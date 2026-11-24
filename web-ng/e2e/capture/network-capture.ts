@@ -13,8 +13,15 @@
  * Rule 1 clause 9 is discharged in the same place. The `Authorization` header, the authentication
  * key and every password field are masked before an exchange record exists, so no later code path —
  * a report writer, a diff, a captured file — can serialise them: headers are reduced to presence
- * booleans and secret-named body fields become {@link MASKED}. The module keeps no credential in a
- * variable, writes none to a message and holds no logger.
+ * booleans and a body field named for a credential or a session becomes {@link MASKED}. The module
+ * keeps no credential in a variable, writes none to a message and holds no logger.
+ *
+ * A response body arrives as a promise, so a capture that serialised only what had already resolved
+ * would lose the body of the last call a workflow made. Teardown is therefore two steps:
+ * {@link CaptureSession.stop} detaches the listeners and answers with the exchanges as they stand,
+ * while {@link CaptureSession.settle} — which {@link CaptureSession.write} awaits — waits for every body
+ * read still in flight before it freezes the records. Either route then carries the bodies of the calls
+ * it recorded, which is what AAP 0.10.1 compares.
  *
  * The only artefact written is one JSON file under `web-ng/e2e/.captures/network/`, at a path fixed
  * by the project and workflow id ({@link CAPTURES_DIR}), so two runs that made the same calls with
@@ -25,13 +32,18 @@
  * 1. **Filtering** — only `fetch`/`xhr` requests below `/fineract-provider/` that are not static
  *    assets are recorded; the document, legacy `views/**` partials, translations, fonts and images
  *    are dropped before a record exists.
- * 2. **Masking** — `Authorization` and tenant headers are reduced to presence booleans; secret-named
- *    body fields become {@link MASKED}; a request body that is not JSON becomes a fixed marker.
+ * 2. **Masking** — `Authorization` and tenant headers are reduced to presence booleans; a body field
+ *    whose name says credential or session material becomes {@link MASKED}, while a boolean flag that
+ *    merely contains such a word is compared as it stands; a request body that is not JSON becomes a
+ *    fixed marker.
  * 3. **Path templating** — numeric segments become role tokens: `/clients/123` → `/clients/{clientId}`.
- * 4. **Body ids** — a numeric value under an id-named key becomes the role token of the id it
- *    carries, so a generated id is compared by its role and its sequence, never by its value.
- * 5. **Dates** — a `…date` string in the payload format becomes a day offset from the run date:
- *    `21 November 2026` on a run date of the same day becomes `d0` (AAP 0.10.1, "Run date").
+ * 4. **Body ids** — a numeric value under a key the run generates an id for becomes the role token of
+ *    that id, so a generated id is compared by its role and its sequence, never by its value. Every
+ *    reference id — office, product, staff, payment type, a `status` or `loanType` object — is compared
+ *    by value, because the two front ends choosing differently is a difference the gate must report.
+ * 5. **Dates** — a `…date` value becomes a day offset from the run date, in either shape Fineract
+ *    reports one in: `21 November 2026` and `[2026, 11, 21]` on a run date of the same day both become
+ *    `d0` (AAP 0.10.2, "Dates"; AAP 0.10.1, "Run date").
  * 6. **Audit block** — `timestamps` subtrees are dropped from response bodies; no workflow asserts
  *    them.
  * 7. **Query parameters** — keys sorted ascending, a repeated key joined with `,` in its own order;
@@ -44,7 +56,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Page, Request, Response } from '@playwright/test';
 
-import { PAYLOAD_DATE_FORMAT, dayOffset } from '../seed/fixtures';
+import { dayOffset, formatDateOnly, parseFineractDate } from '../seed/fixtures';
 
 /**
  * What every masked field is replaced with. A fixed string, so the two front ends' captures compare
@@ -106,14 +118,69 @@ const AUTHORIZATION_HEADER_NAME = 'authorization';
 const NON_JSON_BODY = '<non-json body>';
 
 /**
- * Body fields that carry a credential (Rule 1 clause 9): Fineract's `base64EncodedAuthenticationKey`
- * in the authentication response (AAP 0.7.2 `AuthResponse`), and the login form's `password`. Held as
- * a pattern rather than as a string so the field *names* are documented without any value near them.
+ * How long {@link CaptureSession.settle} waits for one round of response body reads that are still in
+ * flight. Generous for a payload the browser is still handing over, and short enough that a body the
+ * page will never deliver cannot hold a workflow's teardown open: an exchange whose read has not settled
+ * by then keeps `responseBody: null`, which is the same record a failed read leaves.
  */
-const SECRET_KEY_PATTERN = /password|^pass$|authenticationKey/i;
+const BODY_SETTLE_TIMEOUT_MS = 5000;
 
-/** A key carrying a record id, e.g. `id`, `clientId`, `statusId`. */
-const ID_KEY_PATTERN = /^(id|.*Id)$/;
+/**
+ * Body fields that carry a credential or session material (Rule 1 clause 9): the `password` the login
+ * form sends, the `base64EncodedAuthenticationKey` the authentication response returns (AAP 0.7.2
+ * `AuthResponse`), and the credential- and session-shaped names a forked or extended payload could
+ * carry — `passcode`, `token`, `secret`, `session`, `authorization`, `apiKey`, `credential`, with `pass`
+ * and `pin` covered as whole names only. Masking is by name because a body is otherwise unmodelled, so
+ * a session-bearing field cannot reach a record, a diff or a file under any of them (AAP 0.10.2,
+ * "Session and auth material"). A boolean flag whose name merely contains one of these words is
+ * compared instead, because a flag is not a secret: {@link normaliseValue} answers booleans first.
+ */
+const SECRET_KEY_PATTERN =
+  /password|passcode|^pass$|^pin$|token|secret|session|authorization|authenticationKey|apiKey|credential/i;
+
+/**
+ * Body keys whose id a run generates: the ids AAP 0.10.2 compares by their role in the sequence rather
+ * than by their literal value, because each front end creates its own record and so sees its own
+ * number for the same step.
+ *
+ * An allowlist rather than an `id`/`…Id` pattern, because the two possible mistakes are not equally
+ * visible. A reference id — `officeId`, `productId`, `staffId`, `paymentTypeId`, the `id` of a
+ * `status`/`loanType`/`documentType` object — normalised to a role token makes a real difference
+ * between the two front ends vanish from the diff: a false pass, which nothing downstream re-checks
+ * and criterion 4 cannot detect. An id that belongs here but is compared by value only adds a loud
+ * difference to a report a human already reads. So the list names what the run creates and nothing
+ * else; every other id is compared by value.
+ */
+const GENERATED_ID_KEYS: ReadonlySet<string> = new Set<string>([
+  'clientId',
+  'loanId',
+  'savingsId',
+  'savingsAccountId',
+  'accountId',
+  'transactionId',
+  'chargeId',
+  'identifierId',
+  'resourceId',
+]);
+
+/**
+ * Entity nouns whose bare `id` a run generates: in `{ client: { id: 7 } }` the id is the client the
+ * run created, so it takes a role token as a `clientId` does. A noun outside this list is a reference
+ * object — `status`, `documentType`, `loanType`, `amortizationType` — whose id both front ends must
+ * choose identically and which is therefore compared by value.
+ */
+const GENERATED_ENTITY_NOUNS: readonly string[] = [
+  'client',
+  'loan',
+  'loanAccount',
+  'savings',
+  'savingsAccount',
+  'account',
+  'transaction',
+  'charge',
+  'identifier',
+  'resource',
+];
 
 /** A key carrying a date, e.g. `submittedOnDate`, `dueDate`, `approvedOnDate`. */
 const DATE_KEY_PATTERN = /date$/i;
@@ -135,6 +202,23 @@ const API_RESOURCE_TYPES: readonly string[] = ['fetch', 'xhr'];
  * committed. `capture/state-snapshot.ts` imports this constant instead of recomputing the path.
  */
 export const CAPTURES_DIR: string = resolve(dirname(fileURLToPath(import.meta.url)), '..', '.captures');
+
+/**
+ * The file-name component of a capture artefact: the project or workflow id reduced to characters that
+ * cannot leave the capture directory, so an id shapes a name but never a path. The ids the harness uses
+ * — `legacy`, `next`, `W2`, `CHAIN` — pass through unchanged.
+ *
+ * Exported because `capture/state-snapshot.ts` writes its snapshot beside this module's capture under
+ * the same `<project>__<workflow>.json` convention (AAP 0.8.1), and two definitions of the sanitiser
+ * would be free to drift apart. Surrounding whitespace is trimmed first, so an id that reached the
+ * harness through configuration still names the same file either writer would produce.
+ *
+ * @param value Project or workflow id, or `null` when the capture carried none.
+ */
+export function fileNamePart(value: string | null): string {
+  const safe = (value ?? 'unknown').trim().replace(/[^A-Za-z0-9._-]/g, '_');
+  return safe.length > 0 ? safe : 'unknown';
+}
 
 /**
  * A JSON-shaped value after normalisation: every scalar a Fineract payload can carry, and the arrays
@@ -216,15 +300,24 @@ export interface CaptureOptions {
 }
 
 /** A running capture. `stop()` and `write()` may be called in either order, and each one answers for
- * the other. */
+ * the other: `write()` awaits {@link CaptureSession.settle}, so the file carries every body the page
+ * had already fetched however little the caller waited first. */
 export interface CaptureSession {
   /** The capture being built; its `exchanges` fills as the page makes calls and `roles` answers for
    * whatever has been recorded so far. */
   readonly capture: NormalizedCapture;
-  /** Detaches the page listeners, freezes the records, is idempotent, and returns the exchanges. */
+  /** Detaches the page listeners and returns the exchanges as they stand, without freezing them: a
+   * response body this capture is still reading is the capture's own work, not a caller mutation, so it
+   * may still land. A caller that needs every body uses {@link CaptureSession.settle} or
+   * {@link CaptureSession.write}. Idempotent. */
   stop(): NormalizedExchange[];
-  /** Writes the capture and returns the absolute path of the file it wrote. */
-  write(folder?: string): string;
+  /** Detaches the page listeners, waits for every response body read still in flight, then freezes the
+   * records and returns the exchanges. Idempotent, and the array it answers with is the one `stop()`
+   * returned. */
+  settle(): Promise<NormalizedExchange[]>;
+  /** Writes the capture as JSON, once every response body has settled, and resolves with the absolute
+   * path of the file it wrote. */
+  write(folder?: string): Promise<string>;
 }
 
 /**
@@ -347,9 +440,9 @@ const ROLE_NAMES: ReadonlyMap<string, string> = new Map<string, string>([
 ]);
 
 /**
- * The plural collection noun as a singular one, for a collection {@link ROLE_NAMES} does not name:
- * `reports` becomes `report`, while a noun that is already singular — or that merely ends in `us` or
- * `ss`, as `status` and `address` do — is left alone.
+ * The plural noun as a singular one, for a collection {@link ROLE_NAMES} does not name and for the
+ * body keys {@link generatedIdRole} reads: `reports` becomes `report`, while a noun that is already
+ * singular — or that merely ends in `us` or `ss`, as `status` and `address` do — is left alone.
  */
 function singularise(noun: string): string {
   if (noun.endsWith('ies') && noun.length > 3) {
@@ -418,99 +511,6 @@ function hasHeader(headers: Record<string, string>, name: string): boolean {
 }
 
 /**
- * Full English month names in calendar order: the inverse of the fixed table `../seed/fixtures` uses
- * to format a payload date. A fixed table rather than `Intl`, so the text cannot vary with the host's
- * locale data and the harness behaves identically on macOS and in Codespaces (AAP 0.10.3).
- */
-const MONTH_NAMES: readonly string[] = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-];
-
-/** Each token {@link PAYLOAD_DATE_FORMAT} may contain, and the capture group that reads it. */
-const DATE_FORMAT_TOKENS: readonly { readonly token: string; readonly group: string }[] = [
-  { token: 'dd', group: '(\\d{2})' },
-  { token: 'MMMM', group: '([A-Za-z]+)' },
-  { token: 'yyyy', group: '(\\d{4})' },
-];
-
-/**
- * Builds the pattern that reads a date written in `format`, so the parser is derived from the format
- * the harness sends instead of restating it. A character that starts no token is a literal separator
- * — the spaces of `dd MMMM yyyy` — and is matched as it stands.
- */
-function compileDateFormat(format: string): { readonly pattern: RegExp; readonly tokens: readonly string[] } {
-  const tokens: string[] = [];
-  let source = '^';
-  let index = 0;
-  while (index < format.length) {
-    const known = DATE_FORMAT_TOKENS.find((entry) => format.startsWith(entry.token, index));
-    if (known === undefined) {
-      const separator = format.charAt(index);
-      source += separator.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      index += 1;
-      continue;
-    }
-    source += known.group;
-    tokens.push(known.token);
-    index += known.token.length;
-  }
-  return { pattern: new RegExp(`${source}$`), tokens };
-}
-
-/**
- * The payload date format compiled once: `dd MMMM yyyy` becomes `/^(\d{2}) ([A-Za-z]+) (\d{4})$/`.
- * Every Fineract date-bearing payload carries that format beside a `locale` (Rule 1 clause 2), which
- * is what makes a date recognisable inside an otherwise unmodelled body.
- */
-const PAYLOAD_DATE_PATTERN = compileDateFormat(PAYLOAD_DATE_FORMAT);
-
-/**
- * Reads a date written in {@link PAYLOAD_DATE_FORMAT}, or answers `null` when the text is not one.
- * The reconstructed calendar day is checked against the parsed date, so `31 February 2026` is
- * rejected rather than silently rolled into March. Every component is read in UTC, matching the
- * formatter in `../seed/fixtures`, so the same text answers the same day on both verification
- * platforms.
- */
-function parsePayloadDate(text: string): Date | null {
-  const groups = PAYLOAD_DATE_PATTERN.pattern.exec(text.trim());
-  if (groups === null) {
-    return null;
-  }
-  let day = 0;
-  let month = -1;
-  let year = 0;
-  PAYLOAD_DATE_PATTERN.tokens.forEach((token, position) => {
-    const group = groups[position + 1];
-    if (token === 'dd') {
-      day = Number(group);
-    } else if (token === 'yyyy') {
-      year = Number(group);
-    } else {
-      month = MONTH_NAMES.indexOf(group);
-    }
-  });
-  if (day < 1 || month < 0) {
-    return null;
-  }
-  const parsed = new Date(Date.UTC(year, month, day));
-  if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month || parsed.getUTCDate() !== day) {
-    return null;
-  }
-  return parsed;
-}
-
-/**
  * A date as a day offset from the run date: `d0` for the run date itself, `d+1` the day after, `d-2`
  * two days before. AAP 0.10.2 compares dates as offsets, so a capture taken on a different business
  * date still compares equal; the arithmetic belongs to `dayOffset()` in `../seed/fixtures`, which
@@ -541,20 +541,36 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * The role a body id belongs to: the key itself when it names one (`clientId`), the enclosing key
- * when the key is a bare `id` (`statusId` for `{status: {id: 1}}`), and `id` when neither names
- * anything — the shape Fineract uses for a bare record at the top of a body.
+ * The role a body id belongs to, or `null` when that id is a reference the comparison must keep by
+ * value.
+ *
+ * A named generated id answers its own key (`clientId`); a bare `id` answers `id` at the top of a body
+ * — the shape Fineract uses for a bare record — and the enclosing noun's role when that noun is one the
+ * run creates, so `{ client: { id: 7 } }` reads `{clientId}`. A collection key is matched as it stands
+ * as well as singularised, because {@link singularise} turns the already-singular `savings` into
+ * `saving`.
  */
-function roleForKey(key: string, parentKey: string): string {
-  if (key !== 'id' && ID_KEY_PATTERN.test(key)) {
-    return `${key.charAt(0).toLowerCase()}${key.slice(1)}`;
+function generatedIdRole(key: string, parentKey: string): string | null {
+  if (GENERATED_ID_KEYS.has(key)) {
+    return key;
   }
-  return parentKey.length > 0 ? `${parentKey}Id` : 'id';
+  if (key !== 'id') {
+    return null;
+  }
+  if (parentKey.length === 0) {
+    return 'id';
+  }
+  const noun = singularise(parentKey).toLowerCase();
+  const known = GENERATED_ENTITY_NOUNS.find(
+    (entity) => entity.toLowerCase() === noun || entity.toLowerCase() === parentKey.toLowerCase(),
+  );
+  return known === undefined ? null : `${known}Id`;
 }
 
 /**
- * Normalises one JSON value: masks a secret-named field, canonicalises key order, turns an id into a
- * role token, turns a payload date into a day offset and drops the audit block, in the single pass
+ * Normalises one JSON value: masks a field whose name says credential or session material but compares
+ * a boolean flag as it stands, turns a payload date under a date-named key into a day offset,
+ * canonicalises key order, turns an id into a role token and drops the audit block, in the single pass
  * that also builds the record (AAP 0.10.2).
  *
  * Every `unknown` reached here is a Fineract request or response body — payload JSON this harness
@@ -575,11 +591,29 @@ function normaliseValue(
   key: string,
   parentKey: string,
 ): NormalizedValue | undefined {
+  if (typeof value === 'boolean') {
+    // A boolean carries no credential and no session material, so a flag whose name merely contains a
+    // secret word — `shouldRenewPassword`, `isTwoFactorAuthenticationRequired` (AAP 0.7.2,
+    // `AuthResponse`) — is compared rather than masked. Masking it would erase real parity signal for
+    // no security gain: nothing about a `true`/`false` could leak a secret.
+    return value;
+  }
   if (SECRET_KEY_PATTERN.test(key)) {
     return MASKED;
   }
   if (value === null) {
     return null;
+  }
+  if (context.runDate !== null && DATE_KEY_PATTERN.test(key)) {
+    // Dates are read before the shape branches because Fineract reports one date two ways: as the
+    // payload text form `dd MMMM yyyy` and as a `[year, month, day]` triple (AAP 0.7.2; AAP 0.10.2,
+    // "Dates"). Both reduce to the day offset built from the run date, so a run that spans two
+    // business dates still compares equal; a `…date` value in any other shape falls through to the
+    // branches below and is kept as it stands.
+    const parsedDate = parseFineractDate(value);
+    if (parsedDate !== null) {
+      return dateOffsetToken(parsedDate, context.runDate);
+    }
   }
   if (Array.isArray(value)) {
     // Arrays keep their order: repayment-schedule periods, transactions and charges are ordered data
@@ -606,35 +640,33 @@ function normaliseValue(
   if (typeof value === 'number') {
     return Number.isFinite(value) ? normaliseNumber(value, context, key, parentKey) : null;
   }
-  if (typeof value === 'boolean') {
-    return value;
-  }
   // JSON cannot carry anything else, and `undefined` is how a key that must not appear is expressed.
   return undefined;
 }
 
 /**
- * Normalises a string field: a payload date becomes a day offset, a numeric value under an id-named
- * key becomes a role token, and everything else — including `dateFormat` and `locale`, whose values
- * AAP 0.10.2 compares verbatim — is kept as it stands.
+ * Normalises a string field: a numeric value under a key the run generates an id for becomes a role
+ * token, and everything else — a reference id, `dateFormat` and `locale`, whose values AAP 0.10.2
+ * compares verbatim, and a `…date` value in a shape {@link parseFineractDate} does not read — is kept
+ * as it stands.
  */
 function normaliseText(value: string, context: WalkContext, key: string, parentKey: string): NormalizedValue {
-  if (context.runDate !== null && DATE_KEY_PATTERN.test(key)) {
-    const parsed = parsePayloadDate(value);
-    if (parsed !== null) {
-      return dateOffsetToken(parsed, context.runDate);
-    }
-  }
-  if (ID_KEY_PATTERN.test(key) && /^\d+$/.test(value)) {
-    return context.roles.token(roleForKey(key, parentKey), value);
+  const role = generatedIdRole(key, parentKey);
+  if (role !== null && /^\d+$/.test(value)) {
+    return context.roles.token(role, value);
   }
   return value;
 }
 
-/** Normalises a number field: an integer under an id-named key becomes a role token. */
+/**
+ * Normalises a number field: an integer under a key the run generates an id for becomes a role token,
+ * and every other number — a reference id included, since two front ends sending different payment
+ * types or offices is exactly the difference the diff must report — is compared by its value.
+ */
 function normaliseNumber(value: number, context: WalkContext, key: string, parentKey: string): NormalizedValue {
-  if (ID_KEY_PATTERN.test(key) && Number.isInteger(value) && value >= 0) {
-    return context.roles.token(roleForKey(key, parentKey), String(value));
+  const role = generatedIdRole(key, parentKey);
+  if (role !== null && Number.isInteger(value) && value >= 0) {
+    return context.roles.token(role, String(value));
   }
   return value;
 }
@@ -678,8 +710,8 @@ function readRequestBody(request: Request, context: WalkContext): NormalizedValu
   return normaliseBody(parsed, context);
 }
 
-/** One exchange while it is being filled; frozen and handed out as a {@link NormalizedExchange} on
- * {@link CaptureSession.stop}. */
+/** One exchange while it is being filled; frozen and handed out as a {@link NormalizedExchange} once
+ * {@link CaptureSession.settle} has waited for its body and frozen the records. */
 interface MutableExchange {
   method: string;
   origin: string;
@@ -696,17 +728,6 @@ interface MutableExchange {
 interface TrackedExchange {
   readonly record: MutableExchange;
   readonly roles: RoleRegistry;
-}
-
-/**
- * The run date as `yyyy-mm-dd`, read in UTC so the written capture carries a calendar day and never a
- * clock time or a host-specific rendering (AAP 0.10.2, determinism).
- */
-function formatRunDate(date: Date): string {
-  const year = String(date.getUTCFullYear()).padStart(4, '0');
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(date.getUTCDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
 }
 
 /**
@@ -750,10 +771,17 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
 
   const tracked: TrackedExchange[] = [];
   const byRequest = new Map<Request, TrackedExchange>();
+  /** Every response body read this capture has started and not yet seen settle. {@link settle} waits for
+   * them, so a body that arrives once the listeners are detached still reaches the record it belongs to
+   * instead of dropping out of the comparison (AAP 0.10.1 compares the ordered calls with their bodies). */
+  const pendingBodies = new Set<Promise<void>>();
   let stopped = false;
-  /** The frozen exchanges, built once so `stop()` answers with the same array however often it is
-   * called and `capture.exchanges` agrees with it afterwards. */
-  let frozen: NormalizedExchange[] | null = null;
+  /** The exchanges in record order, built once so `stop()` answers with the same array however often it
+   * is called and `capture.exchanges` agrees with it afterwards. */
+  let collected: NormalizedExchange[] | null = null;
+  /** Whether the records have been frozen. A body read that settles afterwards is skipped rather than
+   * assigned to a frozen record, which strict mode would throw on. */
+  let frozen = false;
 
   /**
    * Records one request. Only a Fineract API call becomes an exchange: AAP 0.10.1 compares "the
@@ -805,39 +833,51 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
   };
 
   /**
-   * Attaches a response to the exchange its request created, and reads its body when that body is
-   * JSON.
+   * Reads one response body into the exchange its request created, and keeps the read in
+   * {@link pendingBodies} until it settles so {@link settle} can wait for it.
    *
-   * A body arrives as a promise, so what a capture holds at any moment is what has resolved by then.
-   * `write()` serialises exactly that, which is why the parity fixture stops and writes in teardown:
-   * teardown runs after the workflow's assertions, and those assertions have necessarily read every
-   * body the workflow depends on. A body that never resolves before the capture stops is recorded as
-   * absent, and a failed request keeps `status: 0` — a request that never got an answer is still
-   * evidence about the call that was made.
+   * The read is the capture's own work rather than a caller's mutation, so its callbacks are gated on
+   * the records not being frozen yet and not on the listeners being detached: a body that arrives after
+   * `stop()` still lands, and one that arrives after the freeze is skipped instead of being assigned to
+   * a frozen record. Neither callback rejects, so the set always drains.
+   */
+  const readBody = (entry: TrackedExchange, response: Response): void => {
+    const context: WalkContext = { roles: entry.roles, runDate, dropAuditBlock: true };
+    const read: Promise<void> = response.json().then(
+      (payload: unknown) => {
+        if (!frozen) {
+          entry.record.responseBody = normaliseBody(payload, context);
+        }
+      },
+      () => {
+        if (!frozen) {
+          entry.record.responseBody = null;
+        }
+      },
+    );
+    pendingBodies.add(read);
+    const forget = (): void => {
+      pendingBodies.delete(read);
+    };
+    void read.then(forget, forget);
+  };
+
+  /**
+   * Attaches a response to the exchange its request created, and starts reading its body when that body
+   * is JSON. A failed request keeps `status: 0` — a request that never got an answer is still evidence
+   * about the call that was made — and a body still unread when {@link settle} has waited long enough
+   * is recorded as absent rather than guessed at.
    */
   const onResponse = (response: Response): void => {
     const entry = byRequest.get(response.request());
     if (entry === undefined || stopped) {
       return;
     }
-    const { record, roles } = entry;
-    record.status = response.status();
+    entry.record.status = response.status();
     if (!responseCarriesJson(response)) {
       return;
     }
-    const context: WalkContext = { roles, runDate, dropAuditBlock: true };
-    void response.json().then(
-      (payload: unknown) => {
-        if (!stopped) {
-          record.responseBody = normaliseBody(payload, context);
-        }
-      },
-      () => {
-        if (!stopped) {
-          record.responseBody = null;
-        }
-      },
-    );
+    readBody(entry, response);
   };
 
   /** Marks an exchange whose request failed: no status, no body, but a recorded attempt. */
@@ -862,9 +902,9 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
   const capture: NormalizedCapture = {
     project,
     workflow,
-    runDate: runDate === null ? null : formatRunDate(runDate),
+    runDate: runDate === null ? null : formatDateOnly(runDate),
     get exchanges(): readonly NormalizedExchange[] {
-      return frozen ?? tracked.map((entry) => entry.record);
+      return collected ?? tracked.map((entry) => entry.record);
     },
     get roles(): RoleMap {
       const merged: { [realId: string]: string } = {};
@@ -881,14 +921,24 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
     },
   };
 
+  /** The exchanges in record order, built once and handed out unchanged afterwards, so `stop()` and
+   * `settle()` answer with one array and `capture.exchanges` agrees with both. */
+  function exchanges(): NormalizedExchange[] {
+    collected ??= tracked.map((entry) => entry.record);
+    return collected;
+  }
+
   /**
-   * Detaches the listeners, freezes the records and answers with the exchanges. Calling it again
-   * returns the same array without doing the work twice, and `capture.exchanges` answers with that
-   * same array from then on, so a caller may hold either reference.
+   * Detaches the three page listeners and refuses any further record. Idempotent, and it tolerates a
+   * page that is already gone — a closed page has nothing left to detach and, `stopped` being set first,
+   * cannot add to this capture either way.
+   *
+   * Detaching stops new records from arriving and leaves the records already held writable, because a
+   * body read this capture started is the capture's own work rather than a caller mutation.
    */
-  function stop(): NormalizedExchange[] {
-    if (frozen !== null) {
-      return frozen;
+  function detach(): void {
+    if (stopped) {
+      return;
     }
     stopped = true;
     try {
@@ -896,25 +946,74 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
       page.off('response', onResponse);
       page.off('requestfailed', onRequestFailed);
     } catch {
-      // Detaching from a page that is already gone has nothing left to detach; the records are frozen
-      // below either way, so a receiver that stayed attached cannot add to this capture.
+      // Detaching from a page that is already gone has nothing left to detach; `stopped` above still
+      // keeps a receiver that stayed attached from adding to this capture.
     }
-    for (const entry of tracked) {
-      Object.freeze(entry.record);
-    }
-    frozen = tracked.map((entry) => entry.record);
-    return frozen;
   }
 
   /**
-   * Writes the capture as JSON and answers with the absolute path it wrote, inside
-   * `<folder ?? outputDir ?? CAPTURES_DIR>/network/`. A capture that is still running is stopped first,
-   * so `write()` and `stop()` may be used in either order. The file name is
-   * `<project>__<workflow>.json` — deterministic, so the report writer and the fixture find it without
-   * being told, and matching the `<project>__<workflow>` convention of the sibling capture folders.
+   * Freezes every record, once, and answers with the exchanges. Freezing is what makes a record a
+   * {@link NormalizedExchange} a caller may hold: from then on a body read that settles late is skipped
+   * rather than written into a frozen record. Calling it again returns the same array without doing the
+   * work twice, and `capture.exchanges` answers with that array from then on, so a caller may hold
+   * either reference.
    */
-  function write(folder?: string): string {
-    stop();
+  function freezeRecords(): NormalizedExchange[] {
+    const list = exchanges();
+    if (!frozen) {
+      frozen = true;
+      for (const entry of tracked) {
+        Object.freeze(entry.record);
+      }
+    }
+    return list;
+  }
+
+  /**
+   * Detaches the listeners and answers with the exchanges as they stand. Idempotent, and the same array
+   * comes back however often it is called.
+   *
+   * It neither freezes the records nor waits for a response body still in flight: a body this capture
+   * started reading is the capture's own work, so it is still allowed to land after teardown. A caller
+   * that needs every body must use {@link settle} or {@link write}.
+   */
+  function stop(): NormalizedExchange[] {
+    detach();
+    return exchanges();
+  }
+
+  /**
+   * Detaches the listeners, waits for every response body read still in flight, then freezes the records
+   * and answers with the exchanges. Idempotent, and the array is the one {@link stop} returned.
+   *
+   * Waiting is what keeps the comparison honest: AAP 0.10.1 compares the ordered API calls including
+   * their bodies, so a body that never settled must not silently vanish from it. {@link readsSettled}
+   * bounds the wait, so a body the page will never deliver cannot hold teardown open for ever.
+   */
+  async function settle(): Promise<NormalizedExchange[]> {
+    detach();
+    while (pendingBodies.size > 0) {
+      // A whole round is awaited at once and the loop repeats, because a read that settles may leave
+      // another one behind it in the set.
+      if (!(await readsSettled([...pendingBodies]))) {
+        break;
+      }
+    }
+    return freezeRecords();
+  }
+
+  /**
+   * Writes the capture as JSON and resolves with the absolute path it wrote, inside
+   * `<folder ?? outputDir ?? CAPTURES_DIR>/network/`.
+   *
+   * {@link settle} runs first, so a capture that is still running is stopped, its bodies are read and
+   * its records frozen before anything is serialised: `write()` and `stop()` may be used in either
+   * order, and the file carries every body either way. The file name is `<project>__<workflow>.json` —
+   * deterministic, so the report writer and the fixture find it without being told, and matching the
+   * `<project>__<workflow>` convention of the sibling capture folders.
+   */
+  async function write(folder?: string): Promise<string> {
+    await settle();
     const directory = resolve(folder ?? outputDir ?? CAPTURES_DIR, 'network');
     filesystem.mkdirSync(directory, { recursive: true });
     const file = resolve(directory, `${fileNamePart(project)}__${fileNamePart(workflow)}.json`);
@@ -922,7 +1021,7 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
     return file;
   }
 
-  return { capture, stop, write };
+  return { capture, stop, settle, write };
 }
 
 /**
@@ -936,13 +1035,24 @@ function responseCarriesJson(response: Response): boolean {
 }
 
 /**
- * A capture's file-name component: the project or workflow id reduced to characters that cannot leave
- * the capture directory, so an id shapes a name but never a path. The ids the harness uses —
- * `legacy`, `next`, `W2`, `CHAIN` — pass through unchanged.
+ * Waits for one round of response body reads, giving up after {@link BODY_SETTLE_TIMEOUT_MS} so a read
+ * the browser will never finish cannot keep {@link CaptureSession.settle} waiting for ever.
+ *
+ * @param reads Body reads to wait for; the caller has already taken them out of its pending set.
+ * @returns `true` once every read settled, `false` when the wait timed out first.
  */
-function fileNamePart(value: string | null): string {
-  const safe = (value ?? 'unknown').replace(/[^A-Za-z0-9._-]/g, '_');
-  return safe.length > 0 ? safe : 'unknown';
+async function readsSettled(reads: readonly Promise<void>[]): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<boolean>((resolveExpiry) => {
+    timer = setTimeout(() => resolveExpiry(false), BODY_SETTLE_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([Promise.all(reads).then(() => true), expired]);
+  } finally {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
+  }
 }
 
 /** One exchange rendered as a comparable string, for a call that has no counterpart on the other side. */

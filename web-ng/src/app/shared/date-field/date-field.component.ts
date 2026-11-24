@@ -14,6 +14,8 @@ import {
   ReactiveFormsModule,
 } from '@angular/forms';
 
+import { fromCalendarParts } from '../date-format.util';
+
 /**
  * Source of the per-instance default for `DateFieldComponent.inputId`. The initialiser runs once per
  * component instance, so each field in a form gets its own `date-field-0`, `date-field-1`, … id and
@@ -44,13 +46,18 @@ function toInputValue(value: Date | null): string {
 
 /**
  * Parses the `yyyy-MM-dd` string an `<input type="date">` reports into a `Date` at **local**
- * midnight, or `null` when the element holds no date.
+ * midnight, or `null` when the element holds no date or names a day no calendar holds.
  *
- * The parts are read individually and handed to the `Date` constructor, which interprets them in
- * the browser's timezone. `Date.parse('2026-11-22')` would instead be read as UTC midnight and,
- * west of Greenwich, land on the previous local day — the same shift `toInputValue` avoids.
- * Anything that is not a complete `yyyy-MM-dd` value, or that does not produce a valid date,
- * yields `null` rather than an `Invalid Date` reaching a form control.
+ * The parts are read individually and handed to the shared local-midnight builder, which interprets
+ * them in the browser's timezone. `Date.parse('2026-11-22')` would instead be read as UTC midnight
+ * and, west of Greenwich, land on the previous local day — the same shift `toInputValue` avoids.
+ * Anything that is not a complete `yyyy-MM-dd` value yields `null` rather than an `Invalid Date`
+ * reaching a form control.
+ *
+ * The calendar check is `fromCalendarParts` from `shared/date-format.util.ts`, shared rather than
+ * copied so this parser and `fromFineractDate` answer alike: a value naming a day no calendar holds
+ * yields `null`, where `new Date(2026, 1, 30)` would roll it forward to 2 March and the control
+ * would report a date the user never entered.
  */
 function parseInputValue(raw: string): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
@@ -58,8 +65,7 @@ function parseInputValue(raw: string): Date | null {
     return null;
   }
   const [, year, month, day] = match;
-  const parsed = new Date(Number(year), Number(month) - 1, Number(day));
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  return fromCalendarParts(Number(year), Number(month), Number(day));
 }
 
 /**
@@ -146,9 +152,12 @@ export class DateInputValueAccessor implements ControlValueAccessor {
  * `locale`, because serialising belongs to the owning feature service and never to this control
  * (AAP 0.14.1), and the browser's own picker supplies the interaction the jQuery plugin did.
  *
- * The four inputs are:
+ * The five inputs are:
  * - `control` (required) — the `FormControl<Date | null>` the template binds with `[formControl]`.
  * - `label` — the visible label text, already translated by the parent; empty renders no label.
+ * - `ariaLabel` — the accessible name for a field that renders no visible label, already translated by
+ *   the parent; empty renders no attribute. It is used only while no `<label>` renders, so a visible
+ *   label always supplies the name itself (WCAG label in name).
  * - `required` — a display and accessibility concern only. It marks the label, it does not add a
  *   `Validator` or a `required` attribute, because the only validation this application applies is
  *   the one Fineract itself reports (AAP 0.4.4 behavioural inheritance, Rule 1 clause 3).
@@ -173,6 +182,11 @@ export class DateFieldComponent {
 
   /** Visible label text, already translated by the parent; empty renders no label element. */
   readonly label = input<string>('');
+
+  /** Accessible name for a field that renders no visible label, already translated by the parent;
+   *  empty renders no attribute. The template emits it only while no `<label>` renders, so a visible
+   *  label always supplies the name itself and is never overridden (WCAG label in name). */
+  readonly ariaLabel = input<string>('');
 
   /** Marks the label as required for display and assistive technology; adds no validator. */
   readonly required = input(false);

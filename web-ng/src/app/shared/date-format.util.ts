@@ -139,9 +139,10 @@ function isDateTriple(value: unknown): value is readonly [number, number, number
 /**
  * Builds a local-midnight `Date` from a year, a one-based month and a day, or `null` when no
  * calendar holds that combination — `'2026-02-30'`, month 13 — instead of letting `Date` roll it
- * into the following month, which would report an event on a day the user never entered.
+ * into the following month, which would report an event on a day the user never entered. The date
+ * field's own input parser calls this too, so the two cannot disagree about which days exist.
  */
-function fromCalendarParts(year: number, month: number, day: number): Date | null {
+export function fromCalendarParts(year: number, month: number, day: number): Date | null {
   // The year is applied separately because the constructor maps a year of 0-99 to 1900-1999.
   const date = new Date(2000, month - 1, day);
   date.setFullYear(year);

@@ -47,8 +47,16 @@ import { join } from 'node:path';
 import { request } from '@playwright/test';
 import type { APIRequestContext, APIResponse } from '@playwright/test';
 
-import { apiHeaders, apiUrl, authenticate, dayOffset, readBusinessDate } from '../seed/fixtures';
-import { CAPTURES_DIR } from './network-capture';
+import {
+  apiHeaders,
+  apiUrl,
+  authenticate,
+  dayOffset,
+  formatDateOnly,
+  parseFineractDate,
+  readBusinessDate,
+} from '../seed/fixtures';
+import { CAPTURES_DIR, fileNamePart } from './network-capture';
 import type { NormalizedValue } from './network-capture';
 
 /**
@@ -88,7 +96,10 @@ export interface LoanSnapshot {
   readonly totalExpectedRepayment: number | null;
   /** `summary.totalOutstanding` — the balance the repayment must reduce and W5 and W6 assert. */
   readonly totalOutstanding: number | null;
-  /** The first repayment period's `totalDueForPeriod` — the amount W6 repays (`RepaymentPeriod.totalDueForPeriod`). */
+  /** The first installment's total due, the amount W6 repays: `totalDue`, or `totalDueForPeriod` as the
+   * running fork sends it — reading only `totalDue` would be `null` on both front ends. The schedule's
+   * leading disbursement row carries no period number and a zero total, so it is skipped (AAP 0.7.2,
+   * `RepaymentPeriod`). */
   readonly firstPeriodTotalDue: number | null;
   /** Transactions the loan carries; a repayment adds one (W6). */
   readonly transactionCount: number;
@@ -111,6 +122,11 @@ export interface SavingsSnapshot {
 /**
  * One workflow's end state on one front end, plus the metadata that makes the written file
  * self-describing. `client`, `loan` and `savings` are present only when the caller asked for them.
+ *
+ * This is the shape of the document on disk, so it holds nothing that names the machine the run
+ * happened on: an absolute path recorded here would stop two runs that ended in the same state from
+ * producing byte-identical files. {@link WrittenStateSnapshot} adds the one run-only field,
+ * {@link WrittenStateSnapshot.path}, to what {@link captureState} returns.
  */
 export interface StateSnapshot {
   /** Playwright project the snapshot came from. */
@@ -119,14 +135,27 @@ export interface StateSnapshot {
   readonly workflow: string;
   /** The run date the dates were offset from, `yyyy-mm-dd`. */
   readonly runDate: string;
-  /** Absolute path of the file this snapshot was written to. */
-  readonly path: string;
   /** Client end state, when the workflow targeted a client. */
   readonly client?: ClientSnapshot;
   /** Loan end state, when the workflow targeted a loan. */
   readonly loan?: LoanSnapshot;
   /** Savings end state, when the workflow targeted a savings account. */
   readonly savings?: SavingsSnapshot;
+}
+
+/**
+ * A snapshot as {@link captureState} returns it: the written document plus the absolute path of the
+ * file it wrote.
+ *
+ * The path is the one field a snapshot carries that deliberately does not reach the file (AAP 0.10.2;
+ * AAP 0.10.1's outcome is the backend state, not the run). It locates the artefact for a reader of the
+ * report, and it would differ between the two runs by construction, so the written document leaves it
+ * out and a snapshot reloaded from disk is a plain {@link StateSnapshot} — which is what
+ * {@link diffStates} compares.
+ */
+export interface WrittenStateSnapshot extends StateSnapshot {
+  /** Absolute path of the file this snapshot was written to. */
+  readonly path: string;
 }
 
 /**
@@ -186,26 +215,6 @@ export class StateSnapshotError extends Error {
 }
 
 /**
- * Full English month names in calendar order, for the `dd MMMM yyyy` form a Fineract payload carries a
- * date in (AAP 0.7.2). A fixed table rather than `Intl`, so the text parses identically on macOS and in
- * Codespaces whatever locale data the host has (AAP 0.10.3).
- */
-const MONTH_NAMES = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-] as const;
-
-/**
  * A response body as a plain object, or `null` when it is anything else.
  *
  * Every Fineract response enters this module as `unknown` because it crosses an HTTP boundary the
@@ -248,61 +257,6 @@ function asNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-/** Whether the value is an integer, as the components of a Fineract date array must be. */
-function isInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value);
-}
-
-/**
- * A `Date` at UTC midnight for a 1-based-month calendar date, or `null` when those components are not a
- * real day. UTC rather than local midnight is what makes an offset comparable across machines.
- */
-function utcDate(year: number, month: number, day: number): Date | null {
-  const date = new Date(Date.UTC(year, month - 1, day));
-  const roundTrips =
-    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
-  return roundTrips ? date : null;
-}
-
-/**
- * A date as Fineract reports it, or `null` for anything else. Three shapes are read, because the
- * endpoints this module calls are not consistent about which one they send:
- *
- * - `[year, month, day]` with a 1-based month — what `GET /clients/{id}` and the business-date endpoint
- *   answer with, and the shape `readBusinessDate()` parses.
- * - `dd MMMM yyyy` — the format every date-bearing payload carries (AAP 0.7.2), which is what a
- *   response answers with when the request named a `dateFormat`.
- * - `yyyy-mm-dd` — the ISO form other Fineract resources answer with.
- *
- * A string in any other format is `null`, never a guess parsed by a date library: an offset computed
- * from a misread date would show up as a behavioural difference between the two front ends.
- */
-function toDate(value: unknown): Date | null {
-  if (Array.isArray(value)) {
-    const parts = value as readonly unknown[];
-    if (parts.length !== 3) {
-      return null;
-    }
-    const [year, month, day] = parts;
-    return isInteger(year) && isInteger(month) && isInteger(day) ? utcDate(year, month, day) : null;
-  }
-  if (typeof value !== 'string') {
-    return null;
-  }
-  const text = value.trim();
-  const payloadForm = /^(\d{1,2}) ([A-Za-z]+) (\d{4})$/.exec(text);
-  if (payloadForm !== null) {
-    const monthName = payloadForm[2].toLowerCase();
-    const month = MONTH_NAMES.findIndex((name) => name.toLowerCase() === monthName) + 1;
-    return month === 0 ? null : utcDate(Number(payloadForm[3]), month, Number(payloadForm[1]));
-  }
-  const isoForm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
-  if (isoForm !== null) {
-    return utcDate(Number(isoForm[1]), Number(isoForm[2]), Number(isoForm[3]));
-  }
-  return null;
-}
-
 /**
  * The client's activation date, or `null` when it has none.
  *
@@ -310,14 +264,16 @@ function toDate(value: unknown): Date | null {
  * `activationDate` on the client payload, and `timeline.activatedOnDate`. Both name the same event, so
  * the top-level field wins where it exists and the timeline answers otherwise — reading only one of them
  * would leave W2's "activated on the run date" assertion silently unassertable against a backend that
- * populated the other.
+ * populated the other. The `[year, month, day]` triple, the `dd MMMM yyyy` text and the `yyyy-mm-dd`
+ * text all read through {@link parseFineractDate}, the one date reader the harness and the capture
+ * share (AAP 0.10.2, "Dates").
  */
 function clientActivationDate(client: Record<string, unknown> | null): Date | null {
-  const direct = toDate(field(client, 'activationDate'));
+  const direct = parseFineractDate(field(client, 'activationDate'));
   if (direct !== null) {
     return direct;
   }
-  return toDate(field(asRecord(field(client, 'timeline')), 'activatedOnDate'));
+  return parseFineractDate(field(asRecord(field(client, 'timeline')), 'activatedOnDate'));
 }
 
 /**
@@ -347,19 +303,31 @@ function clientDisplayName(client: Record<string, unknown> | null): string {
 }
 
 /**
- * The first repayment period's `totalDueForPeriod`, which is the amount W6 repays
- * (`RepaymentPeriod.totalDueForPeriod`; the schedule sends that key, never `totalDue`, which would
- * read as null on both front ends). The schedule leads with a disbursement or down-payment row that
- * carries no period number and a zero total, so the reader takes the first entry that carries a
- * `period` number rather than the array's first element — reading element 0 would report `0` and
- * turn W6's outstanding-balance assertion into an identity. `null` when the schedule carries no
- * repayment period, which is the state a loan is in before approval builds one.
+ * The first installment's total due, which is the amount W6 repays (AAP 0.10.1 W6; AAP 0.7.2,
+ * `RepaymentPeriod`).
+ *
+ * The schedule leads with a disbursement or down-payment row that carries no period number — or a
+ * `period` of 0 — and a zero total, so the walk takes the first row whose `period` is an integer of 1 or
+ * more rather than the array's first element: reading element 0 would report `0` and turn W6's
+ * outstanding-balance assertion into an identity. The amount is read as `totalDue`, the field AAP 0.7.2
+ * names, and falls back to `totalDueForPeriod`, the field this fork actually sends — reading one
+ * spelling alone leaves the amount `null` on both front ends and makes the comparison vacuous. `null`
+ * when no numbered period carries a due amount, which is the state a loan is in before approval builds
+ * a schedule.
  */
 function firstPeriodTotalDue(schedule: Record<string, unknown> | null): number | null {
-  const firstRepayment = asArray(field(schedule, 'periods')).find(
-    (period) => asNumber(field(asRecord(period), 'period')) !== null,
-  );
-  return asNumber(field(asRecord(firstRepayment), 'totalDueForPeriod'));
+  for (const row of asArray(field(schedule, 'periods'))) {
+    const period = asRecord(row);
+    const number = asNumber(field(period, 'period'));
+    if (number === null || !Number.isInteger(number) || number < 1) {
+      continue;
+    }
+    const totalDue = asNumber(field(period, 'totalDue')) ?? asNumber(field(period, 'totalDueForPeriod'));
+    if (totalDue !== null) {
+      return totalDue;
+    }
+  }
+  return null;
 }
 
 /**
@@ -571,23 +539,6 @@ async function resolveRunDate(runDate: Date | undefined): Promise<Date> {
   return resolved;
 }
 
-/** A date as `yyyy-mm-dd` in UTC, the form the snapshot's metadata carries. */
-function formatRunDate(date: Date): string {
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(date.getUTCDate()).padStart(2, '0');
-  return `${String(date.getUTCFullYear()).padStart(4, '0')}-${month}-${day}`;
-}
-
-/**
- * A file-name component: the project or workflow id reduced to characters that cannot leave the state
- * directory, so an id shapes a name and never a path. The ids the harness uses — `legacy`, `next`, `W2`,
- * `CHAIN` — pass through unchanged.
- */
-function fileNamePart(value: string): string {
-  const safe = value.trim().replace(/[^A-Za-z0-9._-]/g, '_');
-  return safe.length > 0 ? safe : 'unknown';
-}
-
 /**
  * Reads a client's end state: `GET /clients/{id}`, `GET /clients/{id}/accounts` and
  * `GET /clients/{id}/identifiers`, all three of which AAP 0.7.3 lists for W2 and W3, reduced together.
@@ -650,7 +601,7 @@ export async function snapshotSavings(savingsId: number): Promise<SavingsSnapsho
 
 /**
  * Reads the end state of every resource a workflow targeted, writes it as one snapshot file, and
- * returns it with the file's absolute path.
+ * returns a {@link WrittenStateSnapshot} — the document it wrote plus that file's absolute path.
  *
  * One authentication and one request context serve every resource (`withContext`), because the workflow
  * is already authenticated and a second login would add a call neither front end made. Targets are
@@ -660,7 +611,7 @@ export async function snapshotSavings(savingsId: number): Promise<SavingsSnapsho
  * @throws {@link StateSnapshotError} when a read fails; `Error` when no resource was targeted, when an
  * id is not a positive integer, when `workflow` is blank, or when `runDate` is not a valid date.
  */
-export async function captureState(targets: StateTargets): Promise<StateSnapshot> {
+export async function captureState(targets: StateTargets): Promise<WrittenStateSnapshot> {
   const clientId = optionalResourceId(targets.clientId, 'clientId');
   const loanId = optionalResourceId(targets.loanId, 'loanId');
   const savingsId = optionalResourceId(targets.savingsId, 'savingsId');
@@ -691,7 +642,7 @@ export async function captureState(targets: StateTargets): Promise<StateSnapshot
     const written = {
       project: targets.project,
       workflow,
-      runDate: formatRunDate(runDate),
+      runDate: formatDateOnly(runDate),
       ...(client === undefined ? {} : { client }),
       ...(loan === undefined ? {} : { loan }),
       ...(savings === undefined ? {} : { savings }),
@@ -783,9 +734,10 @@ function compareSection(
  * Compares the two front ends' end states (AAP 0.10.1 criterion 4; AAP 0.10.2). An empty array is
  * parity.
  *
- * `project`, `workflow`, `runDate` and `path` are ignored on purpose: they are metadata about the run,
- * not the outcome, and they differ between the two runs by construction — the legacy run is a different
- * project writing a different file. Comparing them would report a difference for every workflow.
+ * `project`, `workflow` and `runDate` are ignored on purpose: they are metadata about the run, not the
+ * outcome, and they differ between the two runs by construction — the legacy run is a different project
+ * writing a different file. Comparing them would report a difference for every workflow. Both sides are
+ * taken as a {@link StateSnapshot}, the document on disk, which carries no other field to ignore.
  *
  * Nothing here throws: a section that is not an object, or a field of another type, is reported as a
  * difference rather than failing the comparison.

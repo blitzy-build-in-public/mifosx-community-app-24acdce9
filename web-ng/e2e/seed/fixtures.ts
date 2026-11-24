@@ -564,6 +564,85 @@ export function dayOffset(from: Date, to: number | Date): number {
   return Math.round((end - start) / MILLISECONDS_PER_DAY);
 }
 
+/** The payload text form a date-bearing Fineract field carries (Rule 1 clause 2): a 1- or 2-digit day,
+ * a full English month name and a 4-digit year, e.g. `21 November 2026`. */
+const PAYLOAD_DATE_TEXT_PATTERN = /^(\d{1,2}) ([A-Za-z]+) (\d{4})$/;
+
+/** The ISO date-only form some Fineract resources answer with, e.g. `2026-11-21`. */
+const ISO_DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/**
+ * A `Date` at UTC midnight for a 1-based-month calendar date, or `null` when those components are not
+ * a real day — `31 February`, or month `13`. The round trip below is what rejects them: `Date.UTC`
+ * would otherwise roll an impossible day forward into the following month.
+ */
+function calendarDate(year: number, month: number, day: number): Date | null {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  const roundTrips =
+    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+  return roundTrips ? date : null;
+}
+
+/**
+ * A date as Fineract reports one, or `null` for any other shape. Three shapes are read, because the
+ * resources the harness calls are not consistent about which one they send and one comparison has to
+ * understand all of them (AAP 0.10.2, "Dates"):
+ *
+ * - `[year, month, day]` with a 1-based month — what `GET /clients/{id}` and the business-date
+ *   endpoint answer with, and the shape {@link readDateParts} and {@link parseBusinessDate} read.
+ * - `dd MMMM yyyy` — the form every date-bearing payload sends (Rule 1 clause 2), with a 1- or
+ *   2-digit day and a case-insensitive full month name from {@link MONTH_NAMES}.
+ * - `yyyy-mm-dd` — the ISO form other Fineract resources answer with.
+ *
+ * `null` rather than a guess for everything else, and for an impossible calendar day (`31 February`,
+ * month `13`): AAP 0.10.2 compares every run-date-derived value as a day offset, and an offset
+ * computed from a misread date would surface as a behavioural difference between the two front ends
+ * that neither of them caused. Every component is read in UTC and nothing here depends on `Intl`, so
+ * the same payload answers the same day on macOS and in Codespaces (AAP 0.10.3).
+ *
+ * @param value Any JSON value a payload can carry under a date-named key.
+ * @returns The day at UTC midnight, or `null` when the value is not a date this harness reads.
+ */
+export function parseFineractDate(value: unknown): Date | null {
+  const parts = readDateParts(value);
+  if (parts !== null) {
+    return calendarDate(parts[0], parts[1], parts[2]);
+  }
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const text = value.trim();
+  const payloadForm = PAYLOAD_DATE_TEXT_PATTERN.exec(text);
+  if (payloadForm !== null) {
+    const monthName = payloadForm[2].toLowerCase();
+    const month = MONTH_NAMES.findIndex((name) => name.toLowerCase() === monthName) + 1;
+    return month === 0 ? null : calendarDate(Number(payloadForm[3]), month, Number(payloadForm[1]));
+  }
+  const isoForm = ISO_DATE_ONLY_PATTERN.exec(text);
+  if (isoForm !== null) {
+    return calendarDate(Number(isoForm[1]), Number(isoForm[2]), Number(isoForm[3]));
+  }
+  return null;
+}
+
+/**
+ * A date as `yyyy-mm-dd` in UTC: the run-date metadata form both capture writers record, so a
+ * written capture names the day its offsets are measured from (AAP 0.10.2, determinism). UTC and zero
+ * padding together make that text a calendar day that compares as text — never a clock time and never
+ * a host-specific rendering (AAP 0.10.3).
+ *
+ * @param date Date to render; its time of day is ignored.
+ * @throws When `date` is not a valid `Date`.
+ */
+export function formatDateOnly(date: Date): string {
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`formatDateOnly() needs a valid Date; received ${String(date)}`);
+  }
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${String(date.getUTCFullYear()).padStart(4, '0')}-${month}-${day}`;
+}
+
 /**
  * The staff member the seed creates — the AAP 0.10.1 row "Staff: Parity Officer, loan officer,
  * office 1 (Head Office)".

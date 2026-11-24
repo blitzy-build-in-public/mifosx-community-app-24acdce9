@@ -9,6 +9,14 @@
 -->
 @let invalid = control().invalid && (control().touched || control().dirty);
 
+<!--
+  A visible `<label for>` is the control's accessible name, so the attribute is suppressed whenever one
+  renders: an `aria-label` beside it would override the visible text and break "label in name"
+  (WCAG 2.5.3). With no visible label, `ariaLabel` is the only name the control can expose, and an
+  empty one leaves the element exactly as the legacy markup renders it.
+-->
+@let accessibleName = label() ? null : (ariaLabel() || null);
+
 <div class="form-group" [class.has-error]="invalid">
   @if (label()) {
     <label class="control-label" [attr.for]="inputId()">{{ label() }}</label>
@@ -20,6 +28,7 @@
     appDateValue
     [id]="inputId()"
     [formControl]="control()"
+    [attr.aria-label]="accessibleName"
     [attr.aria-required]="required() ? 'true' : null"
     [attr.aria-invalid]="invalid ? 'true' : null"
   />

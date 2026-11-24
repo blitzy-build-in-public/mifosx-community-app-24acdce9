@@ -64,6 +64,11 @@ export class SelectFieldComponent {
    *  in the feature template, so this component imports no i18n service. */
   readonly label = input<string>('');
 
+  /** Accessible name for a field that renders no visible label, already translated by the parent;
+   *  `''` renders no attribute. The template emits it only while no `<label>` renders, so a visible
+   *  label always supplies the name itself and is never overridden (WCAG label in name). */
+  readonly ariaLabel = input<string>('');
+
   /** Sets `aria-required` for assistive technology and is deliberately not the native `required`
    *  attribute: the browser would then block submission before Fineract sees the request, which
    *  is client-side validation the legacy form does not perform (Rule 1 clause 3). */

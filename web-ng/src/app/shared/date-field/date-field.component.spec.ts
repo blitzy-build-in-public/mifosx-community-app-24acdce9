@@ -16,6 +16,8 @@ import { DateFieldComponent } from './date-field.component';
  *   stops being marked once it is valid again;
  * - `required` as accessibility output only, so the browser never blocks a submission that
  *   Fineract alone decides (Rule 1 clause 3; AAP 0.4.4 behavioural inheritance);
+ * - the accessible name: `ariaLabel` names the control exactly while no visible `<label>` renders,
+ *   so a visible label always supplies the name and is never overridden (WCAG label in name);
  * - the disabled state arriving from the control, never from the template;
  * - one stable id per instance, so every `<label for>` points at exactly one input.
  *
@@ -149,6 +151,38 @@ describe('DateFieldComponent', () => {
     expect(control.value).toBeNull();
   });
 
+  it('reports null, never a rolled-forward day, for a value no calendar holds', () => {
+    fixture.detectChanges();
+
+    const input = dateInput();
+    // A conforming `input[type=date]` sanitises '2026-02-30' to the empty string, so the parser can
+    // only be reached with it programmatically: assigning `input.value` would be sanitised away, so
+    // the element's own `value` property is redefined before the event is dispatched.
+    Object.defineProperty(input, 'value', {
+      configurable: true,
+      writable: true,
+      value: '2026-02-30',
+    });
+    input.dispatchEvent(new Event('input'));
+
+    expect(control.value).toBeNull();
+
+    // The same path still takes a day that exists, as that local-midnight `Date`, so the assertion
+    // above cannot pass by rejecting every value the element reports.
+    Object.defineProperty(input, 'value', {
+      configurable: true,
+      writable: true,
+      value: '2026-11-05',
+    });
+    input.dispatchEvent(new Event('input'));
+
+    const picked = dateValueOf(control);
+    expect(picked.getFullYear()).toBe(2026);
+    expect(picked.getMonth()).toBe(10);
+    expect(picked.getDate()).toBe(5);
+    expect(picked.getHours()).toBe(0);
+  });
+
   it('marks the control touched when the field loses focus', () => {
     fixture.detectChanges();
     expect(control.touched).toBe(false);
@@ -222,6 +256,58 @@ describe('DateFieldComponent', () => {
     expect(fixture.nativeElement.querySelectorAll('.control-label')).toHaveLength(1);
     expect(labelOf(fixture).textContent?.trim()).toBe('Submitted on');
     expect(labelOf(fixture).getAttribute('for')).toBe(dateInput().id);
+  });
+
+  /**
+   * The accessible-name rule, as the two name-bearing inputs vary: `ariaLabel` alone names the
+   * control, a visible `label` names it and suppresses the attribute (WCAG label in name, so a caller
+   * supplying both never overrides its own visible text), and neither supplied leaves the shipped
+   * legacy markup — an unnamed control with no attribute at all — exactly as it was.
+   */
+  const accessibleNameCases: readonly {
+    readonly scenario: string;
+    readonly label?: string;
+    readonly ariaLabel?: string;
+    readonly visibleLabel: boolean;
+    readonly accessibleName: string | null;
+  }[] = [
+    {
+      scenario: 'names the input from ariaLabel while rendering no visible label',
+      ariaLabel: 'Submitted on',
+      visibleLabel: false,
+      accessibleName: 'Submitted on',
+    },
+    {
+      scenario: 'lets a visible label supply the name and renders no aria-label beside it',
+      label: 'Submitted on',
+      ariaLabel: 'Submission date',
+      visibleLabel: true,
+      accessibleName: null,
+    },
+    {
+      scenario: 'renders neither a label nor an aria-label when neither input is supplied',
+      visibleLabel: false,
+      accessibleName: null,
+    },
+  ];
+
+  it.each(accessibleNameCases)('$scenario', ({ label, ariaLabel, visibleLabel, accessibleName }) => {
+    if (label !== undefined) {
+      fixture.componentRef.setInput('label', label);
+    }
+    if (ariaLabel !== undefined) {
+      fixture.componentRef.setInput('ariaLabel', ariaLabel);
+    }
+    fixture.detectChanges();
+
+    const labels = fixture.nativeElement.querySelectorAll('.control-label');
+    expect(labels).toHaveLength(visibleLabel ? 1 : 0);
+    expect(dateInput().getAttribute('aria-label')).toBe(accessibleName);
+
+    // A visible label is the name itself, so it still has to point at the control it names.
+    if (visibleLabel) {
+      expect(labelOf(fixture).getAttribute('for')).toBe(dateInput().id);
+    }
   });
 
   it('exposes required to assistive technology without letting the browser block submission', () => {

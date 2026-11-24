@@ -1,7 +1,7 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { FormControl, Validators } from '@angular/forms';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SelectFieldComponent, type SelectOption, type SelectValue } from './select-field.component';
 
@@ -16,10 +16,22 @@ const OFFICES: readonly SelectOption[] = [
   { id: 2, name: 'Branch Two' },
 ];
 
+/**
+ * Two options a feature service can hand in with one id, because `shared/` cannot enforce uniqueness
+ * on a caller's `number | string` id: the rendered rows must stay one per entry, in order, and each
+ * option must still write its own id to the control.
+ */
+const DUPLICATE_ID_OPTIONS: readonly SelectOption[] = [
+  { id: 7, name: 'Branch Seven' },
+  { id: 7, name: 'Branch Seven (archived)' },
+];
+
 /** The inputs a test overrides; every other input keeps the component's own default. */
 interface FieldInputs {
+  readonly options?: readonly SelectOption[];
   readonly placeholder?: string;
   readonly label?: string;
+  readonly ariaLabel?: string;
   readonly required?: boolean;
 }
 
@@ -53,6 +65,17 @@ function optionTexts(select: HTMLSelectElement): (string | undefined)[] {
   return Array.from(select.options, (option) => option.textContent?.trim());
 }
 
+/** The leading prompt option a supplied `placeholder` renders, read through its live DOM state. */
+function promptOption(select: HTMLSelectElement): HTMLOptionElement {
+  const prompt = select.options[0];
+
+  if (!(prompt instanceof HTMLOptionElement)) {
+    throw new Error('SelectFieldComponent rendered no placeholder option');
+  }
+
+  return prompt;
+}
+
 /**
  * Chooses the option carrying `name` the way a user does: by position plus the `change` event
  * `SelectControlValueAccessor` listens to. The option's DOM `value` string is deliberately never
@@ -84,6 +107,7 @@ describe('SelectFieldComponent', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     TestBed.resetTestingModule();
   });
 
@@ -94,7 +118,7 @@ describe('SelectFieldComponent', () => {
   ): ComponentFixture<SelectFieldComponent> {
     const fixture = TestBed.createComponent(SelectFieldComponent);
 
-    fixture.componentRef.setInput('options', OFFICES);
+    fixture.componentRef.setInput('options', inputs.options ?? OFFICES);
     fixture.componentRef.setInput('control', control);
     fixture.componentRef.setInput('inputId', 'office');
 
@@ -103,6 +127,9 @@ describe('SelectFieldComponent', () => {
     }
     if (inputs.label !== undefined) {
       fixture.componentRef.setInput('label', inputs.label);
+    }
+    if (inputs.ariaLabel !== undefined) {
+      fixture.componentRef.setInput('ariaLabel', inputs.ariaLabel);
     }
     if (inputs.required !== undefined) {
       fixture.componentRef.setInput('required', inputs.required);
@@ -121,25 +148,63 @@ describe('SelectFieldComponent', () => {
     expect(optionTexts(select)).toEqual(['Head Office', 'Branch One', 'Branch Two']);
   });
 
-  it('renders no placeholder option unless a placeholder is supplied', () => {
+  it('renders both options that share one id, in order, and writes each id to the control', () => {
+    // Angular reports a duplicated track key through `console.warn` in dev mode and renders on, so
+    // the console is the observable a positional track has to keep quiet: `track option.id` emits
+    // NG0955 here, once per duplicated key.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const control = new FormControl<SelectValue | null>(null);
+    const fixture = createField(control, { options: DUPLICATE_ID_OPTIONS });
+    const select = renderedSelect(fixture);
+
+    expect(select.options).toHaveLength(DUPLICATE_ID_OPTIONS.length);
+    expect(optionTexts(select)).toEqual(['Branch Seven', 'Branch Seven (archived)']);
+
+    chooseOption(select, 'Branch Seven (archived)');
+
+    expect(control.value).toBe(7);
+    expect(selectedText(select)).toBe('Branch Seven (archived)');
+
+    chooseOption(select, 'Branch Seven');
+
+    expect(control.value).toBe(7);
+    expect(selectedText(select)).toBe('Branch Seven');
+
+    expect(warn.mock.calls.filter((call) => String(call[0]).includes('NG0955'))).toHaveLength(0);
+  });
+
+  it('renders a selectable prompt row only when a placeholder is supplied, as legacy chosen does', () => {
     const plain = renderedSelect(createField(new FormControl<SelectValue | null>(null)));
 
     expect(plain.options).toHaveLength(OFFICES.length);
     expect(optionTexts(plain)).not.toContain('');
 
     const control = new FormControl<SelectValue | null>(null);
-    const select = renderedSelect(createField(control, { placeholder: 'Select an office' }));
+    const fixture = createField(control, { placeholder: 'Select an office' });
+    const select = renderedSelect(fixture);
 
     expect(select.options).toHaveLength(OFFICES.length + 1);
     expect(optionTexts(select)[0]).toBe('Select an office');
 
-    chooseOption(select, 'Branch Two');
-    expect(control.value).toBe(2);
+    // The prompt carries visible text, which is exactly what makes chosen render a legacy prompt as an
+    // ordinary results row: it stays selectable after a value exists, so a user can clear the field.
+    expect(promptOption(select).disabled).toBe(false);
 
+    chooseOption(select, 'Branch Two');
+    fixture.detectChanges();
+
+    expect(control.value).toBe(2);
+    expect(selectedText(select)).toBe('Branch Two');
+    expect(promptOption(select).disabled).toBe(false);
+
+    // Choosing the prompt row writes the empty value back, the way a legacy user clears the selection.
     select.selectedIndex = 0;
     select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
 
     expect(control.value).toBeNull();
+    expect(selectedText(select)).toBe('Select an office');
   });
 
   it('writes the original numeric id to the caller\'s control, never a stringified copy', () => {
@@ -201,6 +266,30 @@ describe('SelectFieldComponent', () => {
     expect(dirtyGroup.classList.contains('has-error')).toBe(true);
   });
 
+  it('publishes aria-invalid with the has-error state, only once an invalid control is touched', () => {
+    const control = new FormControl<SelectValue | null>(null, Validators.required);
+    const fixture = createField(control);
+    const select = renderedSelect(fixture);
+
+    expect(control.invalid).toBe(true);
+    expect(control.touched).toBe(false);
+    expect(renderedGroup(fixture).classList.contains('has-error')).toBe(false);
+    expect(select.hasAttribute('aria-invalid')).toBe(false);
+
+    control.markAsTouched();
+    fixture.detectChanges();
+
+    expect(renderedGroup(fixture).classList.contains('has-error')).toBe(true);
+    expect(select.getAttribute('aria-invalid')).toBe('true');
+
+    control.setValue(2);
+    fixture.detectChanges();
+
+    expect(control.invalid).toBe(false);
+    expect(renderedGroup(fixture).classList.contains('has-error')).toBe(false);
+    expect(select.hasAttribute('aria-invalid')).toBe(false);
+  });
+
   it('renders the control label, wired to the select id, only when a label is supplied', () => {
     const unlabelled = createField(new FormControl<SelectValue | null>(null));
 
@@ -212,6 +301,54 @@ describe('SelectFieldComponent', () => {
 
     expect(label?.textContent?.trim()).toBe('Office');
     expect(label?.getAttribute('for')).toBe(renderedSelect(labelled).id);
+  });
+
+  /**
+   * The accessible-name rule, stated exactly as the sibling `shared/date-field` spec states it since
+   * both fields sit on the same forms: `ariaLabel` alone names the control, a visible `label` names it
+   * and suppresses the attribute (WCAG label in name, so a caller supplying both never overrides its
+   * own visible text), and neither supplied leaves the shipped legacy markup — an unnamed control
+   * with no attribute at all — exactly as it was.
+   */
+  const accessibleNameCases: readonly {
+    readonly scenario: string;
+    readonly label?: string;
+    readonly ariaLabel?: string;
+    readonly visibleLabel: boolean;
+    readonly accessibleName: string | null;
+  }[] = [
+    {
+      scenario: 'names the select from ariaLabel while rendering no visible label',
+      ariaLabel: 'Office',
+      visibleLabel: false,
+      accessibleName: 'Office',
+    },
+    {
+      scenario: 'lets a visible label supply the name and renders no aria-label beside it',
+      label: 'Office',
+      ariaLabel: 'Reporting office',
+      visibleLabel: true,
+      accessibleName: null,
+    },
+    {
+      scenario: 'renders neither a label nor an aria-label when neither input is supplied',
+      visibleLabel: false,
+      accessibleName: null,
+    },
+  ];
+
+  it.each(accessibleNameCases)('$scenario', ({ label, ariaLabel, visibleLabel, accessibleName }) => {
+    const fixture = createField(new FormControl<SelectValue | null>(null), { label, ariaLabel });
+    const select = renderedSelect(fixture);
+
+    const renderedLabels = fixture.nativeElement.querySelectorAll('label');
+    expect(renderedLabels).toHaveLength(visibleLabel ? 1 : 0);
+    expect(select.getAttribute('aria-label')).toBe(accessibleName);
+
+    // A visible label is the name itself, so it still has to point at the control it names.
+    if (visibleLabel) {
+      expect(renderedLabels[0]?.getAttribute('for')).toBe(select.id);
+    }
   });
 
   it('marks the field required for assistive technology only', () => {
