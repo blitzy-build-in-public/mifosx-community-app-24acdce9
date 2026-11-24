@@ -1,0 +1,506 @@
+{
+  "header": {
+    "apiPath": "/fineract-provider/api/v1",
+    "source": "AAP 0.7.3 workflow endpoint table",
+    "generatorGap": "app/scripts/services/ResourceFactoryProvider.js is absent from this checkout (base commit holds only README.md); entries are transcribed from AAP 0.7.3",
+    "generatedOn": "2026-11-24",
+    "pathConventions": "paths are relative to apiPath, begin with '/', use {id}-style templates, carry no query string and no trailing slash; query names live in queryParameters",
+    "matching": "membership is method + templated path; a {…} or numeric segment is collapsed to {} on both sides",
+    "additionPolicy": "a URL absent from this file needs a written justification recorded here AND the matching OpenAPI operation (the fork's *ApiResourceSwagger annotation) named in the entry's note, per AAP 0.10.4"
+  },
+  "entries": [
+    {
+      "workflow": "W1 login and logout",
+      "family": "Auth",
+      "method": "POST",
+      "path": "/authentication",
+      "resource": "AuthenticationService",
+      "queryParameters": []
+    },
+    {
+      "workflow": "W1 login and logout",
+      "family": "Auth",
+      "method": "GET",
+      "path": "/users/{id}",
+      "resource": "userResource",
+      "queryParameters": []
+    },
+    {
+      "workflow": "Shell: global search",
+      "family": "Search",
+      "method": "GET",
+      "path": "/search",
+      "resource": "globalSearch",
+      "queryParameters": [
+        "query",
+        "resource"
+      ]
+    },
+    {
+      "workflow": "Shell: global search",
+      "family": "Search",
+      "method": "GET",
+      "path": "/search/template",
+      "resource": null,
+      "queryParameters": [],
+      "note": "AAP 0.7.3 names no legacy resource for this row."
+    },
+    {
+      "workflow": "W2 create and activate client",
+      "family": "Clients",
+      "method": "GET",
+      "path": "/clients/template",
+      "resource": "clientTemplateResource",
+      "queryParameters": [
+        "officeId",
+        "staffInSelectedOfficeOnly"
+      ],
+      "note": "officeId and staffInSelectedOfficeOnly are sent when the office changes (AAP 0.7.3)."
+    },
+    {
+      "workflow": "W2 create and activate client",
+      "family": "Clients",
+      "method": "POST",
+      "path": "/clients",
+      "resource": "clientResource",
+      "queryParameters": []
+    },
+    {
+      "workflow": "W2 create and activate client",
+      "family": "Clients",
+      "method": "GET",
+      "path": "/clients/{id}",
+      "resource": "clientResource",
+      "queryParameters": [
+        "template"
+      ],
+      "note": "Sent as ?template=true. The same method+path appears in 'Client list and edit' and 'W3 search and view client'; each row is kept separately for traceability."
+    },
+    {
+      "workflow": "W2 create and activate client",
+      "family": "Clients",
+      "method": "POST",
+      "path": "/clients/{id}",
+      "resource": "clientResource",
+      "command": "activate",
+      "queryParameters": []
+    },
+    {
+      "workflow": "Client list and edit",
+      "family": "Clients",
+      "method": "GET",
+      "path": "/clients",
+      "resource": "clientResource",
+      "queryParameters": [
+        "offset",
+        "limit",
+        "orderBy",
+        "sortOrder"
+      ],
+      "note": "AAP 0.7.3 leaves the exact search parameter set to the shipped legacy client controller; the new app sends what that controller sends."
+    },
+    {
+      "workflow": "Client list and edit",
+      "family": "Clients",
+      "method": "PUT",
+      "path": "/clients/{id}",
+      "resource": "clientResource",
+      "queryParameters": []
+    },
+    {
+      "workflow": "Client list and edit",
+      "family": "Clients",
+      "method": "GET",
+      "path": "/clients/{id}",
+      "resource": "clientResource",
+      "queryParameters": [
+        "template"
+      ],
+      "note": "Sent as ?template=true. The same method+path appears in 'W2 create and activate client' and 'W3 search and view client'; each row is kept separately for traceability."
+    },
+    {
+      "workflow": "Client actions",
+      "family": "Clients",
+      "method": "GET",
+      "path": "/clients/template",
+      "resource": "clientTemplateResource",
+      "queryParameters": [
+        "commandParam"
+      ],
+      "note": "commandParam is one of close, reject or withdraw. The same method+path appears in 'W2 create and activate client' with different query parameters; each row is kept separately for traceability."
+    },
+    {
+      "workflow": "Client actions",
+      "family": "Clients",
+      "method": "POST",
+      "path": "/clients/{id}",
+      "resource": "clientResource",
+      "command": "close",
+      "queryParameters": []
+    },
+    {
+      "workflow": "Client actions",
+      "family": "Clients",
+      "method": "POST",
+      "path": "/clients/{id}",
+      "resource": "clientResource",
+      "command": "reject",
+      "queryParameters": []
+    },
+    {
+      "workflow": "Client actions",
+      "family": "Clients",
+      "method": "POST",
+      "path": "/clients/{id}",
+      "resource": "clientResource",
+      "command": "withdraw",
+      "queryParameters": []
+    },
+    {
+      "workflow": "Client actions",
+      "family": "Clients",
+      "method": "POST",
+      "path": "/clients/{id}",
+      "resource": "clientResource",
+      "command": "reactivate",
+      "queryParameters": []
+    },
+    {
+      "workflow": "Client actions: datatable gate",
+      "family": "Datatables",
+      "method": "GET",
+      "path": "/entityDatatableChecks",
+      "resource": null,
+      "queryParameters": [
+        "limit"
+      ],
+      "note": "AAP 0.7.3 names no legacy resource for this row. Sent with limit=-1 before any client action."
+    },
+    {
+      "workflow": "Client actions: datatable gate",
+      "family": "Datatables",
+      "method": "GET",
+      "path": "/datatables/{table}/{clientId}",
+      "resource": null,
+      "queryParameters": [
+        "genericResultSet"
+      ],
+      "note": "AAP 0.7.3 names no legacy resource for this row. Sent with genericResultSet=true after the entityDatatableChecks call."
+    },
+    {
+      "workflow": "W3 search and view client",
+      "family": "Clients",
+      "method": "GET",
+      "path": "/clients/{id}",
+      "resource": "clientResource",
+      "queryParameters": []
+    },
+    {
+      "workflow": "W3 search and view client",
+      "family": "Clients",
+      "method": "GET",
+      "path": "/clients/{id}/accounts",
+      "resource": "clientAccountResource",
+      "queryParameters": []
+    },
+    {
+      "workflow": "W3 search and view client",
+      "family": "Clients",
+      "method": "GET",
+      "path": "/clients/{id}/identifiers",
+      "resource": "clientResource",
+      "queryParameters": [],
+      "note": "Legacy getAllClientDocuments({clientId, anotherresource: 'identifiers'}) (AAP 0.7.3)."
+    },
+    {
+      "workflow": "W3 search and view client",
+      "family": "Clients",
+      "method": "GET",
+      "path": "/clients/{id}/identifiers/template",
+      "resource": null,
+      "queryParameters": [],
+      "note": "AAP 0.7.3 names no legacy resource for this row."
+    },
+    {
+      "workflow": "W4 loan application",
+      "family": "Loans",
+      "method": "GET",
+      "path": "/loans/template",
+      "resource": "loanResource",
+      "queryParameters": [
+        "templateType",
+        "clientId",
+        "productId"
+      ],
+      "note": "templateType=individual (AAP 0.7.3)."
+    },
+    {
+      "workflow": "W4 loan application",
+      "family": "Loans",
+      "method": "GET",
+      "path": "/charges/{id}",
+      "resource": null,
+      "queryParameters": [
+        "template"
+      ],
+      "note": "AAP 0.7.3 names no legacy resource for this row. Sent as ?template=true."
+    },
+    {
+      "workflow": "W4 loan application",
+      "family": "Loans",
+      "method": "POST",
+      "path": "/loans",
+      "resource": "loanResource",
+      "command": "calculateLoanSchedule",
+      "queryParameters": []
+    },
+    {
+      "workflow": "W4 loan application",
+      "family": "Loans",
+      "method": "POST",
+      "path": "/loans",
+      "resource": "loanResource",
+      "queryParameters": [],
+      "note": "The submit call after the repayment-schedule preview. The same method+path appears in 'W7 validation error'; each row is kept separately for traceability."
+    },
+    {
+      "workflow": "Loan edit",
+      "family": "Loans",
+      "method": "GET",
+      "path": "/loans/{id}",
+      "resource": "loanResource",
+      "queryParameters": [
+        "template",
+        "associations"
+      ],
+      "note": "associations=charges,collateral,meeting,multiDisburseDetails (AAP 0.7.3). The same method+path appears in 'W6 repayment' with different query parameters; each row is kept separately for traceability."
+    },
+    {
+      "workflow": "Loan edit",
+      "family": "Loans",
+      "method": "PUT",
+      "path": "/loans/{id}",
+      "resource": "loanResource",
+      "queryParameters": []
+    },
+    {
+      "workflow": "W5 approve and disburse",
+      "family": "Loans",
+      "method": "GET",
+      "path": "/loans/{id}/template",
+      "resource": "LoanAccountResource",
+      "queryParameters": [
+        "templateType"
+      ],
+      "note": "templateType=approval (AAP 0.7.3)."
+    },
+    {
+      "workflow": "W5 approve and disburse",
+      "family": "Loans",
+      "method": "POST",
+      "path": "/loans/{id}",
+      "resource": "LoanAccountResource",
+      "command": "approve",
+      "queryParameters": []
+    },
+    {
+      "workflow": "W5 approve and disburse",
+      "family": "Loans",
+      "method": "POST",
+      "path": "/loans/{id}",
+      "resource": "LoanAccountResource",
+      "command": "undoapproval",
+      "queryParameters": []
+    },
+    {
+      "workflow": "W5 approve and disburse",
+      "family": "Loans",
+      "method": "POST",
+      "path": "/loans/{id}",
+      "resource": "LoanAccountResource",
+      "command": "reject",
+      "queryParameters": []
+    },
+    {
+      "workflow": "W5 approve and disburse",
+      "family": "Loans",
+      "method": "GET",
+      "path": "/loans/{id}/transactions/template",
+      "resource": "LoanAccountResource",
+      "queryParameters": [
+        "command"
+      ],
+      "note": "command=disburse (AAP 0.7.3). The same method+path appears in 'W6 repayment' with command=repayment; each row is kept separately for traceability."
+    },
+    {
+      "workflow": "W5 approve and disburse",
+      "family": "Loans",
+      "method": "POST",
+      "path": "/loans/{id}",
+      "resource": "LoanAccountResource",
+      "command": "disburse",
+      "queryParameters": []
+    },
+    {
+      "workflow": "W5 approve and disburse",
+      "family": "Loans",
+      "method": "POST",
+      "path": "/loans/{id}",
+      "resource": "LoanAccountResource",
+      "command": "undodisbursal",
+      "queryParameters": []
+    },
+    {
+      "workflow": "W6 repayment",
+      "family": "Loans",
+      "method": "GET",
+      "path": "/loans/{id}/transactions/template",
+      "resource": "loanTrxnsResource",
+      "queryParameters": [
+        "command"
+      ],
+      "note": "command=repayment (AAP 0.7.3). The same method+path appears in 'W5 approve and disburse' with command=disburse; each row is kept separately for traceability."
+    },
+    {
+      "workflow": "W6 repayment",
+      "family": "Loans",
+      "method": "POST",
+      "path": "/loans/{id}/transactions",
+      "resource": "loanTrxnsResource",
+      "command": "repayment",
+      "queryParameters": []
+    },
+    {
+      "workflow": "W6 repayment",
+      "family": "Loans",
+      "method": "GET",
+      "path": "/loans/{id}",
+      "resource": "loanResource",
+      "queryParameters": [
+        "associations"
+      ],
+      "note": "associations=all (AAP 0.7.3). The same method+path appears in 'Loan edit' with different query parameters; each row is kept separately for traceability."
+    },
+    {
+      "workflow": "Loan charges",
+      "family": "Loans",
+      "method": "GET",
+      "path": "/loans/{id}/charges/template",
+      "resource": null,
+      "queryParameters": [],
+      "note": "AAP 0.7.3 names no legacy resource for this row."
+    },
+    {
+      "workflow": "Loan charges",
+      "family": "Loans",
+      "method": "POST",
+      "path": "/loans/{id}/charges",
+      "resource": null,
+      "queryParameters": [],
+      "note": "AAP 0.7.3 names no legacy resource for this row."
+    },
+    {
+      "workflow": "Loan charges",
+      "family": "Loans",
+      "method": "POST",
+      "path": "/loans/{id}/charges/{chargeId}",
+      "resource": null,
+      "command": "pay",
+      "queryParameters": [],
+      "note": "AAP 0.7.3 names no legacy resource for this row."
+    },
+    {
+      "workflow": "Loan charges",
+      "family": "Loans",
+      "method": "POST",
+      "path": "/loans/{id}/charges/{chargeId}",
+      "resource": null,
+      "command": "waive",
+      "queryParameters": [],
+      "note": "AAP 0.7.3 names no legacy resource for this row."
+    },
+    {
+      "workflow": "W7 validation error",
+      "family": "Loans",
+      "method": "POST",
+      "path": "/loans",
+      "resource": "loanResource",
+      "queryParameters": [],
+      "note": "The same operation as the W4 submit; recorded separately for the 400 or 403 negative case that returns errors[].defaultUserMessage (AAP 0.7.3)."
+    },
+    {
+      "workflow": "W8 savings (Stretch)",
+      "family": "Savings",
+      "method": "GET",
+      "path": "/savingsaccounts/template",
+      "resource": "savingsaccountResource",
+      "queryParameters": [
+        "clientId",
+        "productId"
+      ]
+    },
+    {
+      "workflow": "W8 savings (Stretch)",
+      "family": "Savings",
+      "method": "POST",
+      "path": "/savingsaccounts",
+      "resource": "savingsaccountResource",
+      "queryParameters": []
+    },
+    {
+      "workflow": "W8 savings (Stretch)",
+      "family": "Savings",
+      "method": "POST",
+      "path": "/savingsaccounts/{id}",
+      "resource": "savingsaccountResource",
+      "command": "approve",
+      "queryParameters": []
+    },
+    {
+      "workflow": "W8 savings (Stretch)",
+      "family": "Savings",
+      "method": "POST",
+      "path": "/savingsaccounts/{id}",
+      "resource": "savingsaccountResource",
+      "command": "activate",
+      "queryParameters": []
+    },
+    {
+      "workflow": "W8 savings (Stretch)",
+      "family": "Savings",
+      "method": "GET",
+      "path": "/savingsaccounts/{id}/transactions/template",
+      "resource": "savingsaccountResource",
+      "queryParameters": []
+    },
+    {
+      "workflow": "W8 savings (Stretch)",
+      "family": "Savings",
+      "method": "POST",
+      "path": "/savingsaccounts/{id}/transactions",
+      "resource": "savingsaccountResource",
+      "command": "deposit",
+      "queryParameters": []
+    },
+    {
+      "workflow": "W8 savings (Stretch)",
+      "family": "Savings",
+      "method": "POST",
+      "path": "/savingsaccounts/{id}/transactions",
+      "resource": "savingsaccountResource",
+      "command": "withdrawal",
+      "queryParameters": []
+    },
+    {
+      "workflow": "W8 savings (Stretch)",
+      "family": "Savings",
+      "method": "GET",
+      "path": "/savingsaccounts/{id}",
+      "resource": "savingsaccountResource",
+      "queryParameters": [
+        "associations"
+      ],
+      "note": "associations=all (AAP 0.7.3)."
+    }
+  ]
+}
