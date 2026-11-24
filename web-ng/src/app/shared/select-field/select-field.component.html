@@ -1,0 +1,22 @@
+<div class="form-group" [class.has-error]="control().invalid && (control().touched || control().dirty)">
+  @if (label()) {
+    <label class="control-label" [attr.for]="inputId()">{{ label() }}</label>
+  }
+  <select
+    class="form-control"
+    [id]="inputId()"
+    [formControl]="control()"
+    [attr.aria-required]="required() || null"
+    [attr.aria-invalid]="control().invalid || null"
+  >
+    @if (placeholder()) {
+      <option [ngValue]="null">{{ placeholder() }}</option>
+    }
+    <!-- ngValue writes the template's own id, so an office id keeps its number type (1, not "1");
+         a plain value binding writes the option's DOM string and changes the request body. -->
+    @for (option of options(); track option.id) {
+      <option [ngValue]="option.id">{{ option.name }}</option>
+    }
+  </select>
+  <ng-content></ng-content>
+</div>

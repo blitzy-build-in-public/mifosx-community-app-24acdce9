@@ -1,0 +1,28 @@
+<!--
+  `invalid` is read here, not from a computed signal: `invalid`, `touched` and `dirty` on a
+  FormControl are plain properties, so a computed would keep the first verdict for ever.
+
+  Deliberately absent: a native `required`/`min`/`max` would let the browser block a submission
+  that Fineract alone decides (`required` reaches assistive technology as `aria-required`), and an
+  input, change or blur listener would double-write the value, since DateInputValueAccessor on this
+  same element already owns them.
+-->
+@let invalid = control().invalid && (control().touched || control().dirty);
+
+<div class="form-group" [class.has-error]="invalid">
+  @if (label()) {
+    <label class="control-label" [attr.for]="inputId()">{{ label() }}</label>
+  }
+
+  <input
+    type="date"
+    class="form-control"
+    appDateValue
+    [id]="inputId()"
+    [formControl]="control()"
+    [attr.aria-required]="required() ? 'true' : null"
+    [attr.aria-invalid]="invalid ? 'true' : null"
+  />
+
+  <ng-content></ng-content>
+</div>
