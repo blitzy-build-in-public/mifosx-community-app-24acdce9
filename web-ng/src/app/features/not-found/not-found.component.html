@@ -1,0 +1,27 @@
+<!--
+  The unknown-path screen: the counterpart of the legacy application's `.otherwise` route, which
+  renders `views/errors/404.html`, and the message a 404 from a single record endpoint puts in
+  place of the record.
+
+  Every visual value comes from the global Bootstrap 3 layer compiled in `styles.scss`, so this
+  file carries no styling of its own: `.container-fluid` is the page container, `.panel` the white
+  square surface with its shadow and no border stroke, `.panel-body` the card's 13px body,
+  `.panel-title` the 18px/700 card-title treatment and `.btn.btn-primary` the brand-blue fill with
+  its 1px border and white label.
+
+  All three strings resolve through `TranslatePipe`, and the recorded missing-translation handler
+  humanises a key the locale files do not carry, so no raw dotted key can reach the user.
+-->
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-md-12">
+      <div class="panel">
+        <div class="panel-body text-center">
+          <h4 class="panel-title">{{ 'label.heading.notfound' | translate }}</h4>
+          <p>{{ 'label.text.notfound' | translate }}</p>
+          <p><a class="btn btn-primary" routerLink="/clients">{{ 'label.button.returntoclients' | translate }}</a></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
