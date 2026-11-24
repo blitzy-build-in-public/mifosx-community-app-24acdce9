@@ -1,8 +1,6 @@
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 // `DOCUMENT` is declared by `@angular/core`; `@angular/common` only re-exports the same token for
 // code written before v20, so the owning package is the import that cannot go stale.
 import { DOCUMENT, Injectable, inject, signal, type Signal } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
 
 import { FINERACT_DATE_FORMAT, type AppConfig } from './app-config.model';
 
@@ -42,15 +40,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Names the failure a configuration fetch hit, so the rejection says what went wrong rather than
- * only that something did. A status of `0` is Angular's transport failure, not a response.
+ * The rejection text for a configuration read that failed. Every failure names the file to serve, the
+ * fix an operator has and the fact that no fallback host exists, so the only part `fetchRawConfig`
+ * supplies is what actually broke: a transport failure, a non-2xx status or a body that is not JSON.
  */
-function describeFailure(error: unknown): string {
-  if (!(error instanceof HttpErrorResponse) || error.status === 0) {
-    return 'a network error';
-  }
-
-  return error.statusText === '' ? `HTTP ${error.status}` : `HTTP ${error.status} ${error.statusText}`;
+function configReadError(detail: string): string {
+  return (
+    `Cannot read the application's runtime configuration from ${CONFIG_ASSET_URL} (${detail}). ` +
+    'The application needs that configuration before it can start and will not fall back to a default or ' +
+    'alternative Fineract host. Serve web-ng/src/assets/config.json — in a container the entrypoint writes it ' +
+    'from API_BASE_URL and TENANT_ID — and reload.'
+  );
 }
 
 /**
@@ -71,14 +71,17 @@ function describeFailure(error: unknown): string {
  * (AAP 0.10.5; Rule 2), because a front end that quietly calls a server nobody configured turns a
  * deployment mistake into wrong data in the wrong tenant.
  *
+ * **The file is read with `fetch`, not `HttpClient`.** `assets/config.json` is a same-origin static
+ * asset: it carries no tenant or authorization header, names no Fineract endpoint and owns no URL, so
+ * this file is not one of the seven `HttpClient`-owning files AAP 0.14.1 exempts from the lint ban and
+ * its read never passes through the HTTP interceptor.
+ *
  * **This file is the only place `apiBaseUrl` and `apiPath` are joined.** Every service asks
  * `apiUrl()` for its URL, so a request's host and API root cannot drift between features, and the
  * HTTP interceptor rewrites no URL (AAP 0.4.2).
  */
 @Injectable({ providedIn: 'root' })
 export class AppConfigService {
-  private readonly http = inject(HttpClient);
-
   /** Injected rather than read off the `document` global, so a test can supply a document of its own. */
   private readonly document = inject(DOCUMENT);
 
@@ -87,10 +90,11 @@ export class AppConfigService {
   /**
    * The resolved configuration, or `null` until `load()` has published one.
    *
-   * This nullable signal is the surface for callers that run before resolution — above all the HTTP
-   * interceptor, which handles the configuration fetch itself and therefore has to attach no
-   * tenant or authorization header to it. Such a caller reads `changes()` and skips its work while
-   * the value is `null`; it must never read `config`, which throws until resolution.
+   * This nullable signal is the surface for callers that can run before resolution — an initializer, a
+   * guard or a component that starts while the configuration read is still in flight. Such a caller
+   * reads `changes()` and skips its work while the value is `null`; it must never read `config`, which
+   * throws until resolution. The configuration read itself is not one of those callers: it runs on
+   * `fetch` before anything else starts, so it carries no header and passes through no interceptor.
    */
   readonly changes: Signal<AppConfig | null> = this.state.asReadonly();
 
@@ -168,22 +172,36 @@ export class AppConfigService {
   }
 
   /**
-   * Reads the served file. The body stays `unknown` because it is validated next, never cast: a file
-   * an operator edited by hand or a container rewrote is input, not a typed value (Rule 1 clause 4).
+   * Reads the served file with the platform `fetch`. The body stays `unknown` because it is validated
+   * next, never cast: a file an operator edited by hand or a container rewrote is input, not a typed
+   * value (Rule 1 clause 4).
+   *
+   * The three ways the read can fail are distinguishable in the rejection's text — the request never
+   * reached the server, the server answered with a status, the body was not JSON — but all of them name
+   * the file and the operator's fix, because the caller's only recovery is to fix what is served.
    */
   private async fetchRawConfig(): Promise<unknown> {
+    let response: Response;
+
     try {
-      return await firstValueFrom(this.http.get<unknown>(CONFIG_ASSET_URL));
+      response = await fetch(CONFIG_ASSET_URL);
     } catch (error: unknown) {
-      // Rethrown as a plain `Error` naming the file: the caller's only recovery is to fix what is
-      // served, and no alternative host exists to fall back to.
-      throw new Error(
-        `Cannot read the application's runtime configuration from ${CONFIG_ASSET_URL} (${describeFailure(error)}). ` +
-          'The application needs that configuration before it can start and will not fall back to a default or ' +
-          'alternative Fineract host. Serve web-ng/src/assets/config.json — in a container the entrypoint writes it ' +
-          'from API_BASE_URL and TENANT_ID — and reload.',
-        { cause: error },
-      );
+      throw new Error(configReadError('a network error'), { cause: error });
+    }
+
+    if (!response.ok) {
+      const status =
+        response.statusText === '' ? `HTTP ${response.status}` : `HTTP ${response.status} ${response.statusText}`;
+
+      throw new Error(configReadError(status));
+    }
+
+    try {
+      const body: unknown = await response.json();
+
+      return body;
+    } catch (error: unknown) {
+      throw new Error(configReadError('the response was not valid JSON'), { cause: error });
     }
   }
 

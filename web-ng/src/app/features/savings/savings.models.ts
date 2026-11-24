@@ -19,9 +19,10 @@ import type { StatusKey } from '../../shared/status-swatch/status-swatch.compone
  * in a template").
  *
  * Declaration only. The single function here is `toStatusKey`; everything else disappears at
- * compile time, so a spec imports this module with no provider setup. No URL, host or path appears
- * in this file — paths belong to `savings.service.ts` alone (AAP 0.8.2, AAP 0.14.1), and no
- * credential, tenant datum or session material is modelled here (Rule 1 clause 9).
+ * compile time, so a spec imports this module with no provider setup. A doc comment names the read
+ * or write a shape projects, but no path is ever composed here: URL literals belong to
+ * `savings.service.ts` alone (AAP 0.8.2, AAP 0.14.1), and no credential, tenant datum or session
+ * material is modelled here (Rule 1 clause 9).
  */
 
 /**
@@ -112,10 +113,12 @@ export interface SavingsTransaction {
 /**
  * A savings account as the record page reads it (AAP 0.7.2 `SavingsAccount`).
  *
- * Response projection of the single account read that requests every association: one request
- * returns the status, the summary and the transactions together (AAP 0.7.1 `savings` row), which
- * is why `transactions` is not optional — an absent list would mean the request, not the account,
- * was incomplete.
+ * Response projection of the single account read that requests every association,
+ * `GET /savingsaccounts/{id}?associations=all`: one request returns the status, the summary and the
+ * transactions together (AAP 0.7.1 `savings` row), which is why `transactions` is not optional — an
+ * absent list would mean the request, not the account, was incomplete. Its product members carry the
+ * wire's names (`savingsProductId`, `savingsProductName`), as the fork sends them, so the record's
+ * product column reads a value the response actually carries (Rule 1 clause 2).
  */
 export interface SavingsAccount {
   /** Account identifier. */
@@ -130,11 +133,14 @@ export interface SavingsAccount {
   /** Owning client's display name, when the server includes it. */
   readonly clientName?: string;
 
-  /** Savings product the account was opened on. */
-  readonly productId: number;
+  /**
+   * Savings product the account was opened on, under the wire's `savingsProductId` — the product-id
+   * key the account read carries (Rule 1 clause 2).
+   */
+  readonly savingsProductId: number;
 
-  /** Savings product's name, rendered as the server sent it. */
-  readonly productName: string;
+  /** Savings product's name, under the wire's `savingsProductName`, rendered as the server sent it. */
+  readonly savingsProductName: string;
 
   /** Account status; mapped to the indicator's vocabulary by `toStatusKey`. */
   readonly status: FineractCodeValue;
@@ -147,8 +153,11 @@ export interface SavingsAccount {
 }
 
 /**
- * One selectable option of a savings template response: `savingsProductOptions`,
- * `fieldOfficerOptions` and `paymentTypeOptions` all arrive in this shape.
+ * One selectable option of a savings template response: the `productOptions` and
+ * `paymentTypeOptions` lists arrive in this shape.
+ *
+ * The staff list does not: `fieldOfficerOptions` rows are `SavingsTemplateStaffOption`, which
+ * carries `displayName` where an option carries `name` (Rule 1 clause 2).
  *
  * Structurally identical to `shared/select-field`'s `SelectOption`, so an option list can be handed
  * to a `SelectFieldComponent` without a mapping layer. Declared here rather than imported from that
@@ -167,29 +176,64 @@ export interface SavingsTemplateOption {
 }
 
 /**
+ * One row of the savings template's `fieldOfficerOptions` list: a staff member the new application
+ * may be assigned to.
+ *
+ * It differs from `SavingsTemplateOption` because the server's staff row carries `displayName` and
+ * no `name` — the shape `GET /savingsaccounts/template?clientId=&productId=` returns, and the shape
+ * the legacy form binds (`fieldOfficer.id as fieldOfficer.displayName for fieldOfficer in
+ * fieldOfficers`, `app/views/savings/new_saving_account_application.html`), so the picker labels a
+ * row from a member the response actually carries (Rule 1 clauses 2 and 3). `ClientStaffOption` in
+ * `features/clients/client.models.ts`, the client template's staff-dropdown type, is the same
+ * `{id, displayName}` pair for the same reason.
+ */
+export interface SavingsTemplateStaffOption {
+  /** Staff identifier, posted back verbatim as the application's `fieldOfficerId`. */
+  readonly id: number;
+
+  /** Label in the server's `'Officer, Parity'` form — its display name, rendered unchanged. */
+  readonly displayName: string;
+}
+
+/**
  * The new-application screen's template response: the defaults the server would use and the option
  * lists the screen binds.
  *
- * Response projection of the savings template read (AAP 0.7.3 W8 row). Only what the screen renders
- * is modelled: a template response carries many more keys — currency, terms, charge and accounting
- * mappings — and those are left unmodelled rather than guessed at, so this interface stays a
- * statement about the screen rather than a partial copy of the server's payload.
+ * Response projection of the savings template read,
+ * `GET /savingsaccounts/template?clientId=&productId=` (AAP 0.7.3 W8 row). Only what the screen
+ * renders is modelled: a template response carries many more keys — currency, terms, charge and
+ * accounting mappings — and those are left unmodelled rather than guessed at, so this interface
+ * stays a statement about the screen rather than a partial copy of the server's payload. The
+ * endpoint omits an option list it has no entries for — the client-only read carries no
+ * `fieldOfficerOptions` at all — so both lists are optional and a screen renders an empty picker.
  */
 export interface SavingsTemplate {
   /** Client the template was requested for, when the server echoes it. */
   readonly clientId?: number;
 
-  /** Product the server pre-selected, when the request named one. */
-  readonly productId?: number;
+  /**
+   * Product the server pre-selected, when the request named one; the template read names it
+   * `savingsProductId`, and the client-only read omits it.
+   */
+  readonly savingsProductId?: number;
 
   /** Submission date the server would default to, when it returns one. */
   readonly submittedOnDate?: FineractDateValue;
 
-  /** Products the account may be opened on, in the server's order. */
-  readonly savingsProductOptions: readonly SavingsTemplateOption[];
+  /**
+   * Products the account may be opened on, in the server's order, under the wire's `productOptions`
+   * — the only key the read uses for that list — and absent when the client has no product to open
+   * an account on.
+   */
+  readonly productOptions?: readonly SavingsTemplateOption[];
 
-  /** Field officers the application may be assigned to, in the server's order. */
-  readonly fieldOfficerOptions: readonly SavingsTemplateOption[];
+  /**
+   * Field officers the application may be assigned to, in the server's order, as
+   * `SavingsTemplateStaffOption` rows: a staff row carries `displayName` and no `name`, unlike the
+   * product and payment-type lists above. Absent from the client-only read, so the form renders an
+   * empty picker instead of reading an undefined list.
+   */
+  readonly fieldOfficerOptions?: readonly SavingsTemplateStaffOption[];
 }
 
 /**
@@ -280,19 +324,30 @@ export interface SavingsActivateRequest {
 }
 
 /**
- * Either savings action body, keyed by `SavingsCommand` (AAP 0.7.2 "one shape per command").
+ * Every savings action body, keyed by the command its endpoint takes: `approve` and `activate`,
+ * which post to `POST /savingsaccounts/{id}?command=approve|activate`, and `deposit` / `withdrawal`,
+ * which post to `POST /savingsaccounts/{id}/transactions?command=deposit|withdrawal` (AAP 0.7.2
+ * "one shape per command", AAP 0.7.3 W8 row).
  *
- * Request body union of the two lifecycle actions. The service narrows it with the command it was
- * given rather than inspecting the body it received.
+ * The two-arm split is deliberate: the account endpoint and the transactions endpoint validate
+ * different field sets, so the two lifecycle bodies and `SavingsTransactionRequest` stay distinct
+ * shapes rather than one permissive body. The union still spans all four commands the AAP row names,
+ * so a consumer typed against this name can express an approval, an activation, a deposit or a
+ * withdrawal. The service narrows it with the command it was given rather than inspecting the body
+ * it received.
  */
-export type SavingsActionRequest = SavingsApproveRequest | SavingsActivateRequest;
+export type SavingsActionRequest =
+  | SavingsApproveRequest
+  | SavingsActivateRequest
+  | SavingsTransactionRequest;
 
 /**
  * What the action screen hands the service for an approval or an activation.
  *
- * Form input, the `Date`-bearing counterpart of `SavingsActionRequest`. The member name — and so
- * the command — is the discriminant the service switches on, so a screen cannot post an approval
- * date to the activation command.
+ * Form input, the `Date`-bearing counterpart of the approve and activate arms of
+ * `SavingsActionRequest`; a deposit or a withdrawal hands over `SavingsTransactionInput` instead.
+ * The member name — and so the command — is the discriminant the service switches on, so a screen
+ * cannot post an approval date to the activation command.
  */
 export type SavingsActionInput =
   | { readonly approvedOnDate: Date }

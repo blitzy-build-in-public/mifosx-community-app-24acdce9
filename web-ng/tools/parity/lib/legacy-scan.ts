@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { stat } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
 import { readText, repoRoot, stripComments, walk } from './source-scan.js';

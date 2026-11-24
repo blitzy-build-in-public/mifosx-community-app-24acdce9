@@ -24,7 +24,7 @@ import type { StatusKey } from '../../shared/status-swatch/status-swatch.compone
  *
  * **Wire fidelity over plan shorthand.** Member names and value shapes below are the ones the
  * endpoints actually send, because Rule 1 clause 2 preserves the contract and a type that
- * misdescribes it turns a compile-time check into a runtime defect. Four points where the
+ * misdescribes it turns a compile-time check into a runtime defect. Five points where the
  * research record and the running fork differ, each verified against the
  * `Blitzy-Sandbox/blitzy-fineract` source and a live response:
  *
@@ -36,7 +36,11 @@ import type { StatusKey } from '../../shared/status-swatch/status-swatch.compone
  *     `{id, code, value}` object (`ClientIdentifierData.status` is a `String`);
  *   - `staffOptions` entries carry `displayName` and no `name`, which is the label the legacy
  *     staff dropdown binds (`staff.id as staff.displayName`), so they are `ClientStaffOption`
- *     rather than `ClientOption`.
+ *     rather than `ClientOption`;
+ *   - an entity client is named by `fullname` alone — `ClientDataValidator` rejects a non-blank
+ *     `firstname` or `lastname` sent with it, so a form fills one name set or the other — and
+ *     `PUT /clients/{id}` does not accept `officeId`, so the edit body carries no office and the
+ *     edit form's office control is display-only.
  *
  * The status is a colour swatch and nothing else: no member here offers display text for it, and
  * no helper turns a code into a word (AAP 0.10.5 deliberate difference 11; Rule 1 clause 3).
@@ -87,14 +91,16 @@ export interface ClientStatus {
 }
 
 /**
- * One entry of an office, or of a document-type list, as a Fineract `template` endpoint returns it
- * (`officeOptions` and `allowedDocumentTypes` were observed in this shape).
+ * One entry of an office, of a document-type list, or of a closure, rejection or withdrawal reason
+ * list, as a Fineract `template` endpoint returns it (`officeOptions`, `allowedDocumentTypes` and
+ * the `narrations` lists were observed in this shape).
  *
  * Structurally assignable to `SelectOption` in
  * `web-ng/src/app/shared/select-field/select-field.component.ts`, so a screen hands these options
  * straight to `SelectFieldComponent` with no conversion — which is why the two members are exactly
  * the two that component binds. The other members the endpoints also send (`nameDecorated`,
- * `position`, `active`, `mandatory`) are intentionally unmodelled: no in-scope screen reads them.
+ * `position`, `description`, `active`, `mandatory`) are intentionally unmodelled: no in-scope
+ * screen reads them.
  */
 export interface ClientOption {
   /** Option identifier, sent back unchanged as the chosen value. */
@@ -166,6 +172,10 @@ export interface ClientDatatable {
  * is a route parameter and a request field. Members the endpoints also send but no in-scope screen
  * reads (`legalForm`, `isStaff`, `groups`, `savingsProductName`, `dateOfBirth`, …) are absent by
  * design.
+ *
+ * A client is named by one of two name sets, and the endpoint omits the other one entirely: a
+ * person carries `firstname` and `lastname`, an entity carries `fullname`. Both sets are therefore
+ * optional here, and `displayName` is the member a list or a header prints whichever set is used.
  */
 export interface Client {
   /** Fineract client id: the `:id` of `#/viewclient/:id` and of every client request. */
@@ -180,13 +190,26 @@ export interface Client {
   /** Name the list and the record header print, e.g. `'Ada Okafor'` or a business name. */
   displayName: string;
 
-  /** First name as entered. Business clients hold their entity name fields instead. */
-  firstname: string;
+  /**
+   * First name as entered; absent for an entity client, which the endpoint names through
+   * `fullname` alone (observed live: `GET /clients/5` for `'Blitzy Bakery LLC'` sends no
+   * `firstname` key). A form seeding its name fields reads the set that is there.
+   */
+  firstname?: string;
 
-  /** Last name as entered. */
-  lastname: string;
+  /** Last name as entered; absent for an entity client, as `firstname` is. */
+  lastname?: string;
 
-  /** Office id, the value a client form's office select posts. */
+  /**
+   * Entity name, e.g. `'Blitzy Bakery LLC'`; absent for a person, whose name the endpoint sends as
+   * `firstname` and `lastname` instead. It is the value an entity rename posts back.
+   */
+  fullname?: string;
+
+  /**
+   * Office id; the office a create body files the client under. An update does not accept it
+   * (`ClientEditRequest` carries no office), so an edit form shows it as display-only.
+   */
   officeId: number;
 
   /** Office name, rendered in the list's Office column and the record's breadcrumb. */
@@ -227,8 +250,12 @@ export interface ClientTemplate {
   /** Offices the client may be filed under, rendered in the received order. */
   officeOptions: readonly ClientOption[];
 
-  /** Loan officers selectable for the client, labelled by `displayName`. */
-  staffOptions: readonly ClientStaffOption[];
+  /**
+   * Loan officers selectable for the client, labelled by `displayName`. Absent when the tenant has
+   * no staff: the template drops the key rather than sending a null or an empty list, so a screen
+   * that finds no member here renders an empty picker.
+   */
+  staffOptions?: readonly ClientStaffOption[];
 
   /** Date the template offers as the activation default. */
   activationDate: FineractDate;
@@ -238,6 +265,33 @@ export interface ClientTemplate {
 
   /** Datatables registered for the client entity; absent when none is registered. */
   datatables?: readonly ClientDatatable[];
+}
+
+/**
+ * The `GET /clients/template?commandParam=close|reject|withdraw` response — the reason list the
+ * close, reject and withdraw forms offer (AAP 0.7.3 row "Client actions").
+ *
+ * A separate document from `ClientTemplate`, not a variant of it: for these three `commandParam`
+ * values the endpoint answers with narrations alone, observed live as
+ * `{"isStaff":false,"narrations":[]}`, and carries no `officeId`, `officeOptions`, `activationDate`
+ * or `staffOptions` at all, so a screen reads a reason list here and nothing else. `narrations` is
+ * always present as an array, and is empty when the tenant has configured no reason for that
+ * command. The server's `isStaff` member is not modelled because no in-scope screen reads it, as
+ * with every unread member in this module.
+ *
+ * This is the typed source of the reason ids `ClientActionRequest` requires (AAP 0.7.2 row
+ * `ClientActionRequest`): a `close` body reads its `closureReasonId`, a `reject` body its
+ * `rejectionReasonId` and a `withdraw` body its `withdrawalReasonId` from `narrations`. A screen
+ * therefore never invents an id as a constant, because the configured reasons differ per tenant.
+ */
+export interface ClientNarrationTemplate {
+  /**
+   * Reasons configured for the requested command, in the server's order: the closure reasons, the
+   * rejection reasons or the withdrawal reasons, depending on `commandParam`, each carrying the id
+   * that the matching `closureReasonId`, `rejectionReasonId` or `withdrawalReasonId` member sends.
+   * Always an array, and empty when the tenant has configured none for that command.
+   */
+  narrations: readonly ClientOption[];
 }
 
 /**
@@ -360,8 +414,9 @@ export interface ClientIdentifierTemplate {
  *
  * `legalFormId` is required. The fork's `ClientDataValidator.validateForCreate` extracts it with
  * `notNull().inMinMaxRange(1, 2)`, so a create without it is rejected — 1 for a person, 2 for an
- * entity — and the legacy create screen posts it for the same reason. It is the one field this
- * model adds to AAP 0.7.2's list, because the workflow cannot complete without it.
+ * entity — and the legacy create screen posts it for the same reason. It and `fullname` are the
+ * two fields this model adds to AAP 0.7.2's list, because the workflow cannot complete without
+ * them: an entity client is named by `fullname` and carries no individual name parts.
  *
  * No member carries a client-side validation rule: the required set is the server's, the messages
  * are the server's, and nothing here adds a min, a max or a pattern the legacy form does not have
@@ -374,11 +429,25 @@ export interface ClientCreateRequest {
   /** Legal form: 1 for a person, 2 for an entity. Required by the server on create. */
   legalFormId: number;
 
-  /** First name; required by the server for a person. */
-  firstname: string;
+  /**
+   * First name; required by the server for a person (`legalFormId` 1) and left out for an entity.
+   * The server rejects it together with `fullname`, so a form fills exactly one name set.
+   */
+  firstname?: string;
 
-  /** Last name; required by the server for a person. */
-  lastname: string;
+  /**
+   * Last name; required by the server for a person (`legalFormId` 1) and left out for an entity.
+   * The server rejects it together with `fullname`, so a form fills exactly one name set.
+   */
+  lastname?: string;
+
+  /**
+   * Entity name, e.g. `'Blitzy Bakery LLC'`; required by the server for an entity (`legalFormId` 2)
+   * and left out for a person. The server rejects the individual name parts and this member sent in
+   * one body (`validateIndividualNamePartsCannotBeUsedWithFullname`), so a form fills exactly one
+   * name set.
+   */
+  fullname?: string;
 
   /** Bank-assigned external id; sent only when the form has one. */
   externalId?: string;
@@ -403,8 +472,15 @@ export interface ClientCreateRequest {
 }
 
 /**
- * The `PUT /clients/{id}` body — the create set minus the submission date, which the server keeps
- * (AAP 0.7.2 row `ClientEditRequest`; AAP 0.7.3 row "Client list and edit").
+ * The `PUT /clients/{id}` body — the create set minus the submission date, which the server
+ * keeps, and minus the office, which the update does not accept (AAP 0.7.2 row
+ * `ClientEditRequest`; AAP 0.7.3 row "Client list and edit").
+ *
+ * There is no `officeId` here on purpose. The fork's `CLIENT_UPDATE_REQUEST_DATA_PARAMETERS` does
+ * not list it, so a body carrying it is rejected with HTTP 400 and
+ * `error.msg.parameter.unsupported` ("The parameter officeId is not supported."), and the legacy
+ * edit controller never posts it: the office on the edit form is display-only, read from the
+ * record. A member the server always refuses would be a trap, so it is absent rather than optional.
  *
  * `activationDate` is optional and present because the fork accepts it: `activationDateParamName` is
  * in `CLIENT_UPDATE_REQUEST_DATA_PARAMETERS`, so an edit of a client created inactive may carry the
@@ -412,14 +488,25 @@ export interface ClientCreateRequest {
  * only; a screen sends what it has and never invents a date.
  */
 export interface ClientEditRequest {
-  /** Office the client is filed under. */
-  officeId: number;
+  /**
+   * First name as edited; required by the server for a person (`legalFormId` 1) and left out for an
+   * entity. The server rejects it together with `fullname`, so a form fills exactly one name set.
+   */
+  firstname?: string;
 
-  /** First name as edited. */
-  firstname: string;
+  /**
+   * Last name as edited; required by the server for a person (`legalFormId` 1) and left out for an
+   * entity. The server rejects it together with `fullname`, so a form fills exactly one name set.
+   */
+  lastname?: string;
 
-  /** Last name as edited. */
-  lastname: string;
+  /**
+   * Entity name as edited, e.g. `'Blitzy Bakery LLC'`; required by the server for an entity
+   * (`legalFormId` 2) and left out for a person. The server rejects the individual name parts and
+   * this member sent in one body (`validateIndividualNamePartsCannotBeUsedWithFullname`), so a form
+   * fills exactly one name set.
+   */
+  fullname?: string;
 
   /** Bank-assigned external id, when the form holds one. */
   externalId?: string;
@@ -444,7 +531,8 @@ export interface ClientEditRequest {
  * The discriminant is the thing that keeps a screen honest: a component holding an
  * `activate` request cannot read `closureReasonId` from it, a `close` request without a reason id
  * does not compile, and a closure date can never be posted to `activate`. Each reason id comes from
- * the reason list the action screen reads, never from a constant, because the ids differ per
+ * the reason list the action screen reads (`ClientNarrationTemplate.narrations`, from
+ * `GET /clients/template?commandParam=…`), never from a constant, because the ids differ per
  * tenant. Dates are `Date | null`, serialised by `client.service.ts`; the server rejects an action
  * that needs a date and receives none, with the message the screen shows verbatim.
  *
