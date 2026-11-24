@@ -1,0 +1,26 @@
+<!--
+  One notice per queued message, stacked inside the widget's single `.notification-container`. The
+  classes are the `.notification-container`/`.notification-*` rules of `web-ng/src/styles.scss` —
+  the reproduction of the legacy `_notifications.scss` widget that the component inventory's
+  `Notification` row names as this widget's visual specification — because those rules are what
+  style this stack at its fixed top-right position and give each notice its per-kind accent bar.
+  Bootstrap's alert classes are deliberately not emitted: the component mapping (AAP 0.5.2)
+  assigns them to the inline validation and server error banner, a different widget. Each close
+  control names the one notice it drops, and dismissal is the Angular `(click)` on `.close` with
+  no Bootstrap JS.
+-->
+<div class="notification-container">
+  @for (message of messages(); track message.id) {
+    <div
+      class="notification"
+      [class.notification-info]="message.kind === 'info'"
+      [class.notification-success]="message.kind === 'success'"
+      [class.notification-error]="message.kind === 'error'"
+      role="alert"
+    >
+      <button type="button" class="close" aria-label="Dismiss" (click)="dismiss(message.id)">
+        <span aria-hidden="true">&times;</span>
+      </button>{{ message.message }}
+    </div>
+  }
+</div>

@@ -10,11 +10,13 @@ import { NotificationService } from '../../core/notifications/notification.servi
  * without that screen unmounting or losing its form state (AAP 0.7.4).
  *
  * It is a view of the queue and nothing more: it reads the queue published by
- * `NotificationService`, renders one element per notice, and clears the queue on dismissal. It
- * makes no HTTP call, holds no routing state, starts no timer, auto-hides nothing and declares no
- * styles — the widget's look comes from the global `.notification-*` rules of
- * `web-ng/src/styles.scss` (AAP 0.4.4 decision 4, Rule 1 clause 6). The notice text is Fineract's
- * own, so it is interpolated verbatim and never translated (Rule 1 clause 3).
+ * `NotificationService`, renders one element per notice, and drops the single notice whose close
+ * control was clicked. It makes no HTTP call, holds no routing state, starts no timer, auto-hides
+ * nothing and declares no styles — the widget's look comes from the global `.notification-*`
+ * rules of `web-ng/src/styles.scss`, which carry the `.notification-container` stack and the
+ * per-kind accent bars the template emits (AAP 0.4.4 decision 4, AAP 0.5.2, Rule 1 clause 6). The
+ * notice text is Fineract's own, so it is interpolated verbatim and never translated (Rule 1
+ * clause 3).
  */
 @Component({
   selector: 'app-notification',
@@ -22,7 +24,7 @@ import { NotificationService } from '../../core/notifications/notification.servi
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class NotificationComponent {
-  /** The queue owner; the component reads its `messages` signal and calls only `clear()`. */
+  /** The queue owner; the component reads its `messages` signal and calls only `dismiss(id)`. */
   private readonly notifications = inject(NotificationService);
 
   /**
@@ -34,11 +36,12 @@ export class NotificationComponent {
   protected readonly messages = this.notifications.messages;
 
   /**
-   * Empties the queue: the template's close control calls this, and every visible notice goes at
-   * once. Dropping a single notice stays the queue owner's concern
-   * (`NotificationService.dismiss(id)`), never this host's.
+   * Drops exactly the notice carrying `id` — the one whose close control was clicked — by handing
+   * the id to the queue owner (`NotificationService.dismiss(id)`). Every other queued notice
+   * stays on screen, in its original order; an id that is no longer queued leaves the list
+   * untouched, so a stale click changes nothing.
    */
-  protected dismiss(): void {
-    this.notifications.clear();
+  protected dismiss(id: number): void {
+    this.notifications.dismiss(id);
   }
 }

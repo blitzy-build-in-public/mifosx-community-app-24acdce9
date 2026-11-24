@@ -28,7 +28,7 @@ describe('toFineractDate', () => {
     expect(toFineractDate(new Date(1988, 2, 14), 'en')).toBe('14 March 1988');
   });
 
-  it('keeps the contract pattern for a single-digit day and for any time of day', () => {
+  it('keeps the contract pattern for a single-digit day and for a time late in the day', () => {
     expect(toFineractDate(new Date(2026, 0, 1), 'en')).toBe('01 January 2026');
     expect(toFineractDate(new Date(2026, 10, 21, 23, 59, 59), 'en')).toBe('21 November 2026');
   });
@@ -77,7 +77,7 @@ describe('fromFineractDate', () => {
     const source = new Date(2026, 10, 21);
     const parsed = asDate(fromFineractDate(source));
 
-    expect(parsed.getTime()).toBe(source.getTime());
+    expect(parsed).toEqual(source);
     expect(parsed).not.toBe(source);
 
     source.setFullYear(2030);

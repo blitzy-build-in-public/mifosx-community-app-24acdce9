@@ -15,6 +15,11 @@
  * URL owners recognised by tools/parity/check-wiring.ts and check-endpoints.ts, so the
  * exemption list below must stay identical to theirs.
  *
+ * `core/config/app-config.service.ts` is exempted alongside them for a different reason: it
+ * fetches the static asset `assets/config.json` before any URL is known. That request is not a
+ * Fineract API call, it owns no endpoint, and it belongs in neither parity list — but it has to go
+ * through `HttpClient` to stay interceptable and testable with `HttpTestingController`.
+ *
  * Template accessibility rules are deliberately not enabled. These screens reproduce the
  * legacy Bootstrap 3 markup and look as they are, and adding semantics the legacy screens
  * never carried would be the redesign the migration forbids.
@@ -42,8 +47,9 @@ export default tseslint.config(
     extends: [tseslint.configs.recommended, angular.configs.tsRecommended],
     processor: angular.processInlineTemplates,
     rules: {
-      // Architectural gate: an error, never a warning. The only relaxation is the seven-file
-      // exemption below, so every other file reaches Fineract through a typed service.
+      // Architectural gate: an error, never a warning. The only relaxation is the exemption list
+      // below — the seven URL owners plus the config loader — so every other file reaches Fineract
+      // through a typed service.
       'no-restricted-imports': [
         'error',
         {
@@ -54,7 +60,8 @@ export default tseslint.config(
               message:
                 'Inject HttpClient only in the seven Fineract URL-owning files: auth.service.ts, ' +
                 'client.service.ts, loan.service.ts, savings.service.ts, search.service.ts, ' +
-                'datatable-gate.service.ts, fineract.interceptor.ts. Every other component and ' +
+                'datatable-gate.service.ts, fineract.interceptor.ts, and in core/config/app-config.service.ts, ' +
+                'which fetches the static assets/config.json. Every other component and ' +
                 'service reaches Fineract through its typed service.',
             },
           ],
@@ -66,7 +73,9 @@ export default tseslint.config(
   },
   {
     // The seven files that own the Fineract API surface are the only ones allowed to import
-    // HttpClient; keep this list character for character in step with the parity checks.
+    // HttpClient, together with core/config/app-config.service.ts, which resolves the runtime
+    // configuration from the static assets/config.json before any API URL exists. Keep the seven
+    // URL owners character for character in step with the parity checks.
     files: [
       'src/app/core/auth/auth.service.ts',
       'src/app/features/clients/client.service.ts',
@@ -75,6 +84,7 @@ export default tseslint.config(
       'src/app/core/api/search.service.ts',
       'src/app/core/api/datatable-gate.service.ts',
       'src/app/core/http/fineract.interceptor.ts',
+      'src/app/core/config/app-config.service.ts',
     ],
     rules: {
       'no-restricted-imports': 'off',

@@ -5,32 +5,45 @@ import { createSubmitGuard, type SubmitGuard } from './submit-guard.util';
 interface Deferred {
   readonly promise: Promise<void>;
   resolve(): void;
-  reject(reason: unknown): void;
 }
 
 /** A promise the test settles by hand, so the in-flight window can be observed. */
 function deferred(): Deferred {
   let resolve!: () => void;
-  let reject!: (reason: unknown) => void;
-  const promise = new Promise<void>((res, rej) => {
-    resolve = res;
-    reject = rej;
+  const promise = new Promise<void>((settle) => {
+    resolve = settle;
   });
 
-  return { promise, resolve, reject };
+  return { promise, resolve };
 }
 
-describe('createSubmitGuard', () => {
-  it('starts idle and reports busy only while the guarded call is in flight', async () => {
+describe('submit-guard.util', () => {
+  it('starts idle, so a fresh action button is enabled', () => {
     const guard: SubmitGuard = createSubmitGuard();
+
+    expect(guard.busy()).toBe(false);
+  });
+
+  it('awaits the callback and leaves the guard idle, having called it once', async () => {
+    const guard = createSubmitGuard();
     const pending = deferred();
     const action = vi.fn((): Promise<void> => pending.promise);
 
-    expect(guard.busy()).toBe(false);
-
     const inFlight = guard.runOnce(action);
 
+    pending.resolve();
+    await inFlight;
+
     expect(action).toHaveBeenCalledTimes(1);
+    expect(guard.busy()).toBe(false);
+  });
+
+  it('reports busy while the callback promise is pending', async () => {
+    const guard = createSubmitGuard();
+    const pending = deferred();
+    const action = vi.fn((): Promise<void> => pending.promise);
+    const inFlight = guard.runOnce(action);
+
     expect(guard.busy()).toBe(true);
 
     pending.resolve();

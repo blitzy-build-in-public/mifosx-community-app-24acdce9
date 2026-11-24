@@ -1,70 +1,111 @@
-import { TestBed } from '@angular/core/testing';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { NotificationService } from './notification.service';
+import {
+  NotificationService,
+  type NotificationKind,
+  type NotificationMessage,
+} from './notification.service';
 
+/**
+ * Behavioural spec for the queue the shared `NotificationComponent` renders and the HTTP
+ * interceptor's error mapping feeds. The service has no injected dependency, so each test builds
+ * its own instance: the queue and the id counter live in the instance, and no test may inherit
+ * another test's notices or numbering.
+ */
 describe('NotificationService', () => {
   let service: NotificationService;
 
-  const texts = (): string[] => service.messages().map((notice) => notice.message);
-  const ids = (): number[] => service.messages().map((notice) => notice.id);
+  /** One published snapshot, so a test asserts against a single state of the queue. */
+  const queue = (): readonly NotificationMessage[] => service.messages();
+  const texts = (): string[] => queue().map((notice) => notice.message);
+  const ids = (): number[] => queue().map((notice) => notice.id);
 
   beforeEach(() => {
-    // Reset explicitly so the suite does not depend on the runner clearing the module between
-    // tests: a second `configureTestingModule` on an instantiated module throws.
-    TestBed.resetTestingModule();
-    TestBed.configureTestingModule({});
-    service = TestBed.inject(NotificationService);
+    service = new NotificationService();
   });
 
-  it('starts with an empty queue', () => {
-    expect(service.messages()).toEqual([]);
+  it('queues notices in the order they are shown, keeping each kind', () => {
+    const expectedKinds: readonly NotificationKind[] = ['info', 'error', 'success'];
+
+    service.show('info', 'first');
+    service.show('error', 'second');
+    service.show('success', 'third');
+
+    const notices = queue();
+
+    expect(notices).toHaveLength(3);
+    expect(texts()).toEqual(['first', 'second', 'third']);
+    expect(notices.map((notice) => notice.kind)).toEqual(expectedKinds);
   });
 
-  it('queues notices in the order they are shown, each with a new id', () => {
-    service.show('info', 'Saved');
-    service.show('error', 'Failed to load clients');
-    service.show('success', 'Loan disbursed');
+  it('publishes a new frozen snapshot on every change and leaves the earlier one untouched', () => {
+    // The `OnPush` host re-renders because the reference changes, and freezing the published array
+    // makes the `readonly` element type a runtime fact rather than a compile-time promise.
+    const before = queue();
 
-    expect(texts()).toEqual(['Saved', 'Failed to load clients', 'Loan disbursed']);
-    expect(ids()).toEqual([1, 2, 3]);
-    expect(service.messages().map((notice) => notice.kind)).toEqual(['info', 'error', 'success']);
-  });
+    expect(before).toHaveLength(0);
 
-  it('keeps two notices carrying identical text apart by their id', () => {
-    service.show('error', 'Failed to load clients');
-    service.show('error', 'Failed to load clients');
-
-    expect(texts()).toEqual(['Failed to load clients', 'Failed to load clients']);
-    expect(ids()).toEqual([1, 2]);
-  });
-
-  it('stores the message exactly as received, without trimming or altering it', () => {
-    const fineractMessage = 'The request caused a data integrity issue to be fired by the database.';
-
-    service.show('error', fineractMessage);
-
-    expect(texts()).toEqual([fineractMessage]);
-  });
-
-  it('publishes a frozen array on every change', () => {
     service.show('info', 'Saved');
 
-    expect(Object.isFrozen(service.messages())).toBe(true);
+    const after = queue();
+
+    expect(after).not.toBe(before);
+    expect(Object.isFrozen(after)).toBe(true);
+    expect(before).toHaveLength(0);
+  });
+
+  it('clears every notice, publishing a fresh empty snapshot and tolerating a second clear', () => {
+    service.show('info', 'first');
+    service.show('error', 'second');
+
+    const before = queue();
+
+    expect(before).toHaveLength(2);
 
     service.clear();
 
-    expect(Object.isFrozen(service.messages())).toBe(true);
-    expect(service.messages()).toEqual([]);
+    const after = queue();
+
+    expect(after).toHaveLength(0);
+    expect(Object.isFrozen(after)).toBe(true);
+    expect(after).not.toBe(before);
+    expect(() => service.clear()).not.toThrow();
+    expect(queue()).toHaveLength(0);
   });
 
-  it('leaves an earlier snapshot untouched when a notice is added', () => {
-    const before = service.messages();
+  it('keeps two notices carrying identical text apart by their id', () => {
+    // No deduplication: two identical server messages are two notices a user dismisses separately.
+    service.show('error', 'same');
+    service.show('error', 'same');
 
-    service.show('info', 'Saved');
+    const notices = queue();
 
-    expect(before).toEqual([]);
-    expect(service.messages()).not.toBe(before);
+    expect(notices).toHaveLength(2);
+    expect(texts()).toEqual(['same', 'same']);
+    expect(notices[0].id).not.toBe(notices[1].id);
+  });
+
+  it('numbers each notice higher than the last, never reusing an id after a clear', () => {
+    service.show('info', 'first');
+    service.show('info', 'second');
+    service.show('info', 'third');
+
+    const issued = ids();
+    const [first, second, third] = issued;
+
+    expect(issued).toHaveLength(3);
+    expect(second).toBeGreaterThan(first);
+    expect(third).toBeGreaterThan(second);
+
+    // A stale template reference must never pick up a newer notice, so the counter keeps moving
+    // across a `clear()` rather than restarting with the emptied queue.
+    service.clear();
+    service.show('info', 'after the clear');
+
+    const afterClear = ids();
+
+    expect(afterClear).toHaveLength(1);
+    expect(afterClear[0]).toBeGreaterThan(third);
   });
 
   it('dismisses only the notice carrying the id, preserving the order of the rest', () => {
@@ -72,46 +113,66 @@ describe('NotificationService', () => {
     service.show('error', 'second');
     service.show('success', 'third');
 
-    service.dismiss(2);
+    const notices = queue();
 
-    expect(texts()).toEqual(['first', 'third']);
-    expect(ids()).toEqual([1, 3]);
+    service.dismiss(notices[1].id);
+
+    const remaining = queue();
+
+    expect(remaining).toHaveLength(2);
+    expect(remaining.map((notice) => notice.message)).toEqual(['first', 'third']);
+    expect(remaining.map((notice) => notice.id)).toEqual([notices[0].id, notices[2].id]);
+    expect(Object.isFrozen(remaining)).toBe(true);
   });
 
-  it('changes nothing and keeps the same snapshot when the id is not queued', () => {
+  it('changes nothing when the dismissed id is not queued, so the host does not re-render', () => {
     service.show('info', 'only');
-    const snapshot = service.messages();
 
-    service.dismiss(999);
+    const snapshot = queue();
+    const neverIssuedId = Number.MAX_SAFE_INTEGER;
 
+    expect(ids()).not.toContain(neverIssuedId);
+
+    service.dismiss(neverIssuedId);
+
+    // Same reference, not merely equal contents: an unchanged snapshot is what keeps the widget
+    // from re-rendering for a notice that does not exist.
     expect(service.messages()).toBe(snapshot);
     expect(texts()).toEqual(['only']);
   });
 
-  it('clears every notice', () => {
-    service.show('info', 'first');
-    service.show('error', 'second');
+  it('carries the message verbatim, with no trim, prefix or truncation', () => {
+    // Workflow W7 compares the rendered text with Fineract's `errors[].defaultUserMessage`
+    // character for character, so surrounding spaces and the trailing space have to survive.
+    const serverMessage = '  The field Principal must be less than or equal to 10,000 ';
 
-    service.clear();
+    service.show('error', serverMessage);
 
-    expect(service.messages()).toEqual([]);
+    const notices = queue();
+
+    expect(notices).toHaveLength(1);
+    expect(notices[0].message).toBe(serverMessage);
   });
 
-  it('clears an already empty queue without failing', () => {
-    expect(() => service.clear()).not.toThrow();
-    expect(service.messages()).toEqual([]);
-  });
+  it('writes nothing to the console, because a queued message may echo a field value', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-  it('never reuses an id after the queue is cleared', () => {
-    service.show('info', 'first');
-    service.clear();
+    try {
+      service.show('error', 'The field Principal must be less than or equal to 10,000');
 
-    service.show('info', 'second');
+      const notices = queue();
 
-    expect(ids()).toEqual([2]);
-  });
+      service.dismiss(notices[0].id);
+      service.show('info', 'Saved');
+      service.clear();
 
-  it('resolves as one application-wide instance from the root injector', () => {
-    expect(TestBed.inject(NotificationService)).toBe(service);
+      expect(log).not.toHaveBeenCalled();
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 });
