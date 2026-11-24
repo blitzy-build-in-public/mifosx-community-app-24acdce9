@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.angular/
+
+# No lockfile is committed for this project: every dependency is pinned exactly in package.json
+package-lock.json
+
+# Test and harness artefacts
+coverage/
+playwright-report/
+test-results/
+blob-report/
+parity-report.md
+parity-report.json
+captures/
+
+# Environment and editor files
+.env
+.env.local
+*.log
