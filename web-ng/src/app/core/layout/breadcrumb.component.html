@@ -1,10 +1,17 @@
 @if (items().length > 0) {
-  <ol class="breadcrumb">
-    @for (item of items(); track $index) {
-      <!-- The current page is Bootstrap 3's `.breadcrumb > .active` item: legacy writes
-           `<li class="active">` for it, and that class is the only rule that gives it its
-           non-link colour. Without it the last crumb renders in the inherited body colour. -->
-      <li [class.active]="$last">{{ item.label }}</li>
-    }
-  </ol>
+  <!-- The trail is a navigation landmark so assistive technology can name it and jump to it;
+       legacy Bootstrap 3 carried none, and the wrapper changes no behaviour, layout or pixel. -->
+  <nav aria-label="Breadcrumb">
+    <ol class="breadcrumb">
+      @for (item of items(); track $index) {
+        <!-- The last crumb is the current page, marked twice for two audiences. Bootstrap 3's
+             `.breadcrumb > .active` class is the presentational state legacy writes
+             (`<li class="active">`), and it is the only rule that gives the current crumb its
+             non-link colour; `aria-current="page"` announces that same fact to assistive
+             technology, which otherwise receives an anonymous list of strings. Earlier crumbs
+             carry neither. -->
+        <li [class.active]="$last" [attr.aria-current]="$last ? 'page' : null">{{ item.label }}</li>
+      }
+    </ol>
+  </nav>
 }

@@ -12,6 +12,11 @@ import { TabStripComponent, type TabDescriptor } from './tab-strip.component';
  * least one behavioural spec") and AAP 0.14.2's "no spec without an `expect`". The component is
  * controlled: the parent supplies the tabs and the active id, so every emission asserted below is
  * the whole of its outward behaviour.
+ *
+ * The Bootstrap 3 tab semantics the pattern carries are asserted here too: `role="tablist"` on the
+ * strip, one `role="tab"` per control, `aria-selected` following `activeId`, a tab stop on a control
+ * that deliberately has no link target (a bare `#` would navigate to the root route under hash
+ * routing), Enter and Space both choosing a tab, and an empty tab list rendering nothing at all.
  */
 
 /** Tabs in the order the parent supplies them; ids are deliberately not alphabetical by label. */
@@ -58,6 +63,22 @@ describe('TabStripComponent', () => {
   /** The clickable label of each tab, in render order; the chevron decorations hold no anchor. */
   function tabAnchors(fixture: ComponentFixture<TabStripComponent>): HTMLAnchorElement[] {
     return Array.from(host(fixture).querySelectorAll<HTMLAnchorElement>('li a'));
+  }
+
+  /** The tab control showing `label`, or a named failure when the strip rendered none with it. */
+  function tabAnchor(
+    fixture: ComponentFixture<TabStripComponent>,
+    label: string,
+  ): HTMLAnchorElement {
+    const anchor = tabAnchors(fixture).find(
+      (candidate) => candidate.textContent?.trim() === label,
+    );
+
+    if (anchor === undefined) {
+      throw new Error(`TabStripComponent rendered no tab labelled "${label}"`);
+    }
+
+    return anchor;
   }
 
   /** Records every id the strip reports, so an extra emission is as visible as a missing one. */
@@ -136,5 +157,61 @@ describe('TabStripComponent', () => {
       expect(anchor.hasAttribute('href')).toBe(false);
       expect(anchor.getAttribute('href')).toBeNull();
     }
+  });
+
+  it('exposes the strip as a tablist of focusable tabs, with aria-selected following activeId', () => {
+    const fixture = createStrip('general');
+
+    expect(host(fixture).querySelector('ul')?.getAttribute('role')).toBe('tablist');
+
+    for (const item of tabItems(fixture)) {
+      expect(item.getAttribute('role')).toBe('presentation');
+    }
+
+    for (const anchor of tabAnchors(fixture)) {
+      expect(anchor.getAttribute('role')).toBe('tab');
+      expect(anchor.getAttribute('tabindex')).toBe('0');
+    }
+
+    expect(tabAnchor(fixture, 'General').getAttribute('aria-selected')).toBe('true');
+    expect(tabAnchor(fixture, 'Identities').getAttribute('aria-selected')).toBe('false');
+
+    fixture.componentRef.setInput('activeId', 'identities');
+    fixture.detectChanges();
+
+    expect(tabAnchor(fixture, 'General').getAttribute('aria-selected')).toBe('false');
+    expect(tabAnchor(fixture, 'Identities').getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('chooses a tab with Enter and with Space, cancelling the default action', () => {
+    const fixture = createStrip('general');
+    const emitted = recordChanges(fixture);
+    const identities = tabAnchor(fixture, 'Identities');
+
+    const enterHandled = identities.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+    );
+
+    expect(emitted).toEqual(['identities']);
+    expect(enterHandled).toBe(false);
+
+    const space = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
+    const spaceHandled = identities.dispatchEvent(space);
+
+    expect(emitted).toEqual(['identities', 'identities']);
+    // Space would scroll the page if the default ran, so the handler cancels it.
+    expect(space.defaultPrevented).toBe(true);
+    expect(spaceHandled).toBe(false);
+  });
+
+  it('renders nothing at all when the tab list is empty', () => {
+    const fixture = createStrip('general', []);
+
+    expect(host(fixture).querySelector('.nav-tabs')).toBeNull();
+    expect(host(fixture).querySelectorAll('li')).toHaveLength(0);
+    expect(
+      host(fixture).querySelectorAll('.fa-chevron-left, .fa-chevron-right'),
+    ).toHaveLength(0);
+    expect(host(fixture).textContent?.trim()).toBe('');
   });
 });

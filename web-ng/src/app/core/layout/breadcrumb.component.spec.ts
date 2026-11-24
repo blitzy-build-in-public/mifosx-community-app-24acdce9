@@ -18,6 +18,7 @@ describe('BreadcrumbComponent', () => {
   it('renders nothing at all when the trail is empty', () => {
     fixture.detectChanges();
 
+    expect(host().querySelector('nav')).toBeNull();
     expect(host().querySelector('ol.breadcrumb')).toBeNull();
     expect(host().querySelectorAll('li')).toHaveLength(0);
     expect(host().textContent?.trim()).toBe('');
@@ -25,6 +26,7 @@ describe('BreadcrumbComponent', () => {
     fixture.componentRef.setInput('items', []);
     fixture.detectChanges();
 
+    expect(host().querySelector('nav')).toBeNull();
     expect(host().querySelector('ol.breadcrumb')).toBeNull();
     expect(host().textContent?.trim()).toBe('');
   });
@@ -46,10 +48,15 @@ describe('BreadcrumbComponent', () => {
     fixture.detectChanges();
 
     const crumbs = host().querySelectorAll('li');
+    const landmark = host().querySelector('nav[aria-label="Breadcrumb"]');
 
     expect(crumbs).toHaveLength(2);
     expect(Array.from(crumbs, (crumb) => crumb.textContent?.trim())).toEqual(['Head Office', 'Clients']);
     expect(crumbs[0].classList.contains('active')).toBe(false);
     expect(crumbs[1].classList.contains('active')).toBe(true);
+    expect(landmark).not.toBeNull();
+    expect(landmark?.querySelector('ol.breadcrumb')).toBeTruthy();
+    expect(crumbs[0].getAttribute('aria-current')).toBeNull();
+    expect(crumbs[1].getAttribute('aria-current')).toBe('page');
   });
 });

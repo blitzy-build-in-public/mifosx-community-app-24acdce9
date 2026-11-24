@@ -11,8 +11,13 @@ export const repoRoot: string = resolve(webNgRoot, '..');
 export interface WalkOptions { extensions?: readonly string[]; skip?: readonly string[] }
 /** 1-based position in a file, the form every gate reports its violations in. */
 export interface Located { line: number; column: number }
-/** A quoted literal of a scanned file. */
-export interface Literal extends Located { value: string }
+/**
+ * A quoted literal of a scanned file. `start` is the 0-based offset of its opening quote and `end` the offset of the
+ * character just past its closing quote, both counted in the text handed to {@link findUrlLiterals}. A caller that
+ * stitches `+`-joined neighbours back into the one path they build slices the text between one literal's `end` and
+ * the next literal's `start` to read the glue that joins them.
+ */
+export interface Literal extends Located { value: string; start: number; end: number }
 /** A `path:` entry of a `Routes` array with the mechanism that decides where it leads. */
 export interface RouteDecl extends Located { path: string; kind: 'component' | 'redirect' | 'wildcard' | 'lazy'; redirectTo: string | null; lazySpecifier: string | null }
 /** An `@Injectable` class; consumed by `check:wiring` gate (a). */
@@ -67,7 +72,10 @@ const literalEnd = (text: string, start: number): number => {
 /** Every quoted literal in source order, comments excluded; callers decide which are URLs. */
 export function findUrlLiterals(text: string): Literal[] {
   const stripped = stripComments(text);
-  return [...stripped.matchAll(STRINGS)].map((match) => ({ value: match.at(2) ?? '', ...locate(stripped, match.index) }));
+  return [...stripped.matchAll(STRINGS)].map((match) => {
+    const start = match.index;
+    return { value: match.at(2) ?? '', start, end: start + match[0].length, ...locate(stripped, start) };
+  });
 }
 
 const STATIC_PREFIXES: readonly string[] = ['/assets', '/images', '/global-translations', '/fonts', '/favicon'];

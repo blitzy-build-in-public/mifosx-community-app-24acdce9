@@ -39,4 +39,18 @@ export class TabStripComponent {
     }
     this.tabChange.emit(tab.id);
   }
+
+  /**
+   * Chooses the tab from the keyboard: both Enter and Space activate the tab the user has focused,
+   * as the legacy record's Bootstrap tabs did, and delegate to `select` so the keyboard and the
+   * pointer take the same path. The key's own default is suppressed because Space would otherwise
+   * scroll the page, and nothing else needs it: the anchor carries no link target of its own.
+   *
+   * The event is typed as the DOM `Event` Angular reports for a `keydown.<key>` binding; cancelling
+   * it is the only thing this method needs from it.
+   */
+  activateFromKeyboard(tab: TabDescriptor, event: Event): void {
+    event.preventDefault();
+    this.select(tab);
+  }
 }

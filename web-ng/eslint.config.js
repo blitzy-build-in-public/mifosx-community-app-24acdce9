@@ -22,8 +22,10 @@
  * URL and needs no `HttpClient`.
  *
  * Template accessibility rules are deliberately not enabled. These screens reproduce the
- * legacy Bootstrap 3 markup and look as they are, and adding semantics the legacy screens
- * never carried would be the redesign the migration forbids.
+ * legacy Bootstrap 3 markup and look as they are, so the semantics they do carry — the record
+ * tab strip's `role="tablist"`/`role="tab"`/`tabindex`/key handlers, the breadcrumb's
+ * navigation landmark and `aria-current` — are written by hand where a control needs them,
+ * rather than enforced by a blanket lint rule over markup the migration must preserve.
  */
 import tseslint from 'typescript-eslint';
 import angular from 'angular-eslint';

@@ -1,18 +1,32 @@
-<ul class="nav nav-tabs">
-  <!-- The design's two scroll chevrons are inert decoration: every tab the record keeps fits
-       the row, so they carry no handler and stay out of the accessibility tree rather than
-       presenting a control that does nothing. Bootstrap's own float utility parks the right
-       one at the strip's end, so the pair brackets the tabs instead of trailing the last. -->
-  <li aria-hidden="true"><i class="fa fa-chevron-left text-primary"></i></li>
-  @for (tab of tabs(); track tab.id) {
-    <!-- The anchor carries no link target: under hash routing a bare `#` target would
-         navigate to the root route, which the legacy tab never does. `.active` is bound, so
-         Bootstrap's JS plugin is not needed.
-         BLITZY [A11Y]: the tab is click-only, as the legacy tab is; giving it a link target or
-         a tab stop would change the legacy behaviour this migration must preserve. -->
-    <li [class.active]="tab.id === activeId()">
-      <a (click)="select(tab)">{{ tab.label }}</a>
-    </li>
-  }
-  <li class="pull-right" aria-hidden="true"><i class="fa fa-chevron-right text-primary"></i></li>
-</ul>
+<!-- An empty tab list renders nothing at all. Unguarded, the two decorative chevrons alone would
+     still give the strip its height and `.nav-tabs` its 1px bottom border, painting an empty shell
+     around no tab. -->
+@if (tabs().length > 0) {
+  <ul class="nav nav-tabs" role="tablist">
+    <!-- The design's two scroll chevrons are inert decoration: every tab the record keeps fits
+         the row, so they carry no handler and stay out of the accessibility tree rather than
+         presenting a control that does nothing. Bootstrap's own float utility parks the right
+         one at the strip's end, so the pair brackets the tabs instead of trailing the last. -->
+    <li aria-hidden="true"><i class="fa fa-chevron-left text-primary"></i></li>
+    @for (tab of tabs(); track tab.id) {
+      <!-- The anchor carries no link target: under hash routing a bare `#` target would navigate
+           to the root route, which the legacy tab never does. `.active` is bound, so Bootstrap's
+           JS plugin is not needed. Each tab is instead exposed as a tab of the strip — `role="tab"`
+           inside the `role="tablist"` of the `<ul>`, the Bootstrap 3 tab pattern AAP 0.5.2 names —
+           and is keyboard-reachable: `tabindex="0"` gives it a tab stop, Enter and Space choose it,
+           and `aria-selected` reports which one the parent currently shows. The focus state comes
+           from Bootstrap 3's own `.nav > li > a:focus` rule, so no component CSS is added. -->
+      <li role="presentation" [class.active]="tab.id === activeId()">
+        <a
+          role="tab"
+          tabindex="0"
+          [attr.aria-selected]="tab.id === activeId()"
+          (click)="select(tab)"
+          (keydown.enter)="activateFromKeyboard(tab, $event)"
+          (keydown.space)="activateFromKeyboard(tab, $event)"
+        >{{ tab.label }}</a>
+      </li>
+    }
+    <li class="pull-right" aria-hidden="true"><i class="fa fa-chevron-right text-primary"></i></li>
+  </ul>
+}
