@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { AVAILABLE_LANGS } from '../core/i18n/translate.config';
 import { DISPLAY_DATE_FORMAT, fromFineractDate, toFineractDate } from './date-format.util';
 
 /**
@@ -37,6 +38,29 @@ describe('toFineractDate', () => {
     expect(toFineractDate(null, 'en')).toBeNull();
     expect(toFineractDate(undefined, 'en')).toBeNull();
     expect(toFineractDate(new Date(Number.NaN), 'en')).toBeNull();
+  });
+
+  it('renders the month name in the language the payload carries, not in English', () => {
+    expect(toFineractDate(new Date(2026, 10, 21), 'fr')).toBe('21 novembre 2026');
+    expect(toFineractDate(new Date(2026, 10, 21), 'es')).toBe('21 noviembre 2026');
+  });
+
+  it.each(AVAILABLE_LANGS)(
+    'formats a date in %s without reporting a missing locale',
+    (language: string) => {
+      expect(toFineractDate(new Date(2026, 10, 21), language)).toMatch(/^21 .+ 2026$/u);
+    },
+  );
+
+  it('formats a regional code with its base language data', () => {
+    expect(toFineractDate(new Date(2026, 10, 21), 'pt_BR')).toBe('21 novembro 2026');
+    expect(toFineractDate(new Date(2026, 10, 21), 'fr-CA')).toBe('21 novembre 2026');
+  });
+
+  it('reports a language it ships no locale data for instead of using another language', () => {
+    expect(() => toFineractDate(new Date(2026, 10, 21), 'et')).toThrow(
+      /No Angular locale data|no locale data/i,
+    );
   });
 });
 

@@ -18,6 +18,8 @@
     "check:templates": "tsx tools/parity/check-templates.ts",
     "check:wiring": "tsx tools/parity/check-wiring.ts",
     "check:all": "npm run check:endpoints && npm run check:templates && npm run check:wiring",
+    "typecheck:harness": "tsc -p tsconfig.harness.json --noEmit",
+    "test:harness": "vitest run --config e2e/vitest.config.ts --coverage",
     "e2e": "npm run check:backend && { npm run reset:db && playwright test --config=e2e/playwright.config.ts --project=legacy; npm run reset:db && playwright test --config=e2e/playwright.config.ts --project=next; rc=$?; tsx e2e/report/parity-report.ts || rc=$?; exit $rc; }"
   },
   "dependencies": {

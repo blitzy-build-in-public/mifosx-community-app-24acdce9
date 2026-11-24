@@ -1,6 +1,7 @@
 import { formatDate } from '@angular/common';
 
 import { FINERACT_DATE_FORMAT } from '../core/config/app-config.model';
+import { ensureLocaleData } from '../core/i18n/locale-data';
 
 /**
  * Formatting and parsing for every date the application shows or sends (AAP 0.7.1,
@@ -58,15 +59,29 @@ export const DISPLAY_DATE_FORMAT: string = FINERACT_DATE_FORMAT;
  * `''`, `'Invalid Date'` or `'null'` — so a payload field is either a real date or absent, and the
  * server's own required-field rules are what reject the absence (Rule 1 clause 3).
  *
+ * The month name is rendered in the language the payload will carry, so the value and the `locale`
+ * beside it describe the same language (AAP 0.7.2, "Date handling": `dd MMMM yyyy` in the active
+ * locale). A language the application ships no CLDR data for is reported as an error rather than
+ * rendered in another language's month names — see `ensureLocaleData` in
+ * `core/i18n/locale-data.ts`.
+ *
  * @param value The date a form field holds, or `null`/`undefined` when the field is empty.
  * @param locale Locale code of the selected language, e.g. `'en'`; taken from
  * `AppConfigService.activeLocale`.
  * @returns `value` formatted as `dd MMMM yyyy`, or `null` when it is missing or invalid.
+ * @throws Error when the application ships no locale data for `locale` or for its language subtag.
  */
 export function toFineractDate(value: Date | null | undefined, locale: string): string | null {
   if (value === null || value === undefined || Number.isNaN(value.getTime())) {
     return null;
   }
+
+  // Deliberate departure from legacy, registered in the AAP: the legacy AngularJS app loaded no
+  // angular-locale bundle, so its date filter produced English month names beside a non-English
+  // `locale`; AAP 0.7.2 "Date handling" requires the active locale instead. Registering the data
+  // is what lets `formatDate` render the month name in that language, while `dateFormat` and
+  // `locale` stay exactly the values legacy sent (Rule 1 clause 2).
+  ensureLocaleData(locale);
 
   return formatDate(value, DISPLAY_DATE_FORMAT, locale);
 }

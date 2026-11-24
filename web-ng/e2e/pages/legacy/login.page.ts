@@ -165,21 +165,12 @@ function readOptionSummaries(element: HTMLElement): LanguageOptionSummary[] {
  * narrowed field by field (Rule 1 clause 4). A value that is not JSON object yields an entry with
  * every flag false and `userIdType` `'missing'`, which is the honest reading: no session fields were
  * found under that key. Only key names and booleans leave the page (Rule 1 clause 9).
+ *
+ * Like the family's other page-evaluated readers it declares no inner functions of its own, because a
+ * transpiler that preserves function names (`keepNames`) would emit a helper call into the serialised
+ * source that does not exist in the page: `userIdType` is therefore classified inline.
  */
 function summariseSessionEntries(): SessionEntrySummary[] {
-  function userIdKind(value: unknown): SessionEntrySummary['userIdType'] {
-    if (value === undefined || value === null) {
-      return 'missing';
-    }
-    if (typeof value === 'number') {
-      return 'number';
-    }
-    if (typeof value === 'string') {
-      return 'string';
-    }
-    return 'other';
-  }
-
   return Object.keys(window.localStorage).map((key): SessionEntrySummary => {
     let parsed: unknown = null;
     try {
@@ -194,10 +185,18 @@ function summariseSessionEntries(): SessionEntrySummary[] {
     const userId = record === null ? undefined : record['userId'];
     const authenticationKey = record === null ? undefined : record['authenticationKey'];
     const userPermissions = record === null ? undefined : record['userPermissions'];
+    let userIdType: SessionEntrySummary['userIdType'] = 'other';
+    if (userId === undefined || userId === null) {
+      userIdType = 'missing';
+    } else if (typeof userId === 'number') {
+      userIdType = 'number';
+    } else if (typeof userId === 'string') {
+      userIdType = 'string';
+    }
     return {
       key,
       hasUserId: record !== null && 'userId' in record,
-      userIdType: userIdKind(userId),
+      userIdType,
       hasAuthenticationKey: record !== null && 'authenticationKey' in record,
       authenticationKeyIsNonEmptyString: typeof authenticationKey === 'string' && authenticationKey.length > 0,
       hasUserPermissions: record !== null && 'userPermissions' in record,
@@ -529,21 +528,29 @@ export class LoginPage {
   private entryUrl(hash?: string): string {
     return (
       `${LEGACY_URL}/?baseApiUrl=${encodeURIComponent(FINERACT_URL)}` +
-      `&tenantIdentifier=${TENANT_ID}${hash ?? ''}`
+      `&tenantIdentifier=${encodeURIComponent(TENANT_ID)}${hash ?? ''}`
     );
   }
 
   /**
-   * Navigates to a fragment of the already-loaded app, keeping the query string of the current URL,
-   * and waits for the destination's root locator.
+   * Navigates to a fragment of the loaded app — or opens {@link entryUrl} when the page is not on it
+   * yet — keeping the query string, and waits for the destination's root locator.
    *
-   * `page.goto('#/...')` resolves against the current URL, so the entry parameters survive the move.
-   * When the AngularJS router does not react to the fragment change, assigning `window.location.hash`
-   * is the same event a link click produces, so the router picks it up; the root locator then has to
-   * appear or this throws, rather than returning on a screen that never arrived.
+   * The jump is resolved against the page's own address, never with a fragment-only argument:
+   * Playwright resolves such an argument against the configured `baseURL`, which replaces the address
+   * with `LEGACY_URL`, discards both entry query parameters, and leaves the legacy app addressing a
+   * host that is not `FINERACT_URL` (Rule 2; app/scripts/initialTasks.js:25-44). When the AngularJS
+   * router does not react to the fragment change, assigning `window.location.hash` is the same event
+   * a link click produces, so the router picks it up; the root locator then has to appear or this
+   * throws, rather than returning on a screen that never arrived.
    */
   private async gotoHash(hash: string, root: Locator): Promise<void> {
-    await this.page.goto(hash);
+    const current = this.page.url();
+    if (current.startsWith(LEGACY_URL)) {
+      await this.page.goto(new URL(hash, current).href);
+    } else {
+      await this.page.goto(this.entryUrl(hash));
+    }
     if (await this.waitForVisible(root, LOGIN_FORM_TIMEOUT_MS)) {
       return;
     }

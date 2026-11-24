@@ -9,7 +9,7 @@
  * - `#/savingaccount/:id/:action`               - app/views/savings/saving_account_actions.html
  *
  * Every navigation composes
- * `${LEGACY_URL}/?baseApiUrl=${encodeURIComponent(FINERACT_URL)}&tenantIdentifier=${TENANT_ID}`
+ * `${LEGACY_URL}/?baseApiUrl=${encodeURIComponent(FINERACT_URL)}&tenantIdentifier=${encodeURIComponent(TENANT_ID)}`
  * (Rule 2). Without both query parameters the legacy app ignores the configured backend and falls
  * back to a public demo host the rules forbid, so the parameters are composed for every `open*()`
  * call rather than inherited from whatever the previous screen navigated to.
@@ -660,7 +660,9 @@ export class SavingsPage {
    * @param hash Hash route to land on, e.g. `#/viewsavingaccount/7`; omitted, the shell entry alone.
    */
   private entryUrl(hash?: string): string {
-    const query = `?baseApiUrl=${encodeURIComponent(FINERACT_URL)}&tenantIdentifier=${TENANT_ID}`;
+    const query =
+      `?baseApiUrl=${encodeURIComponent(FINERACT_URL)}` +
+      `&tenantIdentifier=${encodeURIComponent(TENANT_ID)}`;
     return hash === undefined ? `${LEGACY_URL}/${query}` : `${LEGACY_URL}/${query}${hash}`;
   }
 

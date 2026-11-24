@@ -1,5 +1,6 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { isDevMode } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { MissingTranslationHandler, TranslateService } from '@ngx-translate/core';
 import type { MissingTranslationHandlerParams } from '@ngx-translate/core';
@@ -203,6 +204,47 @@ describe('FineractMissingTranslationHandler', () => {
       expect(warnings[0]).not.toContain('Username');
       expect(warnings[0]).not.toMatch(/authorization|authentication|password|base64|tenant|bearer/i);
     });
+
+    it('stays silent outside development mode and still returns the humanised label', async () => {
+      const harness = createHarness();
+
+      await loadLegacyBundle(harness);
+
+      const warnings = captureWarnings();
+      const handler = new FineractMissingTranslationHandler();
+      const params = missingKeyParams('label.heading.missing', harness.translate);
+
+      // Angular's `isDevMode()` reads the global `ngDevMode`, and a production build defines it as
+      // `false` — the very value `enableProdMode()` writes. Writing that global puts the handler in
+      // its production branch here without mocking the function that is under proof. The development
+      // bundle installs an object under the same name for its own diagnostics, so its descriptor is
+      // kept and put back: deleting the global outright would leave later Angular code unable to
+      // read it at all.
+      const original: PropertyDescriptor | undefined = Reflect.getOwnPropertyDescriptor(
+        globalThis,
+        'ngDevMode',
+      );
+
+      try {
+        Reflect.set(globalThis, 'ngDevMode', false);
+
+        // Not vacuous: the flag really reads false while the handler below runs.
+        expect(isDevMode()).toBe(false);
+
+        expect(handler.handle(params)).toBe('Missing');
+        expect(handler.handle(params)).toBe('Missing');
+        expect(warnings).toHaveLength(0);
+      } finally {
+        if (original === undefined) {
+          Reflect.deleteProperty(globalThis, 'ngDevMode');
+        } else {
+          Reflect.defineProperty(globalThis, 'ngDevMode', original);
+        }
+      }
+
+      // The restore itself is pinned, so a leaked flag cannot silence the dev-mode warning above.
+      expect(isDevMode()).toBe(true);
+    });
   });
 });
 
@@ -211,6 +253,8 @@ describe('humaniseKey', () => {
     ['label.heading.clients', 'Clients'],
     ['label.input.user_name', 'User Name'],
     ['client.missing.camelCaseKey', 'Camel Case Key'],
+    ['client.missing.IDField', 'ID Field'],
+    ['label.input.CLIENT_ID', 'CLIENT ID'],
     ['', ''],
     ['   ', ''],
   ];

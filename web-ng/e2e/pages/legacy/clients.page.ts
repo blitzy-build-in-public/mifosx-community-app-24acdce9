@@ -523,19 +523,24 @@ export class ClientsPage {
    * Navigates to a legacy hash route, keeping the entry query string, and waits for the screen root.
    *
    * The first navigation opens {@link entryUrl} so the query parameters are in place. Every later one
-   * is a same-document hash change against the current address, which is what the legacy router
-   * listens for (`html5Mode(false)`, `hashPrefix('')` — AAP 0.3.4 row 2). If the router does not
-   * react to the navigation — the hash is unchanged — the route is set through `location.hash`, which
-   * is the fallback a user's own address edit amounts to.
+   * is resolved against the page's own address: a fragment-only argument is resolved by Playwright
+   * against the configured `baseURL`, which replaces the whole address with `LEGACY_URL` and discards
+   * the query string, so the legacy app would reload without `baseApiUrl`/`tenantIdentifier`, derive
+   * its API host from its own hostname and stop addressing `FINERACT_URL` (Rule 2,
+   * app/scripts/initialTasks.js:25-44). Resolved this way only the fragment moves, which is what the
+   * legacy router listens for (`html5Mode(false)`, `hashPrefix('')` — AAP 0.3.4 row 2). If the router
+   * does not react to the navigation — the hash is unchanged — the route is set through
+   * `location.hash`, which is the fallback a user's own address edit amounts to.
    *
    * @param hash Hash route to open, with or without its leading `#`.
    */
   private async gotoHash(hash: string): Promise<void> {
     const target = hash.startsWith('#') ? hash : `#${hash}`;
-    if (!this.page.url().startsWith(LEGACY_URL)) {
+    const current = this.page.url();
+    if (!current.startsWith(LEGACY_URL)) {
       await this.page.goto(this.entryUrl(target), { waitUntil: 'domcontentloaded' });
     } else {
-      await this.page.goto(target, { waitUntil: 'domcontentloaded' });
+      await this.page.goto(new URL(target, current).href, { waitUntil: 'domcontentloaded' });
       if (!this.page.url().includes(target)) {
         await this.page.evaluate((next: string) => {
           window.location.hash = next;
