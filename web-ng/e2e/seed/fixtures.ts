@@ -10,10 +10,11 @@
  *
  * - **Importing it is inert.** Reading it opens no socket, sends no request, writes no file and
  *   throws nothing, so `npx playwright test --list` exits 0 with no environment configured and no
- *   backend running (AAP 0.10.3). The address and tenant constants read the environment at import,
- *   but only as an override of a default, so an unset variable can pick the default and can never
- *   fail. Everything that can fail — missing credentials, an HTTP call, a payload of the wrong
- *   shape — lives inside a function body and fails at call time.
+ *   backend running (AAP 0.10.3). The address and tenant constants read the environment at import —
+ *   `FINERACT_URL`, `LEGACY_URL` and `NEXT_URL` for the three addresses, `TENANT_ID` or else
+ *   `FINERACT_TENANT_ID` for the tenant — but only as an override of a default, so an unset variable
+ *   can pick the default and can never fail. Everything that can fail — missing credentials, an HTTP
+ *   call, a payload of the wrong shape — lives inside a function body and fails at call time.
  * - **The run date is Fineract's.** Every date a workflow seeds, submits or compares derives from
  *   `readBusinessDate()`, the tenant's business date read over the API, never from the browser
  *   clock (Rule 1 clause 2; AAP 0.10.1, "Run date").
@@ -24,10 +25,30 @@
 
 import { request } from '@playwright/test';
 
-/** Reads an environment setting, falling back when it is unset or blank. Internal to this module. */
+/**
+ * Reads the first non-blank value among a setting's accepted variable names, falling back when none
+ * of them is set to one. Internal to this module: the one reader behind every environment setting,
+ * so a setting with an accepted alias resolves by the same precedence as a setting without.
+ *
+ * @param envNames Accepted variable names, in the order they are read.
+ * @param fallback Value used when none of the names is set to a non-blank value.
+ */
+function resolveFirstNonBlank(envNames: readonly string[], fallback: string): string {
+  for (const envName of envNames) {
+    const configured = (process.env[envName] ?? '').trim();
+    if (configured.length > 0) {
+      return configured;
+    }
+  }
+  return fallback;
+}
+
+/**
+ * Reads an environment setting that has one accepted name, falling back when it is unset or blank.
+ * Internal to this module.
+ */
 function resolveSetting(envName: string, fallback: string): string {
-  const configured = (process.env[envName] ?? '').trim();
-  return configured.length > 0 ? configured : fallback;
+  return resolveFirstNonBlank([envName], fallback);
 }
 
 /**
@@ -58,8 +79,16 @@ export const NEXT_URL: string = resolveBaseUrl('NEXT_URL', 'http://localhost:430
 /** The API version segment every Fineract resource path sits below (`apiVer` in the legacy app). */
 export const API_PATH = '/fineract-provider/api/v1';
 
-/** Fineract tenant the harness runs as: `TENANT_ID`, or the default tenant `default`. */
-export const TENANT_ID: string = resolveSetting('TENANT_ID', 'default');
+/**
+ * Fineract tenant the harness runs as: the first non-blank of `TENANT_ID` then
+ * `FINERACT_TENANT_ID` — the spelling the host this suite runs on exports, as it exports the
+ * `FINERACT_USERNAME`/`FINERACT_PASSWORD` pair — or the default tenant `default` when neither is
+ * set. The seed, the page objects' entry URLs and every request's tenant header carry the answer.
+ */
+export const TENANT_ID: string = resolveFirstNonBlank(
+  ['TENANT_ID', 'FINERACT_TENANT_ID'],
+  'default',
+);
 
 /**
  * Name of the tenant header the API contract fixes, and the one both front ends send. `apiHeaders()`
@@ -104,19 +133,13 @@ export function apiUrl(path: string): string {
 
 /**
  * Reads the first non-blank value among one credential's accepted variables, or `''` when none of
- * them is set. Internal to this module: the credentials are the only setting with more than one
- * accepted name, and {@link readCredentials} reports an absent value itself.
+ * them is set. Internal to this module: {@link readCredentials} reports an absent value itself, so
+ * this reader answers with `''` rather than with a default.
  *
  * @param envNames Accepted variable names, in the order they are read.
  */
 function resolveCredential(envNames: readonly string[]): string {
-  for (const envName of envNames) {
-    const configured = (process.env[envName] ?? '').trim();
-    if (configured.length > 0) {
-      return configured;
-    }
-  }
-  return '';
+  return resolveFirstNonBlank(envNames, '');
 }
 
 /** The Fineract credential pair the harness authenticates with. */
@@ -647,16 +670,23 @@ export function formatDateOnly(date: Date): string {
  * The staff member the seed creates — the AAP 0.10.1 row "Staff: Parity Officer, loan officer,
  * office 1 (Head Office)".
  *
- * The table names one display name; Fineract staff records a first and a last name, so the two-word
- * name is split at its space. That split derives the two fields from the table's single value rather
- * than inventing either of them.
+ * The table gives one two-word value, and Fineract's staff record keeps a first and a last name, so
+ * the pair below is that value split at its space — `Parity`, then `Officer` — rather than either
+ * name invented. The name the screens show is not the table's label but the one Fineract composes
+ * from the pair, last name first; see {@link StaffSeed.displayName}.
  */
 export interface StaffSeed {
   /** Given name Fineract stores for the staff member. */
   readonly firstname: string;
   /** Family name Fineract stores for the staff member. */
   readonly lastname: string;
-  /** Name the client and loan screens display, which Fineract composes from the two above. */
+  /**
+   * Name the client and loan screens display. Fineract composes it from the two names above — the
+   * last name, a comma and a space, then the first name (`StaffWriteServiceImpl.createStaff`) — and
+   * stores it as the staff member's display name, so this seed's is `Officer, Parity`, not the AAP
+   * table's `Parity Officer`. The staff dropdowns label their options with it, which makes it the
+   * value a loan officer is chosen by.
+   */
   readonly displayName: string;
   /** Office the staff member belongs to: office 1, Head Office. */
   readonly officeId: number;
@@ -667,11 +697,11 @@ export interface StaffSeed {
 }
 
 /** The seed staff member of AAP 0.10.1, consumed by `seed/seed.ts` and by the loan page objects,
- * which select it as the loan officer. */
+ * which select its `displayName` as the loan officer. */
 export const SEED_STAFF = {
   firstname: 'Parity',
   lastname: 'Officer',
-  displayName: 'Parity Officer',
+  displayName: 'Officer, Parity',
   officeId: 1,
   officeName: 'Head Office',
   isLoanOfficer: true,

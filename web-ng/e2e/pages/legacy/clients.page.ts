@@ -95,7 +95,11 @@ export interface SelectOptionSummary {
 export interface ClientFormValues {
   /** Office to select by its visible label, e.g. `Head Office`; already chosen on the edit form. */
   readonly officeName?: string;
-  /** Staff to select by its visible label, e.g. `Parity Officer`; a loan officer is optional. */
+  /**
+   * Staff to select by its visible label, e.g. `Officer, Parity` — the name Fineract composes from
+   * a staff member's last and first names, which is what the dropdown shows; a loan officer is
+   * optional.
+   */
   readonly staffName?: string;
   /** First name (`#firstname`) — required by the form on the person branch. */
   readonly firstName: string;

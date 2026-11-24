@@ -65,7 +65,10 @@ export interface SeedEntityResult {
 
 /** The four entities the seed creates, in creation order. */
 export interface SeedEntities {
-  /** `Parity Officer` — the loan officer the loan workflows select (AAP 0.10.1). */
+  /**
+   * `Officer, Parity` — the loan officer the loan workflows select, the name Fineract composes from
+   * the AAP 0.10.1 first and last names.
+   */
   readonly staff: SeedEntityResult;
   /** `Parity Loan` — the product W4, W5, W6 and W7 use (AAP 0.10.1). */
   readonly loanProduct: SeedEntityResult;
@@ -635,6 +638,7 @@ const SEED_USAGE: CliUsage = {
   environment: [
     'FINERACT_URL — base address of the Blitzy Fineract backend the fixtures are written to',
     'TENANT_ID — the Fineract tenant the fixtures are created in',
+    'FINERACT_TENANT_ID — accepted alias of TENANT_ID',
     'E2E_USER / E2E_PASSWORD — the Fineract login the seed authenticates with',
     'FINERACT_USERNAME / FINERACT_PASSWORD — accepted aliases of E2E_USER / E2E_PASSWORD',
     'CODESPACES — set when the run happens in Codespaces, recorded as the run environment',

@@ -14,6 +14,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveCliIntent, type CliUsage } from '../tools/parity/lib/cli';
+import { FINERACT_URL } from './seed/fixtures';
 
 /** Where the run happened; the report header names it (AAP 0.10.4). */
 export type BackendEnvironment = 'mac' | 'codespaces';
@@ -23,8 +24,14 @@ export interface BackendInfo {
   fineractUrl: string; checkedAt: string;
 }
 
-/** Server root of the backend: `FINERACT_URL`, or the locally built Fineract on 8443 (Rule 2). */
-export const FINERACT_URL: string = process.env['FINERACT_URL'] ?? 'https://localhost:8443';
+/**
+ * Server root of the backend this gate proves: the locally built Fineract on
+ * `https://localhost:8443` unless the run sets `FINERACT_URL` to another address (Rule 2). Resolved
+ * once, in `seed/fixtures.ts`, where an unset or blank value falls back to that default and trailing
+ * slashes are stripped, so the address recorded in `fineractUrl` is the same address the seed, the
+ * state snapshot and the page objects compose and the two can never describe different backends.
+ */
+export { FINERACT_URL };
 // The only repository a run may be backed by, the harness-owned endpoint (in harness-allowlist.json
 // only, because the application never calls it), the commit-id shape, and the git-ignored artefact.
 const REQUIRED_REMOTE = 'Blitzy-Sandbox/blitzy-fineract';

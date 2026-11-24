@@ -73,8 +73,29 @@ else
   fi
 fi
 
-FINERACT_URL="${FINERACT_URL:-https://localhost:8443}"
-health_url="$FINERACT_URL/fineract-provider/actuator/health"
+# The backend address is the one setting the whole harness shares — the seed, the snapshot and the
+# page objects all read this same `FINERACT_URL` — so it is resolved here exactly as
+# `seed/fixtures.ts`'s `resolveBaseUrl` resolves it: whitespace around the value is not part of the
+# address, an empty or whitespace-only value means "unset" and falls back to the locally built
+# Fineract (Rule 2), and every trailing slash is dropped so the health path below cannot double one.
+# The caller's `FINERACT_URL` is left as it was set; only this local copy is adjusted.
+trim_whitespace() {
+  # `String.prototype.trim` in parameter expansion alone — no sed, no tr — so macOS bash 3.2 and Linux
+  # bash resolve the same address from the same value.
+  local value="$1"
+  value=${value#"${value%%[![:space:]]*}"}
+  value=${value%"${value##*[![:space:]]}"}
+  printf '%s' "$value"
+}
+
+fineract_url=$(trim_whitespace "${FINERACT_URL:-}")
+if [ -z "$fineract_url" ]; then
+  fineract_url='https://localhost:8443'
+fi
+while [ "${fineract_url%/}" != "$fineract_url" ]; do
+  fineract_url=${fineract_url%/}
+done
+health_url="$fineract_url/fineract-provider/actuator/health"
 compose_dir=$(cd "$(dirname "$FINERACT_COMPOSE_FILE")" && pwd)
 compose_file="$compose_dir/$(basename "$FINERACT_COMPOSE_FILE")"
 
