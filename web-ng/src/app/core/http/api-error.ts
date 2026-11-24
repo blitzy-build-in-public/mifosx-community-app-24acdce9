@@ -75,38 +75,53 @@ export class ApiError extends Error {
   }
 }
 
-/**
- * Narrows `HttpErrorResponse.error`, which is `unknown` by declaration: an object for a body the
- * server sent, a string when something in between answered with text, a `ProgressEvent` when the
- * transport itself failed. This guard is the single documented boundary where that loosely typed
- * value is narrowed, and it is applied to each entry of `errors` as well; it rejects `null`,
- * primitives, arrays, and objects carrying neither a `defaultUserMessage` nor a conforming
- * `errors` array.
- */
-function isFineractErrorBody(value: unknown): value is FineractErrorBody {
+/** Whether one entry of `errors` carries the text `validationErrors` reports (AAP 0.7.2). */
+function isFineractValidationError(value: unknown): value is FineractValidationError {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return false;
   }
-  const candidate = value as { defaultUserMessage?: unknown; errors?: unknown };
-  const errors = candidate.errors;
-  if (errors !== undefined && (!Array.isArray(errors) || !errors.every((entry) => isFineractErrorBody(entry)))) {
-    return false;
+  return typeof (value as { defaultUserMessage?: unknown }).defaultUserMessage === 'string';
+}
+
+/**
+ * Reads `HttpErrorResponse.error`, which is `unknown` by declaration: an object for a body the
+ * server sent, a string when something in between answered with text, a `ProgressEvent` when the
+ * transport itself failed. This reader is the single documented boundary where that loosely typed
+ * value is narrowed, and it normalises rather than rejects: the body's `defaultUserMessage` is
+ * kept whenever it is a string, whatever its `errors` member holds, and `errors` is kept as the
+ * entries that conform — in the server's order — with a member of another shape counted as
+ * absent. It answers `undefined` for `null`, a primitive, an array, and a body yielding neither,
+ * so the later fallbacks in `toApiError` carry the message (AAP 0.7.2 row `FineractError`).
+ */
+function readFineractErrorBody(value: unknown): FineractErrorBody | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return undefined;
   }
-  return typeof candidate.defaultUserMessage === 'string' || Array.isArray(errors);
+  const candidate = value as { defaultUserMessage?: unknown; errors?: unknown };
+  const defaultUserMessage =
+    typeof candidate.defaultUserMessage === 'string' ? candidate.defaultUserMessage : undefined;
+  const errors: FineractValidationError[] = Array.isArray(candidate.errors)
+    ? candidate.errors.filter(isFineractValidationError)
+    : [];
+  if (defaultUserMessage === undefined && errors.length === 0) {
+    return undefined;
+  }
+  return defaultUserMessage === undefined ? { errors } : { defaultUserMessage, errors };
 }
 
 /**
  * Builds the displayable error from a failed response, choosing its message in this order and
  * returning the first non-empty string unchanged: the body's `defaultUserMessage`; the first
  * `errors[].defaultUserMessage` carrying text; Angular's own `message` for the failure; then
- * `HTTP <status>`. A blank entry counts as absent, and nothing else about the chosen string is
- * altered, so the text a screen shows is the text the server sent (workflow W7).
+ * `HTTP <status>`. A blank entry counts as absent, an absent or malformed member of the body is
+ * passed over rather than costing the body its other members, and nothing else about the chosen
+ * string is altered, so the text a screen shows is the text the server sent (workflow W7).
  *
  * @param response The failed response Angular produced.
  * @returns The one error type a service returns, carrying the status and the field-level failures.
  */
 export function toApiError(response: HttpErrorResponse): ApiError {
-  const body = isFineractErrorBody(response.error) ? response.error : undefined;
+  const body = readFineractErrorBody(response.error);
   const validationErrors: readonly FineractValidationError[] = body?.errors ?? [];
   const candidates: readonly string[] = [
     body?.defaultUserMessage ?? '',

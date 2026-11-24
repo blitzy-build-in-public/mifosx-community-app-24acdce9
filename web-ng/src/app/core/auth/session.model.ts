@@ -28,9 +28,22 @@ export interface SessionData {
  * `permissions` from it and keeps the submitted password in memory only for the call.
  */
 export interface AuthResponse {
+  /** Fineract id of the authenticated user, from `POST /authentication`; becomes `SessionData.userId`. */
   userId: number;
+
+  /** The name the user authenticated with, from `POST /authentication`; labels the user menu. */
   username: string;
+
+  /**
+   * The Basic credential from `POST /authentication`, sent as `Authorization: Basic <key>` and
+   * persisted only in the legacy session entry.
+   */
   base64EncodedAuthenticationKey: string;
+
+  /**
+   * The permission strings from `POST /authentication`, consulted through `PermissionsService`
+   * and the permission guard, `ALL_FUNCTIONS` allowing everything.
+   */
   permissions: string[];
 
   /**
@@ -57,7 +70,15 @@ export interface AuthResponse {
  * members.
  */
 export interface SessionUserResponse {
+  /** Fineract user id, and the `{id}` the restore reads `GET /users/{id}` with. */
   id: number;
+
+  /** The account name the user-menu label shows, held in `SessionService`'s user signal. */
   username: string;
+
+  /**
+   * The tenant permission list the restore reconciles the stored `userPermissions` against;
+   * absent when the response omits it.
+   */
   permissions?: string[];
 }
