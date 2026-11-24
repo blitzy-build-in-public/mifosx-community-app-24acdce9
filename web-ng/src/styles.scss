@@ -449,13 +449,34 @@ input[type="checkbox"] {
 // -----------------------------------------------------------------------------
 // Client status (plan 0.2.4: CSS on the legacy status class, consumed by StatusSwatch)
 //
-// Background only — the design shows a colour swatch and no textual status, and adding one
-// would be an improvement the migration may not make. The swatch's own 12.5px square and
-// the record header's 20.5px dot are component sizes, not global rules.
-/* BLITZY [A11Y]: colour is the only carrier of client status here. StatusSwatch keeps the
-   design's swatch and is expected to expose the status in an accessible name (title or
-   visually hidden text) so the meaning is not colour-only. */
+// Geometry and colour only — the design shows a colour swatch and no textual status, and
+// adding one would be an improvement the migration may not make (AAP 0.10.5 item 11).
+// StatusSwatchComponent and its template declare no styles of their own (Rule 1 clause 6), so
+// the indicator's two measured geometries are declared here: the clients list's 12.5px square
+// (Figma node `1:3`) and the client record header's 20.5px circle (node `1:4`). The component
+// emits `status-swatch` for both and adds `status-dot` for the record, which is why the dot's
+// rule follows the square's and overrides its geometry by source order.
+/* BLITZY [A11Y]: colour is the only carrier of client status. The migration keeps the design's
+   colour-only indicator (AAP 0.10.5 item 11) and StatusSwatch's span is aria-hidden, so a
+   screen reader learns the status only if the calling row or record states it in its own text.
+   A label, title or visually hidden word is a design decision, not a change to this rule. */
 // -----------------------------------------------------------------------------
+
+.status-swatch {
+  display: inline-block;
+  inline-size: 12.5px; // the list column's square
+  block-size: 12.5px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  vertical-align: middle;
+}
+
+.status-dot {
+  inline-size: 20.5px; // the record header's circle
+  block-size: 20.5px;
+  border-radius: 50%;
+}
 
 .status-active {
   background-color: $mx-status-active; // color-status-active
