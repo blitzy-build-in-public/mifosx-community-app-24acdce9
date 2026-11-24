@@ -1,6 +1,9 @@
 @if (items().length > 0) {
   <ol class="breadcrumb">
     @for (item of items(); track $index) {
+      <!-- The current page is Bootstrap 3's `.breadcrumb > .active` item: legacy writes
+           `<li class="active">` for it, and that class is the only rule that gives it its
+           non-link colour. Without it the last crumb renders in the inherited body colour. -->
       <li [class.active]="$last">{{ item.label }}</li>
     }
   </ol>
