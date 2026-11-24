@@ -1,23 +1,35 @@
 # Dependencies
 node_modules/
 
-# Build output
-dist/
-.angular/
-
-# No lockfile is committed for this project: every dependency is pinned exactly in package.json
+# No lockfile in the repository: every dependency is pinned exactly in package.json and
+# installed with `npm install`, never `npm ci`
 package-lock.json
 
-# Test and harness artefacts
-coverage/
-playwright-report/
-test-results/
-blob-report/
-parity-report.md
-parity-report.json
-captures/
+# Build output: ng build target directory, tsc intermediates, and the Angular CLI cache
+/dist
+/out-tsc
+/.angular
 
-# Environment and editor files
+# Test and coverage output: the coverage passes in `npm test`, and the Playwright reports
+/coverage
+/playwright-report
+/test-results
+/blob-report
+
+# Parity harness artefacts: captures written by e2e/capture/**, and the report written by
+# e2e/report/parity-report.ts
+/e2e/.captures
+/parity-report.md
+/parity-report.json
+
+# Editor and OS noise
+/.DS_Store
+Thumbs.db
+*.swp
+/.idea
+/.vscode
+
+# Credentials and run logs never enter the repository; secrets are read from the environment
 .env
 .env.local
 *.log
