@@ -18,7 +18,7 @@
     "check:templates": "tsx tools/parity/check-templates.ts",
     "check:wiring": "tsx tools/parity/check-wiring.ts",
     "check:all": "npm run check:endpoints && npm run check:templates && npm run check:wiring",
-    "e2e": "npm run check:backend && npm run reset:db && playwright test --config=e2e/playwright.config.ts --project=legacy; npm run reset:db && playwright test --config=e2e/playwright.config.ts --project=next && tsx e2e/report/parity-report.ts"
+    "e2e": "npm run check:backend && { npm run reset:db && playwright test --config=e2e/playwright.config.ts --project=legacy; npm run reset:db && playwright test --config=e2e/playwright.config.ts --project=next; rc=$?; tsx e2e/report/parity-report.ts || rc=$?; exit $rc; }"
   },
   "dependencies": {
     "@angular/common": "22.3.0",
