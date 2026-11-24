@@ -13,8 +13,9 @@
  * Rule 1 clause 9 is discharged in the same place. The `Authorization` header, the authentication
  * key and every password field are masked before an exchange record exists, so no later code path —
  * a report writer, a diff, a captured file — can serialise them: headers are reduced to presence
- * booleans and a body field named for a credential or a session becomes {@link MASKED}. The module
- * keeps no credential in a variable, writes none to a message and holds no logger.
+ * booleans and a body field or query parameter named for a credential or a session becomes
+ * {@link MASKED}. The module keeps no credential in a variable, writes none to a message and holds no
+ * logger.
  *
  * A response body arrives as a promise, so a capture that serialised only what had already resolved
  * would lose the body of the last call a workflow made. Teardown is therefore two steps:
@@ -32,22 +33,24 @@
  * 1. **Filtering** — only `fetch`/`xhr` requests below `/fineract-provider/` that are not static
  *    assets are recorded; the document, legacy `views/**` partials, translations, fonts and images
  *    are dropped before a record exists.
- * 2. **Masking** — `Authorization` and tenant headers are reduced to presence booleans; a body field
- *    whose name says credential or session material becomes {@link MASKED}, while a boolean flag that
- *    merely contains such a word is compared as it stands; a request body that is not JSON becomes a
- *    fixed marker.
+ * 2. **Masking** — `Authorization` and tenant headers are reduced to presence booleans; a body field or
+ *    a query parameter whose name says credential or session material becomes {@link MASKED}, while a
+ *    boolean flag that merely contains such a word is compared as it stands; a request body that is not
+ *    JSON becomes a fixed marker.
  * 3. **Path templating** — numeric segments become role tokens: `/clients/123` → `/clients/{clientId}`.
  * 4. **Body ids** — a numeric value under a key the run generates an id for becomes the role token of
  *    that id, so a generated id is compared by its role and its sequence, never by its value. Every
  *    reference id — office, product, staff, payment type, a `status` or `loanType` object — is compared
  *    by value, because the two front ends choosing differently is a difference the gate must report.
- * 5. **Dates** — a `…date` value becomes a day offset from the run date, in either shape Fineract
- *    reports one in: `21 November 2026` and `[2026, 11, 21]` on a run date of the same day both become
- *    `d0` (AAP 0.10.2, "Dates"; AAP 0.10.1, "Run date").
+ * 5. **Dates** — a value under a date-naming key — `submittedOnDate`, `dueDate`, `dateOfBirth` — becomes
+ *    a day offset from the run date, in either shape Fineract reports one in: `21 November 2026` and
+ *    `[2026, 11, 21]` on a run date of the same day both become `d0` (AAP 0.10.2, "Dates"; AAP 0.10.1,
+ *    "Run date"). A value under such a key that is not a date, `dateFormat` included, stays verbatim.
  * 6. **Audit block** — `timestamps` subtrees are dropped from response bodies; no workflow asserts
  *    them.
- * 7. **Query parameters** — keys sorted ascending, a repeated key joined with `,` in its own order;
- *    `command` is kept because it distinguishes Fineract action endpoints.
+ * 7. **Query parameters** — keys sorted ascending, a repeated key joined with `,` in its own order, and
+ *    a value under a credential- or session-named key masked to {@link MASKED}; `command` is kept
+ *    because it distinguishes Fineract action endpoints.
  * 8. **Key order** — every object's keys sorted recursively at normalisation time; arrays keep their
  *    order, because schedule periods, transactions and charges are ordered data (AAP 0.10.2).
  */
@@ -182,8 +185,13 @@ const GENERATED_ENTITY_NOUNS: readonly string[] = [
   'resource',
 ];
 
-/** A key carrying a date, e.g. `submittedOnDate`, `dueDate`, `approvedOnDate`. */
-const DATE_KEY_PATTERN = /date$/i;
+/**
+ * A key naming a date — `submittedOnDate`, `dueDate`, `approvedOnDate`, and `dateOfBirth`, whose name
+ * puts the word first — matched as a prefix, a suffix or after a separator, case-insensitively. The
+ * name is only the gate to the date branch: whether the value under it is a date is
+ * {@link parseFineractDate}'s decision, which is what keeps `dateFormat` and `locale` verbatim.
+ */
+const DATE_KEY_PATTERN = /(^|_|\b)date|date$/i;
 
 /**
  * Fineract's server-side audit block. AAP 0.10.2 drops timestamps no workflow asserts; the whole
@@ -247,7 +255,8 @@ export interface NormalizedExchange {
   readonly origin: string;
   /** Pathname with numeric segments templated by role, e.g. `/fineract-provider/api/v1/clients/{clientId}`. */
   readonly path: string;
-  /** Query parameters with keys sorted ascending; a repeated key keeps its values joined with `,`. */
+  /** Query parameters with keys sorted ascending; a repeated key keeps its values joined with `,`, and
+   * a credential- or session-named key's value is {@link MASKED} (Rule 1 clause 9). */
   readonly query: Readonly<Record<string, string>>;
   /** HTTP status, or `0` when no response arrived (a failed request is still evidence). */
   readonly status: number;
@@ -488,11 +497,17 @@ function normalisePath(pathname: string, roles: RoleRegistry): string {
  * `?offset=0&limit=-1` normalise alike. A repeated key keeps its own values in their own order, joined
  * with `,`: the order inside a key is the caller's, and discarding it would hide a real difference.
  * `command` is kept because it is what separates Fineract's action endpoints (AAP 0.7.3).
+ *
+ * The value of a key named for a credential or session material is {@link MASKED} instead of the values
+ * the page sent, under {@link SECRET_KEY_PATTERN} and on the same terms as a body field: the name
+ * decides, the key itself stays, and both front ends' captures compare equal by construction. A query
+ * parameter therefore cannot reach a record, a diff or a written file unmasked (Rule 1 clause 9;
+ * AAP 0.10.2, "Session and auth material").
  */
 function normaliseQuery(url: URL): Record<string, string> {
   const query: Record<string, string> = {};
   for (const key of [...new Set(url.searchParams.keys())].sort()) {
-    query[key] = url.searchParams.getAll(key).join(',');
+    query[key] = SECRET_KEY_PATTERN.test(key) ? MASKED : url.searchParams.getAll(key).join(',');
   }
   return query;
 }
@@ -608,8 +623,8 @@ function normaliseValue(
     // Dates are read before the shape branches because Fineract reports one date two ways: as the
     // payload text form `dd MMMM yyyy` and as a `[year, month, day]` triple (AAP 0.7.2; AAP 0.10.2,
     // "Dates"). Both reduce to the day offset built from the run date, so a run that spans two
-    // business dates still compares equal; a `…date` value in any other shape falls through to the
-    // branches below and is kept as it stands.
+    // business dates still compares equal; a value under a date-named key that is not a date — a
+    // `dateFormat`, say — falls through to the branches below and is kept as it stands.
     const parsedDate = parseFineractDate(value);
     if (parsedDate !== null) {
       return dateOffsetToken(parsedDate, context.runDate);
@@ -647,8 +662,8 @@ function normaliseValue(
 /**
  * Normalises a string field: a numeric value under a key the run generates an id for becomes a role
  * token, and everything else — a reference id, `dateFormat` and `locale`, whose values AAP 0.10.2
- * compares verbatim, and a `…date` value in a shape {@link parseFineractDate} does not read — is kept
- * as it stands.
+ * compares verbatim, and a value under a date-named key in a shape {@link parseFineractDate} does not
+ * read — is kept as it stands.
  */
 function normaliseText(value: string, context: WalkContext, key: string, parentKey: string): NormalizedValue {
   const role = generatedIdRole(key, parentKey);

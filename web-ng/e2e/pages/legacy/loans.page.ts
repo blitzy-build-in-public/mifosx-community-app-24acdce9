@@ -44,88 +44,154 @@ import { chooseOption } from './chosen';
 
 /** The values an application form is filled with. Only the fields a caller supplies are touched. */
 export interface LoanApplicationValues {
+  /** Visible label of the product to choose from `select#productId`, matched by `chooseOption`. */
   productName?: string;
+  /** Submitted-on date, typed into `input#submittedOnDate` as `dd MMMM yyyy`. */
   submittedOnDate?: Date;
+  /** Expected disbursement date, typed into `input#expectedDisbursementDate` the same way. */
   expectedDisbursementDate?: Date;
+  /** Principal the Terms step's `#principal` field receives, exactly as the caller supplied it. */
   principal?: string;
+  /** Number of repayments the Terms step's `#numberOfRepayments` field receives. */
   numberOfRepayments?: string;
+  /** Repayment interval the Terms step's `#repaymentEvery` field receives (`repaymentEvery`). */
   repaymentEvery?: string;
+  /** Visible label of `select#repaymentFrequencyType`, the Terms step's frequency option. */
   repaymentFrequency?: string;
+  /** Nominal interest rate the Terms step's `#interestRatePerPeriod` control receives. */
   interestRatePerPeriod?: string;
+  /** Visible label of `select#amortizationType` (`amortizationType`). */
   amortizationType?: string;
+  /** Visible label of `select#interestType` (`interestType`). */
   interestType?: string;
+  /** Visible label of `select#interestCalculationPeriodType`. */
   interestCalculationPeriodType?: string;
+  /** Visible label of `select#transactionProcessingStrategyId`, the processing strategy option. */
   transactionProcessingStrategy?: string;
+  /** Visible label of `select#loanOfficerId`, the officer the application is assigned to. */
   loanOfficerName?: string;
+  /** Visible label of `select#fundId`, the fund the application draws on. */
   fundName?: string;
+  /** One amount per charge row the wizard's Charges step already shows, in document order. */
   chargeAmounts?: string[];
 }
 
 /** One period of the repayment schedule the application form previews. */
 export interface RepaymentPreviewRow {
+  /** Period column (`#`), the previewed period's sequence number. */
   period: string;
+  /** From-date column; `''` because the legacy preview renders no period start date. */
   fromDate: string;
+  /** Due-date column, the date the period falls due. */
   dueDate: string;
+  /** Principal-due column, the principal this period repays. */
   principalDue: string;
+  /** Interest-due column, the interest this period charges. */
   interestDue: string;
+  /** Fees column, the fee charges this period collects. */
   feesDue: string;
+  /** Total-due column, everything the period demands: principal, interest and fees. */
   totalDue: string;
+  /** Total-outstanding column; `''` because the legacy preview renders none. */
   totalOutstandingForPeriod: string;
 }
 
 /** One label/value pair of the loan record's summary. */
 export interface LoanSummaryField {
+  /** The cell's label, `"<row> <column>"` such as `Principal Original`. */
   label: string;
+  /** The cell's rendered text, `''` when the record leaves the cell blank. */
   value: string;
 }
 
 /** The loan record's status, as the class its indicator carries, beside the summary's pairs. */
 export interface LoanSummary {
+  /** The class list of the record's status indicator: legacy shows a colour and no text. */
   statusClass: string;
+  /** The summary matrix's label/value pairs, in document order. */
   fields: LoanSummaryField[];
 }
 
 /** One period of the loan record's repayment schedule. */
 export interface ScheduleRow {
+  /** Period column (`#`), the schedule period's sequence number. */
   period: string;
+  /** From-date column, the period's start date. */
   fromDate: string;
+  /** Due-date column, the date the period falls due. */
   dueDate: string;
+  /** Principal-due column, the principal the period repays. */
   principalDue: string;
+  /** Interest column, the interest the period charges. */
   interestDue: string;
+  /** Fees column, the fee charges the period collects. */
   feesDue: string;
+  /** Due column, everything the period demands: principal, interest and fees. */
   totalDue: string;
+  /** Paid column, what has been paid against the period so far. */
   totalPaid: string;
+  /** Outstanding column, what the period still owes. */
   totalOutstandingForPeriod: string;
 }
 
 /** One row of the loan record's transaction list. */
 export interface TransactionRow {
+  /** Id column, the transaction's Fineract id. */
   id: string;
+  /** Transaction-date column, formatted by the legacy `DateFormat` filter. */
   date: string;
+  /** Transaction-type column: Fineract's `type.value`, without the reversal marker. */
   type: string;
+  /** Amount column, the transaction's Fineract `amount`. */
   amount: string;
+  /** Principal column, Fineract's `principalPortion`. */
   principal: string;
+  /** Interest column, Fineract's `interestPortion`. */
   interest: string;
+  /** Fees column, Fineract's `feeChargesPortion`. */
   fees: string;
+  /** Running-balance column ("Loan Balance"), Fineract's `outstandingLoanBalance`. */
   outstandingBalance: string;
+  /** `strikeoff` when the row carries that class, `''` otherwise (`manuallyReversed`). */
   reversed: string;
 }
 
 /** One row of the loan record's charge list. */
 export interface ChargeRow {
+  /** Name column, the charge's Fineract `name`. */
   name: string;
+  /** Due column, the charge's Fineract `amount`. */
   amount: string;
+  /** Paid column, Fineract's `amountPaid`. */
   amountPaid: string;
+  /** Waived column, Fineract's `amountWaived`. */
   amountWaived: string;
+  /** Outstanding column, Fineract's `amountOutstanding`. */
   amountOutstanding: string;
 }
 
 /** The values an action, repayment or charge form is filled with. */
 export interface LoanActionValues {
+  /** The form's transaction or action date control, typed as `dd MMMM yyyy`. */
   date?: Date;
+  /** The transaction amount or charge amount input, exactly as the caller supplies it. */
   amount?: string;
+  /** The note textarea, on the forms whose legacy controller renders one. */
   note?: string;
+  /** Visible label of `select#paymentTypeId`, the payment type the transaction template fills. */
   paymentType?: string;
+  /**
+   * Visible label of the charge the add-charge form's `select#chargeId` offers. The legacy option
+   * text is `"<charge name> (<currency name>)"`, e.g. `Parity Fee (US Dollar)`, and the option's
+   * value is the charge's id, which the form posts as `chargeId` (AAP 0.7.3, "Loan charges").
+   */
+  chargeName?: string;
+  /**
+   * Reason, for a form that renders a reason control — the `select#reasonId` /
+   * `select[ng-model*="eason"]` probe of `fillActionForm`. No in-scope legacy loan screen renders
+   * one today, so no workflow depends on it; it is not the charge on the add-charge form, which
+   * `chargeName` names.
+   */
   reasonName?: string;
 }
 
@@ -1035,14 +1101,15 @@ export class LoansPage {
   /**
    * Fills the add-charge form (AAP 0.7.3: `POST /loans/{id}/charges`).
    *
-   * The shared shape carries no charge field, so the charge to apply is named through `reasonName`:
-   * the form reveals its amount and due date only after a charge has been chosen, so naming one is
-   * what makes the rest of the form fillable. A charge that carries no due date leaves the date
-   * control absent, and a supplied date is then not entered — the capture of the request shows that.
+   * `chargeName` names the charge to apply — the visible label of the option `select#chargeId`
+   * offers. The form reveals its amount and due date only after a charge has been chosen, so naming
+   * one is what makes the rest of the form fillable. A charge that carries no due date leaves the
+   * date control absent, and a supplied date is then not entered — the capture of the request shows
+   * that.
    */
   async fillCharge(values: LoanActionValues): Promise<void> {
-    if (values.reasonName !== undefined) {
-      await chooseOption(this.page, this.page.locator('select#chargeId').first(), values.reasonName);
+    if (values.chargeName !== undefined) {
+      await chooseOption(this.page, this.page.locator('select#chargeId').first(), values.chargeName);
     }
     if (values.amount !== undefined) {
       const amount = this.page.locator('input#amount').first();
