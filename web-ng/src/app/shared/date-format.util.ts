@@ -21,6 +21,25 @@ import { FINERACT_DATE_FORMAT } from '../core/config/app-config.model';
  */
 
 /**
+ * The single declaration of the two shapes a Fineract response sends a date in.
+ *
+ * They are the `'yyyy-MM-dd'` string — a record's date, or a template's default — and the
+ * `[year, month, day]` triple with a one-based month, e.g. `[2026, 11, 21]`, which is how the fork
+ * serialises a `LocalDate` inside a response body and how `GET /businessdate/BUSINESS_DATE`
+ * answers.
+ *
+ * Every response model in the clients, loans and savings families imports this one name rather than
+ * declaring a copy of its own, so the wire shape the three families describe cannot drift apart
+ * (AAP 0.7.2 rows `Client`, `LoanAccount`, `SavingsAccount`).
+ *
+ * Deliberately a triple and not `readonly number[]`: only a triple names a day, while an array of
+ * any length promises values no endpoint sends. `fromFineractDate` in this same file accepts
+ * exactly these two shapes plus an already-parsed `Date`, so a wider type would promise values the
+ * parser rejects.
+ */
+export type FineractDate = string | readonly [number, number, number];
+
+/**
  * The one pattern for both a payload value and a rendered date: `dd MMMM yyyy`, e.g.
  * `21 November 2026`.
  *
@@ -40,7 +59,8 @@ export const DISPLAY_DATE_FORMAT: string = FINERACT_DATE_FORMAT;
  * server's own required-field rules are what reject the absence (Rule 1 clause 3).
  *
  * @param value The date a form field holds, or `null`/`undefined` when the field is empty.
- * @param locale Locale code of the active language, e.g. `'en'`; taken from `AppConfig.locale`.
+ * @param locale Locale code of the selected language, e.g. `'en'`; taken from
+ * `AppConfigService.activeLocale`.
  * @returns `value` formatted as `dd MMMM yyyy`, or `null` when it is missing or invalid.
  */
 export function toFineractDate(value: Date | null | undefined, locale: string): string | null {
@@ -66,8 +86,8 @@ export function toFineractDate(value: Date | null | undefined, locale: string): 
  * such a string as UTC midnight, which renders the previous day anywhere west of Greenwich, and that
  * shift would put an activation or a repayment on the wrong day.
  *
- * @param value A `Date`, a `'yyyy-MM-dd'` string (a leading date part of an ISO string is read), or
- *   a `readonly [year, month, day]` number triple.
+ * @param value A `FineractDate` — the `'yyyy-MM-dd'` string (a leading date part of an ISO string
+ *   is read) or the `readonly [year, month, day]` triple — or an already-parsed `Date`.
  * @returns A new local-midnight `Date`, or `null` when `value` is not one of those shapes or names
  *   a calendar day that does not exist.
  */

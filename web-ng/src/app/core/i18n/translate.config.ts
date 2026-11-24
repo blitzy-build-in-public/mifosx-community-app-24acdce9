@@ -66,14 +66,41 @@ export const FALLBACK_LANG = 'en';
  * list may exist anywhere, so a language can never be offered in one switcher and missing from
  * the other.
  *
- * A code belongs here only once the corresponding bundle exists at
- * `app/global-translations/locale-<code>.json`. Adding a language therefore means adding its code
- * to this array and nothing else: the bundle is referenced in place through `angular.json`, so no
- * file is created, copied or added to `src/assets` (Rule 1 clause 6), and no translation text is
- * ever inlined here. The list holds codes the checkout can actually serve; enumerating speculative
- * codes would offer a switcher entry whose load fails.
+ * **Source: the legacy bundles, served in place.** A code belongs here only once the corresponding
+ * bundle exists at `app/global-translations/locale-<code>.json`. That tree ships exactly 32
+ * `locale-*.json` files, served in place through the `assets` mapping in `web-ng/angular.json` and
+ * never copied (AAP 0.3.4 claim 5; AAP 0.6.2 row "`app/global-translations/locale-*.json`";
+ * AAP 0.4.3 integration row "Legacy translations"; Rule 1 clause 6). The list below holds the 31
+ * user-facing codes of those 32: `qqq` is deliberately not offered, because it is TranslateWiki's
+ * message-documentation pseudo-locale rather than a language anyone reads — 814 of its 855 values
+ * carry a TranslateWiki maintenance marker (`{{Identical|…}}` and the like), which offering it would
+ * put on screen where the product shows text.
+ *
+ * **Order.** `en` first, because it is the fallback language every other bundle is completed from
+ * (`FALLBACK_LANG` above) and therefore the language of the first paint; the rest ascend by code,
+ * which is the order both switchers list them in.
+ *
+ * **How this differs from legacy, and why.** The legacy switcher read its own list from
+ * `app/scripts/models/Langs.js`, which offered 14 codes: en, fr, es, pt, cs, zh_CN, hi, ka, lo, vi,
+ * my_MM, my, et and te. One of them, `et`, ships no bundle at all, so it could never load; it is not
+ * offered here. The remaining served bundles are offered, so the switcher actually switches and
+ * AAP 0.10.2's i18n comparison "checked in English and one non-English locale" is exercisable. That
+ * widening is the deliberate difference from legacy this array registers (Rule 1 clause 3), and it
+ * stays inside the same rule the code above applies: every code offered is a bundle the checkout
+ * really serves, so a user cannot pick a language and get a failed load.
+ *
+ * **Adding a language** therefore still means adding its code to this array and nothing else: the
+ * bundle is referenced in place through `angular.json`, so no file is created, copied or added to
+ * `src/assets` (Rule 1 clause 6), and no translation text is ever inlined here. Enumerating
+ * speculative codes would offer a switcher entry whose load fails.
  */
-export const AVAILABLE_LANGS: readonly string[] = ['en'];
+export const AVAILABLE_LANGS: readonly string[] = [
+  'en',
+  'br', 'cs', 'de', 'es', 'fr', 'hi', 'id',
+  'ka', 'km', 'kn', 'ko', 'lo', 'lt', 'my', 'my_MM',
+  'ne', 'nl', 'oc', 'pl', 'pt', 'pt_BR', 'skr-arab',
+  'sv', 'sw', 'te', 'tr', 'uk', 'vi', 'zh_CN', 'zh_TW',
+];
 
 /**
  * Provides the i18n stack: `TranslateService` with the legacy-prefixed HTTP loader, the initial and
@@ -92,7 +119,8 @@ export const AVAILABLE_LANGS: readonly string[] = ['en'];
  * configuration default, so that the first paint has text before `AppConfigService` resolves the
  * deployment's own `locale`. Changing the language afterwards is `TranslateService.use(code)` from
  * either switcher, which swaps the active bundle in place — no page reload and no re-bootstrap
- * (AAP 0.7.4).
+ * (AAP 0.7.4) — and that selection is also the `locale` a date-bearing payload carries, because
+ * `AppConfigService.activeLocale` reads the same service (AAP 0.1.1).
  *
  * The handler is registered as an explicit provider object for the `MissingTranslationHandler`
  * token rather than through the config object's `missingTranslationHandler` slot, whose accepted

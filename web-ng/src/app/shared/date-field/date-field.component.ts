@@ -138,8 +138,9 @@ export class DateInputValueAccessor implements ControlValueAccessor {
  * load (AAP 0.2.3 component inventory row `DateField`; AAP 0.5.4 gaps inventory row "Date picker").
  *
  * Its template carries the legacy Bootstrap 3 form markup and this file declares no styles, so the
- * label, the native control and the invalid state are styled by the global `.control-label`,
- * `input[type="date"].form-control` and `.has-error` rules alone. The value is carried as
+ * label, the native control and the invalid state are styled by the global
+ * `input[type="date"].form-control` and `.has-error` rules alone, with `.control-label` left to
+ * Bootstrap's own declaration exactly as the legacy screens leave it. The value is carried as
  * `Date | null` through `DateInputValueAccessor`. It is the only intended difference from the legacy
  * screens (AAP 0.10.5 item 1): payloads still go out with `dateFormat: 'dd MMMM yyyy'` and the active
  * `locale`, because serialising belongs to the owning feature service and never to this control

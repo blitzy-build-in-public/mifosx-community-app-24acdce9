@@ -31,9 +31,22 @@
 export const FINERACT_DATE_FORMAT = 'dd MMMM yyyy' as const;
 
 /**
+ * The type of a date-bearing payload's `dateFormat` member: the literal `'dd MMMM yyyy'`.
+ *
+ * Declared beside the constant it is derived from, so the feature model modules name one type
+ * instead of each repeating `typeof FINERACT_DATE_FORMAT` or widening the member to `string`, and
+ * so a request body cannot carry an arbitrary pattern (Rule 1 clause 2; AAP 0.7.2, the `dateFormat`
+ * member of every request row).
+ */
+export type AppDateFormat = typeof FINERACT_DATE_FORMAT;
+
+/**
  * The resolved configuration. Immutable once resolved: every consumer receives the same
  * value and no screen derives its own variation of one. In practice only `apiBaseUrl`
- * and `tenantId` differ between deployments; the rest are shared constants.
+ * and `tenantId` differ between deployments; the rest are shared constants. `locale` is
+ * fixed like the rest, but it is only the language the application starts in: the locale
+ * a date-bearing payload carries follows the user's selection through
+ * `AppConfigService.activeLocale`.
  */
 export interface AppConfig {
   /** Scheme, host and port of the Fineract server, e.g. `https://localhost:8443` — no path, no `/fineract-provider`. */
@@ -48,7 +61,12 @@ export interface AppConfig {
   /** Literal-typed, so a date-bearing payload cannot be handed an arbitrary format. */
   readonly dateFormat: typeof FINERACT_DATE_FORMAT;
 
-  /** Language sent alongside `dateFormat` on every date-bearing payload. */
+  /**
+   * The language the application starts in: the deployment's configured default, which seeds the
+   * i18n bootstrap so the first paint has text. It is the locale a date-bearing payload carries
+   * until the user selects a language, and `AppConfigService.activeLocale` is the locale payloads
+   * carry from then on.
+   */
   readonly locale: string;
 
   /** Idle minutes that elapse before the session times out (legacy 30). */
@@ -62,13 +80,14 @@ export interface AppConfig {
 }
 
 /**
- * The configuration the build ships with, and the value `AppConfigService` starts from.
+ * The configuration the build ships with: the values `web-ng/src/assets/config.json` carries.
  *
  * It exists so the type has a concrete value at compile time and so
- * `core/i18n/translate.config.ts` has a default `locale` to load before the first
- * translation is requested. It is deliberately not a fallback for a failed configuration
- * fetch: when `assets/config.json` cannot be read, `AppConfigService.load()` rejects and
- * the application does not start, rather than quietly calling a server nobody configured.
+ * `core/i18n/translate.config.ts` has a starting `locale` to load before the deployment's own
+ * configuration resolves. It is neither what `AppConfigService` starts from — that service starts
+ * from `null` and takes every value from the served file — nor a fallback for a failed configuration
+ * fetch: when `assets/config.json` cannot be read, `AppConfigService.load()` rejects and the
+ * application does not start, rather than quietly calling a server nobody configured.
  */
 export const DEFAULT_APP_CONFIG: AppConfig = {
   /** The only Fineract host this folder names; every other host arrives from configuration. */

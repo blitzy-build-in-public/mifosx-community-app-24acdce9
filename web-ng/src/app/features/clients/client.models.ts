@@ -1,3 +1,5 @@
+import type { AppDateFormat } from '../../core/config/app-config.model';
+import type { FineractDate } from '../../shared/date-format.util';
 import type { StatusKey } from '../../shared/status-swatch/status-swatch.component';
 
 /**
@@ -8,19 +10,24 @@ import type { StatusKey } from '../../shared/status-swatch/status-swatch.compone
  * screens exchange with Fineract.
  *
  * Declaration only — no class, no enum, no fixture, no Angular or RxJS import, and no loosely
- * typed escape hatch anywhere inside it (Rule 1 clause 4). The one import is the `StatusKey`
- * vocabulary the status indicator already owns, so the four-state colour vocabulary lives in
- * exactly one place and the screens' status mapping has one verdict rather than two.
+ * typed escape hatch anywhere inside it (Rule 1 clause 4). Two of the three imports are shared
+ * declarations every family uses — the response-date value `FineractDate` from
+ * `web-ng/src/app/shared/date-format.util.ts` and the payload format `AppDateFormat` from
+ * `web-ng/src/app/core/config/app-config.model.ts` — and the third is the `StatusKey` vocabulary
+ * the status indicator already owns, so the four-state colour vocabulary lives in exactly one
+ * place and the screens' status mapping has one verdict rather than two.
  *
  * **Date serialisation.** No model here stores a formatted date. A request body carries
  * `Date | null` and `client.service.ts` converts it at the API boundary with
  * `toFineractDate(value, locale)` from `web-ng/src/app/shared/date-format.util.ts`, into a body
- * that also carries `dateFormat` from `AppConfig.dateFormat` (`'dd MMMM yyyy'`) and `locale` from
- * `AppConfig.locale` (AAP 0.7.2 "Date handling"; Rule 1 clause 2). Both fields are declared
- * optional here only because AAP 0.7.2 lists them in the request shape: a component never sets
- * them, and `client.service.ts` owns a wire type that requires them. A response body carries a
- * date as the `FineractDate` triple Fineract serialises a `LocalDate` into, which
- * `fromFineractDate` turns back into a `Date` at the point a field or a cell holds it.
+ * that also carries `dateFormat` from `AppConfig.dateFormat` (`'dd MMMM yyyy'`, typed as the one
+ * `AppDateFormat`) and `locale` from `AppConfigService.activeLocale` (AAP 0.7.2 "Date handling"; Rule 1
+ * clause 2). Both members are required, not optional, so a body that omitted either would not
+ * compile: no component sets them, and the service fills them unconditionally at the boundary. A
+ * response body carries a date as the `FineractDate` declared once in
+ * `web-ng/src/app/shared/date-format.util.ts` — the `'yyyy-MM-dd'` string or the
+ * `[year, month, day]` triple the endpoints send — which `fromFineractDate` turns back into a
+ * `Date` at the point a field or a cell holds it.
  *
  * **Wire fidelity over plan shorthand.** Member names and value shapes below are the ones the
  * endpoints actually send, because Rule 1 clause 2 preserves the contract and a type that
@@ -30,8 +37,9 @@ import type { StatusKey } from '../../shared/status-swatch/status-swatch.compone
  *
  *   - a client's timeline object is keyed `timeline`, not `timestamps` (`ClientData.timeline`,
  *     and the legacy templates read `client.timeline.activatedOnDate`);
- *   - a `LocalDate` arrives as `[year, month, day]`, not as a string (`getClients` returns
- *     `"activationDate": [2026, 11, 21]`), which is why every response date is a `FineractDate`;
+ *   - a `LocalDate` arrives as `[year, month, day]` (`getClients` returns
+ *     `"activationDate": [2026, 11, 21]`), which is why every response date is a `FineractDate` —
+ *     the shared value that also admits the `'yyyy-MM-dd'` string a template default uses;
  *   - an identifier's `status` is plain text, while a client's own `status` is the
  *     `{id, code, value}` object (`ClientIdentifierData.status` is a `String`);
  *   - `staffOptions` entries carry `displayName` and no `name`, which is the label the legacy
@@ -56,24 +64,11 @@ import type { StatusKey } from '../../shared/status-swatch/status-swatch.compone
 export type ClientActionCommand = 'activate' | 'close' | 'reject' | 'withdraw' | 'reactivate';
 
 /**
- * A calendar date exactly as Fineract serialises a `LocalDate` in a response body: a
- * `[year, month, day]` triple with a one-based month, e.g. `[2026, 11, 21]`.
- *
- * Typed rather than left as a string, because the wire sends an array and a screen that treated it
- * as text would render `2026,11,21` or nothing at all. `fromFineractDate` in
- * `web-ng/src/app/shared/date-format.util.ts` converts one to the local-midnight `Date` a field or
- * a table cell holds; it also accepts the `'yyyy-MM-dd'` string and `Date` forms, so a caller never
- * has to narrow this value itself. Deliberately a tuple and not `number[]`: only a triple names a
- * day.
- */
-export type FineractDate = readonly [number, number, number];
-
-/**
  * A client's status object as the client endpoints return it (observed:
  * `{ id: 300, code: 'clientStatusType.active', value: 'Active' }`), on `GET /clients` rows, on
  * `GET /clients/{id}` and on `GET /clients/{id}/accounts` entries.
  *
- * `code` is the only member the application acts on, through `toStatusKey`. `value` is the
+ * `code` is the only member the application acts on, through `toClientStatusKey`. `value` is the
  * server's English display text and is deliberately never rendered: the design paints a colour
  * swatch with no word beside it (AAP 0.2.1 step 2, AAP 0.10.5 deliberate difference 11), and
  * showing `value` would put English on a screen whose translations come from
@@ -83,7 +78,7 @@ export interface ClientStatus {
   /** Fineract status id, e.g. `300` for active. Carried through, never compared. */
   id: number;
 
-  /** Machine code the application maps with `toStatusKey`, e.g. `'clientStatusType.active'`. */
+  /** Machine code the application maps with `toClientStatusKey`, e.g. `'clientStatusType.active'`. */
   code: string;
 
   /** Server-provided English label. Present on the wire, deliberately never displayed. */
@@ -409,8 +404,8 @@ export interface ClientIdentifierTemplate {
  * AAP 0.7.2 row `ClientCreateRequest`).
  *
  * Dates are `Date | null` and are serialised by `client.service.ts`; `dateFormat` and `locale` are
- * declared because AAP 0.7.2 lists them in the shape, and are filled by that service, never by a
- * component.
+ * required members, filled by that service from `AppConfig` and never by a component, so a body
+ * that omitted either would not compile (AAP 0.7.2 row `ClientCreateRequest`; Rule 1 clause 2).
  *
  * `legalFormId` is required. The fork's `ClientDataValidator.validateForCreate` extracts it with
  * `notNull().inMinMaxRange(1, 2)`, so a create without it is rejected — 1 for a person, 2 for an
@@ -465,10 +460,10 @@ export interface ClientCreateRequest {
   activationDate?: Date | null;
 
   /** Payload date format, filled by `client.service.ts` from `AppConfig.dateFormat`. */
-  dateFormat?: string;
+  dateFormat: AppDateFormat;
 
-  /** Payload locale, filled by `client.service.ts` from `AppConfig.locale`. */
-  locale?: string;
+  /** Payload locale, filled by `client.service.ts` from `AppConfigService.activeLocale`. */
+  locale: string;
 }
 
 /**
@@ -518,10 +513,10 @@ export interface ClientEditRequest {
   activationDate?: Date | null;
 
   /** Payload date format, filled by `client.service.ts` from `AppConfig.dateFormat`. */
-  dateFormat?: string;
+  dateFormat: AppDateFormat;
 
-  /** Payload locale, filled by `client.service.ts` from `AppConfig.locale`. */
-  locale?: string;
+  /** Payload locale, filled by `client.service.ts` from `AppConfigService.activeLocale`. */
+  locale: string;
 }
 
 /**
@@ -549,11 +544,11 @@ export type ClientActionRequest =
       /** Activation date the action posts; required by the server. */
       activationDate: Date | null;
 
-      /** Payload date format, filled by `client.service.ts`. */
-      dateFormat?: string;
+      /** Payload date format, filled by `client.service.ts` from `AppConfig.dateFormat`. */
+      dateFormat: AppDateFormat;
 
-      /** Payload locale, filled by `client.service.ts`. */
-      locale?: string;
+      /** Payload locale, filled by `client.service.ts` from `AppConfigService.activeLocale`. */
+      locale: string;
     }
   | {
       /** Closes an active client. */
@@ -565,11 +560,11 @@ export type ClientActionRequest =
       /** Chosen closure reason, from the reason list the action screen reads. */
       closureReasonId: number;
 
-      /** Payload date format, filled by `client.service.ts`. */
-      dateFormat?: string;
+      /** Payload date format, filled by `client.service.ts` from `AppConfig.dateFormat`. */
+      dateFormat: AppDateFormat;
 
-      /** Payload locale, filled by `client.service.ts`. */
-      locale?: string;
+      /** Payload locale, filled by `client.service.ts` from `AppConfigService.activeLocale`. */
+      locale: string;
     }
   | {
       /** Rejects a client that was never activated. */
@@ -581,11 +576,11 @@ export type ClientActionRequest =
       /** Chosen rejection reason, from the reason list the action screen reads. */
       rejectionReasonId: number;
 
-      /** Payload date format, filled by `client.service.ts`. */
-      dateFormat?: string;
+      /** Payload date format, filled by `client.service.ts` from `AppConfig.dateFormat`. */
+      dateFormat: AppDateFormat;
 
-      /** Payload locale, filled by `client.service.ts`. */
-      locale?: string;
+      /** Payload locale, filled by `client.service.ts` from `AppConfigService.activeLocale`. */
+      locale: string;
     }
   | {
       /** Withdraws a client application that was never activated. */
@@ -597,11 +592,11 @@ export type ClientActionRequest =
       /** Chosen withdrawal reason, from the reason list the action screen reads. */
       withdrawalReasonId: number;
 
-      /** Payload date format, filled by `client.service.ts`. */
-      dateFormat?: string;
+      /** Payload date format, filled by `client.service.ts` from `AppConfig.dateFormat`. */
+      dateFormat: AppDateFormat;
 
-      /** Payload locale, filled by `client.service.ts`. */
-      locale?: string;
+      /** Payload locale, filled by `client.service.ts` from `AppConfigService.activeLocale`. */
+      locale: string;
     }
   | {
       /** Reactivates a closed client; the server takes no body. */
@@ -656,22 +651,41 @@ export interface ClientMutationResponse {
 
 /**
  * The client status codes this application recognises, mapped to the indicator vocabulary
- * `StatusSwatchComponent` owns. Every code is the `status.code` Fineract's `ClientStatus` enum
- * declares; the four-state vocabulary is this application's own and is the only thing a screen
- * needs to know.
+ * `StatusSwatchComponent` owns. Every key is one of `ClientStatus`'s own codes in the fork's
+ * `ClientStatus.java`, normalised as all three families normalise a status code, and nothing else:
+ * `invalid`, `transfer.in.progress` and `transfer.on.hold` are absent by design.
+ *
+ * All three terminal states are `closed` — closed, rejected and withdrawn — because the design's
+ * vocabulary has no colour of its own for any of them.
  */
-const STATUS_KEY_BY_CODE: ReadonlyMap<string, StatusKey> = new Map<string, StatusKey>([
-  ['clientStatusType.active', 'active'],
-  ['clientStatusType.pending', 'pending'],
-  ['clientStatusType.closed', 'closed'],
-  ['clientStatusType.rejected', 'closed'],
-  ['clientStatusType.withdraw', 'closed'],
-]);
+const STATUS_KEY_BY_CODE: Readonly<Partial<Record<string, StatusKey>>> = {
+  active: 'active',
+  pending: 'pending',
+  closed: 'closed',
+  rejected: 'closed',
+  withdraw: 'closed',
+};
+
+/**
+ * The normalisation the three feature families share before a status code is looked up:
+ * lower-cased, the family's own message-code prefix removed if the payload carried it, and every
+ * non-alphanumeric character stripped, so the whole remaining name is the key.
+ *
+ * `clientStatusType.transfer.in.progress`, `TRANSFER_IN_PROGRESS` and `transferInProgress`
+ * therefore all normalise to `transferinprogress`.
+ */
+function normaliseClientStatusCode(code: string): string {
+  return code.toLowerCase().replace(/^clientstatustype\./, '').replace(/[^a-z0-9]/g, '');
+}
 
 /**
  * The single mapping from a Fineract client status code to the status indicator's key, shared by
  * the clients list and the client record header so both paint the same verdict for the same client
  * (AAP 0.2.3 row `StatusSwatch`; AAP 0.7.2 row `Client`).
+ *
+ * The lookup is exact. The code is lower-cased, its `clientStatusType.` prefix and every separator
+ * removed, and the whole remaining name — never just its last dot-segment — is matched against an
+ * exact table over the fork's `ClientStatus` enum.
  *
  * Recognised codes, by the state they indicate:
  *
@@ -690,10 +704,10 @@ const STATUS_KEY_BY_CODE: ReadonlyMap<string, StatusKey> = new Map<string, Statu
  * @param code The `code` of a client status object, or `undefined` when a response carried none.
  * @returns One of the four keys `StatusSwatchComponent` renders.
  */
-export function toStatusKey(code: string | undefined): StatusKey {
+export function toClientStatusKey(code: string | undefined): StatusKey {
   if (code === undefined) {
     return 'other';
   }
 
-  return STATUS_KEY_BY_CODE.get(code) ?? 'other';
+  return STATUS_KEY_BY_CODE[normaliseClientStatusCode(code)] ?? 'other';
 }

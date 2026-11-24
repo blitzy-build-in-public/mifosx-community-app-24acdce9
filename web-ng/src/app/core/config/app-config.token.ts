@@ -27,8 +27,9 @@ import type { AppConfig } from './app-config.model';
  *
  * **What a consumer receives.** The immutable resolved `AppConfig`: eight properties —
  * `apiBaseUrl`, `apiPath`, `tenantId`, `dateFormat` (the literal `dd MMMM yyyy`), `locale`
- * (the active language), `idleMinutes`, `warningSeconds` and `keepaliveMinutes`. Read it
- * through `inject(APP_CONFIG)` and derive nothing local from it, so every screen sends the
- * same tenant header and the same date format as the legacy application did.
+ * (the language the application starts in; the locale a date-bearing payload carries is
+ * `AppConfigService.activeLocale`), `idleMinutes`, `warningSeconds` and `keepaliveMinutes`.
+ * Read it through `inject(APP_CONFIG)` and derive nothing local from it, so every screen sends
+ * the same tenant header and the same date format as the legacy application did.
  */
 export const APP_CONFIG = new InjectionToken<AppConfig>('APP_CONFIG');

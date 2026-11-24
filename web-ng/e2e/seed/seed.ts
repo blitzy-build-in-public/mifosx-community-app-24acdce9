@@ -34,10 +34,11 @@
  * source of truth AAP 0.7.3 names, and each carries the enum member it encodes in a comment.
  */
 
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { request, type APIRequestContext } from '@playwright/test';
+import { detectBackendEnvironment, type BackendEnvironment } from '../check-backend';
 import {
   FINERACT_URL,
   LOCALE,
@@ -52,6 +53,7 @@ import {
   readBusinessDate,
   readCredentials,
 } from './fixtures';
+import { resolveCliIntent, type CliUsage } from '../../tools/parity/lib/cli';
 
 /** One entity the seed created: the name the plan fixes and the id Fineract assigned it. */
 export interface SeedEntityResult {
@@ -83,8 +85,8 @@ export interface SeedResult {
   readonly fineractUrl: string;
   /** Tenant the entities belong to. */
   readonly tenantId: string;
-  /** Verification environment, detected the way `web-ng/e2e/check-backend.ts` detects it. */
-  readonly environment: 'mac' | 'codespaces';
+  /** Verification environment, from the shared `detectBackendEnvironment` in `../check-backend`. */
+  readonly environment: BackendEnvironment;
   /** When the seed ran, as an ISO-8601 timestamp — a wall clock, used for provenance only. */
   readonly seededAt: string;
   /** The run date the seed read from Fineract, as `yyyy-mm-dd` (Rule 1 clause 2). */
@@ -333,16 +335,6 @@ function assertPermittedBackend(baseUrl: string): void {
   }
 }
 
-/**
- * Detects the verification environment the same way `web-ng/e2e/check-backend.ts` does: the
- * `CODESPACES` variable set to anything but `0`/`false` means Codespaces, otherwise the Mac (AAP
- * 0.10.3 keeps environment differences to variables only).
- */
-function readEnvironment(): 'mac' | 'codespaces' {
-  const codespaces = (process.env['CODESPACES'] ?? '').trim().toLowerCase();
-  return codespaces.length > 0 && codespaces !== '0' && codespaces !== 'false' ? 'codespaces' : 'mac';
-}
-
 /** Formats a run date as `yyyy-mm-dd`, reading the UTC day so no host timezone can shift it. */
 function toIsoDay(date: Date): string {
   const year = String(date.getUTCFullYear()).padStart(4, '0');
@@ -514,11 +506,32 @@ async function post(context: APIRequestContext, path: string, body: unknown): Pr
  * The directory is git-ignored by `web-ng/.gitignore` (`/e2e/.captures`), and the file holds ids,
  * names, addresses and the run date only — never a credential, an authentication key or a raw
  * response body (Rule 1 clause 9).
+ *
+ * The write is atomic, so that a consumer reading the artefact beside this script never sees a
+ * half-written document and never has to detect one: the serialised JSON goes to `seed.json.tmp` in
+ * the same directory and that file is then renamed onto `seed.json`, which within one filesystem
+ * replaces the artefact in a single step. A reader racing the run, or a crash part-way through it,
+ * therefore finds the previous artefact complete or the new one complete, never a truncated file. A
+ * failed write or rename removes the temporary file rather than leaving a partial one beside the
+ * artefact, and the failure itself is rethrown so the run still exits non-zero.
+ *
+ * @param result The provenance and ids of the run.
+ * @throws When the directory cannot be created, the document cannot be written, or the temporary
+ * file cannot be renamed into place. The error's own message is preserved.
  */
 async function writeResultArtefact(result: SeedResult): Promise<void> {
   const path = fileURLToPath(RESULT_ARTEFACT_URL);
+  const temporaryPath = `${path}.tmp`;
   await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+  try {
+    await writeFile(temporaryPath, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+    await rename(temporaryPath, path);
+  } catch (error) {
+    // `force` treats an already-absent temporary file as success, and a second failure here is
+    // swallowed so the error the caller sees is the write or rename that actually failed.
+    await rm(temporaryPath, { force: true }).catch(() => undefined);
+    throw error;
+  }
 }
 
 /** One line per created entity, in creation order — what a successful run prints and nothing more. */
@@ -553,7 +566,9 @@ function describeFailure(error: unknown): string[] {
  *
  * The run date is read once from Fineract (`readBusinessDate`) and recorded in the result, so every
  * workflow that consumes this artefact derives its dates from the tenant's business date rather than
- * the browser clock (Rule 1 clause 2). These four payloads carry no date of their own.
+ * the browser clock (Rule 1 clause 2). The read is handed the key this run already authenticated
+ * with, so a run authenticates exactly once and the only key that crosses the boundary is the one
+ * registered above for masking (Rule 1 clause 9). These four payloads carry no date of their own.
  *
  * @returns The ids of the four entities and the provenance of the run.
  * @throws When the backend is a refused public demo host (Rule 2), when credentials are missing,
@@ -575,7 +590,7 @@ export async function runSeed(): Promise<SeedResult> {
       ignoreHTTPSErrors: true,
       extraHTTPHeaders: apiHeaders(authenticationKey),
     });
-    const runDate = await readBusinessDate();
+    const runDate = await readBusinessDate(authenticationKey);
     const staffId = await post(context, '/staff', staffCreateBody());
     const loanProductId = await post(context, '/loanproducts', loanProductCreateBody());
     const loanChargeId = await post(context, '/charges', loanChargeCreateBody());
@@ -583,7 +598,7 @@ export async function runSeed(): Promise<SeedResult> {
     const result: SeedResult = {
       fineractUrl: FINERACT_URL,
       tenantId: TENANT_ID,
-      environment: readEnvironment(),
+      environment: detectBackendEnvironment(),
       seededAt: new Date().toISOString(),
       runDate: toIsoDay(runDate),
       entities: {
@@ -605,11 +620,44 @@ export async function runSeed(): Promise<SeedResult> {
 }
 
 /**
+ * What `--help` prints (finding 406f-F02): the four writes this command performs, the variables it
+ * reads — named, never valued (Rule 1 clause 9) — and the two ways it is invoked.
+ */
+const SEED_USAGE: CliUsage = {
+  name: 'seed',
+  summary: 'Creates the AAP 0.10.1 parity fixtures in a freshly recreated Blitzy Fineract and records their ids in e2e/.captures/seed.json.',
+  effects: [
+    'writes four records, in this order: staff (POST /staff), loan product (POST /loanproducts), loan charge (POST /charges), savings product (POST /savingsproducts)',
+    'writes e2e/.captures/seed.json with the four ids, the tenant, the run date and the backend it wrote to',
+    'is not idempotent: a second run against the same database fails on the names the first run created',
+    'runs after `npm run reset:db`, against the database that reset has just recreated',
+  ],
+  environment: [
+    'FINERACT_URL — base address of the Blitzy Fineract backend the fixtures are written to',
+    'TENANT_ID — the Fineract tenant the fixtures are created in',
+    'E2E_USER / E2E_PASSWORD — the Fineract login the seed authenticates with',
+    'FINERACT_USERNAME / FINERACT_PASSWORD — accepted aliases of E2E_USER / E2E_PASSWORD',
+    'CODESPACES — set when the run happens in Codespaces, recorded as the run environment',
+  ],
+  examples: [
+    'npm run seed',
+    'npx tsx e2e/seed/seed.ts',
+  ],
+};
+
+/**
  * CLI body: seeds, prints one line per created entity, and turns any failure into exit code 1 with
  * Fineract's own messages on stderr. Printing stays to ids and names, so the authentication key and
  * the password never reach the console (Rule 1 clause 9).
  */
 async function main(): Promise<void> {
+  // Usage is answered before runSeed(), so `--help` inspects the four writes without performing one
+  // (finding 406f-F02). The code is set on process.exitCode rather than forced, so a piped line survives.
+  const intent = resolveCliIntent(SEED_USAGE, process.argv.slice(2));
+  if (intent.kind === 'handled') {
+    process.exitCode = intent.exitCode;
+    return;
+  }
   try {
     const result = await runSeed();
     for (const line of entityLines(result.entities)) {

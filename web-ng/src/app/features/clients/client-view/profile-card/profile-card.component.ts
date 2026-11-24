@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { TranslatePipe } from '@ngx-translate/core';
 
 /**
  * One label/value row of the client record's profile card (AAP 0.2.3 component inventory
@@ -19,12 +20,16 @@ export interface ProfileCardField {
 /**
  * Right-hand profile card of the individual client record: the client name as the card
  * heading, the decorative avatar, the label/value rows supplied by the parent and the
- * "Performance History" sub-heading (AAP 0.2.3 row `ProfileCard`, AAP 0.2.1 step 3).
+ * performance-history sub-heading (AAP 0.2.3 row `ProfileCard`, AAP 0.2.1 step 3).
  *
  * Presentational only. It issues no request, holds no state of its own and knows no
  * `Client` model: the parent resolves every value into a display string before binding
  * it, so this component never formats a date, reads the clock or alters a value it was
- * given (AAP 0.4.2, 0.7.2, 0.14.1).
+ * given (AAP 0.4.2, 0.7.2, 0.14.1). It carries no copy either: the sub-heading resolves
+ * from the legacy `label.heading.performancehistory` key through `TranslatePipe`, so it
+ * follows the active language as every other label does and no English text is inlined
+ * here (AAP 0.2.1 step 3, AAP 0.10.2; Rule 1 clause 6 reads the shipped bundle in place
+ * rather than copying its text).
  *
  * Figma: file `DKm5TBFbXypfqyx4xUdhBw`, frame `2:2` ("Legacy"), flow "Sign in and open a
  * client record", step 3 of 3 — Individual client view, screen `1:4` (its raster in the
@@ -32,6 +37,7 @@ export interface ProfileCardField {
  */
 @Component({
   selector: 'app-profile-card',
+  imports: [TranslatePipe],
   templateUrl: './profile-card.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -46,9 +52,5 @@ export class ProfileCardComponent {
   /** Decorative client avatar, served from the legacy image tree through the `images/`
    *  entry of `angular.json` assets (AAP 0.2.4 asset inventory; the Figma file holds no
    *  exportable node for it). */
-  readonly AVATAR_SRC = 'images/client-image-placeholder.png';
-
-  /** Sub-heading the design places beneath the card's label/value rows, the text of the
-   *  legacy `label.heading.performancehistory` translation (Figma screen `1:4`). */
-  readonly PERFORMANCE_HISTORY_LABEL = 'Performance History';
+  protected readonly AVATAR_SRC = 'images/client-image-placeholder.png';
 }

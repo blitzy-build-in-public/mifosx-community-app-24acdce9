@@ -42,12 +42,21 @@
 // _chosen.scss (chosen is replaced by a native <select>), _nv.d3.scss (dashboards) and
 // _report.scss (reports).
 //
-// Two kinds of rule live in the product layer: element rules the in-scope screens match by
-// their Bootstrap 3 markup (.panel, .table, .breadcrumb, .form-control, .navbar, .btn,
-// .nav-tabs, the status classes, .alert) and a small set of single-purpose classes the
-// in-scope components name themselves because the legacy product set that type by hand:
-// .text-small, .form-label, .panel-title, .record-title, .value-key, .panel-bordered,
-// .notification-container/.notification. Each carries its token in a comment.
+// Three kinds of rule live in the product layer:
+//
+//   * rules keyed to the Bootstrap 3 markup the in-scope screens render — .panel (and
+//     .panel-heading, .panel-body, .panel-title), .table, .breadcrumb, .form-control, .navbar,
+//     .btn, .nav-tabs, .alert, hr and the status classes. `.panel-title` and `.control-label` are
+//     Bootstrap 3's own classes rather than product ones: bootstrap-sass declares `.panel-title`
+//     at 16px and this file re-values it to the design's 18px card title, and `.control-label` is
+//     deliberately left at Bootstrap's own declaration, because legacy carries it on 1,839 form
+//     labels and styles none of them.
+//   * product-only classes the components name themselves where no Bootstrap class expresses
+//     them: .form-label, .record-title, .value-key, .panel-bordered, .text-small and the
+//     notification widget's .notification-container/.notification(-info|-success|-error).
+//   * the token declarations below, each annotated with the legacy variable it reproduces.
+//
+// Each rule carries its token in a comment.
 //
 // app/styles-dev/styles.scss is NEVER compiled: it imports five ../bower_components/...
 // stylesheets that do not exist in this build, and app/ may not be modified. Everything this
@@ -70,9 +79,9 @@
 // derived from it (links, .btn-primary, the active nav item, focus glows) follows.
 $brand-primary: rgba(79, 153, 237, 1);
 
-// The design's primary-button border is #378CEB. Bootstrap computes it as
-// darken($btn-primary-bg, 5%), which lands on #389CEB for this blue, one step off the
-// measured value, so it is pinned here rather than derived.
+// The design's primary-button border is #378CEB. Bootstrap derives the border as
+// darken($btn-primary-bg, 5%) on $brand-primary — rgba(79, 153, 237, 1) above — which lands on
+// #388CEB, one step off the measured value, so the border is pinned here rather than derived.
 $btn-primary-border: #378CEB;
 
 // Not set on purpose: $brand-success/#1abc9c is the left-rail accent, and the rail is not
@@ -161,7 +170,12 @@ $mx-hairline: #EEEEEE; // color-hairline — $gray-lighter
 $mx-input-border: #E0E0E0; // color-input-border
 $mx-input-focus: #BCE0FD; // _inputs.scss :focus border
 $mx-navbar-border: #DFDFDF; // color-navbar-border
-$mx-checkbox-border: #767676; // color-checkbox-border
+$mx-checkbox-border: #767676; // color-checkbox-border — the native box no rule here paints
+
+// The notification widget's own colours — main/components/_notifications.scss, which AAP 0.2.3 and
+// 0.5.2 name as this widget's visual specification.
+$mx-notice-border: #CCCCCC; // _notifications.scss — the panel's 1px border
+$mx-notice-accent: #4F99ED; // .new-notification — the 2px accent bar's colour
 
 // Brand and status
 $mx-brand-blue: #5099ED; // color-brand-blue — $brand-primary #5099ED
@@ -178,7 +192,7 @@ $mx-radius-input: 2px; // radius-input; Bootstrap's default is 4px and the legac
                         // sets 0, so the measured 2px is the value the design shows
 $mx-radius-card: 0; // radius-card — .panel
 $mx-radius-button: 2px; // _buttons.scss:2 — every button in the product
-$mx-radius-notice: 2px; // _alerts.scss:4 — alerts and the notification widget
+$mx-radius-notice: 2px; // _alerts.scss:4 — .alert; the notification widget takes the partial's 0
 $mx-shadow-card: 0 1px 3px rgba(0, 0, 0, .14); // shadow-card — .panel, no border stroke
 
 // -----------------------------------------------------------------------------
@@ -197,22 +211,32 @@ body {
   background-color: $mx-surface;
 }
 
-// Small secondary chrome: row subtitles, the release line, metadata.
+// The product's small secondary text: a fixed 12px at #777777 (the AAP's `text-small` token).
+// Bootstrap's own `.small` utility is not reused for it: `.small` is 85% of the parent's size, so
+// inside a 13px `.panel-body` it renders 11.05px rather than the measured 12px, and it carries no
+// colour — `.small .text-muted` would still be a composition where the token is one value. Row
+// subtitles, the release line and metadata name this class.
 .text-small {
   font-size: $mx-font-size-small;
   color: $mx-text-secondary;
 }
 
-// Labels of the login form and of the filter toolbar: uppercase semibold 12px. A form
-// that wants this treatment names the class on its <label>.
-.control-label,
+// The login form's labels: uppercase semibold 12px, the AAP's `text-label-caps` token, measured on
+// the login form only (usage 2). A form that wants this treatment names `.form-label` on its
+// <label>. Bootstrap's universal `.control-label` is deliberately not captured here: legacy
+// carries it on 1,839 labels across its templates and uppercases none of them in CSS — the login
+// screen uppercases its own label text through Angular's `| uppercase` filter — so a
+// `label.control-label` keeps Bootstrap's declaration and the legacy look (14px, weight 700,
+// sentence case) on every migrated form.
 .form-label {
   font-size: $mx-font-size-label;
   font-weight: 600;
   text-transform: uppercase;
 }
 
-// A panel's own title ("List of Clients").
+// A panel's own title ("List of Clients"). `.panel-title` is Bootstrap 3's own class —
+// bootstrap-sass declares it at ceil(14px × 1.125) = 16px — and the design's card title is 18px,
+// so this file re-values Bootstrap's declaration rather than introducing a class of its own.
 .panel-title {
   font-size: $mx-font-size-card-title;
   font-weight: 700;
@@ -305,12 +329,27 @@ hr {
   border: 0;
   border-radius: 0;
   font-size: $mx-font-size-small;
-  color: $mx-text-secondary;
+  color: $mx-text-secondary; // color-text-secondary — AAP 0.2.3: 12px #777777 on the list screen
 
   // The trailing crumb is the current page, so it carries the same quiet colour rather
   // than Bootstrap's lighter grey.
   > .active {
     color: $mx-text-secondary;
+  }
+}
+
+// The record screen's crumb is #666F74 (AAP 0.2.3), one step stronger than the list's. The two
+// screens are told apart by the trail's own shape, which is the difference the AAP fixes — the
+// list shows the single "Clients" crumb, the record the office plus its trailing separator ("Head
+// Office /", the second item legacy's viewclient.html renders when the client has no staff) — so a
+// trail carrying a second item takes the stronger colour. Bootstrap 3 declares no colour on
+// `.breadcrumb` itself, and its `.breadcrumb > .active` paints the current crumb the list's grey,
+// so the record's trail states both.
+.breadcrumb:has(> li + li) {
+  color: $mx-text-strong; // color-text-strong
+
+  > .active {
+    color: $mx-text-strong;
   }
 }
 
@@ -327,7 +366,13 @@ hr {
   // The legacy focus treatment replaces Bootstrap's glow with a pale blue border.
   &:focus {
     border-color: $mx-input-focus;
-    box-shadow: inset 0 1px 1px rgba(0, 0, 0, .075), 0 0 2px rgba(97, 161, 215, .6);
+    box-shadow: inset 0 1px 1px rgba(0, 0, 0, .075), 0 0 2px rgba(102, 175, 233, .6);
+
+    // BLITZY [A11Y]: the design's focus indicator is this move of the border from #E0E0E0 to
+    // #BCE0FD (about 1.3:1 between the two states, about 1.5:1 against the white field) plus the
+    // soft glow, and Bootstrap's own `.form-control:focus` sets `outline: 0`, so the indicator
+    // sits below the 3:1 non-text contrast guidance. Implemented as the design value; a stronger
+    // indicator — a darker ring, or an outline kept on focus — needs a design decision.
   }
 
   // BLITZY [A11Y]: the measured placeholder #999999 on #FFFFFF is 2.85:1, below WCAG AA for
@@ -348,10 +393,10 @@ input[type="date"].form-control {
   color: $mx-text-select; // color-select-value
 }
 
-// The "Show Closed" control of the client list.
-input[type="checkbox"] {
-  border: 1px solid $mx-checkbox-border; // color-checkbox-border
-}
+// The "Show Closed" control of the client list is the browser's own input[type=checkbox] (AAP
+// 0.5.2), whose box the user agent draws: a border or background declared here never paints, and
+// replacing the control's appearance is a treatment the design does not show. The AAP 0.2.2 token
+// color-checkbox-border stays declared above for the manifest.
 
 // Invalid fields use Bootstrap's own .has-error / .help-block treatment; there is no second
 // validation mechanism.
@@ -405,7 +450,7 @@ input[type="checkbox"] {
 .btn-primary {
   background-color: $mx-brand-blue; // color-brand-blue
   border: 1px solid $mx-brand-border; // color-primary-border
-  color: #FFFFFF;
+  color: $mx-surface; // color-surface — the label on the brand fill
 }
 
 // The record screen's joined action row: square ends and a single 1px separator between
@@ -502,37 +547,50 @@ input[type="checkbox"] {
   border-radius: $mx-radius-notice;
 }
 
-// The notification widget NotificationComponent renders: a fixed stack at the top right,
-// clear of the 50px navbar, with one accent bar per kind. The legacy partial styled a
-// bell-anchored dropdown, and the bell is out of scope; the container and its variants are
-// what the component actually needs.
+// The notification widget NotificationComponent renders. AAP 0.2.3 and 0.5.2 name
+// main/components/_notifications.scss as its visual specification, so these are that partial's
+// values: a 250px white panel with a 1px #ccc border and a 0 0 2px rgba(0,0,0,.2) shadow, notices
+// separated by a 1px rule at 8px 5px padding in 14px text, and a 2px accent bar on the left. The
+// partial hid the panel behind a bell-anchored dropdown (`display: none` until `.open`); the bell
+// is not rendered (AAP 0.10.5 item 8), so the panel is fixed to the viewport's top-right and shows
+// as soon as a notice is queued.
 .notification-container {
   position: fixed;
-  inset-block-start: 60px;
-  inset-inline-end: 15px;
-  z-index: $zindex-navbar-fixed + 10;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 320px;
+  inset-block-start: 51px; // the partial's top: 51px, one pixel under the 50px navbar
+  inset-inline-end: 0; // the partial's right: 0
+  z-index: $zindex-navbar-fixed + 10; // the partial's 100 sat inside the navbar it hung from
+  width: 250px; // the partial's width
   max-width: calc(100vw - 30px);
+  max-height: 300px; // the partial's height, kept as a scroll ceiling rather than a fixed box
+  overflow-y: auto;
+  background-color: $mx-surface; // the partial's #fff
+  border: 1px solid $mx-notice-border; // the partial's 1px #ccc
+  box-shadow: 0 0 2px rgba(0, 0, 0, .2); // the partial's shadow
   pointer-events: none;
+
+  // The host renders this container unconditionally (app.component.html), so a container holding no
+  // notice must not paint a bordered panel over every screen. Keyed on the absence of a notice
+  // rather than on `:empty`, which a whitespace text node alone would defeat.
+  &:not(:has(> .notification)) {
+    display: none;
+  }
 }
 
 .notification {
   pointer-events: auto;
-  padding: 8px 12px;
-  background-color: $mx-surface;
-  border: 1px solid $mx-input-border;
-  border-inline-start-width: 3px;
-  border-radius: $mx-radius-notice;
-  box-shadow: $mx-shadow-card;
-  font-size: $mx-font-size-body-sm;
+  padding: 8px 5px; // the partial's .notification-list li padding
+  border-bottom: 1px solid $mx-input-border; // the partial's 1px #e0e0e0 row separator
+  border-inline-start: 2px solid transparent; // the slot for .new-notification's 2px accent bar
+  font-size: $mx-font-size-base; // the partial's 14px row text
   color: $mx-text-strong;
   overflow-wrap: break-word;
 
+  // The partial accents a notice with one colour, .new-notification's #4f99ed. NotificationService
+  // publishes three kinds, so each takes the product token for its meaning: the partial's own blue
+  // for info, the status green for success, and Bootstrap's danger red for error — the colour
+  // .alert-danger already carries.
   &.notification-info {
-    border-inline-start-color: $mx-brand-blue;
+    border-inline-start-color: $mx-notice-accent;
   }
 
   &.notification-success {

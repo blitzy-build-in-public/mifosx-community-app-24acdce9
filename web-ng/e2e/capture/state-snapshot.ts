@@ -88,7 +88,7 @@ export interface LoanSnapshot {
   readonly totalExpectedRepayment: number | null;
   /** `summary.totalOutstanding` — the balance the repayment must reduce and W5 and W6 assert. */
   readonly totalOutstanding: number | null;
-  /** `repaymentSchedule.periods[0].totalDue` — the amount W6 repays (AAP 0.7.2, `RepaymentPeriod.totalDue`). */
+  /** The first repayment period's `totalDueForPeriod` — the amount W6 repays (`RepaymentPeriod.totalDueForPeriod`). */
   readonly firstPeriodTotalDue: number | null;
   /** Transactions the loan carries; a repayment adds one (W6). */
   readonly transactionCount: number;
@@ -347,12 +347,19 @@ function clientDisplayName(client: Record<string, unknown> | null): string {
 }
 
 /**
- * `repaymentSchedule.periods[0].totalDue` — the first period's total due, which is the amount W6
- * repays (AAP 0.7.2, `RepaymentPeriod.totalDue`). `null` when the schedule carries no first period,
- * which is the state a loan is in before approval builds one.
+ * The first repayment period's `totalDueForPeriod`, which is the amount W6 repays
+ * (`RepaymentPeriod.totalDueForPeriod`; the schedule sends that key, never `totalDue`, which would
+ * read as null on both front ends). The schedule leads with a disbursement or down-payment row that
+ * carries no period number and a zero total, so the reader takes the first entry that carries a
+ * `period` number rather than the array's first element — reading element 0 would report `0` and
+ * turn W6's outstanding-balance assertion into an identity. `null` when the schedule carries no
+ * repayment period, which is the state a loan is in before approval builds one.
  */
 function firstPeriodTotalDue(schedule: Record<string, unknown> | null): number | null {
-  return asNumber(field(asRecord(asArray(field(schedule, 'periods'))[0]), 'totalDue'));
+  const firstRepayment = asArray(field(schedule, 'periods')).find(
+    (period) => asNumber(field(asRecord(period), 'period')) !== null,
+  );
+  return asNumber(field(asRecord(firstRepayment), 'totalDueForPeriod'));
 }
 
 /**

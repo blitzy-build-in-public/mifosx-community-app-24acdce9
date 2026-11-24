@@ -4,8 +4,11 @@
  *
  * Field names are the contract (Rule 1 clause 2). A renamed member is a parity break, because the
  * new application must send the same body the legacy screens send, so nothing here is prettified:
- * `loanTermFrequency`, `interestCalculationPeriodType` and `transactionProcessingStrategyId` are
- * reproduced exactly as `GET /loans/template` and `GET /loans/{id}` name them (AAP 0.7.2, 0.7.3).
+ * `loanTermFrequency` and `interestCalculationPeriodType` are reproduced exactly as `POST /loans`
+ * names them, and a response member keeps the spelling of the endpoint that returns it — which is
+ * why a template's term members are `termFrequency` and `termPeriodFrequencyType` although the
+ * posted body names the same two values `loanTermFrequency` and `loanTermFrequencyType`
+ * (AAP 0.7.2, 0.7.3).
  *
  * Declaration only. This module carries no Angular decorator, no injected collaborator, no HTTP
  * call, no fixture and no `any` (Rule 1 clause 4): a payload member the plan does not model is
@@ -13,11 +16,12 @@
  * The three functions at the end are pure — same input, same output, no clock read, no dependency
  * — so the types cost the loans feature's other files nothing to import.
  *
- * Dates never travel as formatted strings. A response date is a `FineractDateValue` (the
- * `'yyyy-MM-dd'` string or the `[year, month, day]` triple Fineract returns) and a screen reads it
- * with `fromFineractDate`; a request date is a `Date` and `loan.service.ts` writes it with
- * `toFineractDate` at the boundary, beside `dateFormat` and `locale` (AAP 0.7.2, "Date handling";
- * `shared/date-format.util.ts`).
+ * Dates never travel as formatted strings. A response date is the `FineractDate` declared once in
+ * `web-ng/src/app/shared/date-format.util.ts` — the `'yyyy-MM-dd'` string or the
+ * `[year, month, day]` triple Fineract returns — and a screen reads it with `fromFineractDate`; a
+ * request date is a `Date | null` and `loan.service.ts` writes it with `toFineractDate` at the
+ * boundary, beside the required `dateFormat` (`AppDateFormat`) and `locale` (AAP 0.7.2, "Date
+ * handling").
  *
  * Two absences are deliberate and must stay. `principal` carries no minimum and no maximum,
  * because legacy adds none and workflow W7 depends on Fineract itself rejecting a principal above
@@ -25,7 +29,8 @@
  * (Rule 1 clause 3). And no status model carries a label, because the indicator the design paints
  * is a colour and never a word (AAP 0.10.5 item 11).
  */
-import type { FINERACT_DATE_FORMAT } from '../../core/config/app-config.model';
+import type { AppDateFormat } from '../../core/config/app-config.model';
+import type { FineractDate } from '../../shared/date-format.util';
 import type { StatusKey } from '../../shared/status-swatch/status-swatch.component';
 
 /**
@@ -45,13 +50,6 @@ export interface OptionItem {
 }
 
 /**
- * The two shapes a Fineract date member takes in a response: `'2026-11-21'` in a record or a
- * template default, and `[2026, 11, 21]` in the business date. `fromFineractDate` accepts both,
- * so a model describes what the server sends instead of asserting one of the two.
- */
-export type FineractDateValue = string | readonly number[];
-
-/**
  * The two shapes an option-valued template member takes: the `{id, name}` object the template
  * returns for the choice it seeds (`transactionProcessingStrategy`), and the bare numeric id a
  * payload that only carries the choice sends instead. Both occur for the same field, which is why
@@ -60,17 +58,17 @@ export type FineractDateValue = string | readonly number[];
 export type OptionRef = OptionItem | number;
 
 /**
- * A loan's lifecycle status as Fineract sends it: the numeric `LoanStatusType` id, its
+ * A loan's lifecycle status as Fineract sends it: the numeric `LoanStatus` id, its
  * `loanStatusType.*` message code, and the server's display text.
  *
  * The text is kept because it is part of the response, and it is never rendered: the indicator is
- * a colour (AAP 0.10.5 item 11), so screens pass `id` — or `code` — to `toStatusKey()`.
+ * a colour (AAP 0.10.5 item 11), so screens pass `id` — or `code` — to `toLoanStatusKey()`.
  */
 export interface LoanStatus {
-  /** Numeric `LoanStatusType` id, the value `toStatusKey()` maps. */
+  /** Numeric `LoanStatus` id, one of the values `toLoanStatusKey()` looks up. */
   readonly id: number;
 
-  /** Message code such as `loanStatusType.active`, matched on its trailing segment. */
+  /** Message code such as `loanStatusType.active`, matched on its whole normalised code. */
   readonly code: string;
 
   /** Server display text, carried for completeness and deliberately not shown. */
@@ -153,7 +151,7 @@ export interface LoanChargeOption extends OptionItem {
   };
 
   /** Due date of a charge that carries one (a specified-due-date fee). */
-  readonly dueDate?: FineractDateValue;
+  readonly dueDate?: FineractDate;
 }
 
 /**
@@ -162,9 +160,12 @@ export interface LoanChargeOption extends OptionItem {
  * (AAP 0.7.3, "W4 loan application"; Rule 1 clause 3: every option list comes from the template
  * endpoint, never from a constant in this application).
  *
- * The numeric members are required only where the endpoint always seeds one. The rest are
- * optional because a template requested before a product is chosen legitimately omits them; an
- * absent default stays an empty field and posts nothing, rather than being filled in here.
+ * The endpoint seeds the product-dependent defaults — `product`, `principal`, the term, repayment
+ * and interest members — only when the request names a `productId`. Without one it answers a bare
+ * `new LoanAccountData()`: the option lists are present and every default is null, and that
+ * product-less read is the one the legacy new-loan screen makes first, to fill its product picker.
+ * The defaults are therefore optional, and an absent one stays an empty field and posts nothing
+ * rather than being filled in here.
  */
 export interface LoanTemplate {
   /** Client the loan is opened for, echoed back from the request. */
@@ -176,32 +177,49 @@ export interface LoanTemplate {
   /** Office the client belongs to, which scopes the officer and fund lists. */
   readonly clientOfficeId?: number;
 
-  /** The selected product. */
-  readonly product: LoanTemplateProduct;
+  /** The selected product; seeded only when the request names a `productId`. */
+  readonly product?: LoanTemplateProduct;
 
   /** Products the client may be given, rendered as the product dropdown. */
   readonly productOptions: readonly LoanTemplateProduct[];
 
-  /** Default principal, typically the product's default principal. */
-  readonly principal: number;
+  /**
+   * Default principal, typically the product's default principal; seeded only when the request
+   * names a `productId`.
+   */
+  readonly principal?: number;
 
-  /** Default term length, in `loanTermFrequencyType` units. */
-  readonly loanTermFrequency: number;
+  /**
+   * Default term length, in `termPeriodFrequencyType` units — `LoanAccountData.termFrequency` on the
+   * template, which `POST /loans` spells `loanTermFrequency`.
+   */
+  readonly termFrequency?: number;
 
-  /** Unit of `loanTermFrequency`, e.g. months. */
-  readonly loanTermFrequencyType?: number;
+  /**
+   * Unit of `termFrequency`, e.g. months — `LoanAccountData.termPeriodFrequencyType` on the
+   * template, which `POST /loans` spells `loanTermFrequencyType` and carries as the `id` this object
+   * reports, beside the message code and display text the server sent.
+   */
+  readonly termPeriodFrequencyType?: {
+    readonly id: number;
+    readonly code?: string;
+    readonly value?: string;
+  };
 
-  /** Default number of repayments. */
-  readonly numberOfRepayments: number;
+  /** Default number of repayments; seeded only when the request names a `productId`. */
+  readonly numberOfRepayments?: number;
 
-  /** Default interval between repayments. */
-  readonly repaymentEvery: number;
+  /** Default interval between repayments; seeded only when the request names a `productId`. */
+  readonly repaymentEvery?: number;
 
   /** Unit of `repaymentEvery`, e.g. months. */
   readonly repaymentFrequencyType?: number;
 
-  /** Default nominal interest rate per `interestRateFrequencyType` period. */
-  readonly interestRatePerPeriod: number;
+  /**
+   * Default nominal interest rate per `interestRateFrequencyType` period; seeded only when the
+   * request names a `productId`.
+   */
+  readonly interestRatePerPeriod?: number;
 
   /** Unit of `interestRatePerPeriod`, e.g. per year. */
   readonly interestRateFrequencyType?: number;
@@ -248,10 +266,10 @@ export interface LoanTemplate {
   };
 
   /** Default expected disbursement date, read with `fromFineractDate`. */
-  readonly expectedDisbursementDate?: FineractDateValue;
+  readonly expectedDisbursementDate?: FineractDate;
 
   /** Default submission date, read with `fromFineractDate`. */
-  readonly submittedOnDate?: FineractDateValue;
+  readonly submittedOnDate?: FineractDate;
 }
 
 /**
@@ -263,25 +281,25 @@ export interface LoanTemplate {
  */
 export interface LoanTimeline {
   /** Date the application was submitted. */
-  readonly submittedOnDate?: FineractDateValue;
+  readonly submittedOnDate?: FineractDate;
 
   /** Date the loan was approved. */
-  readonly approvedOnDate?: FineractDateValue;
+  readonly approvedOnDate?: FineractDate;
 
   /** Date the loan is expected to be disbursed. */
-  readonly expectedDisbursementDate?: FineractDateValue;
+  readonly expectedDisbursementDate?: FineractDate;
 
   /** Date the loan was actually disbursed. */
-  readonly actualDisbursementDate?: FineractDateValue;
+  readonly actualDisbursementDate?: FineractDate;
 
   /** Date the loan reached a closed state. */
-  readonly closedOnDate?: FineractDateValue;
+  readonly closedOnDate?: FineractDate;
 
   /** Date the application was rejected. */
-  readonly rejectedOnDate?: FineractDateValue;
+  readonly rejectedOnDate?: FineractDate;
 
   /** Date the application was withdrawn. */
-  readonly withdrawnOnDate?: FineractDateValue;
+  readonly withdrawnOnDate?: FineractDate;
 }
 
 /**
@@ -301,8 +319,8 @@ export interface LoanSummary {
   /** Total repaid so far. */
   readonly totalRepayment?: number;
 
-  /** Principal actually disbursed. */
-  readonly totalPrincipalDisbursed?: number;
+  /** Principal actually disbursed, the fork's `LoanSummaryData.principalDisbursed`. */
+  readonly principalDisbursed?: number;
 
   /** Principal still outstanding. */
   readonly principalOutstanding?: number;
@@ -316,8 +334,8 @@ export interface LoanSummary {
   /** Interest repaid so far. */
   readonly interestPaid?: number;
 
-  /** Fees still outstanding. */
-  readonly feesOutstanding?: number;
+  /** Fees still outstanding, the fork's `LoanSummaryData.feeChargesOutstanding`. */
+  readonly feeChargesOutstanding?: number;
 
   /** Penalty charges still outstanding. */
   readonly penaltyChargesOutstanding?: number;
@@ -347,11 +365,14 @@ export interface LoanAccount {
   /** Client's display name. */
   readonly clientName?: string;
 
-  /** Product id the loan was written against. */
-  readonly productId?: number;
+  /**
+   * Product id the loan was written against, the fork's `LoanAccountData.loanProductId` — the only
+   * product id `GET /loans/{id}` sends.
+   */
+  readonly loanProductId?: number;
 
-  /** Product name, displayed on the record. */
-  readonly productName?: string;
+  /** Product name, the fork's `LoanAccountData.loanProductName`, displayed on the record. */
+  readonly loanProductName?: string;
 
   /** Principal applied for, the amount every disbursement and schedule is based on. */
   readonly principal: number;
@@ -368,7 +389,7 @@ export interface LoanAccount {
   /** Nominal interest rate per `interestRateFrequencyType` period. */
   readonly interestRatePerPeriod: number;
 
-  /** Lifecycle status; `toStatusKey()` turns it into the indicator's colour. */
+  /** Lifecycle status; `toLoanStatusKey()` turns it into the indicator's colour. */
   readonly status: LoanStatus;
 
   /** Dated milestones of the loan's lifecycle. */
@@ -391,19 +412,23 @@ export interface LoanAccount {
  * One row of a repayment schedule — the `periods[]` of `RepaymentSchedule`, and the rows the
  * preview table renders after `POST /loans?command=calculateLoanSchedule` (AAP 0.7.2).
  *
- * `complete` is what marks a period as paid, and the first period's `totalDue` is the amount the
- * repayment form defaults to for workflow W6: it is read from this array and never hard-coded,
- * because the figure depends on the product, the principal and the run date.
+ * The fee, penalty and total members carry the fork's own `LoanSchedulePeriodData` names —
+ * `feeChargesDue`, `penaltyChargesDue`, `totalDueForPeriod` — because those are the keys the
+ * schedule sends and the columns the preview and schedule tables render (Rule 1 clause 2).
+ *
+ * `complete` is what marks a period as paid, and the first period's `totalDueForPeriod` is the
+ * amount the repayment form defaults to for workflow W6: it is read from this array and never
+ * hard-coded, because the figure depends on the product, the principal and the run date.
  */
 export interface RepaymentPeriod {
   /** Period number, 1-based; the schedule table's first column. */
   readonly period: number;
 
   /** Date the period starts. */
-  readonly fromDate: FineractDateValue;
+  readonly fromDate: FineractDate;
 
   /** Date the period falls due. */
-  readonly dueDate: FineractDateValue;
+  readonly dueDate: FineractDate;
 
   /** Principal due in this period. */
   readonly principalDue: number;
@@ -414,11 +439,14 @@ export interface RepaymentPeriod {
   /** Interest due in this period. */
   readonly interestDue: number;
 
-  /** Fees due in this period. */
-  readonly feesDue: number;
+  /** Fees due in this period, the fork's `LoanSchedulePeriodData.feeChargesDue`. */
+  readonly feeChargesDue: number;
 
-  /** Total due in this period. */
-  readonly totalDue: number;
+  /** Penalties due in this period, the fork's `LoanSchedulePeriodData.penaltyChargesDue`. */
+  readonly penaltyChargesDue: number;
+
+  /** Total due in this period, the fork's `LoanSchedulePeriodData.totalDueForPeriod`. */
+  readonly totalDueForPeriod: number;
 
   /** Total originally scheduled for this period, before rescheduling. */
   readonly totalOriginalDueForPeriod: number;
@@ -479,7 +507,7 @@ export interface LoanTransaction {
   readonly id: number;
 
   /** Date the transaction was posted, read with `fromFineractDate`. */
-  readonly date: FineractDateValue;
+  readonly date: FineractDate;
 
   /** Transaction type, e.g. disbursement or repayment. */
   readonly type: {
@@ -548,7 +576,7 @@ export interface LoanCharge {
   };
 
   /** Due date of a charge that carries one. */
-  readonly dueDate?: FineractDateValue;
+  readonly dueDate?: FineractDate;
 }
 
 /**
@@ -582,13 +610,16 @@ export interface ChargeTemplate {
 /*
  * Request bodies.
  *
- * `POST`/`PUT` bodies are assembled by the forms and formatted by `loan.service.ts` immediately
- * before they are sent, so, unlike the response models above, they are not `readonly`: a screen
- * builds one member at a time from its form values. Every date-bearing body ends in `dateFormat`
- * and `locale`, and both are optional because no component ever supplies them — the service sets
- * them unconditionally from `AppConfig` (`dateFormat` is `FINERACT_DATE_FORMAT`, `locale` is the
- * active language) while it converts each `Date` with `toFineractDate`. Their optionality therefore
- * never means "sometimes omitted": a posted body always carries both (Rule 1 clause 2, AAP 0.7.2).
+ * `POST`/`PUT` bodies are assembled by the forms, so, unlike the response models above, they are
+ * not `readonly`: a screen builds one member at a time from its form values.
+ *
+ * One convention holds for every one of them, and it is the one AAP 0.7.2 "Date handling" sets: a
+ * request body holds the values the form holds — each date a `Date | null`, `dateFormat` and
+ * `locale` required — and `loan.service.ts` converts each date with `toFineractDate(date, locale)`
+ * and fills `dateFormat` from `AppConfig` and `locale` from
+ * `AppConfigService.activeLocale` at the boundary. No model stores a formatted
+ * date (AAP 0.7.2 "Date handling"; AAP 0.14.1 "Dates never travel as strings built in a
+ * template"), and a body that omitted `dateFormat` or `locale` would not compile (Rule 1 clause 2).
  */
 
 /**
@@ -650,11 +681,11 @@ export interface LoanApplicationRequest {
   /** Transaction processing strategy id, read from the template through `optionId()`. */
   transactionProcessingStrategyId: number;
 
-  /** Expected disbursement date, formatted by the service. */
-  expectedDisbursementDate: Date;
+  /** Expected disbursement date the form holds; `null` when its field is empty. */
+  expectedDisbursementDate: Date | null;
 
-  /** Submission date, formatted by the service. */
-  submittedOnDate: Date;
+  /** Submission date the form holds; `null` when its field is empty. */
+  submittedOnDate: Date | null;
 
   /** Loan officer to assign, when one was chosen from `loanOfficerOptions`. */
   loanOfficerId?: number;
@@ -666,10 +697,10 @@ export interface LoanApplicationRequest {
   charges?: readonly { readonly chargeId: number; readonly amount: number }[];
 
   /** Payload date format, set by the service from `AppConfig.dateFormat`. */
-  dateFormat?: typeof FINERACT_DATE_FORMAT;
+  dateFormat: AppDateFormat;
 
   /** Payload locale, set by the service from the active language. */
-  locale?: string;
+  locale: string;
 }
 
 /**
@@ -684,53 +715,108 @@ export interface LoanApplicationRequest {
 export type LoanEditRequest = LoanApplicationRequest;
 
 /**
- * The body posted to `POST /loans/{id}?command=<command>` for the five lifecycle actions
- * (AAP 0.7.3, "W5 approve and disburse").
+ * The body of one loan lifecycle action, as a discriminated union on the command the endpoint takes
+ * in its query string (AAP 0.7.2 row `LoanActionRequest`; AAP 0.7.3, "W5 approve and disburse").
  *
- * One interface rather than a union, because the command travels in the query string that
- * `loan.service.ts` composes, not in the body. Which members a command uses is fixed:
+ * Each arm is one `POST /loans/{id}?command=<command>` body: `loan.service.ts` takes the command
+ * from the body's own `command` member and puts it in the query string, so a body and the command
+ * it is posted under cannot be mismatched. The required members are the fork's mandatory fields —
+ * `approve` needs `approvedOnDate`, `reject` needs `rejectedOnDate`, `disburse` needs
+ * `actualDisbursementDate` — and the two undo commands take no body of their own.
  *
- * - `approve` — `approvedOnDate` and `approvedPrincipal`, with an optional `note`;
- * - `reject` — `rejectedOnDate`, with an optional `note`;
- * - `disburse` — `actualDisbursementDate`, an optional `transactionAmount`, and an optional `note`;
- * - `undoapproval` — `note` only;
- * - `undodisbursal` — no members at all; the body is empty apart from `dateFormat` and `locale`.
+ * One name deliberately departs from the plan: AAP 0.7.2's row spells the approved amount
+ * `approvedPrincipal`, but the fork rejects that parameter (HTTP 400, "The parameter
+ * approvedPrincipal is not supported"), documents `approvedLoanAmount`, and the legacy action
+ * controller posts `approvedLoanAmount`. The wire name is therefore the one posted
+ * (Rule 1 clause 2; AAP 0.3.4: where the code disagrees with the request, the code wins).
  */
-export interface LoanActionRequest {
-  /** Approval date, formatted by the service; `approve` only. */
-  approvedOnDate?: Date;
+export type LoanActionRequest =
+  | {
+      /** Approves the submitted loan. */
+      command: 'approve';
 
-  /** Principal approved, which may differ from the applied amount; `approve` only. */
-  approvedPrincipal?: number;
+      /** Approval date, as the form holds it and `null` while it is empty; mandatory on the server. */
+      approvedOnDate: Date | null;
 
-  /** Rejection date, formatted by the service; `reject` only. */
-  rejectedOnDate?: Date;
+      /** Principal approved, which may differ from the applied amount; the fork's `approvedLoanAmount`. */
+      approvedLoanAmount?: number;
 
-  /** Disbursement date, formatted by the service; `disburse` only. */
-  actualDisbursementDate?: Date;
+      /** Expected disbursement date recorded with the approval, as the form holds it. */
+      expectedDisbursementDate?: Date | null;
 
-  /** Amount disbursed, when the screen edits the approved principal; `disburse` only. */
-  transactionAmount?: number;
+      /** Free-text note recorded with the action. */
+      note?: string;
 
-  /** Free-text note recorded with the action; accepted by `approve`, `reject` and `disburse`. */
-  note?: string;
+      /** Payload date format, set by the service from `AppConfig.dateFormat`. */
+      dateFormat: AppDateFormat;
 
-  /** Payload date format, set by the service from `AppConfig.dateFormat`. */
-  dateFormat?: typeof FINERACT_DATE_FORMAT;
+      /** Payload locale, set by the service from the active language. */
+      locale: string;
+    }
+  | {
+      /** Rejects the submitted loan. */
+      command: 'reject';
 
-  /** Payload locale, set by the service from the active language. */
-  locale?: string;
-}
+      /** Rejection date, as the form holds it and `null` while it is empty; mandatory on the server. */
+      rejectedOnDate: Date | null;
+
+      /** Free-text note recorded with the action. */
+      note?: string;
+
+      /** Payload date format, set by the service from `AppConfig.dateFormat`. */
+      dateFormat: AppDateFormat;
+
+      /** Payload locale, set by the service from the active language. */
+      locale: string;
+    }
+  | {
+      /** Disburses the approved loan. */
+      command: 'disburse';
+
+      /** Disbursement date, as the form holds it and `null` while it is empty; mandatory on the server. */
+      actualDisbursementDate: Date | null;
+
+      /** Amount disbursed, when the screen edits the approved principal. */
+      transactionAmount?: number;
+
+      /** Fixed EMI amount, for the products that take one. */
+      fixedEmiAmount?: number;
+
+      /** Free-text note recorded with the action. */
+      note?: string;
+
+      /** Payload date format, set by the service from `AppConfig.dateFormat`. */
+      dateFormat: AppDateFormat;
+
+      /** Payload locale, set by the service from the active language. */
+      locale: string;
+    }
+  | {
+      /**
+       * Undoes the approval, returning the loan to pending. The server accepts `note` here and
+       * nothing else, which is why this arm carries neither a date nor the `dateFormat`/`locale`
+       * pair the dated arms send.
+       */
+      command: 'undoapproval';
+
+      /** Free-text note recorded with the action. */
+      note?: string;
+    }
+  | {
+      /** Undoes the disbursal; the server takes no body for it. */
+      command: 'undodisbursal';
+    };
 
 /**
  * The body `POST /loans/{id}/transactions?command=repayment` posts (AAP 0.7.3, "W6 repayment").
  *
- * The amount defaults to the first unpaid period's `totalDue` from the loan's repayment schedule and
- * the date to the run date, but both are editable before submission, so neither is fixed here.
+ * The amount defaults to the first unpaid period's `totalDueForPeriod` from the loan's repayment
+ * schedule and the date to the run date, but both are editable before submission, so neither is
+ * fixed here.
  */
 export interface LoanRepaymentRequest {
-  /** Date the repayment is recorded on, formatted by the service. */
-  transactionDate: Date;
+  /** Date the repayment is recorded on, as the form holds it; `null` when it is empty. */
+  transactionDate: Date | null;
 
   /** Amount repaid. */
   transactionAmount: number;
@@ -742,10 +828,10 @@ export interface LoanRepaymentRequest {
   note?: string;
 
   /** Payload date format, set by the service from `AppConfig.dateFormat`. */
-  dateFormat?: typeof FINERACT_DATE_FORMAT;
+  dateFormat: AppDateFormat;
 
   /** Payload locale, set by the service from the active language. */
-  locale?: string;
+  locale: string;
 }
 
 /**
@@ -759,79 +845,84 @@ export interface LoanChargeRequest {
   /** Amount charged. */
   amount: number;
 
-  /** Due date, sent only for a charge whose timing carries a specified due date. */
-  dueDate?: Date;
+  /** Due date the form holds when the charge's timing carries one, and `null` otherwise. */
+  dueDate?: Date | null;
 
   /** Payload date format, set by the service from `AppConfig.dateFormat`. */
-  dateFormat?: typeof FINERACT_DATE_FORMAT;
+  dateFormat: AppDateFormat;
 
   /** Payload locale, set by the service from the active language. */
-  locale?: string;
+  locale: string;
 }
 
 /**
- * The body `POST /loans/{id}/charges/{chargeId}?command=pay|waive` posts (AAP 0.7.3,
- * "Loan charges").
+ * The body of one loan-charge action, as a discriminated union on the command
+ * `POST /loans/{id}/charges/{chargeId}?command=` takes (AAP 0.7.2 row `LoanChargeActionRequest`;
+ * AAP 0.7.3, "Loan charges").
  *
- * The `pay` variant reads `transactionDate` and `paymentTypeId`; the `waive` variant sends neither,
- * because a waiver books no money movement. The amount defaults to the charge's outstanding portion
- * and stays editable.
+ * `pay` books a money movement, so it carries the amount, its date and a payment type; `waive`
+ * books none, so it sends the amount alone. The amount defaults to the charge's outstanding portion
+ * and stays editable in both.
  */
-export interface LoanChargeActionRequest {
-  /** Amount paid or waived. */
-  amount: number;
+export type LoanChargeActionRequest =
+  | {
+      /** Pays the outstanding portion of the charge. */
+      command: 'pay';
 
-  /** Date the payment is recorded on, formatted by the service; `pay` only. */
-  transactionDate?: Date;
+      /** Amount paid. */
+      amount: number;
 
-  /** Payment type id chosen from `paymentTypeOptions`; `pay` only. */
-  paymentTypeId?: number;
+      /** Date the payment is recorded on, as the form holds it and `null` while it is empty. */
+      transactionDate: Date | null;
 
-  /** Payload date format, set by the service from `AppConfig.dateFormat`. */
-  dateFormat?: typeof FINERACT_DATE_FORMAT;
+      /** Payment type id chosen from `paymentTypeOptions`. */
+      paymentTypeId: number;
 
-  /** Payload locale, set by the service from the active language. */
-  locale?: string;
-}
+      /** Payload date format, set by the service from `AppConfig.dateFormat`. */
+      dateFormat: AppDateFormat;
+
+      /** Payload locale, set by the service from the active language. */
+      locale: string;
+    }
+  | {
+      /** Waives the outstanding portion of the charge. */
+      command: 'waive';
+
+      /** Amount waived. */
+      amount: number;
+
+      /** Payload date format, set by the service from `AppConfig.dateFormat`. */
+      dateFormat: AppDateFormat;
+
+      /** Payload locale, set by the service from the active language. */
+      locale: string;
+    };
 
 /*
  * Partial projections.
  *
- * The two template payloads below are not modelled by the plan in full: each endpoint returns the
- * loan's wider record alongside option lists, and a screen reads only the members listed here.
- * Declaring just those is how Rule 1 clause 4 is met without `any` and without inventing members the
- * run never observed.
+ * The two template payloads below are not modelled by the plan in full: each endpoint returns more
+ * than a screen reads, and a screen reads only the members listed here. Declaring just those is how
+ * Rule 1 clause 4 is met without `any` and without inventing members the run never observed.
  */
 
 /**
- * A partial projection of `GET /loans/{id}/template?templateType=approval` — the approval, and
- * subsequent disbursement, form's seed (AAP 0.7.3, "W5 approve and disburse").
+ * A partial projection of `GET /loans/{id}/template?templateType=approval` — the approval form's
+ * seed (AAP 0.7.3, "W5 approve and disburse").
  *
- * The endpoint returns the loan's wider record plus these lists; only the members below are read.
+ * The endpoint serialises `LoanApprovalData`, not the loan's wider record, so only the approval
+ * defaults it carries are declared here. The disbursement form's payment types and default amount
+ * come from `LoanTransactionTemplate` — `GET /loans/{id}/transactions/template?command=disburse` —
+ * never from this response.
  */
 export interface LoanActionTemplate {
-  /** Loan id the template belongs to. */
-  id?: number;
-
-  /** Principal the approval form defaults to. */
-  approvedPrincipal?: number;
-
   /** Approval date the template defaults to. */
-  approvalDate?: FineractDateValue;
+  approvalDate?: FineractDate;
 
   /** Expected disbursement date the template defaults to. */
-  expectedDisbursementDate?: FineractDateValue;
+  expectedDisbursementDate?: FineractDate;
 
-  /** Actual disbursement date the template defaults to. */
-  actualDisbursementDate?: FineractDateValue;
-
-  /** Amount the disbursement form defaults to. */
-  transactionAmount?: number;
-
-  /** Payment types the disbursement form offers. */
-  paymentTypeOptions?: readonly OptionItem[];
-
-  /** Approval amount the template reports, where the server sends it under this name. */
+  /** Approval amount the template reports. */
   approvalAmount?: number;
 }
 
@@ -840,14 +931,16 @@ export interface LoanActionTemplate {
  * seed for the disbursement and repayment forms (AAP 0.7.3, "W5 approve and disburse", "W6
  * repayment").
  *
- * The endpoint returns the loan's wider record plus these members; only the members below are read.
+ * The endpoint serialises `LoanTransactionData`: the forms read its default date from `date`, since
+ * `transactionDate` exists only on the import payload and is never sent here. Only the members
+ * below are read.
  */
 export interface LoanTransactionTemplate {
   /** Payment types the form offers, rendered in the received order. */
   paymentTypeOptions?: readonly OptionItem[];
 
-  /** Transaction date the form defaults to, read with `fromFineractDate`. */
-  transactionDate?: FineractDateValue;
+  /** Default date the form seeds — the fork's `LoanTransactionData.date`, read with `fromFineractDate`. */
+  date?: FineractDate;
 
   /** Amount the form defaults to. */
   amount?: number;
@@ -905,10 +998,18 @@ export function isLoanAccount(value: LoanTemplate | LoanAccount): value is LoanA
 }
 
 /**
- * Fineract's `LoanStatusType` ids, mapped onto the indicator's four colours.
+ * Fineract's `LoanStatus` ids, mapped onto the indicator's four colours.
  *
- * The numbers are the server's enum values rather than this application's, so the mapping is stated
- * once, beside the model that carries them, instead of in each screen that renders a status.
+ * The keys are the fork's own enum values in `LoanStatus.java` — `100`
+ * `SUBMITTED_AND_PENDING_APPROVAL`, `200` `APPROVED`, `300` `ACTIVE`, `400` `WITHDRAWN_BY_CLIENT`,
+ * `500` `REJECTED`, `600` `CLOSED_OBLIGATIONS_MET`, `601` `CLOSED_WRITTEN_OFF`, `602`
+ * `CLOSED_RESCHEDULE_OUTSTANDING_AMOUNT` and `700` `OVERPAID` — so the mapping is stated once,
+ * beside the model that carries them, instead of in each screen that renders a status.
+ *
+ * Three ids are absent by design, exactly as in the clients family: `0` (`INVALID`) is not a state,
+ * and `303` (`TRANSFER_IN_PROGRESS`) and `304` (`TRANSFER_ON_HOLD`) are transitions this
+ * application paints no colour of their own for. Each of them, and any id the fork adds later, is
+ * `other` — the indicator's neutral colour.
  */
 const STATUS_BY_ID: Readonly<Partial<Record<string, StatusKey>>> = {
   /** Submitted and pending approval, and approved: the loan is not disbursed yet. */
@@ -918,25 +1019,33 @@ const STATUS_BY_ID: Readonly<Partial<Record<string, StatusKey>>> = {
   /** Active, i.e. disbursed. */
   '300': 'active',
 
-  /** Rejected, closed, closed written off, closed by reschedule and overpaid. */
+  /** Withdrawn by the client, rejected, and every closed form, including overpaid. */
+  '400': 'closed',
   '500': 'closed',
   '600': 'closed',
   '601': 'closed',
+  '602': 'closed',
   '700': 'closed',
-  '900': 'closed',
 };
 
 /**
- * The same colours keyed by the trailing segment of a `loanStatusType.*` message code, for the
- * payloads that send the code rather than the number. Lower-cased and stripped of separators, so
- * `submittedAndPendingApproval` and `submitted-and-pending-approval` are one key.
+ * The same colours keyed by a `loanStatusType.*` message code, normalised the way all three
+ * families normalise a status code: lower-cased, the family prefix `loanstatustype.` removed if
+ * present, and every non-alphanumeric character stripped. The whole prefix-stripped code is the
+ * key — never just its last dot-segment — so
+ * `loanStatusType.closed.reschedule.outstanding.amount` is `closedrescheduleoutstandingamount`.
+ *
+ * The keys are the fork's own codes in `LoanStatus.java` and nothing else: the non-enum shorthands
+ * (`pending`, `closed`) are gone because the enum sends neither, and `invalid`,
+ * `transfer.in.progress` and `transfer.on.hold` are absent by design, so those and anything
+ * unrecognised fall to `other`.
  */
 const STATUS_BY_NAME: Readonly<Partial<Record<string, StatusKey>>> = {
-  active: 'active',
-  pending: 'pending',
   submittedandpendingapproval: 'pending',
   approved: 'pending',
-  closed: 'closed',
+  active: 'active',
+  withdrawnbyclient: 'closed',
+  rejected: 'closed',
   closedobligationsmet: 'closed',
   closedwrittenoff: 'closed',
   closedrescheduleoutstandingamount: 'closed',
@@ -944,21 +1053,40 @@ const STATUS_BY_NAME: Readonly<Partial<Record<string, StatusKey>>> = {
 };
 
 /**
- * The indicator colour for a loan status, from either the numeric `LoanStatusType` id or a
+ * The normalisation the three feature families share before a status code is looked up:
+ * lower-cased, the family's own message-code prefix removed if the payload carried it, and every
+ * non-alphanumeric character stripped, so the whole remaining name is the key.
+ *
+ * `loanStatusType.submitted.and.pending.approval`, `submittedAndPendingApproval` and
+ * `SUBMITTED_AND_PENDING_APPROVAL` therefore all normalise to `submittedandpendingapproval`.
+ */
+function normaliseLoanStatusCode(code: string): string {
+  return code.toLowerCase().replace(/^loanstatustype\./, '').replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * The indicator colour for a loan status, from either the numeric `LoanStatus` id or a
  * `loanStatusType.*` message code.
+ *
+ * Both tables are the fork's `LoanStatus` enum: the ids are its values and the keys of the code
+ * table are its codes normalised as described above. The whole prefix-stripped code is matched,
+ * never a single dot-segment, so every multi-word state the enum declares — submitted and pending
+ * approval, closed obligations met, closed written off, closed with a rescheduled outstanding
+ * amount, withdrawn by client, rejected — reaches its colour instead of falling through to `other`.
  *
  * `StatusSwatchComponent` takes a `StatusKey` and never a Fineract code, so the translation belongs
  * to this family and is done here once. The result is a colour and only a colour: no label is
  * returned and no screen may render the status as text, because the design paints a swatch with no
  * word beside it (AAP 0.10.5 item 11, Rule 1 clause 3).
  *
- * A status the mapping does not cover — none, or a type this application has no colour for — is
- * `other`, which renders the indicator in its neutral colour rather than failing.
+ * A status the mapping does not cover — none, `INVALID`, a transfer in progress or on hold, or a
+ * code this application has no colour for — is `other`, which renders the indicator in its neutral
+ * colour rather than failing.
  *
  * @param code The status id or message code, as the payload sent it.
  * @returns The `StatusKey` the indicator renders.
  */
-export function toStatusKey(code: string | number | null | undefined): StatusKey {
+export function toLoanStatusKey(code: string | number | null | undefined): StatusKey {
   if (code === null || code === undefined) {
     return 'other';
   }
@@ -967,14 +1095,9 @@ export function toStatusKey(code: string | number | null | undefined): StatusKey
     return STATUS_BY_ID[String(code)] ?? 'other';
   }
 
-  // A message code is `loanStatusType.<name>`, but a payload may also send the bare number as text
-  // or the bare name, so the trailing segment is tried against both tables before giving up.
-  const trailing = code.slice(code.lastIndexOf('.') + 1);
-  const byId = STATUS_BY_ID[trailing];
+  // A string may be the message code, or the bare id as text, so the normalised value is tried
+  // against the id table as well; normalising leaves a bare number unchanged.
+  const normalised = normaliseLoanStatusCode(code);
 
-  if (byId !== undefined) {
-    return byId;
-  }
-
-  return STATUS_BY_NAME[trailing.toLowerCase().replace(/[^a-z]/g, '')] ?? 'other';
+  return STATUS_BY_ID[normalised] ?? STATUS_BY_NAME[normalised] ?? 'other';
 }

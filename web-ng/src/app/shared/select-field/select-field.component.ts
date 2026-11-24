@@ -36,9 +36,10 @@ const nextSelectFieldId = (): string => `select-field-${++nextInputId}`;
  * adds no validation, default selection, sorting, filtering, type-ahead or clear affordance, so
  * a screen behaves as the legacy one does rather than better (Rule 1 clause 3). Options come
  * from the Fineract `template` endpoint the legacy screen calls (AAP 0.4.4 decision 6). Every
- * visual value is the global Bootstrap 3 `.form-group` / `.control-label` / `.form-control` /
- * `.has-error` / `.help-block` layer of `web-ng/src/styles.scss`, which already styles
- * `select.form-control` at the legacy 34px control height; this component has no styles.
+ * visual value comes from the global Bootstrap 3 layer: `.form-group`, `.control-label`,
+ * `.has-error` and `.help-block` from Bootstrap itself, and `.form-control` with
+ * `select.form-control` at the legacy 34px control height from `web-ng/src/styles.scss`. This
+ * component has no styles.
  */
 @Component({
   selector: 'app-select-field',

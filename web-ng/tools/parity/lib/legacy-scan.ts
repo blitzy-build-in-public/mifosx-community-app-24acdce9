@@ -31,6 +31,39 @@ export async function scanLegacyTree(): Promise<LegacyTree> {
   return { present: true, scriptsRoot: SCRIPTS_ROOT, viewsRoot: viewsVisible ? VIEWS_ROOT : null };
 }
 
+/** One resource the legacy factory declares, with the endpoint path it performs its call on; consumed by `check:templates`. */
+export interface LegacyResourcePath {
+  /** Property name of the resource on the legacy factory, e.g. `clientResource`. */
+  name: string;
+  /** Path the declaration hands to `defineResource`, api version prefix excluded and placeholders intact. */
+  path: string;
+}
+
+/** A `name: defineResource(apiVer + "<path>"` declaration; the backreference keeps the quote the path opened with. */
+const RESOURCE_DECLARATION = /([A-Za-z_$][\w$]*)\s*:\s*defineResource\(\s*apiVer\s*\+\s*(["'])([^"']*)\2/g;
+
+/**
+ * Every resource the legacy factory declares, each with the path it performs its call on; `null` when that factory cannot
+ * be read, because a factory that cannot be read must never pass for a factory with no resources. Consumed by
+ * `check:templates`, which resolves a legacy call's resource to the route the call addresses.
+ */
+export async function findLegacyResourcePaths(tree: LegacyTree): Promise<LegacyResourcePath[] | null> {
+  if (!tree.present) return [];
+  let text: string;
+  try {
+    text = await readText(join(tree.scriptsRoot, 'services', 'ResourceFactoryProvider.js'));
+  } catch {
+    return null;
+  }
+  // The first declaration of a name wins, so a later redefinition cannot quietly take over the path calls are joined to.
+  const paths = new Map<string, string>();
+  for (const match of text.matchAll(RESOURCE_DECLARATION)) {
+    const name: string = match.at(1) ?? '';
+    if (name !== '' && !paths.has(name)) paths.set(name, match.at(3) ?? '');
+  }
+  return [...paths].map(([name, path]) => ({ name, path }));
+}
+
 /** Controller sources under one scripts root, so a fixture tree and the real tree are walked identically. */
 const controllerFiles = (scriptsRoot: string): Promise<string[]> => walk(join(scriptsRoot, 'controllers'), { extensions: ['.js'] });
 

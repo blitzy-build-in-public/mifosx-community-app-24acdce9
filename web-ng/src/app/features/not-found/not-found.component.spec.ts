@@ -24,13 +24,13 @@ import { NotFoundComponent } from './not-found.component';
  */
 
 /** Key of the card heading the template resolves (AAP 0.7.4 "the not-found message"). */
-const HEADING_KEY = 'label.heading.notfound';
+const HEADING_KEY = 'label.heading.notavailable';
 
 /** Key of the body sentence the template resolves. */
-const BODY_KEY = 'label.text.notfound';
+const BODY_KEY = 'error.msg.resource.not.found';
 
 /** Key of the label of the screen's single destination, the client list. */
-const ACTION_KEY = 'label.button.returntoclients';
+const ACTION_KEY = 'label.button.clients';
 
 /**
  * Stand-in for the English bundle `app/global-translations/locale-en.json`, with one distinct value

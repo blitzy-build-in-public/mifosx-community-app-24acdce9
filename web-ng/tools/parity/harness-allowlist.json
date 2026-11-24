@@ -13,7 +13,7 @@
       "prefix": "apiPath",
       "path": "/staff",
       "purpose": "Create the fixed staff member Parity Officer (loan officer, office 1 Head Office), which the loan workflows select as loan officer.",
-      "note": "Seed-only write: the application never creates or updates staff. Staff cannot be deleted through the API (HTTP 405), so the seed includes its clone index in the name and shortName to stay unique on the shared backend."
+      "note": "Seed-only write: the application never creates or updates staff. The seed sends the AAP 0.10.1 value verbatim (firstname Parity, lastname Officer, which Fineract composes into the display name Officer, Parity) with no clone index or other suffix, and it is non-idempotent by design: every run is expected to start from a recreated database (npm run reset:db), which is what keeps the name unique. On a backend that already holds the staff member the seed fails fast on Fineract's duplicate-name rejection of that display name (HTTP 403), as expected, because staff cannot be deleted through the API (HTTP 405)."
     },
     {
       "consumer": "web-ng/e2e/seed/seed.ts",
@@ -21,7 +21,7 @@
       "prefix": "apiPath",
       "path": "/loanproducts",
       "purpose": "Create the fixed loan product Parity Loan (USD, principal min 1,000, default 5,000, max 10,000, 12 monthly repayments, flat interest 12% per year) used by W4, W5, W6 and W7.",
-      "note": "Seed-only write: the application only reads loan products through GET /loans/template. Loan products cannot be deleted through the API (HTTP 405), so the seed includes its clone index in name and shortName."
+      "note": "Seed-only write: the application only reads loan products through GET /loans/template. The seed sends the AAP 0.10.1 values verbatim (name Parity Loan, shortName PARL) with no clone index or other suffix, and it is non-idempotent by design: every run is expected to start from a recreated database (npm run reset:db), which is what keeps the name unique. On a backend that already holds the product the seed fails fast on Fineract's duplicate-name rejection, as expected, because loan products cannot be deleted through the API (HTTP 405)."
     },
     {
       "consumer": "web-ng/e2e/seed/seed.ts",
@@ -37,7 +37,7 @@
       "prefix": "apiPath",
       "path": "/savingsproducts",
       "purpose": "Create the fixed savings product Parity Savings (USD, nominal annual interest 2%) used by the W8 savings workflow.",
-      "note": "Seed-only write: the application only reads savings products through GET /savingsaccounts/template. The seed includes its clone index in name and shortName because products cannot be deleted through the API (HTTP 405)."
+      "note": "Seed-only write: the application only reads savings products through GET /savingsaccounts/template. The seed sends the AAP 0.10.1 values verbatim (name Parity Savings, shortName PARS) with no clone index or other suffix, and it is non-idempotent by design: every run is expected to start from a recreated database (npm run reset:db), which is what keeps the name unique. On a backend that already holds the product the seed fails fast on Fineract's duplicate-name rejection, as expected, because savings products cannot be deleted through the API (HTTP 405)."
     },
     {
       "consumer": "web-ng/e2e/seed/fixtures.ts",

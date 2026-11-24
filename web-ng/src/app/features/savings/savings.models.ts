@@ -1,4 +1,5 @@
-import type { AppConfig } from '../../core/config/app-config.model';
+import type { AppDateFormat } from '../../core/config/app-config.model';
+import type { FineractDate } from '../../shared/date-format.util';
 import type { StatusKey } from '../../shared/status-swatch/status-swatch.component';
 
 /**
@@ -11,14 +12,13 @@ import type { StatusKey } from '../../shared/status-swatch/status-swatch.compone
  * standing order, no share or deposit-product shape — because those belong to migration units the
  * plan leaves out of scope (AAP 0.9.2).
  *
- * **Each date-bearing payload is a pair.** A `*Request` interface is the HTTP body exactly as
- * Fineract receives it: the date already formatted, plus `dateFormat` and `locale`. A `*Input`
- * interface is what a screen hands the service: real `Date` values. The conversion happens once, in
- * `SavingsService`, through `toFineractDate`, so no component formats a date and no payload can
- * carry a second format (AAP 0.7.2 "Date handling", AAP 0.14.1 "Dates never travel as strings built
- * in a template").
+ * **One date convention, shared with the other two families.** A request body holds the values the
+ * form holds: each date a `Date | null`, `dateFormat` and `locale` required. `SavingsService`
+ * converts every date with `toFineractDate` and fills the two format members from `AppConfig` where
+ * it builds the payload, so no component formats a date and no model stores a formatted date
+ * (AAP 0.7.2 "Date handling", AAP 0.14.1 "Dates never travel as strings built in a template").
  *
- * Declaration only. The single function here is `toStatusKey`; everything else disappears at
+ * Declaration only. The single function here is `toSavingsStatusKey`; everything else disappears at
  * compile time, so a spec imports this module with no provider setup. A doc comment names the read
  * or write a shape projects, but no path is ever composed here: URL literals belong to
  * `savings.service.ts` alone (AAP 0.8.2, AAP 0.14.1), and no credential, tenant datum or session
@@ -26,33 +26,11 @@ import type { StatusKey } from '../../shared/status-swatch/status-swatch.compone
  */
 
 /**
- * The format a date-bearing body carries beside its `locale`: the literal type of
- * `AppConfig.dateFormat`, itself `FINERACT_DATE_FORMAT`.
- *
- * Derived rather than re-typed so the format string has exactly one owner
- * (`core/config/app-config.model.ts`, Rule 1 clause 2). Annotating a request's `dateFormat` with
- * this alias means a body cannot be built with an arbitrary pattern — any other string fails to
- * compile.
- */
-export type AppDateFormat = AppConfig['dateFormat'];
-
-/**
- * A date as Fineract returns it in a response body: either an ISO `yyyy-MM-dd` string or a
- * `[year, month, day]` number triple with a one-based month.
- *
- * This is a wire value, not something a screen renders or computes with. The only parser is
- * `fromFineractDate` in `shared/date-format.util.ts`, which narrows both shapes and returns a
- * local-midnight `Date` (or `null`); a table cell or a field goes through it rather than reading
- * these members itself.
- */
-export type FineractDateValue = string | [number, number, number];
-
-/**
  * The `{id, code, value}` object Fineract uses for an account `status` and for a transaction
  * `transactionType` (AAP 0.7.2 `SavingsAccount.status`).
  *
  * `code` is the stable discriminator — a resource-type-qualified key such as
- * `savingsAccountStatusType.active` — and it is what `toStatusKey` matches on. `value` is the
+ * `savingsAccountStatusType.active` — and it is what `toSavingsStatusKey` matches on. `value` is the
  * server's display text for the same code: a transaction row may render it as the type of the
  * transaction, while an account's status never renders it at all, because the status indicator is
  * a colour swatch and nothing else (AAP 0.10.5 deliberate difference 11).
@@ -61,7 +39,7 @@ export interface FineractCodeValue {
   /** Numeric identifier of the code, as the server sent it. */
   readonly id: number;
 
-  /** Stable, resource-qualified code key; the only member `toStatusKey` reads. */
+  /** Stable, resource-qualified code key; the only member `toSavingsStatusKey` reads. */
   readonly code: string;
 
   /** Display text for the code, rendered unchanged where a screen shows text at all. */
@@ -98,7 +76,7 @@ export interface SavingsTransaction {
   readonly id: number;
 
   /** The transaction's date, as the server returned it; parsed by `fromFineractDate` for display. */
-  readonly date: FineractDateValue;
+  readonly date: FineractDate;
 
   /** Transaction type — deposit, withdrawal and so on; its `value` is the row's type text. */
   readonly transactionType: FineractCodeValue;
@@ -142,7 +120,7 @@ export interface SavingsAccount {
   /** Savings product's name, under the wire's `savingsProductName`, rendered as the server sent it. */
   readonly savingsProductName: string;
 
-  /** Account status; mapped to the indicator's vocabulary by `toStatusKey`. */
+  /** Account status; mapped to the indicator's vocabulary by `toSavingsStatusKey`. */
   readonly status: FineractCodeValue;
 
   /** The account's three balance figures. */
@@ -161,11 +139,11 @@ export interface SavingsAccount {
  *
  * Structurally identical to `shared/select-field`'s `SelectOption`, so an option list can be handed
  * to a `SelectFieldComponent` without a mapping layer. Declared here rather than imported from that
- * component, because this module's dependencies are limited to the configuration model and the
- * status vocabulary; the equal shape is what keeps the two compatible, so narrowing one of them
- * here or there is a compile error at the hand-off rather than a silent mismatch. Options render in
- * the order the template returned them — no sorting, filtering or renaming — because the legacy
- * screens do the same (AAP 0.4.4 decision 6, Rule 1 clause 3).
+ * component, because this module's dependencies are limited to the configuration model, the shared
+ * date value and the status vocabulary; the equal shape is what keeps the two compatible, so
+ * narrowing one of them here or there is a compile error at the hand-off rather than a silent
+ * mismatch. Options render in the order the template returned them — no sorting, filtering or
+ * renaming — because the legacy screens do the same (AAP 0.4.4 decision 6, Rule 1 clause 3).
  */
 export interface SavingsTemplateOption {
   /** Option identifier, sent back verbatim when the option is posted. */
@@ -218,7 +196,7 @@ export interface SavingsTemplate {
   readonly savingsProductId?: number;
 
   /** Submission date the server would default to, when it returns one. */
-  readonly submittedOnDate?: FineractDateValue;
+  readonly submittedOnDate?: FineractDate;
 
   /**
    * Products the account may be opened on, in the server's order, under the wire's `productOptions`
@@ -251,9 +229,10 @@ export interface SavingsTransactionTemplate {
  * The new-account application body (AAP 0.7.2 `SavingsApplicationRequest`).
  *
  * Request body of the account creation the W8 workflow opens. The field list is the plan's, verbatim
- * and in its order; every date is already formatted and travels with `dateFormat` and `locale`
- * (Rule 1 clause 2). Product defaults come from the template response rather than from this type:
- * no member here carries a default value or a client-side constraint (Rule 1 clause 3).
+ * and in its order; `submittedOnDate` is the `Date | null` the form holds, and the service writes the
+ * formatted date beside the required `dateFormat` and `locale` (Rule 1 clause 2). Product defaults
+ * come from the template response rather than from this type: no member here carries a default
+ * value or a client-side constraint (Rule 1 clause 3).
  */
 export interface SavingsApplicationRequest {
   /** Owning client's identifier. */
@@ -262,31 +241,14 @@ export interface SavingsApplicationRequest {
   /** Savings product the account is opened on. */
   readonly productId: number;
 
-  /** Submission date, formatted with `dateFormat` in `locale`. */
-  readonly submittedOnDate: string;
+  /** Submission date the form holds; `null` when its field is empty. */
+  readonly submittedOnDate: Date | null;
 
-  /** Format `submittedOnDate` was written in; the one the configuration fixes. */
+  /** Format the service writes the date in; the one the configuration fixes. */
   readonly dateFormat: AppDateFormat;
 
-  /** Language `submittedOnDate` was written in. */
+  /** Language the service writes the date in. */
   readonly locale: string;
-}
-
-/**
- * What the new-application screen hands the service to open an account.
- *
- * Form input, the `Date`-bearing counterpart of `SavingsApplicationRequest`: the service formats
- * `submittedOnDate` and adds `dateFormat` and `locale` at the boundary.
- */
-export interface SavingsApplicationInput {
-  /** Owning client's identifier. */
-  readonly clientId: number;
-
-  /** Savings product the account is opened on. */
-  readonly productId: number;
-
-  /** Submission date the screen's field holds. */
-  readonly submittedOnDate: Date;
 }
 
 /**
@@ -297,13 +259,13 @@ export interface SavingsApplicationInput {
  * locale.
  */
 export interface SavingsApproveRequest {
-  /** Approval date, formatted with `dateFormat` in `locale`. */
-  readonly approvedOnDate: string;
+  /** Approval date the form holds; `null` when its field is empty. */
+  readonly approvedOnDate: Date | null;
 
-  /** Format `approvedOnDate` was written in; the one the configuration fixes. */
+  /** Format the service writes the date in; the one the configuration fixes. */
   readonly dateFormat: AppDateFormat;
 
-  /** Language `approvedOnDate` was written in. */
+  /** Language the service writes the date in. */
   readonly locale: string;
 }
 
@@ -313,13 +275,13 @@ export interface SavingsApproveRequest {
  * Request body of the activate action, which only a submitted-and-approved account accepts.
  */
 export interface SavingsActivateRequest {
-  /** Activation date, formatted with `dateFormat` in `locale`. */
-  readonly activatedOnDate: string;
+  /** Activation date the form holds; `null` when its field is empty. */
+  readonly activatedOnDate: Date | null;
 
-  /** Format `activatedOnDate` was written in; the one the configuration fixes. */
+  /** Format the service writes the date in; the one the configuration fixes. */
   readonly dateFormat: AppDateFormat;
 
-  /** Language `activatedOnDate` was written in. */
+  /** Language the service writes the date in. */
   readonly locale: string;
 }
 
@@ -334,24 +296,13 @@ export interface SavingsActivateRequest {
  * shapes rather than one permissive body. The union still spans all four commands the AAP row names,
  * so a consumer typed against this name can express an approval, an activation, a deposit or a
  * withdrawal. The service narrows it with the command it was given rather than inspecting the body
- * it received.
+ * it received, and the date member's name is the discriminant a screen switches on, so an approval
+ * date cannot reach the activation command.
  */
 export type SavingsActionRequest =
   | SavingsApproveRequest
   | SavingsActivateRequest
   | SavingsTransactionRequest;
-
-/**
- * What the action screen hands the service for an approval or an activation.
- *
- * Form input, the `Date`-bearing counterpart of the approve and activate arms of
- * `SavingsActionRequest`; a deposit or a withdrawal hands over `SavingsTransactionInput` instead.
- * The member name — and so the command — is the discriminant the service switches on, so a screen
- * cannot post an approval date to the activation command.
- */
-export type SavingsActionInput =
-  | { readonly approvedOnDate: Date }
-  | { readonly activatedOnDate: Date };
 
 /**
  * The two lifecycle commands the account endpoint takes (AAP 0.7.3 W8 row).
@@ -370,8 +321,8 @@ export type SavingsCommand = 'approve' | 'activate';
  * (Rule 1 clause 3).
  */
 export interface SavingsTransactionRequest {
-  /** Transaction date, formatted with `dateFormat` in `locale`. */
-  readonly transactionDate: string;
+  /** Transaction date the form holds; `null` when its field is empty. */
+  readonly transactionDate: Date | null;
 
   /** Amount deposited or withdrawn as entered. */
   readonly transactionAmount: number;
@@ -379,27 +330,11 @@ export interface SavingsTransactionRequest {
   /** Payment type the transaction is recorded against, from the transaction template. */
   readonly paymentTypeId: number;
 
-  /** Format `transactionDate` was written in; the one the configuration fixes. */
+  /** Format the service writes the date in; the one the configuration fixes. */
   readonly dateFormat: AppDateFormat;
 
-  /** Language `transactionDate` was written in. */
+  /** Language the service writes the date in. */
   readonly locale: string;
-}
-
-/**
- * What the deposit or withdrawal form hands the service.
- *
- * Form input, the `Date`-bearing counterpart of `SavingsTransactionRequest`.
- */
-export interface SavingsTransactionInput {
-  /** Transaction date the screen's field holds. */
-  readonly transactionDate: Date;
-
-  /** Amount deposited or withdrawn as entered. */
-  readonly transactionAmount: number;
-
-  /** Payment type the transaction is recorded against. */
-  readonly paymentTypeId: number;
 }
 
 /**
@@ -412,52 +347,72 @@ export interface SavingsTransactionInput {
 export type SavingsTransactionCommand = 'deposit' | 'withdrawal';
 
 /**
+ * The savings status codes this application recognises, mapped onto the indicator vocabulary
+ * `StatusSwatchComponent` owns. The keys are the fork's own `SavingsAccountStatusType` codes in
+ * `SavingsAccountStatusType.java`, normalised as all three families normalise a status code, and
+ * nothing else: `invalid`, `transfer.in.progress` and `transfer.on.hold` are absent by design.
+ *
+ * Every terminal state of the enum is `closed` — withdrawn by applicant, rejected, closed,
+ * pre-mature closure and matured — because a matured or prematurely closed account is as finished
+ * as a plainly closed one, which is what a substring test on `closed` alone got wrong.
+ */
+const STATUS_KEY_BY_CODE: Readonly<Partial<Record<string, StatusKey>>> = {
+  submittedandpendingapproval: 'pending',
+  approved: 'pending',
+  active: 'active',
+  withdrawnbyapplicant: 'closed',
+  rejected: 'closed',
+  closed: 'closed',
+  prematureclosure: 'closed',
+  matured: 'closed',
+};
+
+/**
+ * The normalisation the three feature families share before a status code is looked up:
+ * lower-cased, the family's own message-code prefix removed if the payload carried it, and every
+ * non-alphanumeric character stripped, so the whole remaining name is the key.
+ *
+ * `savingsAccountStatusType.pre.mature.closure`, `preMatureClosure` and `PRE_MATURE_CLOSURE`
+ * therefore all normalise to `prematureclosure`.
+ */
+function normaliseSavingsStatusCode(code: string): string {
+  return code.toLowerCase().replace(/^savingsaccountstatustype\./, '').replace(/[^a-z0-9]/g, '');
+}
+
+/**
  * Maps a Fineract savings status code onto the status indicator's vocabulary
  * (`StatusKey`, AAP 0.2.3 component inventory row `StatusSwatch`).
  *
  * The family's only status mapping, and the reason `StatusSwatchComponent` never receives a
  * Fineract code: the indicator carries a colour and no text at all (AAP 0.10.5 deliberate
- * difference 11), so the code — not the server's display text — decides the swatch. Matching is on
- * the code string, lower-cased and tested with a tolerant substring check, so a fork that qualifies
- * or spells a code slightly differently still maps instead of silently falling through. The
- * server's `value` display text is never consulted, because it is localised prose and would change
- * the swatch with the language.
+ * difference 11), so the code — not the server's display text — decides the swatch. The code is
+ * lower-cased, its `savingsAccountStatusType.` prefix and every separator removed, and the whole
+ * remaining name is looked up in an exact table over the fork's `SavingsAccountStatusType` enum;
+ * the server's `value` display text is never consulted, because it is localised prose and would
+ * change the swatch with the language.
  *
- * Mappings: `savingsAccountStatusType.active` → `active`; the submitted-and-pending-approval and
- * approved codes → `pending`; closed, rejected and withdrawn → `closed`; everything else, and a
- * missing code, → `other`.
+ * Mappings, by the state they indicate:
+ *
+ *   - `savingsAccountStatusType.active` → `active`;
+ *   - `savingsAccountStatusType.submitted.and.pending.approval` and `…approved` → `pending`;
+ *   - `…withdrawn.by.applicant`, `…rejected`, `…closed`, `…pre.mature.closure` and `…matured`
+ *     → `closed`, because all five are terminal in the design's vocabulary;
+ *   - everything else → `other`: `…invalid`, `…transfer.in.progress`, `…transfer.on.hold`, an
+ *     empty string, `undefined`, and any code the enum does not declare all fall here.
+ *
+ * Failure is neutral, never `active`: an unrecognised or missing code must not paint a pending or
+ * transferred account as active, and `other` carries a colour of its own without claiming a state.
+ * Pure and total — no I/O, no logging, no throw — so it can run in a template for every row.
  *
  * @param code The `code` member of the account's `status`, or `undefined` when the response carried
  *   none.
  * @returns The key the indicator renders.
  */
-export function toStatusKey(code: string | undefined): StatusKey {
+export function toSavingsStatusKey(code: string | undefined): StatusKey {
   if (code === undefined) {
     return 'other';
   }
 
-  const normalisedCode = code.trim().toLowerCase();
-
-  if (normalisedCode.includes('active')) {
-    return 'active';
-  }
-
-  if (
-    normalisedCode.includes('submitted') ||
-    normalisedCode.includes('pending') ||
-    normalisedCode.includes('approved')
-  ) {
-    return 'pending';
-  }
-
-  if (
-    normalisedCode.includes('closed') ||
-    normalisedCode.includes('rejected') ||
-    normalisedCode.includes('withdrawn')
-  ) {
-    return 'closed';
-  }
-
-  return 'other';
+  return STATUS_KEY_BY_CODE[normaliseSavingsStatusCode(code)] ?? 'other';
 }
 

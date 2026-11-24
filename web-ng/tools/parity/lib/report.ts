@@ -26,11 +26,59 @@ function byFileThenLine(a: Violation, b: Violation): number {
   return compareText(a.file, b.file) || a.line - b.line;
 }
 
-/** Prints one outcome in the format all three gates share, interpolating only listed fields (AAP 0.10.4). */
-export function printOutcome(outcome: CheckOutcome): void {
-  console.log('▶ ' + outcome.check);
+/** What a masked credential is replaced with before a line reaches stdout (Rule 1 clause 9). */
+const REDACTED = '***';
+
+/** An `Authorization` header and every value quoted after it on its line (Rule 1 clause 9 bullet 2). */
+const AUTHORIZATION_HEADER = /authorization:[^\r\n]*/gi;
+
+/** A `Basic` credential, whether a quoted header, a bare token or a thrown message carries it (Rule 1). */
+const BASIC_CREDENTIAL = /\bbasic\s+[A-Za-z0-9+/=]+/gi;
+
+/**
+ * A credential-shaped key and the value assigned to it, quoted or bare, in an assignment (`password = …`)
+ * or in the JSON body a thrown message stringifies (`"password":"…"`), where the key's closing quote and
+ * the value's own opening quote sit either side of the separator. The quoted-key branch takes the key's
+ * quote and one value quote into the separator, so the value alone is masked; the bare-key branch leaves
+ * the separator alone, so `password = '…'` keeps its current rendering. The value alternation tries a
+ * double-quoted value, then a single-quoted one, then — for a separator that has already consumed the
+ * value's opening quote — every character up to the next double quote or the end of the line, so a value
+ * containing spaces is masked whole and its JSON delimiters survive, with the space-terminated
+ * `[^\s,;]+` form kept behind it. The identifier prefix keeps `E2E_PASSWORD = <value>` masked while a
+ * note that only names a variable still reads normally, and bare `credential`/`credentials` are absent so
+ * "credentials: E2E_PASSWORD is not set" keeps its words.
+ */
+const CREDENTIAL_ASSIGNMENT = /\b([A-Za-z0-9_]*(?:password|passwd|secret|authenticationKey|apiKey|token))(["']\s*[:=]\s*["']?|["']?\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^"\r\n]*|[^\s,;]+)/gi;
+
+/**
+ * Masks the authentication material one line of gate output can carry — each non-empty supplied secret,
+ * any `authorization:` header value, any `Basic` credential and any value assigned to a credential-shaped
+ * key, whose name stays readable — so nothing printed carries a credential (Rule 1 clause 9 bullet 2;
+ * AAP 0.14.2 Logging, and the `credential-literal` findings will print through here).
+ */
+export function redactSensitive(text: string, secrets: readonly string[] = []): string {
+  let redacted = text;
+  for (const secret of secrets) {
+    if (secret.length > 0) {
+      redacted = redacted.split(secret).join(REDACTED);
+    }
+  }
+  redacted = redacted.replace(AUTHORIZATION_HEADER, `authorization: ${REDACTED}`);
+  redacted = redacted.replace(BASIC_CREDENTIAL, `Basic ${REDACTED}`);
+  return redacted.replace(CREDENTIAL_ASSIGNMENT, `$1$2${REDACTED}`);
+}
+
+/**
+ * Prints one outcome in the format all three gates share, interpolating only listed fields (AAP 0.10.4)
+ * and masking every line it writes — header, notes, rule groups, findings, summary, verdict — through
+ * {@link redactSensitive} with the caller's `secrets`, so nothing printed carries a credential (Rule 1
+ * clause 9 bullet 2).
+ */
+export function printOutcome(outcome: CheckOutcome, secrets: readonly string[] = []): void {
+  const write = (line: string): void => { console.log(redactSensitive(line, secrets)); };
+  write('▶ ' + outcome.check);
   for (const note of outcome.notes) {
-    console.log('note: ' + note);
+    write('note: ' + note);
   }
   const groups = new Map<string, Violation[]>();
   for (const found of outcome.violations) {
@@ -42,22 +90,26 @@ export function printOutcome(outcome: CheckOutcome): void {
     }
   }
   for (const rule of [...groups.keys()].sort(compareText)) {
-    console.log(rule);
+    write(rule);
     for (const found of [...(groups.get(rule) ?? [])].sort(byFileThenLine)) {
       const where = found.file === '' ? '' : found.file + ':' + found.line + ' — ';
-      console.log(where + found.message);
+      write(where + found.message);
     }
   }
   const counts = Object.entries(outcome.scanned).sort((a, b) => compareText(a[0], b[0])).map(([key, value]) => key + '=' + value);
-  console.log(outcome.check + ': ' + outcome.violations.length + ' violation(s); scanned ' + (counts.join(', ') || 'none'));
-  console.log(outcome.violations.length === 0 ? 'PASS' : 'FAIL');
+  write(outcome.check + ': ' + outcome.violations.length + ' violation(s); scanned ' + (counts.join(', ') || 'none'));
+  write(outcome.violations.length === 0 ? 'PASS' : 'FAIL');
 }
 
-/** Runs a gate body and turns its outcome, or its throw, into one exit code (AAP 0.10.4). */
-export async function runCheck(check: string, body: () => Promise<CheckOutcome>): Promise<void> {
+/**
+ * Runs a gate body and turns its outcome, or its throw, into one exit code (AAP 0.10.4), printing through
+ * {@link printOutcome} with the caller's `secrets` so a thrown message and stack are masked the same way
+ * (Rule 1 clause 9 bullet 2).
+ */
+export async function runCheck(check: string, body: () => Promise<CheckOutcome>, secrets: readonly string[] = []): Promise<void> {
   try {
     const outcome = await body();
-    printOutcome(outcome);
+    printOutcome(outcome, secrets);
     process.exitCode = outcome.violations.length === 0 ? 0 : 1;
   } catch (error) {
     // A body may throw any arbitrary value, so the payload is narrowed from unknown rather than trusted.
@@ -69,7 +121,7 @@ export async function runCheck(check: string, body: () => Promise<CheckOutcome>)
       violations: [violation('internal', '', 0, 'check body threw: ' + message)],
       notes: ['internal failure: ' + message, ...stackLines],
       scanned: {},
-    });
+    }, secrets);
     process.exitCode = 1;
   }
 }

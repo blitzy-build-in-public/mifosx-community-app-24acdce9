@@ -2,6 +2,7 @@
   "header": {
     "apiPath": "/fineract-provider/api/v1",
     "source": "AAP 0.7.3 workflow endpoint table",
+    "resource": "the legacy resourceFactory key that performs the call, from app/scripts/services/ResourceFactoryProvider.js at the pinned legacy commit; null where the legacy app has no equivalent and AAP 0.7.3 names none. AuthenticationService is the exception: the legacy app authenticates through a service file rather than a factory resource, so that row carries AAP 0.7.3's own label",
     "generatorGap": "app/scripts/services/ResourceFactoryProvider.js is absent from this checkout (base commit holds only README.md); entries are transcribed from AAP 0.7.3",
     "generatedOn": "2026-11-24",
     "pathConventions": "paths are relative to apiPath, begin with '/', use {id}-style templates, carry no query string and no trailing slash; query names live in queryParameters",
@@ -326,11 +327,11 @@
       "family": "Loans",
       "method": "GET",
       "path": "/loans/{id}/transactions/template",
-      "resource": "LoanAccountResource",
+      "resource": "loanTrxnsTemplateResource",
       "queryParameters": [
         "command"
       ],
-      "note": "command=disburse (AAP 0.7.3). The same method+path appears in 'W6 repayment' with command=repayment; each row is kept separately for traceability."
+      "note": "command=disburse (AAP 0.7.3). AAP 0.7.3 labels this row LoanAccountResource, but the legacy factory key for this template read is loanTrxnsTemplateResource; the same method+path appears in 'W6 repayment' with command=repayment, and each row is kept separately for traceability."
     },
     {
       "workflow": "W5 approve and disburse",
@@ -355,11 +356,11 @@
       "family": "Loans",
       "method": "GET",
       "path": "/loans/{id}/transactions/template",
-      "resource": "loanTrxnsResource",
+      "resource": "loanTrxnsTemplateResource",
       "queryParameters": [
         "command"
       ],
-      "note": "command=repayment (AAP 0.7.3). The same method+path appears in 'W5 approve and disburse' with command=disburse; each row is kept separately for traceability."
+      "note": "command=repayment (AAP 0.7.3). AAP 0.7.3 labels this row loanTrxnsResource, but the legacy factory key for this template read is loanTrxnsTemplateResource; the same method+path appears in 'W5 approve and disburse' with command=disburse, and each row is kept separately for traceability."
     },
     {
       "workflow": "W6 repayment",
@@ -433,7 +434,7 @@
       "family": "Savings",
       "method": "GET",
       "path": "/savingsaccounts/template",
-      "resource": "savingsaccountResource",
+      "resource": "savingsTemplateResource",
       "queryParameters": [
         "clientId",
         "productId"
@@ -444,33 +445,36 @@
       "family": "Savings",
       "method": "POST",
       "path": "/savingsaccounts",
-      "resource": "savingsaccountResource",
-      "queryParameters": []
+      "resource": "savingsResource",
+      "queryParameters": [],
+      "note": "savingsResource is the legacy factory key for /savingsaccounts[/:accountId]; its :resourceType and :chargeId parameters are absent from this call."
     },
     {
       "workflow": "W8 savings (Stretch)",
       "family": "Savings",
       "method": "POST",
       "path": "/savingsaccounts/{id}",
-      "resource": "savingsaccountResource",
+      "resource": "savingsResource",
       "command": "approve",
-      "queryParameters": []
+      "queryParameters": [],
+      "note": "savingsResource is the legacy factory key for /savingsaccounts[/:accountId]; its :resourceType and :chargeId parameters are absent from this call."
     },
     {
       "workflow": "W8 savings (Stretch)",
       "family": "Savings",
       "method": "POST",
       "path": "/savingsaccounts/{id}",
-      "resource": "savingsaccountResource",
+      "resource": "savingsResource",
       "command": "activate",
-      "queryParameters": []
+      "queryParameters": [],
+      "note": "savingsResource is the legacy factory key for /savingsaccounts[/:accountId]; its :resourceType and :chargeId parameters are absent from this call."
     },
     {
       "workflow": "W8 savings (Stretch)",
       "family": "Savings",
       "method": "GET",
       "path": "/savingsaccounts/{id}/transactions/template",
-      "resource": "savingsaccountResource",
+      "resource": "savingsTrxnsTemplateResource",
       "queryParameters": []
     },
     {
@@ -478,7 +482,7 @@
       "family": "Savings",
       "method": "POST",
       "path": "/savingsaccounts/{id}/transactions",
-      "resource": "savingsaccountResource",
+      "resource": "savingsTrxnsResource",
       "command": "deposit",
       "queryParameters": []
     },
@@ -487,7 +491,7 @@
       "family": "Savings",
       "method": "POST",
       "path": "/savingsaccounts/{id}/transactions",
-      "resource": "savingsaccountResource",
+      "resource": "savingsTrxnsResource",
       "command": "withdrawal",
       "queryParameters": []
     },
@@ -496,11 +500,11 @@
       "family": "Savings",
       "method": "GET",
       "path": "/savingsaccounts/{id}",
-      "resource": "savingsaccountResource",
+      "resource": "savingsResource",
       "queryParameters": [
         "associations"
       ],
-      "note": "associations=all (AAP 0.7.3)."
+      "note": "associations=all (AAP 0.7.3). savingsResource is the legacy factory key for /savingsaccounts[/:accountId]; its :resourceType and :chargeId parameters are absent from this call."
     }
   ]
 }

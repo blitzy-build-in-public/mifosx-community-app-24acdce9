@@ -102,11 +102,31 @@ export function apiUrl(path: string): string {
   return `${FINERACT_URL}${API_PATH}${path}`;
 }
 
+/**
+ * Reads the first non-blank value among one credential's accepted variables, or `''` when none of
+ * them is set. Internal to this module: the credentials are the only setting with more than one
+ * accepted name, and {@link readCredentials} reports an absent value itself.
+ *
+ * @param envNames Accepted variable names, in the order they are read.
+ */
+function resolveCredential(envNames: readonly string[]): string {
+  for (const envName of envNames) {
+    const configured = (process.env[envName] ?? '').trim();
+    if (configured.length > 0) {
+      return configured;
+    }
+  }
+  return '';
+}
+
 /** The Fineract credential pair the harness authenticates with. */
 export interface Credentials {
-  /** Fineract user name, read from `E2E_USER` at call time. */
+  /** Fineract user name, read from `E2E_USER` or else `FINERACT_USERNAME` at call time. */
   readonly username: string;
-  /** Fineract password, read from `E2E_PASSWORD` at call time; never logged, serialised or written. */
+  /**
+   * Fineract password, read from `E2E_PASSWORD` or else `FINERACT_PASSWORD` at call time; never
+   * logged, serialised or written.
+   */
   readonly password: string;
 }
 
@@ -114,29 +134,38 @@ export interface Credentials {
  * Reads the harness credentials from the environment. Consumed by {@link authenticate}; the page
  * objects and specs never need them directly.
  *
+ * Each value comes from the first of its accepted names that is set and non-blank: the user name
+ * from `E2E_USER` then `FINERACT_USERNAME`, the password from `E2E_PASSWORD` then
+ * `FINERACT_PASSWORD`. `E2E_USER`/`E2E_PASSWORD` are the names AAP 0.13 fixes and stay first; the
+ * `FINERACT_*` pair follows because it is the spelling the host this harness runs on exports, so
+ * the run authenticates there without the operator inventing an alias.
+ *
  * The variables are read inside this body, never at import, so an unconfigured environment breaks
  * the check that needs credentials and leaves the rest of the run — collection, date helpers,
- * fixture data — working. There is no fallback value of any kind (Rule 1 clause 9), and the pair is
- * returned in memory only.
+ * fixture data — working. A blank value counts as unset, there is no default value of any kind
+ * (Rule 1 clause 9), and the pair is returned in memory only.
  *
- * @throws When `E2E_USER` or `E2E_PASSWORD` is unset or blank; the message names every missing
- * variable and points at `web-ng/README.md`, the only place the harness's environment is documented.
+ * @throws When neither name of the user name nor of the password yields a value; the message names
+ * every accepted variable, states which value is missing and points at `web-ng/README.md`, the only
+ * place the harness's environment is documented. It never echoes a value.
  */
 export function readCredentials(): Credentials {
-  const username = (process.env['E2E_USER'] ?? '').trim();
-  const password = (process.env['E2E_PASSWORD'] ?? '').trim();
+  const username = resolveCredential(['E2E_USER', 'FINERACT_USERNAME']);
+  const password = resolveCredential(['E2E_PASSWORD', 'FINERACT_PASSWORD']);
   const missing: string[] = [];
   if (username.length === 0) {
-    missing.push('E2E_USER');
+    missing.push('no user name in E2E_USER or FINERACT_USERNAME');
   }
   if (password.length === 0) {
-    missing.push('E2E_PASSWORD');
+    missing.push('no password in E2E_PASSWORD or FINERACT_PASSWORD');
   }
   if (missing.length > 0) {
     throw new Error(
-      `Missing Fineract credentials for the parity harness: ${missing.join(', ')} is not set. ` +
-        'Export the variable before running the harness; web-ng/README.md names every variable the ' +
-        'harness reads and where the development credentials come from.',
+      `Missing Fineract credentials for the parity harness: ${missing.join(', and ')}. ` +
+        'The user name is read from E2E_USER or FINERACT_USERNAME and the password from ' +
+        'E2E_PASSWORD or FINERACT_PASSWORD; export the missing value before running the harness. ' +
+        'web-ng/README.md names every variable the harness reads and where the development ' +
+        'credentials come from.',
     );
   }
   return { username, password };
@@ -395,23 +424,34 @@ export function resetBusinessDateCache(): void {
  * (AAP 0.10.5 item 15).
  *
  * The successful value is cached for the life of the process; callers get a copy, so mutating the
- * returned `Date` cannot corrupt the cache. A failed read leaves the cache empty, so the next call
- * retries instead of serving a stale run date.
+ * returned `Date` cannot corrupt the cache. The cache is consulted before the key, so a cached run
+ * date answers a call made with or without one and no request is sent either way. A failed read
+ * leaves the cache empty, so the next call retries instead of serving a stale run date.
  *
+ * @param authenticationKey Key an earlier {@link authenticate} call already returned, when the caller
+ * holds one. A non-empty key is reused as it stands, so a caller that has authenticated passes it in
+ * rather than paying for a second `POST /authentication`; that also keeps the run's only key the one
+ * the caller registered for masking (Rule 1 clause 9). Omitted or empty, this function authenticates
+ * for itself, which is what a caller holding no key relies on.
  * @throws When credentials are missing, when Fineract refuses the call or answers non-2xx, or when
  * the payload is not the documented `{description, type, date: [year, month, day]}`. It never falls
  * back to the browser clock: a harness that invented a run date would date every workflow from the
  * wrong day, which is exactly what Rule 1 clause 2 forbids.
  */
-export async function readBusinessDate(): Promise<Date> {
+export async function readBusinessDate(authenticationKey?: string): Promise<Date> {
   if (cachedBusinessDate !== null) {
     return new Date(cachedBusinessDate.getTime());
   }
-  const authenticationKey = await authenticate();
+  // Authenticating only when the caller handed over no key keeps one run to a single
+  // POST /authentication, and keeps the key sent from here the one the caller registered for masking.
+  const key =
+    authenticationKey === undefined || authenticationKey.length === 0
+      ? await authenticate()
+      : authenticationKey;
   const url = apiUrl('/businessdate/BUSINESS_DATE');
   const context = await request.newContext({ ignoreHTTPSErrors: true });
   try {
-    const response = await context.get<unknown>(url, { headers: apiHeaders(authenticationKey) });
+    const response = await context.get<unknown>(url, { headers: apiHeaders(key) });
     const status = response.status();
     const text = await response.text();
     if (!response.ok()) {

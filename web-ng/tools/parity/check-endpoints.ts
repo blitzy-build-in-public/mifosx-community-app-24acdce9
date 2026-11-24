@@ -18,6 +18,7 @@
 // for either list to hold.
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveCliIntent, type CliUsage } from './lib/cli.js';
 import type { CheckOutcome, Violation } from './lib/report.js';
 import { runCheck, violation } from './lib/report.js';
 import { canonicalPath, findUrlLiterals, isStaticAsset, readText, stripComments, walk } from './lib/source-scan.js';
@@ -143,7 +144,34 @@ function lineStarts(text: string): number[] {
   return starts;
 }
 
-await runCheck('check:endpoints', async (): Promise<CheckOutcome> => {
+/**
+ * What `--help` prints (finding 406f-F02): what the gate proves, that it writes nothing, the fact that
+ * it reads no environment variable, and how it is run.
+ */
+const ENDPOINTS_USAGE: CliUsage = {
+  name: 'check:endpoints',
+  summary: 'Fails on any Fineract URL under web-ng/src that endpoint-allowlist.json does not declare, and on any public demo host in the tree.',
+  effects: [
+    'scans web-ng/src, web-ng/e2e and web-ng/tools and fails on a Fineract URL the four parity data files do not declare',
+    'fails on a public demo Fineract host in code or in a comment (Rule 2)',
+    'writes nothing: the gate only reads the tree and the data files under web-ng/tools/parity',
+  ],
+  environment: [
+    'none — the gate reads the four data files under web-ng/tools/parity and no environment variable',
+  ],
+  examples: [
+    'npm run check:endpoints',
+  ],
+};
+
+// A usage request is answered before the gate body runs, so `--help` reads no file and proves nothing
+// (finding 406f-F02). The code goes on process.exitCode, never through process.exit(), so a piped
+// summary line is never lost.
+const intent = resolveCliIntent(ENDPOINTS_USAGE, process.argv.slice(2));
+if (intent.kind === 'handled') {
+  process.exitCode = intent.exitCode;
+}
+if (intent.kind === 'run') await runCheck('check:endpoints', async (): Promise<CheckOutcome> => {
   const violations: Violation[] = [];
   const notes: string[] = [LEGACY_NOTE];
   const fail = (rule: string, file: string, line: number, message: string): void => { violations.push(violation(rule, file, line, message)); };

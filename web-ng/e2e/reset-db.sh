@@ -6,7 +6,13 @@
 #   1. pull the PostgreSQL image, because a fresh machine holds none and step 2 may never pull;
 #   2. recreate the stack from images already on disk (`--pull never`), so Docker can never substitute a
 #      downloaded server for the locally built `fineract:latest` (Rule 2: Blitzy Fineract from source);
-#   3. poll the backend's health endpoint until it reports UP instead of sleeping a fixed interval;
+#   3. poll the backend's health endpoint until it reports UP instead of sleeping a fixed interval,
+#      for up to 15 minutes by default: 450 attempts 2 seconds apart. The fork's compose file declares
+#      no data volume for PostgreSQL, so step 2's `--force-recreate` discards the cluster and every
+#      reset replays the Liquibase migrations from empty, a first start measured at 2-8 minutes; a
+#      shorter bound would fail a healthy run on a loaded host. FINERACT_HEALTH_MAX_ATTEMPTS overrides
+#      the attempt count (a positive integer, same 2-second interval) and defaults to 450 when unset or
+#      empty; a value that is not a positive integer exits 1 before any docker or curl call;
 #   4. seed the fixed test data (AAP 0.10.1) once the backend answers.
 #
 # The seed is last because it is the only step that needs a working API, and it is not idempotent: it
@@ -41,6 +47,32 @@ if [ ! -f "$FINERACT_COMPOSE_FILE" ] || [ ! -r "$FINERACT_COMPOSE_FILE" ]; then
   exit 1
 fi
 
+# Step 3's bound, read and checked before anything talks to Docker or the backend, so a typo fails
+# here instead of fifteen minutes into a wait. The interval is named once, so the attempt count and
+# the seconds it stands for cannot drift apart.
+health_poll_interval=2
+health_max_attempts_raw="${FINERACT_HEALTH_MAX_ATTEMPTS:-}"
+if [ -z "$health_max_attempts_raw" ]; then
+  health_max_attempts=450
+else
+  health_max_attempts=$health_max_attempts_raw
+  case "$health_max_attempts_raw" in
+    *[!0-9]*)
+      health_max_attempts='' # a sign, a space or a decimal: rejected below
+      ;;
+    *)
+      # Leading zeros are accepted, but `[` and `$(( ))` read 010 as octal, so strip them first.
+      while [ "${health_max_attempts#0}" != "$health_max_attempts" ]; do
+        health_max_attempts=${health_max_attempts#0}
+      done
+      ;;
+  esac
+  if [ -z "$health_max_attempts" ]; then
+    printf 'reset-db: FINERACT_HEALTH_MAX_ATTEMPTS must be a positive integer number of attempts; received "%s".\n' "$health_max_attempts_raw" >&2
+    exit 1
+  fi
+fi
+
 FINERACT_URL="${FINERACT_URL:-https://localhost:8443}"
 health_url="$FINERACT_URL/fineract-provider/actuator/health"
 compose_dir=$(cd "$(dirname "$FINERACT_COMPOSE_FILE")" && pwd)
@@ -60,17 +92,27 @@ printf 'reset-db: step 2/4 recreating the stack with --pull never\n'
 ( cd "$compose_dir" && docker compose -f "$compose_file" up -d --force-recreate --pull never )
 
 # Step 3 — readiness, not a fixed sleep. `-k` because the fork serves a self-signed certificate.
-printf 'reset-db: step 3/4 waiting for %s\n' "$health_url"
-max_attempts=90
+printf 'reset-db: step 3/4 waiting for %s (up to %s attempts, %s seconds apart)\n' \
+  "$health_url" "$health_max_attempts" "$health_poll_interval"
 attempt=0
 until curl -kfsS --max-time 5 "$health_url" 2>/dev/null | grep -q '"status"[[:space:]]*:[[:space:]]*"UP"'; do
   attempt=$((attempt + 1))
-  if [ "$attempt" -ge "$max_attempts" ]; then
-    printf 'reset-db: backend is not UP after %s attempts: %s\n' "$max_attempts" "$health_url" >&2
+  sleep "$health_poll_interval"
+  if [ "$attempt" -ge "$health_max_attempts" ]; then
+    waited_seconds=$((attempt * health_poll_interval))
+    # Both units when the wait is a minute or more, seconds alone below that, so an overridden
+    # short bound never reports itself as "0 minutes".
+    if [ "$waited_seconds" -ge 60 ]; then
+      waited_text="${waited_seconds} seconds ($((waited_seconds / 60)) minutes)"
+    else
+      waited_text="${waited_seconds} seconds"
+    fi
+    printf 'reset-db: backend is not UP after %s attempts over %s: %s\n' \
+      "$attempt" "$waited_text" "$health_url" >&2
+    printf 'reset-db: every reset replays the Liquibase migrations from an empty cluster; raise FINERACT_HEALTH_MAX_ATTEMPTS to wait longer.\n' >&2
     printf 'reset-db: inspect it with: docker compose -f "%s" logs\n' "$compose_file" >&2
     exit 1
   fi
-  sleep 2
 done
 printf 'reset-db: backend reports UP\n'
 
