@@ -28,13 +28,32 @@ const LONG_ERROR =
   'The request failed: principal 50,000 exceeds the maximum allowed for this product.';
 
 /**
+ * A message padded the way a Fineract `defaultUserMessage` or a legacy translation can be: leading
+ * and trailing spaces are part of the text the host was given, so the rendered notice has to keep
+ * both of them.
+ */
+const PADDED_INFO = '  Saved: 50,000.  ';
+
+/**
+ * The one character the template's own markup contributes after the message: the line break that
+ * `notification.component.html` puts between `{{ message.message }}` and its closing `</div>`,
+ * which Angular's whitespace handling collapses to a single space. It is named here rather than
+ * trimmed away so every expectation below pins the rendered text to exactly what the host emits.
+ */
+const TEMPLATE_TAIL = ' ';
+
+/**
  * Returns the notice's rendered text with its dismiss control removed, so the comparison measures
- * only the message Fineract sent and not the close glyph the template also renders.
+ * only the message Fineract sent and not the close glyph the template also renders. Nothing is
+ * trimmed: the message has to reach the host character for character (AAP 0.5.2 "Carries Fineract's
+ * `defaultUserMessage` verbatim", AAP 0.7.4, Rule 1 clause 3), so a template or component that
+ * trimmed it must fail here. The template's own trailing space is accounted for separately, in
+ * `TEMPLATE_TAIL`.
  */
 function renderedText(notice: HTMLElement): string {
   const dismiss = notice.querySelector('.close');
   dismiss?.remove();
-  return (notice.textContent ?? '').trim();
+  return notice.textContent ?? '';
 }
 
 describe('NotificationComponent', () => {
@@ -73,8 +92,18 @@ describe('NotificationComponent', () => {
     expect(notices[0].classList.contains('notification-error')).toBe(false);
     expect(notices[1].classList.contains('notification-error')).toBe(true);
     expect(notices[1].classList.contains('notification-info')).toBe(false);
-    expect(renderedText(notices[0])).toBe(SHORT_INFO);
-    expect(renderedText(notices[1])).toBe(LONG_ERROR);
+    expect(renderedText(notices[0])).toBe(`${SHORT_INFO}${TEMPLATE_TAIL}`);
+    expect(renderedText(notices[1])).toBe(`${LONG_ERROR}${TEMPLATE_TAIL}`);
+  });
+
+  it('renders a message carrying a leading and a trailing space character for character', () => {
+    service.show('info', PADDED_INFO);
+    fixture.detectChanges();
+
+    const notices = host.querySelectorAll<HTMLElement>('.notification');
+
+    expect(notices).toHaveLength(1);
+    expect(renderedText(notices[0])).toBe(`${PADDED_INFO}${TEMPLATE_TAIL}`);
   });
 
   it('maps the success kind to the notification-success class alone', () => {
@@ -114,7 +143,7 @@ describe('NotificationComponent', () => {
     expect(remaining[0]).toBe(second);
     expect(host.querySelectorAll('.notification-info')).toHaveLength(0);
     expect(remaining[0].classList.contains('notification-error')).toBe(true);
-    expect(renderedText(remaining[0])).toBe(LONG_ERROR);
+    expect(renderedText(remaining[0])).toBe(`${LONG_ERROR}${TEMPLATE_TAIL}`);
     expect(service.messages()).toHaveLength(1);
     expect(service.messages()[0].message).toBe(LONG_ERROR);
   });

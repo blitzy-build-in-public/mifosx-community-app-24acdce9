@@ -21,10 +21,14 @@ import { DateFieldComponent } from './date-field.component';
  * - the disabled state arriving from the control, never from the template;
  * - one stable id per instance, so every `<label for>` points at exactly one input.
  *
- * The element helpers narrow with `instanceof` instead of a cast: `ComponentFixture.nativeElement`
- * and `querySelector` are loosely typed, and the strict build this file compiles under forbids `as`
- * and `!` (Rule 1 clause 4). A helper that throws when the element is missing also turns a broken
- * template into a named failure rather than an `undefined` further down the test.
+ * The element helpers narrow with `instanceof` rather than with a cast:
+ * `ComponentFixture.nativeElement` and `querySelector` are loosely typed, so narrowing them is
+ * what keeps the rest of each test type-checked. A helper that throws when the element is missing,
+ * or is of another type, turns a broken template into a named failure where the template broke
+ * instead of an `undefined` surfacing further down the test. The strict build (Rule 1 clause 4) and
+ * the pinned lint set permit both `as` and `!` — sibling specs here use them and lint clean — but
+ * neither is used in this file, deliberately, because either would suppress the failure the
+ * narrowing reports.
  */
 
 /** The root form group, or a named failure when the template rendered none. */

@@ -143,9 +143,18 @@ describe('SelectFieldComponent', () => {
   it('renders one option per entry, in the order the template endpoint returned them', () => {
     const fixture = createField(new FormControl<SelectValue | null>(null));
     const select = renderedSelect(fixture);
+    const group = renderedGroup(fixture);
 
     expect(select.options).toHaveLength(OFFICES.length);
     expect(optionTexts(select)).toEqual(['Head Office', 'Branch One', 'Branch Two']);
+
+    // The Bootstrap 3 markup is the control's whole look, so it is part of what renders here:
+    // `.form-control` is what gives the native select its 34px height and #E0E0E0 border (AAP 0.5.2
+    // "`SelectFieldComponent` wrapping native `<select>` with `.form-control`", AAP 0.5.3 control
+    // height, Rule 1 clause 6), and `.form-group` is the element the `.has-error` state lands on.
+    expect(select.classList.contains('form-control')).toBe(true);
+    expect(group.classList.contains('form-group')).toBe(true);
+    expect(select.parentElement).toBe(group);
   });
 
   it('renders both options that share one id, in order, and writes each id to the control', () => {
