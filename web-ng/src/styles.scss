@@ -1,0 +1,529 @@
+// =============================================================================
+// Mifos X — the single global stylesheet of the Angular application
+//
+// Cascade order, top to bottom. The order is what produces the look; a different
+// order changes the cascade and is a defect.
+//
+//   1. brand overrides      — declared before every import, so the !default values
+//                             inside Bootstrap cannot win over the product's own
+//   2. bootstrap-sass 3.4.3 — Bootstrap 3 grid, tables, panels, buttons, tabs,
+//                             dropdowns and alerts, resolved from node_modules
+//   3. font-awesome 4.7.0   — the icon family the legacy screens draw, from npm
+//   4. the product layer    — the rules the legacy partials of app/styles-dev/main
+//                             contributed to the in-scope screens, reproduced inline
+//
+// WHAT IS NOT IMPORTED, AND WHY
+// The plan compiles the legacy partials from app/styles-dev/main through the Angular
+// `stylePreprocessorOptions.includePaths` entry. That tree is absent from this checkout, so
+// importing any partial would fail the build outright ("Can't find stylesheet to import") —
+// a hard error, not a warning. The product layer below therefore reproduces, rule by rule,
+// only what the in-scope screens need. The ten partials of the plan's import layer are
+// accounted for here:
+//
+//   _variables.scss       reproduced as the token block below — the values of every
+//                         variable the in-scope screens use, each annotated with its
+//                         legacy variable name
+//   _custom_mixins.scss   no rule needed: its mixins serve the left rail, the wizard
+//                         progress bar and the account tree, none of which is rendered
+//   _layout.scss          the signed-in content surface and the navbar link colour; the
+//                         rest of the partial positions the excluded left rail
+//   _content.scss         body typography, the breadcrumb, the table head band, the card
+//                         surface and the status colours
+//   _inputs.scss          .form-control border, radius, shadow and focus state
+//   _navbar.scss          navbar fill and bottom rule, navbar-brand image sizing
+//   _buttons.scss         .btn radius, .btn-primary, the joined action button group
+//   _alerts.scss          .alert radius
+//   _notifications.scss   the notification widget container NotificationComponent renders
+//   _loader.scss          nothing at all: no screen renders a spinner, loader or progress
+//                         indicator, so a rule here would be an invented element
+//
+// The four partials the plan deliberately excludes stay excluded: _leftnav.scss (the left
+// icon rail is not rendered — every destination behind it is an out-of-scope module),
+// _chosen.scss (chosen is replaced by a native <select>), _nv.d3.scss (dashboards) and
+// _report.scss (reports).
+//
+// Two kinds of rule live in the product layer: element rules the in-scope screens match by
+// their Bootstrap 3 markup (.panel, .table, .breadcrumb, .form-control, .navbar, .btn,
+// .nav-tabs, the status classes, .alert) and a small set of single-purpose classes the
+// in-scope components name themselves because the legacy product set that type by hand:
+// .text-small, .form-label, .panel-title, .record-title, .value-key, .panel-bordered,
+// .notification-container/.notification. Each carries its token in a comment.
+//
+// app/styles-dev/styles.scss is NEVER compiled: it imports five ../bower_components/...
+// stylesheets that do not exist in this build, and app/ may not be modified. Everything this
+// file imports is resolved from npm, and nothing is imported from app/.
+//
+// Dart Sass emits deprecation warnings for the npm packages' @import-era Sass. They are
+// accepted and are never silenced by editing app/.
+//
+// The design reference for these screens is the legacy Bootstrap 3 application: this is a
+// framework migration, not a redesign, so the tokens below are the legacy values and the
+// build keeps the legacy look. A later, unrelated redesign of the same screens must not be
+// adopted here by rewriting these rules.
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// 1. Brand overrides — must precede the import so !default cannot win
+// -----------------------------------------------------------------------------
+
+// $brand-primary is the product's own override [app/styles-dev/styles.scss:2]. Everything
+// derived from it (links, .btn-primary, the active nav item, focus glows) follows.
+$brand-primary: rgba(79, 153, 237, 1);
+
+// The design's primary-button border is #378CEB. Bootstrap computes it as
+// darken($btn-primary-bg, 5%), which lands on #389CEB for this blue, one step off the
+// measured value, so it is pinned here rather than derived.
+$btn-primary-border: #378CEB;
+
+// Not set on purpose: $brand-success/#1abc9c is the left-rail accent, and the rail is not
+// rendered. Leaving it at Bootstrap's default keeps the success green out of the screens.
+
+// The two icon-font locations, both resolved from npm. Angular inlines the Sass into this
+// one stylesheet and then resolves every url() relative to it, so the packages' own
+// defaults ("../fonts/..." from the partial) would point above src/ and fail the build.
+// Pointing them at the packages lets the builder read the font files straight out of
+// node_modules and emit them with the bundle — nothing is copied into src/ and no CDN is
+// involved. The tidier home for this is an assets mapping of its own, which belongs to
+// web-ng/angular.json rather than to this file.
+$icon-font-path: "../node_modules/bootstrap-sass/assets/fonts/bootstrap/";
+$fa-font-path: "../node_modules/font-awesome/fonts";
+
+// -----------------------------------------------------------------------------
+// 2-3. Bootstrap 3 and Font Awesome from npm — never from bower_components
+// -----------------------------------------------------------------------------
+
+@import "bootstrap-sass/assets/stylesheets/bootstrap";
+
+// Font Awesome 4.7.0, the icon family the legacy screens draw. The package's entry point
+// (@import "font-awesome/scss/font-awesome") is not used: its _path.scss appends "?v=4.7.0"
+// to every font URL, and the Angular CSS pipeline treats the query as part of the file name
+// and cannot resolve it. The package's own partials are imported in the package's order and
+// the same @font-face is declared below against unversioned paths inside the package, so
+// every .fa rule is the package's own, the fonts come from npm, nothing is copied into src/
+// and no CDN is used. The EOT and SVG fallbacks of the original face are dropped because no
+// browser this app supports needs them.
+@import "font-awesome/scss/variables";
+@import "font-awesome/scss/mixins";
+
+@font-face {
+  font-family: 'FontAwesome';
+  src:
+    url('#{$fa-font-path}/fontawesome-webfont.woff2') format('woff2'),
+    url('#{$fa-font-path}/fontawesome-webfont.woff') format('woff'),
+    url('#{$fa-font-path}/fontawesome-webfont.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@import "font-awesome/scss/core";
+@import "font-awesome/scss/larger";
+@import "font-awesome/scss/fixed-width";
+@import "font-awesome/scss/list";
+@import "font-awesome/scss/bordered-pulled";
+@import "font-awesome/scss/animated";
+@import "font-awesome/scss/rotated-flipped";
+@import "font-awesome/scss/stacked";
+@import "font-awesome/scss/icons";
+@import "font-awesome/scss/screen-reader";
+
+// -----------------------------------------------------------------------------
+// 4. The product layer
+//
+// Tokens — the inline stand-in for main/components/_variables.scss while that tree is
+// absent from the checkout. Every value is the plan's measured design token, annotated
+// with the legacy variable that produced it.
+// -----------------------------------------------------------------------------
+
+// Typography
+$mx-font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; // $font-family-sans-serif
+$mx-font-size-base: 14px; // $font-size-base
+$mx-line-height-base: 1.42857143; // $line-height-base (20/14)
+$mx-font-size-small: 12px; // $font-size-small
+$mx-font-size-body-sm: 13px; // .card > .content of _content.scss
+$mx-font-size-label: 12px; // text-label-caps
+$mx-font-size-card-title: 18px; // $font-size-h4
+$mx-font-size-record-title: 24px; // $font-size-h3
+
+// Text colours
+$mx-text-strong: #666F74; // color-text-strong — body copy
+$mx-text-secondary: #777777; // color-text-secondary — $gray-light
+$mx-text-black: #555555; // color-text-black — $gray
+$mx-text-placeholder: #999999; // color-placeholder — $input-color-placeholder
+$mx-text-select: #333333; // color-select-value — $gray-dark
+
+// Surfaces and rules
+$mx-surface: #FFFFFF; // color-surface — $body-bg
+$mx-app-bg: #EBEFF1; // color-app-bg — surface behind the signed-in cards
+$mx-table-head: #F5F5F5; // color-table-head — $table-bg-active, the .table th band
+$mx-rule: #DDDDDD; // color-rule — $table-border-color
+$mx-section-rule: #E5E5E5; // color-section-rule — panel heading rule
+$mx-hairline: #EEEEEE; // color-hairline — $gray-lighter
+$mx-input-border: #E0E0E0; // color-input-border
+$mx-input-focus: #BCE0FD; // _inputs.scss :focus border
+$mx-navbar-border: #DFDFDF; // color-navbar-border
+$mx-checkbox-border: #767676; // color-checkbox-border
+
+// Brand and status
+$mx-brand-blue: #5099ED; // color-brand-blue — $brand-primary #5099ED
+$mx-brand-border: #378CEB; // color-primary-border — $btn-primary-border
+$mx-tab-accent: #428BCA; // color-tab-accent — the active tab's 3px top bar
+$mx-status-active: #00CE02; // color-status-active
+$mx-status-pending: #FFA500; // color-status-pending
+
+// Metrics
+$mx-control-height: 34px; // space-control — .form-control height
+$mx-nav-control-height: 30px; // space-nav-control — the navbar's search control
+$mx-cell-padding: 8px; // space-cell — .table > tbody > tr > td padding
+$mx-radius-input: 2px; // radius-input; Bootstrap's default is 4px and the legacy partial
+                        // sets 0, so the measured 2px is the value the design shows
+$mx-radius-card: 0; // radius-card — .panel
+$mx-radius-button: 2px; // _buttons.scss:2 — every button in the product
+$mx-radius-notice: 2px; // _alerts.scss:4 — alerts and the notification widget
+$mx-shadow-card: 0 1px 3px rgba(0, 0, 0, .14); // shadow-card — .panel, no border stroke
+
+// -----------------------------------------------------------------------------
+// Base typography (_variables.scss scaffolding + the body rule of _content.scss)
+// -----------------------------------------------------------------------------
+
+body {
+  // _content.scss enables font smoothing on the body; the design's text rendering
+  // depends on it.
+  -webkit-font-smoothing: antialiased;
+  font-family: $mx-font-family;
+  font-size: $mx-font-size-base;
+  line-height: $mx-line-height-base;
+  font-weight: 400;
+  color: $mx-text-strong;
+  background-color: $mx-surface;
+}
+
+// Small secondary chrome: row subtitles, the release line, metadata.
+.text-small {
+  font-size: $mx-font-size-small;
+  color: $mx-text-secondary;
+}
+
+// Labels of the login form and of the filter toolbar: uppercase semibold 12px. A form
+// that wants this treatment names the class on its <label>.
+.control-label,
+.form-label {
+  font-size: $mx-font-size-label;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+// A panel's own title ("List of Clients").
+.panel-title {
+  font-size: $mx-font-size-card-title;
+  font-weight: 700;
+}
+
+// The client record's name, and any other record-page heading of the same weight.
+.record-title {
+  font-size: $mx-font-size-record-title;
+  font-weight: 700;
+}
+
+// The bold key column of the record's label/value rows.
+.value-key {
+  font-size: $mx-font-size-base;
+  font-weight: 700;
+}
+
+// -----------------------------------------------------------------------------
+// Shell and content (_layout.scss, _content.scss)
+// -----------------------------------------------------------------------------
+
+// The surface behind the signed-in cards. The shell applies the class to the element that
+// wraps the routed view. Only a class selector is used: the legacy id it replaces is not
+// carried into the new markup, and styling by id does not compose.
+.content-wrapper {
+  background-color: $mx-app-bg; // color-app-bg
+}
+
+// The card of the list screen and of the record screen: white, square, shadowed, with no
+// border stroke. Bootstrap's .panel-default border is cleared because the design shows a
+// shadow and no stroke.
+.panel {
+  background-color: $mx-surface;
+  border: 0;
+  border-radius: $mx-radius-card;
+  box-shadow: $mx-shadow-card;
+}
+
+// The card's heading band stays white with a single rule under it, unlike Bootstrap's
+// tinted panel heading.
+.panel > .panel-heading {
+  background-color: $mx-surface;
+  border-bottom: 1px solid $mx-section-rule; // color-section-rule
+}
+
+// 13px body inside a card, as the legacy card content was set.
+.panel-body {
+  font-size: $mx-font-size-body-sm;
+}
+
+// The record's right-hand profile card is the one card drawn with a border instead of a
+// shadow, so it takes both the border and the removal of the shadow.
+.panel.panel-bordered {
+  border: 1px solid $mx-rule; // color-rule
+  box-shadow: none;
+}
+
+// Hairline divider: the login screen's three dividers are <hr> elements, and Bootstrap's
+// own rule already carries the hairline colour — this states it as the token.
+hr {
+  border: 0;
+  border-top: 1px solid $mx-hairline; // color-hairline
+}
+
+// -----------------------------------------------------------------------------
+// Tables (_content.scss .table rule, Bootstrap's cell metrics)
+// -----------------------------------------------------------------------------
+
+.table {
+  > thead > tr > th {
+    background-color: $mx-table-head; // color-table-head
+    border-bottom: 2px solid $mx-rule; // the 2px head rule of the design
+  }
+
+  > tbody > tr > td {
+    padding: $mx-cell-padding; // space-cell
+    border-top: 1px solid $mx-rule;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Breadcrumb (_content.scss)
+// -----------------------------------------------------------------------------
+
+.breadcrumb {
+  padding: 2px;
+  margin-bottom: 4px;
+  max-height: 21px;
+  background-color: transparent;
+  border: 0;
+  border-radius: 0;
+  font-size: $mx-font-size-small;
+  color: $mx-text-secondary;
+
+  // The trailing crumb is the current page, so it carries the same quiet colour rather
+  // than Bootstrap's lighter grey.
+  > .active {
+    color: $mx-text-secondary;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Forms (_inputs.scss) — the two plugin replacements inherit this shape
+// -----------------------------------------------------------------------------
+
+.form-control {
+  height: $mx-control-height; // space-control
+  border: 1px solid $mx-input-border; // color-input-border
+  border-radius: $mx-radius-input; // radius-input, over Bootstrap's 4px default
+  box-shadow: none;
+
+  // The legacy focus treatment replaces Bootstrap's glow with a pale blue border.
+  &:focus {
+    border-color: $mx-input-focus;
+    box-shadow: inset 0 1px 1px rgba(0, 0, 0, .075), 0 0 2px rgba(97, 161, 215, .6);
+  }
+
+  // BLITZY [A11Y]: the measured placeholder #999999 on #FFFFFF is 2.85:1, below WCAG AA for
+  // 14px text. Implemented as designed; a darker treatment needs a design decision.
+  &::placeholder {
+    color: $mx-text-placeholder; // color-placeholder
+    opacity: 1;
+  }
+}
+
+// The native controls that replace the jQuery datepicker and chosen carry the same box as
+// every other .form-control, so DateField and SelectField need no styling of their own.
+select.form-control,
+input[type="date"].form-control {
+  height: $mx-control-height;
+  border: 1px solid $mx-input-border;
+  border-radius: $mx-radius-input;
+  color: $mx-text-select; // color-select-value
+}
+
+// The "Show Closed" control of the client list.
+input[type="checkbox"] {
+  border: 1px solid $mx-checkbox-border; // color-checkbox-border
+}
+
+// Invalid fields use Bootstrap's own .has-error / .help-block treatment; there is no second
+// validation mechanism.
+
+// -----------------------------------------------------------------------------
+// Navbar (_navbar.scss, _layout.scss)
+// -----------------------------------------------------------------------------
+
+.navbar {
+  min-height: 50px; // the design's navbar height
+  background-color: $mx-surface;
+  border-bottom: 1px solid $mx-navbar-border; // color-navbar-border
+
+  .navbar-brand {
+    padding: 10px 15px;
+
+    img {
+      max-width: 80px;
+    }
+  }
+}
+
+// Primary navigation items and the links inside their dropdowns are the brand blue, in
+// every state: the legacy partial pinned the colour with !important, which also silenced
+// Bootstrap's darker hover colour. Stating the states explicitly reproduces that behaviour
+// without !important.
+.navbar-default .navbar-nav > li > a,
+.navbar-default .navbar-nav .open .dropdown-menu > li > a {
+  color: $mx-brand-blue; // color-brand-blue
+}
+
+.navbar-default .navbar-nav > li > a:hover,
+.navbar-default .navbar-nav > li > a:focus,
+.navbar-default .navbar-nav > .open > a {
+  color: $mx-brand-blue;
+}
+
+// The global search field sits in the navbar and is shorter than a form control in a form.
+.navbar .form-control {
+  height: $mx-nav-control-height; // space-nav-control
+}
+
+// -----------------------------------------------------------------------------
+// Buttons (_buttons.scss)
+// -----------------------------------------------------------------------------
+
+.btn {
+  border-radius: $mx-radius-button;
+}
+
+.btn-primary {
+  background-color: $mx-brand-blue; // color-brand-blue
+  border: 1px solid $mx-brand-border; // color-primary-border
+  color: #FFFFFF;
+}
+
+// The record screen's joined action row: square ends and a single 1px separator between
+// neighbours, drawn by the adjacent border rather than by a gap.
+.btn-group {
+  > .btn {
+    border-radius: 0;
+  }
+
+  > .btn + .btn {
+    margin-inline-start: -1px;
+    border-inline-start: 1px solid $mx-brand-border; // color-primary-border
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Tabs (the record's tab strip, _content.scss)
+// -----------------------------------------------------------------------------
+
+.nav-tabs {
+  > li > a {
+    color: $mx-brand-blue; // inactive tab label
+  }
+
+  // The active tab is white, sided by 1px rules, carries the 3px accent bar on top and
+  // takes its label in near-black. The physical border properties are used here because
+  // Bootstrap 3 declares the tab box with the same shorthand and the two must stay on the
+  // same edges to interleave correctly.
+  > li.active > a,
+  > li.active > a:hover,
+  > li.active > a:focus {
+    background-color: $mx-surface;
+    border-top: 3px solid $mx-tab-accent; // color-tab-accent
+    border-right: 1px solid $mx-rule;
+    border-left: 1px solid $mx-rule;
+    border-bottom-color: transparent;
+    color: $mx-text-black; // color-text-black
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Client status (plan 0.2.4: CSS on the legacy status class, consumed by StatusSwatch)
+//
+// Background only — the design shows a colour swatch and no textual status, and adding one
+// would be an improvement the migration may not make. The swatch's own 12.5px square and
+// the record header's 20.5px dot are component sizes, not global rules.
+/* BLITZY [A11Y]: colour is the only carrier of client status here. StatusSwatch keeps the
+   design's swatch and is expected to expose the status in an accessible name (title or
+   visually hidden text) so the meaning is not colour-only. */
+// -----------------------------------------------------------------------------
+
+.status-active {
+  background-color: $mx-status-active; // color-status-active
+}
+
+.status-pending {
+  background-color: $mx-status-pending; // color-status-pending
+}
+
+.status-closed {
+  background-color: $mx-text-secondary;
+}
+
+.status-other {
+  background-color: $mx-text-placeholder;
+}
+
+// -----------------------------------------------------------------------------
+// Alerts and notifications (_alerts.scss, _notifications.scss)
+// -----------------------------------------------------------------------------
+
+.alert {
+  border-radius: $mx-radius-notice;
+}
+
+// The notification widget NotificationComponent renders: a fixed stack at the top right,
+// clear of the 50px navbar, with one accent bar per kind. The legacy partial styled a
+// bell-anchored dropdown, and the bell is out of scope; the container and its variants are
+// what the component actually needs.
+.notification-container {
+  position: fixed;
+  inset-block-start: 60px;
+  inset-inline-end: 15px;
+  z-index: $zindex-navbar-fixed + 10;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 320px;
+  max-width: calc(100vw - 30px);
+  pointer-events: none;
+}
+
+.notification {
+  pointer-events: auto;
+  padding: 8px 12px;
+  background-color: $mx-surface;
+  border: 1px solid $mx-input-border;
+  border-inline-start-width: 3px;
+  border-radius: $mx-radius-notice;
+  box-shadow: $mx-shadow-card;
+  font-size: $mx-font-size-body-sm;
+  color: $mx-text-strong;
+  overflow-wrap: break-word;
+
+  &.notification-info {
+    border-inline-start-color: $mx-brand-blue;
+  }
+
+  &.notification-success {
+    border-inline-start-color: $mx-status-active;
+  }
+
+  &.notification-error {
+    border-inline-start-color: $brand-danger;
+  }
+}
+
+// _loader.scss contributes nothing: no screen renders a spinner, loader or progress
+// indicator, and the design system has no such component, so a loader rule would be an
+// invented element.
+
