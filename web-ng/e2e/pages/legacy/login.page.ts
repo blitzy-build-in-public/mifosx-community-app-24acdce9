@@ -32,7 +32,7 @@
  */
 import type { Locator, Page } from '@playwright/test';
 
-import { FINERACT_URL, LEGACY_URL, TENANT_ID } from '../../seed/fixtures.js';
+import { FINERACT_URL, LEGACY_URL, TENANT_ID } from '../../seed/fixtures';
 
 /**
  * One `localStorage` entry, described by its key and by the presence and type of the three fields the
