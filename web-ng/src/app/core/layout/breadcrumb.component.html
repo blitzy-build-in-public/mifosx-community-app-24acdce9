@@ -1,0 +1,7 @@
+@if (items().length > 0) {
+  <ol class="breadcrumb">
+    @for (item of items(); track $index) {
+      <li [class.active]="$last">{{ item.label }}</li>
+    }
+  </ol>
+}
