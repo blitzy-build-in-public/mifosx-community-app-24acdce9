@@ -7,11 +7,13 @@
  * at least one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`, nothing
  * boilerplate). What it proves is the contract the screen advertises: exactly one search per
  * parameter set with exactly the three parameters the service takes, a trimmed query that is never
- * sent empty, a scope validated against the three the control offers, the exact-match flag the URL
- * carries together with legacy's `false` when it carries none, one row per result carrying the
- * server's own values, the client and loan records the rows open, the explicit empty state, a 4xx
- * rendered verbatim with the previous rows kept, a parameter change that replaces the results, and a
- * loan row listed but not linked to a user without the loan read permission.
+ * sent empty, a scope validated against the three the control offers with every out-of-scope value
+ * answered by `all`, the exact-match flag the URL carries together with legacy's `false` when it
+ * carries none, one row per result carrying the server's values with a text-free status indicator,
+ * the client and loan records the rows open, the explicit empty state, a 4xx rendered verbatim with
+ * the previous rows and the card kept, a parameter change that replaces the results, and a row
+ * listed to a user who may not open it, with the link withheld in both families while the result
+ * itself stays on screen.
  *
  * Providers, and what each one proves. `provideRouter([])` because the rows link through `RouterLink`
  * and the component builds their destinations with `Router`; an empty route table is enough, because
@@ -220,7 +222,20 @@ describe('SearchResultsComponent', () => {
   });
 
   it('accepts only the three scopes and answers anything else with all', async () => {
-    queryParams.next(convertToParamMap({ scope: 'groups' }));
+    // Every value outside the control's three: the legacy scopes this migration leaves to the legacy
+    // application (groups, savings, shares), a differently cased spelling and an empty one. None of
+    // them may reach the service as a search of its own, and none is repaired into a scope the caller
+    // did not name (AAP 0.10.5 item 9; Rule 1 clause 3).
+    for (const raw of ['groups', 'savings', 'shares', 'CLIENTS', '']) {
+      queryParams.next(convertToParamMap({ scope: raw }));
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(calls.at(-1)?.resource, `scope=${raw}`).toBe('all');
+    }
+
+    // A URL that carries no scope at all asks for both families, not for a third one.
+    queryParams.next(convertToParamMap({}));
     fixture.detectChanges();
     await fixture.whenStable();
 
@@ -231,7 +246,15 @@ describe('SearchResultsComponent', () => {
     await fixture.whenStable();
 
     expect(calls.at(-1)?.resource).toBe('clients');
-    expect(calls).toHaveLength(3);
+
+    queryParams.next(convertToParamMap({ scope: 'loans' }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(calls.at(-1)?.resource).toBe('loans');
+    expect(component.scope()).toBe('loans');
+    // One call for the initial navigation, then exactly one for each parameter set pushed above.
+    expect(calls).toHaveLength(9);
   });
 
   it('renders one row per result, with the server values the table binds', () => {
@@ -261,6 +284,10 @@ describe('SearchResultsComponent', () => {
     expect(rendered[1]?.textContent).toContain('Ada Okafor');
     expect(rendered[0]?.querySelector('app-status-swatch')).not.toBeNull();
     expect(rendered[1]?.querySelector('app-status-swatch .status-swatch')).not.toBeNull();
+    // The indicator is a colour and nothing else: no word, label or tooltip rides along with it
+    // (AAP 0.10.5 item 11; Rule 1 clause 3).
+    expect(rendered[0]?.querySelector('app-status-swatch')?.textContent?.trim()).toBe('');
+    expect(rendered[1]?.querySelector('app-status-swatch')?.textContent?.trim()).toBe('');
   });
 
   it('names the card and echoes the query, showing the title alone for a blank one', async () => {
@@ -362,6 +389,9 @@ describe('SearchResultsComponent', () => {
     expect(component.isEmpty()).toBe(false);
     expect(host().querySelector('#search-results-empty')).toBeNull();
     expect(rows()).toHaveLength(2);
+    // The screen stays mounted and usable: the card and its title are still there around the alert.
+    expect(host().querySelector('.panel')).not.toBeNull();
+    expect(host().querySelector('.panel-title')).not.toBeNull();
   });
 
   for (const { label, failure } of SILENT_FAILURES) {
@@ -413,6 +443,22 @@ describe('SearchResultsComponent', () => {
     expect(plain?.style.display).not.toBe('none');
     expect(plain?.textContent?.trim()).toBe('Parity Loan');
     expect(rows()[0]?.querySelector('a')?.style.display).not.toBe('none');
+  });
+
+  it('lists a client row to a user without READ_CLIENT but does not offer the link', async () => {
+    TestBed.inject(PermissionsService).setPermissions(['READ_LOAN']);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const clientRow = rows()[0];
+    const anchor = clientRow?.querySelector('a');
+    const plain = clientRow?.querySelector('span');
+
+    expect(anchor?.style.display).toBe('none');
+    expect(plain?.style.display).not.toBe('none');
+    expect(plain?.textContent?.trim()).toBe('Ada Okafor');
+    expect(rows()[1]?.querySelector('a')?.style.display).not.toBe('none');
   });
 
   it('survives a failure and searches again afterwards', async () => {
