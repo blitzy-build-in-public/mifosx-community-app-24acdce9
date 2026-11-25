@@ -1,0 +1,55 @@
+<!--
+  The header strip of the client record: the status indicator, the client name and the three
+  inline metadata runs, closed by a rule (Figma flow "Sign in and open a client record", step 3 of
+  3, screen 1:4 of file DKm5TBFbXypfqyx4xUdhBw; AAP 0.2.3 row RecordHeader, AAP 0.7.4).
+
+  Every visual value comes from the global stylesheet, so this file carries no styling of its own.
+  Its shape is the legacy record template's: the indicator, the name and the metadata all sit
+  inside one h3, which is what keeps the indicator on the name's line (Rule 1 clause 6). Each
+  measured value resolves to a global class:
+
+    status dot  the record's circle geometry and its client-status colour, both of which
+                web-ng/src/styles.scss declares for the status-swatch and status-dot classes;
+                app-status-swatch's `variant` input selects them. No class, colour, label or
+                tooltip is set here, because the design paints a colour and the server's status
+                word is never rendered (AAP 0.10.5 deliberate difference 11, Rule 1 clause 3).
+
+    client name Bootstrap's own h3 is the record-title size the AAP measures, and <strong>
+                carries its 700 weight. The legacy `bolder` utility is named by no rule in this
+                build — bootstrap-sass declares no such class and the legacy partials that did are
+                not part of it — so the element would otherwise paint Bootstrap's 500 heading
+                weight; <strong> supplies the weight the design measures, exactly as the legacy
+                template wraps the name, with no rule and no inline style added for it.
+
+    metadata    `class="small text-small"`: .small is Bootstrap's small-text class, and .text-small
+                is the product's small-text token, which web-ng/src/styles.scss declares for this
+                purpose (12px, second-level grey — AAP 0.2.2) and which wins over .small's
+                85%-of-parent by cascade order, so the runs stay 12px whatever the surrounding
+                card's font-size. A run's value is the record's own: an unset External Id or Staff
+                renders its label and nothing else — no dash, no N/A, no placeholder (Rule 1
+                clause 3).
+
+    closing     hr, whose rule colour the global stylesheet owns.
+
+  The separator glyphs are decorative punctuation, so they stay out of the accessibility tree and a
+  screen reader reads the three `label: value` runs rather than "vertical bar" between them.
+
+  Spaces are written as `{{ ' ' }}` rather than left as indentation between the elements: the
+  compiler's default whitespace handling deletes a whitespace-only text node outright, and an
+  indented layout would render the runs glued together ("Client Number:000000002|External ID:") and
+  the name flush against the status dot. The interpolation keeps each one a real text node while
+  every span keeps exactly the text of its own run.
+-->
+<h3>
+  <app-status-swatch [status]="statusKey()" variant="dot" />{{ ' ' }}<strong>{{ client().displayName }}</strong>
+</h3>
+
+<div class="small text-small">
+  @for (run of metadataRuns(); track run.label) {
+    <span>{{ run.label }}:</span>{{ ' ' }}<span>{{ run.value }}</span>@if (!$last) {
+      {{ ' ' }}<span aria-hidden="true">|</span>{{ ' ' }}
+    }
+  }
+</div>
+
+<hr />
