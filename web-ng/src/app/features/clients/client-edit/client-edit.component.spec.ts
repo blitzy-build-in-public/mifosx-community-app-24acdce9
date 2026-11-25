@@ -21,9 +21,11 @@ import { ClientEditComponent } from './client-edit.component';
  *
  * What the suite drives is the screen's public surface and the traffic it produces: the one seed read
  * and the one save, the form the seed fills, the name set the record's shape selects, the body the
- * save posts, the duplicate-submission guarantee, and the two states in which no form exists. It also
- * drives the record a second route emission names, because the router reuses this component when the
- * URL moves from one `#/editclient/{id}` to another.
+ * save posts, the controls the record marks required — which block the request and report the missing
+ * value in place — the duplicate-submission guarantee, the failure banner that carries Fineract's own
+ * text verbatim, and the two states in which no form exists. It also drives the record a second route
+ * emission names, because the router reuses this component when the URL moves from one
+ * `#/editclient/{id}` to another.
  * `ClientService` is stubbed at its own token, so the endpoint contract of
  * `GET /clients/{id}?template=true` and `PUT /clients/{id}` stays in `client.service.spec.ts` and no
  * HTTP client, interceptor or transport takes part here (Rule 1 clause 5). The router, the
@@ -300,6 +302,11 @@ describe('ClientEditComponent', () => {
     expect(activationDate?.getFullYear()).toBe(2026);
     expect(activationDate?.getMonth()).toBe(10);
     expect(activationDate?.getDate()).toBe(21);
+
+    // Nothing has failed, so the failure region is absent — the state is proven rather than assumed,
+    // and the rejection case below is the only place a banner may appear.
+    expect(host.querySelector('.alert.alert-danger')).toBeNull();
+    expect(component.error()).toBeNull();
   });
 
   it('issues exactly one update with the form’s values, then opens the record', async () => {
@@ -307,8 +314,10 @@ describe('ClientEditComponent', () => {
     const host = hostOf(harness);
     const component = componentOf(harness);
 
-    // The one field the case changes, so the posted body is the form's and not the payload's.
+    // Two fields are edited — one name and one contact value — so the posted body is the form's and
+    // not the payload the read answered with.
     expect(inputValue(host, 'mobileNo')).toBe('2025550102');
+    component.form.controls.lastname.setValue('Okafor-Rowe');
     component.form.controls.mobileNo.setValue('2025550199');
 
     await component.submit();
@@ -317,17 +326,32 @@ describe('ClientEditComponent', () => {
 
     const [id, body] = clients.update.mock.calls[0] ?? [];
 
+    // The route's own spelling of `#/editclient/2`, which is what `route.paramMap` hands the screen.
     expect(id).toBe(CLIENT_ID);
     expect(body).toMatchObject({
       firstname: 'Ada',
-      lastname: 'Okafor',
+      lastname: 'Okafor-Rowe',
       externalId: 'EXT-2',
       mobileNo: '2025550199',
-      dateFormat: DISPLAY_DATE_FORMAT,
     });
-    // An active record posts its activation date; the two date-wire members are the model's, and
-    // `ClientService.update` is what fills them on the way out.
+    // An active record posts its activation date.
     expect(body?.activationDate).toBeInstanceOf(Date);
+
+    // Exactly the members `ClientEditRequest` declares, and nothing the form does not own: no office,
+    // no client id, no account number. The date-wire pair is the model's own constant here, and
+    // `ClientService.update` — whose `ClientEditInput` omits both members — rewrites it from the
+    // resolved configuration and the active language before the body reaches the wire, so the screen
+    // cannot widen what the endpoint receives (AAP 0.7.2 "Date handling"; Rule 1 clause 2).
+    expect(Object.keys(body ?? {}).sort()).toEqual([
+      'activationDate',
+      'dateFormat',
+      'externalId',
+      'firstname',
+      'lastname',
+      'locale',
+      'mobileNo',
+    ]);
+    expect(body?.dateFormat).toBe(DISPLAY_DATE_FORMAT);
     expect(body?.locale).toBe('');
 
     expect(navigate).toHaveBeenCalledTimes(1);
@@ -356,6 +380,65 @@ describe('ClientEditComponent', () => {
     expect(body).not.toHaveProperty('activationDate');
   });
 
+  it('sends nothing for a person whose first name was cleared, and reports the missing value in place', async () => {
+    const harness = await render(`/editclient/${CLIENT_ID}`);
+    const host = hostOf(harness);
+    const component = componentOf(harness);
+
+    component.form.controls.firstname.setValue('');
+
+    await component.submit();
+    harness.detectChanges();
+
+    // The legacy template marks this control required and nothing more, so the screen is what stops
+    // the request — and it stops it before a body is built (Rule 1 clause 3).
+    expect(clients.update).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(component.form.controls.firstname.touched).toBe(true);
+
+    // The control's own form-group carries the Bootstrap error state and its message renders beside it.
+    expect(host.querySelector('.form-group.has-error #firstname')).not.toBeNull();
+    expect(host.querySelector('#firstname-error')?.textContent?.trim()).toBe('Required field');
+    // Nothing was refused by the server, so no failure banner appears.
+    expect(host.querySelector('.alert.alert-danger')).toBeNull();
+  });
+
+  it('sends nothing for an entity whose name was cleared', async () => {
+    clients.getWithTemplate.mockReturnValue(of(ENTITY_PAYLOAD));
+
+    const harness = await render(`/editclient/${CLIENT_ID}`);
+    const host = hostOf(harness);
+    const component = componentOf(harness);
+
+    expect(inputValue(host, 'fullname')).toBe('Blitzy Bakery LLC');
+    component.form.controls.fullname.setValue('');
+
+    await component.submit();
+    harness.detectChanges();
+
+    // The entity branch's own required rule is what blocks the request, not the person's two names.
+    expect(clients.update).not.toHaveBeenCalled();
+    expect(component.form.controls.fullname.touched).toBe(true);
+    expect(host.querySelector('#fullname-error')?.textContent?.trim()).toBe('Required field');
+  });
+
+  it('sends nothing for an active record whose activation date was cleared', async () => {
+    const harness = await render(`/editclient/${CLIENT_ID}`);
+    const host = hostOf(harness);
+    const component = componentOf(harness);
+
+    component.form.controls.activationDate.setValue(null);
+
+    await component.submit();
+    harness.detectChanges();
+
+    // The date field owns its own error state and projects the message into the slot it renders.
+    expect(clients.update).not.toHaveBeenCalled();
+    expect(component.form.controls.activationDate.touched).toBe(true);
+    expect(host.querySelector('app-date-field .form-group.has-error')).not.toBeNull();
+    expect(host.querySelector('app-date-field .help-block')?.textContent?.trim()).toBe('Required field');
+  });
+
   it('sends one update when the save control is used twice while the first is in flight', async () => {
     const save = deferredSave();
     clients.update.mockReturnValue(save.response);
@@ -365,11 +448,17 @@ describe('ClientEditComponent', () => {
     const first = component.submit();
     const second = component.submit();
 
+    // The latch the save control binds is closed while the call is out, so a click that slipped past
+    // the disabled button still reaches no second request.
+    expect(component.guard.busy()).toBe(true);
+
     save.complete();
     await first;
     await second;
 
     expect(clients.update).toHaveBeenCalledTimes(1);
+    // The latch is released once the call settles, so the screen is usable afterwards.
+    expect(component.guard.busy()).toBe(false);
   });
 
   it('renders a rejected save’s message verbatim and keeps every entered value', async () => {
@@ -377,13 +466,28 @@ describe('ClientEditComponent', () => {
 
     const harness = await render(`/editclient/${CLIENT_ID}`);
     const host = hostOf(harness);
+    const component = componentOf(harness);
 
-    await componentOf(harness).submit();
+    component.form.controls.lastname.setValue('Okafor-Rowe');
+    component.form.controls.externalId.setValue('EXT-2-RETRY');
+
+    await component.submit();
     harness.detectChanges();
 
-    expect(renderedText(host)).toContain(REJECTED_MESSAGE);
-    // The form and its values survive the failure, which is the state AAP 0.7.4 requires.
+    // One banner, carrying the server's text and nothing else: no prefix, no suffix, no retranslation
+    // (AAP 0.7.2 "Rendered verbatim"; Rule 1 clause 3, the message workflow W7 compares).
+    const banners = host.querySelectorAll('.alert.alert-danger');
+
+    expect(banners.length).toBe(1);
+    expect(banners[0]?.textContent?.trim()).toBe(REJECTED_MESSAGE);
+    // The interceptor owns the notification for a failure, so the screen must not raise a second one.
+    expect(host.querySelector('app-notification')).toBeNull();
+
+    // The form and the values just entered survive the failure, which is the state AAP 0.7.4 requires.
     expect(inputValue(host, 'firstname')).toBe('Ada');
+    expect(inputValue(host, 'lastname')).toBe('Okafor-Rowe');
+    expect(inputValue(host, 'externalId')).toBe('EXT-2-RETRY');
+    expect(component.ready()).toBe(true);
     expect(clients.update).toHaveBeenCalledTimes(1);
     expect(navigate).not.toHaveBeenCalled();
   });
