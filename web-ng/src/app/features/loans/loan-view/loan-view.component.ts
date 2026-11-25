@@ -81,9 +81,11 @@ type PeriodBalance =
  * The loan-wide balance a set of per-period outstanding members adds up to, or `null` when the
  * schedule reports none of them.
  *
- * This is where the record's three balances come from. `GET /loans/{id}?associations=all` answers
- * with no `summary` member on this fork, and the schedule's own periods carry the server's
- * per-period outstanding amounts instead: `principalOutstanding`, `interestOutstanding`,
+ * This is where the record's three balances come from. `GET /loans/{id}?associations=all` carries a
+ * `summary` object for some states only — an active loan answers one, a submitted or approved
+ * application does not — so the record reads the repayment schedule, which every state carries, and
+ * the schedule's own periods hold the server's per-period outstanding amounts:
+ * `principalOutstanding`, `interestOutstanding`,
  * `feeChargesOutstanding` and `penaltyChargesOutstanding`, already net of everything repaid, waived
  * and written off against that period. Adding them up is the reading the fork itself applies — its
  * `CommonLoanSummaryDataProvider` totals `interestOutstanding` over the schedule the same way — and
@@ -120,6 +122,118 @@ function sumPeriodBalances(
 }
 
 /**
+ * One action the record links to, as the template renders it: a stable id, the legacy bundle's
+ * caption key, the permission code the link is gated on, and the router commands it opens.
+ *
+ * Exported beside {@link LOAN_ACTIONS} so the paired spec asserts the record's entry points against
+ * the declaration the template renders rather than restating them.
+ */
+export interface LoanActionLink {
+  /** Stable DOM id of the link, which the end-to-end page objects also address. */
+  readonly id: string;
+
+  /** Legacy translation key of the link's caption, resolved by the template's `TranslatePipe`. */
+  readonly labelKey: string;
+
+  /** Fineract permission code the link is gated on, as the legacy record gates it. */
+  readonly permission: string;
+
+  /** Router commands of the screen the link opens. */
+  readonly commands: readonly string[];
+}
+
+/**
+ * A row of {@link LOAN_ACTIONS}: a link, the loan states the legacy record offers it in, and the
+ * router commands it builds for the record being shown.
+ */
+export interface LoanActionDefinition extends Omit<LoanActionLink, 'commands'> {
+  /** Fineract loan status ids — the numeric `LoanStatus.id` — the legacy record shows it under. */
+  readonly statuses: readonly number[];
+
+  /** Builds the link's router commands for the id of the loan the record shows. */
+  readonly route: (id: string) => readonly string[];
+}
+
+/**
+ * The actions the legacy loan record offers, and the states it offers each one in.
+ *
+ * Transcribed from `app/scripts/controllers/loanAccount/ViewLoanDetailsController.js`, whose
+ * `scope.buttons.singlebuttons` is built per loan status: "Submitted and pending approval" (100)
+ * carries add-charge, approve, modify-application and reject; "Approved" (200) carries disburse and
+ * undo-approval; "Active" (300) carries add-charge, make-repayment and undo-disbursal. Each row's
+ * permission is that table's own `taskPermissionName`, which is why undo approval is
+ * `APPROVALUNDO_LOAN`, the repayment form is `REPAYMENT_LOAN` and undo disbursal is
+ * `DISBURSALUNDO_LOAN` — the tenant's real codes, so a user holding exactly the codes the legacy
+ * record asks for sees exactly the links it showed (Rule 1 clause 3).
+ *
+ * Every `route` addresses a path `loans.routes.ts` declares: the six lifecycle and repayment
+ * commands of `loanaccount/:id/:action`, the charge form, and the edit form. The legacy record's
+ * other entries — foreclosure, waive interest, reschedule, write-off, close, guarantor, collateral,
+ * transfer and officer assignment — belong to migration units this application does not serve, so
+ * none of them is listed and no link can lead to a screen that does not exist. A loan in any other
+ * state (rejected, withdrawn, closed, overpaid) shows no action, exactly as the legacy record shows
+ * none, so a button can never open a form the server refuses (AAP 0.7.4; Rule 1 clause 3).
+ */
+export const LOAN_ACTIONS: readonly LoanActionDefinition[] = [
+  {
+    id: 'loan-action-addcharge',
+    labelKey: 'label.button.addloancharge',
+    permission: 'CREATE_LOANCHARGE',
+    statuses: [100, 200, 300],
+    route: (id) => ['/addloancharge', id],
+  },
+  {
+    id: 'loan-action-approve',
+    labelKey: 'label.button.approve',
+    permission: 'APPROVE_LOAN',
+    statuses: [100],
+    route: (id) => ['/loanaccount', id, 'approve'],
+  },
+  {
+    id: 'loan-action-edit',
+    labelKey: 'label.button.modifyapplication',
+    permission: 'UPDATE_LOAN',
+    statuses: [100],
+    route: (id) => ['/editloanaccount', id],
+  },
+  {
+    id: 'loan-action-reject',
+    labelKey: 'label.button.reject',
+    permission: 'REJECT_LOAN',
+    statuses: [100],
+    route: (id) => ['/loanaccount', id, 'reject'],
+  },
+  {
+    id: 'loan-action-disburse',
+    labelKey: 'label.button.disburse',
+    permission: 'DISBURSE_LOAN',
+    statuses: [200],
+    route: (id) => ['/loanaccount', id, 'disburse'],
+  },
+  {
+    id: 'loan-action-undoapproval',
+    labelKey: 'label.button.undoapproval',
+    permission: 'APPROVALUNDO_LOAN',
+    statuses: [200],
+    route: (id) => ['/loanaccount', id, 'undoapproval'],
+  },
+  {
+    id: 'loan-action-repayment',
+    labelKey: 'label.button.makerepayment',
+    permission: 'REPAYMENT_LOAN',
+    statuses: [300],
+    route: (id) => ['/loanaccount', id, 'repayment'],
+  },
+  {
+    id: 'loan-action-undodisbursal',
+    labelKey: 'label.button.undodisbursal',
+    permission: 'DISBURSALUNDO_LOAN',
+    statuses: [300],
+    route: (id) => ['/loanaccount', id, 'undodisbursal'],
+  },
+];
+
+/**
  * The individual-loan record — `#/viewloanaccount/:id`, the screen the loan route tree mounts for
  * its one record path (AAP 0.8.2 "Feature routes, matching legacy paths exactly"; AAP 0.7.1 Features
  * row `loans`, which names this component `LoanViewComponent`; AAP 0.7.4's `#/viewloanaccount/:id`
@@ -154,9 +268,9 @@ function sumPeriodBalances(
  * with `toLoanStatusKey(status?.code)` and the server's own status label is never read (AAP 0.10.5
  * deliberate difference 11; Rule 1 clause 3). The summary block prints the five figures AAP 0.7.2's
  * `LoanSummary` row names — total expected repayment, total outstanding, and the principal, interest
- * and fee balances — taken from the one place this fork publishes them, the loan's
- * `repaymentSchedule` (see {@link LoanViewComponent.summaryRows}); the payload's separate `summary`
- * object is not declared on the model and no screen reads it, and a figure the payload omits renders
+ * and fee balances — taken from the loan's `repaymentSchedule` (see
+ * {@link LoanViewComponent.summaryRows}), which every loan state carries; the payload's separate
+ * `summary` object is not modelled and no screen reads it, and a figure the payload omits renders
  * an empty cell rather than a zero or a word this
  * screen would have invented (Rule 1 clause 3). Below them the record shows three tabs through the
  * application's one tab component, `app-tab-strip`: the repayment schedule in `app-loan-schedule`,
@@ -168,13 +282,14 @@ function sumPeriodBalances(
  * hands the payload's own rows to the charges section and issues no second request — the same single
  * call the legacy record made, and no charge-list endpoint is used (Rule 1 clauses 2 and 3).
  *
- * **Action entry points.** Every lifecycle command and the repayment form is a permission-gated
- * `routerLink` to the segment `loan-action.component.ts` serves — `/loanaccount/:id/approve`,
- * `undoapproval`, `reject`, `disburse`, `undodisbursal` and `repayment` — plus `/addloancharge/:id`
- * for the charge form. All of them are gated by `HasPermissionDirective` on the single named code
- * {@link LoanViewComponent.actionPermission}, so no action can be left ungated and the gate has one
- * home. Which of those steps is legal is the server's decision and not this screen's, so no action
- * is enabled, disabled or reordered by the loan's status (Rule 1 clause 3).
+ * **Action entry points.** The links are rendered from {@link LOAN_ACTIONS}, the table transcribed
+ * from the legacy record's own per-status button list, so only the steps the legacy record offers for
+ * the loan's current state appear: a submitted application shows add-charge, approve, modify and
+ * reject; an approved loan shows add-charge, disburse and undo approval; an active loan shows
+ * add-charge, make repayment and undo disbursal; any other state shows none (Rule 1 clause 3). Each
+ * link is a `routerLink` to the screen that serves it and is gated by `HasPermissionDirective` on the
+ * action's own Fineract code from that table, so a user holding exactly the codes the legacy record
+ * asks for sees exactly the links it showed.
  *
  * **One id, one load per navigation.** `:id` is read from `route.paramMap`, never from the snapshot:
  * the router reuses this component when the URL moves from one `#/viewloanaccount/{id}` to another,
@@ -192,6 +307,17 @@ function sumPeriodBalances(
  * `TranslatePipe`, or — for the two tab captions, which the tab strip takes as plain text — by
  * {@link LoanViewComponent.translated}, exactly as `savings-new.component.ts` resolves the labels its
  * shared fields take; no copy is inlined here (AAP 0.10.2; Rule 1 clause 3).
+ *
+ * **Rules that bind this file.** Rule 1 clause 2 — preserve the Fineract API contract: the one
+ * request is `LoanService.get(id)`, an endpoint the allowlist already holds, and this file composes
+ * no URL, sends no body and reads no clock. Rule 1 clause 3 — match legacy rather than improve it:
+ * the payload's figures are printed as reported and the entry points are the legacy record's own
+ * per-status list. Rule 1 clause 4 — strict TypeScript, with no `any` outside the one documented
+ * library boundary in {@link LoanViewComponent.translated}. Rule 1 clause 5 — standalone component,
+ * signals, `inject()`, and no `HttpClient`. Rule 1 clause 6 — the Bootstrap 3 layer of
+ * `web-ng/src/styles.scss` owns every visual value, so no stylesheet, `<style>` or `style=` is
+ * declared here. Rule 1 clause 9 and Rule 2 — nothing credential-shaped is logged or written, and the
+ * backend is reached only through the family's service, never a host literal.
  */
 @Component({
   selector: 'app-loan-view',
@@ -336,7 +462,8 @@ export class LoanViewComponent {
    * owed — and the three balances are the sums {@link sumPeriodBalances} takes over the schedule's
    * periods. Nothing is rounded, recalculated from other members, or defaulted: a figure the payload
    * does not report becomes `null`, which the template renders as an empty cell (Rule 1 clause 3;
-   * AAP 0.7.2's `LoanSummary` row, whose figures this fork publishes in the schedule instead).
+   * AAP 0.7.2's `LoanSummary` row, whose figures this record reads from the schedule the fork carries
+   * for every loan state).
    */
   readonly summaryRows = computed<readonly LoanSummaryRow[]>(() => {
     const schedule = this.loan()?.repaymentSchedule;
@@ -361,15 +488,37 @@ export class LoanViewComponent {
   });
 
   /**
-   * The permission every action on this record is gated on: `UPDATE_LOAN`, the code
-   * `loans.routes.ts` declares as `data.permission` for the `loanaccount/:id/:action` route
-   * (`loan-action.component.ts` records exactly that for the screen those links reach).
+   * The links the record renders: the rows of {@link LOAN_ACTIONS} the loan's current state offers,
+   * each carrying the router commands for the id on screen.
    *
-   * It is one named member so every entry point in the template binds the same code rather than
-   * transcribing the string seven times, and so the charge form's links state the code they use
-   * beside the lifecycle ones. The route table remains the only route declaration; this constant
-   * repeats one permission code, not the routes (AAP 0.14.1, "Permissions are declared once per
-   * route and once per action").
+   * The only derivation is that filter — the loan's numeric status id against each row's `statuses`
+   * — so the entry points are the legacy record's own, in its order, with its permission codes. A
+   * loan that has not loaded, or whose payload reported no status, offers no action at all: the
+   * conservative reading, and the same one the legacy record takes when its status matches none of
+   * its button lists (Rule 1 clause 3).
+   */
+  readonly actions = computed<readonly LoanActionLink[]>(() => {
+    const status = this.loan()?.status;
+
+    if (status === undefined) {
+      return [];
+    }
+
+    return LOAN_ACTIONS.filter((action) => action.statuses.includes(status.id)).map(
+      (action): LoanActionLink => ({
+        id: action.id,
+        labelKey: action.labelKey,
+        permission: action.permission,
+        commands: action.route(this.loanId()),
+      }),
+    );
+  });
+
+  /**
+   * The permission the charge section's own pay and waive links are gated on — `UPDATE_LOAN`, the
+   * code `loans.routes.ts` declares for the charge screens those links reach. It is handed to
+   * `app-loan-charges` unchanged, while the record's own entry points each carry their code in
+   * {@link LOAN_ACTIONS} (AAP 0.14.1, "Permissions are declared once per route and once per action").
    */
   readonly actionPermission = 'UPDATE_LOAN';
 

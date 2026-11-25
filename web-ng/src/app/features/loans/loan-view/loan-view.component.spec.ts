@@ -14,7 +14,7 @@ import { LoanService } from '../loan.service';
 import { LoanChargesComponent } from './loan-charges/loan-charges.component';
 import { LoanScheduleComponent } from './loan-schedule/loan-schedule.component';
 import { LoanTransactionsComponent } from './loan-transactions/loan-transactions.component';
-import { LoanViewComponent } from './loan-view.component';
+import { LOAN_ACTIONS, LoanViewComponent } from './loan-view.component';
 
 /**
  * Behavioural spec for the individual-loan record — `#/viewloanaccount/:id`, the screen the loan
@@ -36,8 +36,9 @@ import { LoanViewComponent } from './loan-view.component';
  *     rules);
  *  4. the summary block prints the loan's total and outstanding balance from the repayment
  *     schedule's own `totalRepaymentExpected` and `totalOutstanding`, and its three balances from the
- *     sums of the schedule's per-period outstanding members — this fork's record carries no `summary`
- *     member — with a figure the payload omits rendering an empty cell rather than a zero; a 4xx other
+ *     sums of the schedule's per-period outstanding members — the fork answers a `summary` for active
+ *     loans only, so the schedule it carries for every state is what the block reads — with a figure
+ *     the payload omits rendering an empty cell rather than a zero; a 4xx other
  *     than a 404 shows Fineract's own message verbatim with the screen intact, and a 5xx is left to the
  *     interceptor's single notification (Rule 1 clause 3; AAP 0.4.2; AAP 0.4.4 decision 6; AAP 0.7.4);
  *  5. the charges tab renders one row per charge the record's own `charges` member carried — name, due
@@ -53,9 +54,10 @@ import { LoanViewComponent } from './loan-view.component';
  * URL the way the router does, on the same mounted component.
  *
  * The action entry points are asserted too, because they are what makes the record the way into W5,
- * W6 and the two charge screens: seven links to the segments `loan-action.component.ts` serves plus
- * the charge form, every one gated by `HasPermissionDirective` on the single code the component
- * declares (AAP 0.14.1, "Permissions are declared once per route and once per action").
+ * W6 and the two charge screens: the rows of `LOAN_ACTIONS` the loan's own state offers — the charge
+ * form, the six `loanaccount/:id/:action` segments and the edit form — each gated by
+ * `HasPermissionDirective` on that row's own Fineract code (AAP 0.14.1, "Permissions are declared
+ * once per route and once per action").
  *
  * **What is stubbed, and why.** Only the two collaborations a unit test cannot own: `LoanService`,
  * which would otherwise need a transport for a request this screen's contract already fixes — and of
@@ -82,27 +84,20 @@ const LOAN_ID = '9';
  */
 const SECOND_LOAN_ID = '12';
 
-/** The API path of each action screen, in the order the record renders the links. */
+/**
+ * The action links the fixture loan's state offers — it is an active loan (`loanStatusType.active`,
+ * 300) — in the order `LOAN_ACTIONS` lists them: the charge form, the repayment form and undo
+ * disbursal, which is exactly the set the legacy record shows for an active loan
+ * (`ViewLoanDetailsController.js`).
+ */
 const ACTION_PATHS: readonly string[] = [
-  `/loanaccount/${LOAN_ID}/approve`,
-  `/loanaccount/${LOAN_ID}/undoapproval`,
-  `/loanaccount/${LOAN_ID}/reject`,
-  `/loanaccount/${LOAN_ID}/disburse`,
-  `/loanaccount/${LOAN_ID}/undodisbursal`,
-  `/loanaccount/${LOAN_ID}/repayment`,
   `/addloancharge/${LOAN_ID}`,
+  `/loanaccount/${LOAN_ID}/repayment`,
+  `/loanaccount/${LOAN_ID}/undodisbursal`,
 ];
 
 /** The captions those links render, keyed exactly as the shipped flat translation bundles key them. */
-const ACTION_CAPTIONS: readonly string[] = [
-  'Approve',
-  'Undo Approval',
-  'Reject',
-  'Disburse',
-  'Undo Disbursal',
-  'Make Repayment',
-  'Add Loan Charge',
-];
+const ACTION_CAPTIONS: readonly string[] = ['Add Loan Charge', 'Make Repayment', 'Undo Disbursal'];
 
 /** The summary block's captions, in render order: the loan-wide totals, then the three balances. */
 const SUMMARY_CAPTIONS: readonly string[] = [
@@ -141,6 +136,7 @@ const TRANSLATIONS: Readonly<Record<string, string>> = {
   'label.heading.fromdate': 'From Date',
   'label.heading.interest': 'Interest',
   'label.button.approve': 'Approve',
+  'label.button.modifyapplication': 'Modify Application',
   'label.button.undoapproval': 'Undo Approval',
   'label.button.reject': 'Reject',
   'label.button.disburse': 'Disburse',
@@ -319,6 +315,73 @@ const SECOND_LOAN: LoanAccount = {
   principal: 12000,
   charges: [SECOND_LOAN_CHARGE],
 };
+
+/**
+ * The fixture loan as the same payload in another lifecycle state, so a case can read the record the
+ * way the server answers it for an application that has been submitted, approved or rejected.
+ *
+ * @param id numeric `LoanStatus.id` the record filters its action links on.
+ * @param code the status's message code, as the payload carries it.
+ * @param value the status's display text.
+ * @returns the fixture loan in that state.
+ */
+function loanInStatus(id: number, code: string, value: string): LoanAccount {
+  return { ...LOAN, status: { id, code, value } };
+}
+
+/**
+ * The action links the legacy record offers in each loan state, and the ones it does not — the
+ * per-status button lists of `app/scripts/controllers/loanAccount/ViewLoanDetailsController.js`,
+ * which is what the record's entry points have to reproduce (Rule 1 clause 3): a submitted
+ * application (100) carries add-charge, approve, modify and reject; an approved loan (200) carries
+ * add-charge, disburse and undo approval; an active loan (300) carries add-charge, make repayment and
+ * undo disbursal; an application in any other state carries none.
+ */
+const ACTIONS_BY_STATUS: readonly {
+  readonly state: string;
+  readonly loan: LoanAccount;
+  readonly shown: readonly string[];
+  readonly hidden: readonly string[];
+}[] = [
+  {
+    state: 'a submitted application',
+    loan: loanInStatus(
+      100,
+      'loanStatusType.submitted.and.pending.approval',
+      'Submitted and pending approval',
+    ),
+    shown: [
+      'loan-action-addcharge',
+      'loan-action-approve',
+      'loan-action-edit',
+      'loan-action-reject',
+    ],
+    hidden: [
+      'loan-action-disburse',
+      'loan-action-undoapproval',
+      'loan-action-repayment',
+      'loan-action-undodisbursal',
+    ],
+  },
+  {
+    state: 'an approved loan',
+    loan: loanInStatus(200, 'loanStatusType.approved', 'Approved'),
+    shown: ['loan-action-addcharge', 'loan-action-disburse', 'loan-action-undoapproval'],
+    hidden: ['loan-action-approve', 'loan-action-edit', 'loan-action-reject', 'loan-action-repayment'],
+  },
+  {
+    state: 'an active loan',
+    loan: LOAN,
+    shown: ['loan-action-addcharge', 'loan-action-repayment', 'loan-action-undodisbursal'],
+    hidden: ['loan-action-approve', 'loan-action-edit', 'loan-action-reject', 'loan-action-disburse'],
+  },
+  {
+    state: 'a rejected application',
+    loan: loanInStatus(500, 'loanStatusType.rejected', 'Rejected'),
+    shown: [],
+    hidden: LOAN_ACTIONS.map((action) => action.id),
+  },
+];
 
 /**
  * A loan whose schedule reports only part of what the summary block prints: no loan-wide totals at
@@ -644,31 +707,69 @@ describe('LoanViewComponent', () => {
     expect(component.charges()).toBeNull();
   });
 
-  it('links every action the loan family serves, each gated on the permission the route declares', async () => {
+  it('links the steps the loan’s state allows, each gated on that step’s own permission code', async () => {
     await show(LOAN_ID, () => of(LOAN));
 
+    expect(actionLinks().map((link) => link.getAttribute('id'))).toEqual([
+      'loan-action-addcharge',
+      'loan-action-repayment',
+      'loan-action-undodisbursal',
+    ]);
     expect(actionLinks().map((link) => link.textContent?.trim())).toEqual(ACTION_CAPTIONS);
     expect(actionLinks().map((link) => link.getAttribute('href'))).toEqual(ACTION_PATHS);
+    // The charge section's pay and waive links keep the record's own code; the entry points above
+    // each answer to the code their `LOAN_ACTIONS` row carries.
     expect(component.actionPermission).toBe('UPDATE_LOAN');
 
-    // The gate fails closed: without the code no entry point is visible…
+    // The gate fails closed: without the codes no entry point is visible…
     permissions.grant([]);
     fixture.detectChanges();
     expect(actionLinks().every((link) => link.style.display === 'none')).toBe(true);
 
-    // …and one code reveals all of them, because the record declares one permission for its actions.
-    permissions.grant(['UPDATE_LOAN']);
+    // …and it is per action, so holding the repayment code alone reveals the repayment form only.
+    permissions.grant(['REPAYMENT_LOAN']);
+    fixture.detectChanges();
+    expect(
+      actionLinks().map((link) => [link.getAttribute('id'), link.style.display] as const),
+    ).toEqual([
+      ['loan-action-addcharge', 'none'],
+      ['loan-action-repayment', ''],
+      ['loan-action-undodisbursal', 'none'],
+    ]);
+
+    // `ALL_FUNCTIONS` is the one code that reveals every entry point (legacy's permission algebra).
+    permissions.grant(['ALL_FUNCTIONS']);
     fixture.detectChanges();
     expect(actionLinks().every((link) => link.style.display === '')).toBe(true);
   });
 
+  it.each(ACTIONS_BY_STATUS)(
+    'offers the entry points the legacy record offers for $state, and no others',
+    async ({ loan, shown, hidden }) => {
+      await show(LOAN_ID, () => of(loan));
+
+      // Every code the table names is held, so the only thing deciding what appears is the loan's
+      // own state — the filter the legacy record applies and the record reproduces (Rule 1 clause 3).
+      permissions.grant(['ALL_FUNCTIONS']);
+      fixture.detectChanges();
+
+      expect(actionLinks().map((link) => link.getAttribute('id'))).toEqual(shown);
+
+      for (const id of hidden) {
+        expect(host().querySelector(`#${id}`)).toBeNull();
+      }
+    },
+  );
+
   it('derives the five summary figures from the repayment schedule the fork sends', async () => {
     await show(LOAN_ID, () => of(LOAN));
 
-    // This fork's record carries no `summary` member, so the block reads the schedule: the total is
+    // The fork answers a `summary` object for an active loan only, so the block reads the schedule
+    // every state carries: the total is
     // `totalRepaymentExpected`, the outstanding balance is `totalOutstanding`, and the three balances
     // are the sums of the periods' own `principalOutstanding`, `interestOutstanding` and
-    // `feeChargesOutstanding` + `penaltyChargesOutstanding`.
+    // `feeChargesOutstanding` + `penaltyChargesOutstanding` — the same figures the live API's
+    // `summary` reports for an active loan.
     expect(renderedSummary().map(([caption, value]) => [caption, value])).toEqual([
       ['Total', '5,625'],
       ['Outstanding', '5,133.33'],

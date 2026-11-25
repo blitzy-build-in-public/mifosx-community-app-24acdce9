@@ -75,21 +75,22 @@
   the record's `charges` member carried, and for a loan that carries none it renders the explicit empty
   state (AAP 0.7.4).
 
-  The action entry points are the seven `routerLink`s to the screens this application serves: the
-  five lifecycle commands and the repayment form on `#/loanaccount/:id/:action` (the segments
-  `loan-action.component.ts` serves) and the charge form on `#/addloancharge/:id`. Each one is gated
-  by `HasPermissionDirective` on the single named code the component's `actionPermission` member
-  states — `UPDATE_LOAN`, the code `loans.routes.ts` declares for the `loanaccount/:id/:action`
-  route — so no entry point is left ungated and the gate has one home. Which step is legal is the
-  server's decision, so no link is enabled, disabled or reordered by the loan's status (Rule 1
-  clause 3). The captions are the legacy record's own button keys; the five lifecycle ones are
-  exactly the codes `loan-action.component.ts`'s copy table submits with, so a link and the screen it
-  reaches cannot disagree about a command's name.
+  The action entry points are rendered from the component's `LOAN_ACTIONS` table, the transcription
+  of the legacy record's per-status button list, so only the steps the loan's own state offers appear:
+  add-charge, approve, modify and reject on a submitted application; add-charge, disburse and undo
+  approval on an approved loan; add-charge, make repayment and undo disbursal on an active loan; none
+  on a loan in any other state (Rule 1 clause 3). Each link is a `routerLink` to the screen that
+  serves it — the six `loanaccount/:id/:action` segments, the charge form and the edit form, the seven
+  paths `loans.routes.ts` declares — and is gated by `HasPermissionDirective` on that row's own
+  Fineract code, so a user holding exactly the codes the legacy record asks for sees exactly the links
+  it showed. The captions are the legacy record's own button keys, the codes a link and the screen it
+  reaches come from one table, and the group is omitted entirely for a state with no action rather
+  than rendered empty.
 
-  The block resolves only once both reads have answered, and the sections are handed the payload's own
-  slices: `account.repaymentSchedule ?? null`, `account.transactions ?? []` and the charge rows the
-  charge read returned. None of the three components requests anything, so the record keeps making
-  exactly the two calls its typed service owns.
+  The block resolves once the record's one read has answered, and the sections are handed the
+  payload's own slices: `record.repaymentSchedule ?? null`, `record.transactions ?? []` and the
+  `charges` member that same answer carried. None of the three components requests anything, so the
+  record keeps making exactly the one call its typed service owns.
 -->
 <div class="container-fluid">
   <div class="row">
@@ -125,46 +126,22 @@
               <hr />
 
               <!--
-                The joined primary-button group the record carries, as the legacy record shows it:
-                right-aligned, one button per served screen, every one permission-gated.
+                The joined primary-button group: right-aligned, one link per step the loan's own
+                state allows, each gated on the Fineract code its LOAN_ACTIONS row carries. A state
+                the legacy record offers no action in renders no group at all.
               -->
-              <div class="pull-right btn-group">
-                <a
-                  class="btn btn-primary"
-                  [routerLink]="['/loanaccount', record.id, 'approve']"
-                  [hasPermission]="actionPermission"
-                >{{ 'label.button.approve' | translate }}</a>
-                <a
-                  class="btn btn-primary"
-                  [routerLink]="['/loanaccount', record.id, 'undoapproval']"
-                  [hasPermission]="actionPermission"
-                >{{ 'label.button.undoapproval' | translate }}</a>
-                <a
-                  class="btn btn-primary"
-                  [routerLink]="['/loanaccount', record.id, 'reject']"
-                  [hasPermission]="actionPermission"
-                >{{ 'label.button.reject' | translate }}</a>
-                <a
-                  class="btn btn-primary"
-                  [routerLink]="['/loanaccount', record.id, 'disburse']"
-                  [hasPermission]="actionPermission"
-                >{{ 'label.button.disburse' | translate }}</a>
-                <a
-                  class="btn btn-primary"
-                  [routerLink]="['/loanaccount', record.id, 'undodisbursal']"
-                  [hasPermission]="actionPermission"
-                >{{ 'label.button.undodisbursal' | translate }}</a>
-                <a
-                  class="btn btn-primary"
-                  [routerLink]="['/loanaccount', record.id, 'repayment']"
-                  [hasPermission]="actionPermission"
-                >{{ 'label.button.makerepayment' | translate }}</a>
-                <a
-                  class="btn btn-primary"
-                  [routerLink]="['/addloancharge', record.id]"
-                  [hasPermission]="actionPermission"
-                >{{ 'label.button.addloancharge' | translate }}</a>
-              </div>
+              @if (actions().length > 0) {
+                <div class="pull-right btn-group">
+                  @for (action of actions(); track action.id) {
+                    <a
+                      class="btn btn-primary"
+                      [id]="action.id"
+                      [routerLink]="action.commands"
+                      [hasPermission]="action.permission"
+                    >{{ action.labelKey | translate }}</a>
+                  }
+                </div>
+              }
 
               <hr />
 

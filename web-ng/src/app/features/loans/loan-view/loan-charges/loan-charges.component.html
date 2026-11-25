@@ -17,10 +17,20 @@
 
   The two row actions are links to the screens that post them — `pay` and `waive` on
   `#/loanaccountcharge/:id/:action/:chargeId`, the route `loans.routes.ts` declares — and each is
-  gated by `HasPermissionDirective` on the single code the record passes down, which is the code the
-  record's own action group uses (AAP 0.14.1). Neither link is hidden or disabled by the charge's
+  gated by `HasPermissionDirective` on the single code the record passes down, `UPDATE_LOAN`: the
+  code that route is guarded by, so the directive and the guard cannot disagree here (AAP 0.14.1).
+  The record's own action group is a different matter and gates each of its links on the Fineract
+  code that link's step needs (see `loan-view.component.html`), which is why the one code this
+  section receives is the charge route's write code and not a copy of the group's permissions.
+  Neither link is hidden or disabled by the charge's
   state: whether the step is legal is the server's decision, exactly as the record's action group
-  treats its own commands (Rule 1 clause 3).
+  treats its own commands (Rule 1 clause 3). Each anchor carries a per-charge id, so the charge a
+  row's entry point belongs to is named in the DOM for the screens' selectors.
+
+  This section deliberately offers no "Add Charge" control of its own: the record renders the one
+  entry point to `#/addloancharge/:id` in its joined action group (see `loan-view.component.html`),
+  and the legacy record likewise has no add button inside its charges tab. A second control on the
+  same route would give one action two homes on one screen (Rule 1 clause 3).
 
   The look is entirely global: `.table.table-striped` for the table, `.btn.btn-primary.btn-sm` for the
   row actions and the empty state's own `.text-center.text-muted`. The owning record page supplies the
@@ -54,11 +64,13 @@
           <td>
             <a
               class="btn btn-primary btn-sm"
+              [id]="'loan-charge-pay-' + row.id"
               [routerLink]="['/loanaccountcharge', loanId(), 'pay', row.id]"
               [hasPermission]="actionPermission()"
             >{{ 'label.button.paycharge' | translate }}</a>
             <a
               class="btn btn-primary btn-sm"
+              [id]="'loan-charge-waive-' + row.id"
               [routerLink]="['/loanaccountcharge', loanId(), 'waive', row.id]"
               [hasPermission]="actionPermission()"
             >{{ 'label.button.waivecharge' | translate }}</a>

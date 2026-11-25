@@ -95,9 +95,11 @@ export class LoanChargesComponent {
   readonly loanId = input.required<number | string>();
 
   /**
-   * The permission the two charge actions are gated on. The record page passes the one code it gates
-   * every action with, so the record and this section cannot disagree about who may act (AAP 0.14.1,
-   * "Permissions are declared once per route and once per action").
+   * The permission the two charge actions are gated on. The record page passes `UPDATE_LOAN`, the
+   * code `loans.routes.ts` guards `loanaccountcharge/:id/:action/:chargeId` with, so the directive
+   * and the route guard cannot disagree about who may act (AAP 0.14.1, "Permissions are declared
+   * once per route and once per action"). The record's own action group carries no value this
+   * section shares: it gates each of its links on that step's own Fineract code.
    *
    * Legacy names finer codes for these operations — `CREATE_LOANCHARGE` to add a charge,
    * `PAY_LOANCHARGE` to pay one, `WAIVE_LOANCHARGE` to waive one — and they are not the code
