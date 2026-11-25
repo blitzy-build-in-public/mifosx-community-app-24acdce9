@@ -30,6 +30,13 @@ import { SessionService, sessionStorageKey } from './session.service';
  *   both the accessors and the signals a template reads;
  * - a restore that fails leaves the login successful and the gate closed — the path the prompt
  *   requires, because the entry is already written and the interceptor owns a 401;
+ * - `restore()` is the call the bootstrap initializer makes (`web-ng/src/app/app.config.ts`, awaited
+ *   before the router's first navigation), so it is the session-reload half of workflow W1
+ *   (AAP 0.10.1): the stored entry's user is re-read with one bodiless `GET /users/{id}`, and the
+ *   session, the account name and the permission list are in effect afterwards, with no second
+ *   credential exchange;
+ * - `restore()` with nothing stored resolves `false`, reaches no transport at all and leaves every
+ *   accessor reporting the closed state;
  * - an authentication failure reaches the caller unchanged and writes no session;
  * - driven through the application's own interceptor, the login is tagged with the tenant header and
  *   no credential, the restore carries the key the login just stored, and a 401 reaches the caller as
@@ -421,6 +428,55 @@ describe('AuthService', () => {
     expect(service.isAuthenticated()).toBe(true);
     expect(service.permissions()).toEqual(GRANTED);
     httpMock.expectNone(byMethodAndUrl('POST', AUTHENTICATION_URL));
+  });
+
+  it('resumes the stored legacy entry on restore, reading the user once with a bodiless GET', async () => {
+    // What a page reload, or a login on a legacy screen, leaves behind: the entry in storage and
+    // nothing in memory — the state the bootstrap initializer restores from before the router's first
+    // navigation (AAP 0.10.1 W1; `web-ng/src/app/app.config.ts`).
+    window.localStorage.setItem(COMPOSED_KEY, JSON.stringify(expectedSession()));
+    expect(service.isAuthenticated()).toBe(false);
+
+    const restored = service.restore();
+
+    // The reload is a read, not a second credential exchange: one bodiless `GET` for the stored id,
+    // with no query parameter (AAP 0.7.3 row "W1 login and logout"; Rule 1 clause 8).
+    const users = httpMock.expectOne(byMethodAndUrl('GET', usersUrl(USER_ID)));
+    expect(users.request.method).toBe('GET');
+    expect(users.request.params.keys()).toEqual([]);
+    expect(users.request.body).toBeNull();
+
+    users.flush(projection());
+    await expect(restored).resolves.toBe(true);
+
+    // The state the restore publishes: the stored session, the account name the projection supplied
+    // and the stored permission list, for the accessors and the signals a template reads (AAP 0.7.1
+    // `restore(): Promise<boolean>`).
+    expect(service.user()).toEqual(expectedSession());
+    expect(service.session()).toEqual(expectedSession());
+    expect(service.isAuthenticated()).toBe(true);
+    expect(service.permissions()).toEqual(GRANTED);
+    expect(service.username()).toBe(USERNAME);
+    expect(sessions.user()).toEqual({ id: USER_ID, username: USERNAME });
+    expect(permissions.can('READ_CLIENT')).toBe(true);
+    expect(permissions.can('DELETE_CLIENT')).toBe(false);
+    httpMock.expectNone(byMethodAndUrl('POST', AUTHENTICATION_URL));
+  });
+
+  it('restores nothing when no entry is stored, and reaches no transport', async () => {
+    // A start with no entry — the first run after a logout, or a visitor arriving at the login screen —
+    // resolves `false`, so the initializer's awaited restore closes the gate instead of opening one
+    // over an empty session (AAP 0.10.1 W1; AAP 0.7.1).
+    await expect(service.restore()).resolves.toBe(false);
+
+    // Nothing at all reached the transport: with nothing stored there is no id to read a user for.
+    httpMock.expectNone(() => true);
+    expect(service.user()).toBeNull();
+    expect(service.session()).toBeNull();
+    expect(service.username()).toBeNull();
+    expect(service.permissions()).toEqual([]);
+    expect(service.isAuthenticated()).toBe(false);
+    expect(permissions.can('READ_CLIENT')).toBe(false);
   });
 
   it('ends the session on logout without issuing a request', async () => {

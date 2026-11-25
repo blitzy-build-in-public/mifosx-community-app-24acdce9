@@ -34,11 +34,12 @@
  * from parts, so no credential-shaped literal reaches the source, and it is asserted through object
  * equality rather than printed.
  *
- * The second block, `SessionService restore over HTTP`, is the contract test Rule 1 clause 8 requires of
- * the `GET /users/{id}` the restore drives (AAP 0.7.3 W1: `GET /users/{id}`, `userResource`). There the
- * service comes from a `TestBed` module wired with `provideHttpClient()` and `provideHttpClientTesting()`,
- * the read is issued through Angular's own handler chain, and `HttpTestingController` asserts the method,
- * the composed path, the empty parameter set and the bodiless request.
+ * The second block, `SessionService restore over HTTP`, proves the projection `restore()` publishes over
+ * a real handler chain, and the shape of the request the reader it is handed puts on the transport. The
+ * reader there is a stand-in in the shape `SessionUserReader` declares, because `SessionService` owns no
+ * `HttpClient`; the production `GET /users/{id}` reader's own composition — method, path, parameters,
+ * body and the interceptor's headers — is proven in `auth.service.spec.ts` (AAP 0.7.3 W1:
+ * `GET /users/{id}`, `userResource`; Rule 1 clause 8).
  */
 import { HttpHandler, HttpRequest, HttpResponse, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
@@ -598,12 +599,23 @@ describe('SessionService', () => {
 });
 
 /**
- * The restore's `GET /users/{id}` contract, over the real transport and the testing backend (Rule 1
- * clause 8; AAP 0.7.3 W1 row `GET /users/{id}`, `userResource`).
+ * The projection `restore()` publishes when it drives a real transport (AAP 0.7.1,
+ * `restore(): Promise<boolean>`; AAP 0.10.3 criterion 2's session round-trip).
  *
  * `SessionService` owns no `HttpClient`: the read arrives as a `SessionUserReader` from the service that
- * does own it, which is why this block supplies the reader that owner supplies and asserts the request
- * the reader produces — method, composed path, parameter set and body — instead of the service's own.
+ * does own it, so the reader supplied here is a stand-in in exactly the shape that type declares, built
+ * on `HttpHandler` — the chain `HttpClient` itself submits through — because the lint gate leaves only
+ * the seven files AAP 0.14.1 names free to hold `HttpClient`, and a spec is not one of them. What this
+ * block therefore proves is the restore's own behaviour over a real handler chain: that it resolves
+ * `true`, puts the stored session in effect, publishes the account name the projection answered with
+ * and keeps the stored permission list, and that the request it hands the transport is the shape its
+ * reader composes — a bodiless `GET` with no query parameter.
+ *
+ * The production reader's own composition of the method, the `users/{id}` path, the empty parameter set
+ * and the body, together with the `Authorization` and tenant headers the interceptor attaches to it, is
+ * proven where that reader lives: `auth.service.spec.ts`, whose restore cases drive
+ * `AuthService.restore()` — the very delegation the bootstrap initializer makes (AAP 0.10.1 W1;
+ * `web-ng/src/app/app.config.ts`).
  */
 describe('SessionService restore over HTTP', () => {
   let service: SessionService;
@@ -615,11 +627,7 @@ describe('SessionService restore over HTTP', () => {
     window.localStorage.clear();
 
     TestBed.configureTestingModule({
-      providers: [
-        provideHttpClient(),
-        provideHttpClientTesting(),
-        { provide: AppConfigService, useValue: apiConfig },
-      ],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
     });
 
     service = TestBed.inject(SessionService);
