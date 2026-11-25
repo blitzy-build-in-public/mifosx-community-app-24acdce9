@@ -1,0 +1,35 @@
+<!-- Eight columns are this section's whole contract, and each cell prints the payload's own member —
+     `feeChargesDue` and `totalDueForPeriod` are the fork's field names — so no figure is recomputed,
+     rounded, summed or worded here and the table cannot disagree with the server's schedule. -->
+@if (rows().length > 0) {
+  <table class="table table-striped" id="loan-schedule">
+    <thead>
+      <tr>
+        <th scope="col">{{ 'label.heading.no' | translate }}</th>
+        <th scope="col">{{ 'label.heading.fromdate' | translate }}</th>
+        <!-- The period's due date is labelled with label.heading.date: no locale file defines
+             label.heading.duedate, and this is the key the legacy schedule heads that column with. -->
+        <th scope="col">{{ 'label.heading.date' | translate }}</th>
+        <th scope="col">{{ 'label.heading.principal' | translate }}</th>
+        <th scope="col">{{ 'label.heading.interest' | translate }}</th>
+        <th scope="col">{{ 'label.heading.fees' | translate }}</th>
+        <th scope="col">{{ 'label.heading.total' | translate }}</th>
+        <th scope="col">{{ 'label.heading.outstanding' | translate }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (row of rows(); track row.period) {
+        <tr>
+          <td>{{ row.period }}</td>
+          <td>{{ row.fromDate | date: displayFormat }}</td>
+          <td>{{ row.dueDate | date: displayFormat }}</td>
+          <td>{{ row.principalDue | number }}</td>
+          <td>{{ row.interestDue | number }}</td>
+          <td>{{ row.feeChargesDue | number }}</td>
+          <td>{{ row.totalDueForPeriod | number }}</td>
+          <td>{{ row.totalOutstandingForPeriod | number }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+}

@@ -1,0 +1,59 @@
+<!--
+  Transactions section of the individual loan record (`#/viewloanaccount/:id`; AAP 0.7.1 row
+  `loans`, AAP 0.7.2 row `LoanTransaction`, AAP 0.7.3 row "W6 repayment"). It renders the
+  `transactions` slice the parent already loaded through `GET /loans/{id}?associations=all` and
+  issues no request of its own (Rule 1 clause 2; Rule 2 — no URL, host or endpoint appears here).
+
+  Exactly one of the two branches renders. A loan with no transactions yet shows the shared
+  explicit empty state and no error, which is the state AAP 0.7.4 requires of this surface; the
+  table renders otherwise, one row per element of `rows()` in the order the API returned them — no
+  sort, filter, pager, subtotal, link, icon or confirmation step (Rule 1 clause 3). The seven
+  columns and the striped class are the component mapping's table definition, so the legacy tab's
+  transaction id, office and penalty columns, its two-row sortable header and its hide-accrual
+  filter are deliberately not reproduced: that departure from Rule 1 clause 3 rests on the plan
+  recording it as an intentional difference. `type.value` is Fineract's own transaction-type label
+  and is rendered verbatim, never through `TranslatePipe`, because translating it would put words
+  in the server's mouth.
+
+  The empty state's key is `label.nodata` ("No Data") rather than the planned `label.none.found`:
+  the legacy bundles at `app/global-translations/` carry the former and not the latter, and the
+  client record's accounts section already uses it, so a missing-key humanisation never reaches the
+  screen. Every `label.heading.*` key below is present in `locale-en.json` as written.
+
+  The look is entirely global: `.table.table-striped` for the table and the empty state's own
+  `.text-center.text-muted`. The owning record page supplies the card, so this file adds no panel,
+  no heading, no stylesheet, no inline style and no colour of its own (Rule 1 clause 6).
+-->
+@if (isEmpty()) {
+  <app-empty-state
+    id="loan-transactions-empty"
+    [message]="'label.nodata' | translate"
+  />
+} @else {
+  <table class="table table-striped" id="loan-transactions">
+    <thead>
+      <tr>
+        <th>{{ 'label.heading.date' | translate }}</th>
+        <th>{{ 'label.heading.type' | translate }}</th>
+        <th>{{ 'label.heading.amount' | translate }}</th>
+        <th>{{ 'label.heading.principal' | translate }}</th>
+        <th>{{ 'label.heading.interest' | translate }}</th>
+        <th>{{ 'label.heading.fees' | translate }}</th>
+        <th>{{ 'label.heading.outstanding' | translate }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (row of rows(); track row.id) {
+        <tr>
+          <td>{{ row.date | date: displayFormat }}</td>
+          <td>{{ row.type.value }}</td>
+          <td>{{ row.amount | number }}</td>
+          <td>{{ row.principalPortion | number }}</td>
+          <td>{{ row.interestPortion | number }}</td>
+          <td>{{ row.feeChargesPortion | number }}</td>
+          <td>{{ row.outstandingLoanBalance | number }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+}

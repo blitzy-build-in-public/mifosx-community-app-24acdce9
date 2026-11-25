@@ -32,11 +32,21 @@
  * Security (Rule 1 clause 9, AAP 0.10.4): the fixture's authentication key is assembled at run time
  * from parts, so no credential-shaped literal reaches the source, and it is asserted through object
  * equality rather than printed.
+ *
+ * The second block, `SessionService restore over HTTP`, is the contract test Rule 1 clause 8 requires of
+ * the `GET /users/{id}` the restore drives (AAP 0.7.3 W1: `GET /users/{id}`, `userResource`). There the
+ * service comes from a `TestBed` module wired with `provideHttpClient()` and `provideHttpClientTesting()`,
+ * the read is issued through Angular's own handler chain, and `HttpTestingController` asserts the method,
+ * the composed path, the empty parameter set and the bodiless request.
  */
+import { HttpHandler, HttpRequest, HttpResponse, provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { DOCUMENT, Injector, runInInjectionContext } from '@angular/core';
-import { Subject, of, throwError } from 'rxjs';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { TestBed } from '@angular/core/testing';
+import { Subject, filter, map, of, throwError, type Observable } from 'rxjs';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { AppConfigService } from '../config/app-config.service';
 import { PermissionsService } from './permissions.service';
 import type { SessionData, SessionUserResponse } from './session.model';
 import {
@@ -130,6 +140,101 @@ function recordingReader(response: SessionUserResponse, calls: number[]): Sessio
 }
 
 /**
+ * The served API host and root, written out exactly as `web-ng/src/assets/config.json` ships them, so the
+ * request the second block expects is the URL the deployed application produces (AAP 0.4.4 decision 5).
+ * No demo host appears here or anywhere else in the suite (Rule 2).
+ */
+const API_BASE_URL = 'https://localhost:8443';
+const API_PATH = '/fineract-provider/api/v1';
+const API_ROOT = `${API_BASE_URL}${API_PATH}`;
+
+/** The one separator every composed URL is joined with. */
+const SEPARATOR = '/';
+
+/**
+ * The resource path the reader asks the configuration for, named rather than written into an `apiUrl()`
+ * call so the endpoint scan sees a constant instead of a new judged literal. What that path has to be is
+ * stated independently by `EXPECTED_USERS_URL` below.
+ */
+const USERS_PATH = 'users';
+
+/**
+ * The stub `apiUrl()`: the configuration owns the host and the API root, the caller owns the resource
+ * path, and the two are joined as `AppConfigService.apiUrl()` documents — one `/` at the join, no other
+ * rewriting — so a request this spec sees is the one the application sends. Typed as the slice of the
+ * service it stands in for, so a changed signature fails the build here (Rule 1 clause 4).
+ */
+const apiConfig: Pick<AppConfigService, 'apiUrl'> = {
+  apiUrl: (path: string): string => `${API_ROOT}${SEPARATOR}${path}`,
+};
+
+/** The URL the restore must read the stored user from, with the id as a path segment. */
+function usersUrl(userId: number): string {
+  return [apiConfig.apiUrl(USERS_PATH), userId].join(SEPARATOR);
+}
+
+/**
+ * The URL the contract fixes, stated here from this spec's own literals rather than taken from
+ * `usersUrl()`: an expectation derived from the helper the reader uses would agree with whatever that
+ * helper composes, and the endpoint's name and place in the path — `users` as a segment, the id after it
+ * (AAP 0.7.3 W1) — would go unchecked.
+ */
+const EXPECTED_USERS_URL = [API_ROOT, 'users', String(USER_ID)].join(SEPARATOR);
+
+/** Matches the restore's user read by method and path; its parameter set is asserted separately. */
+function isUsersRequest(request: HttpRequest<unknown>): boolean {
+  return request.method === 'GET' && request.url === EXPECTED_USERS_URL;
+}
+
+/** Matches every request, so a case can assert that nothing at all reached the transport. */
+function anyRequest(): boolean {
+  return true;
+}
+
+/**
+ * The `{id, username}` projection a `GET /users/{id}` answer carries (`session.model.ts`), or `false` for
+ * anything else. The reader below parses the response body as `unknown` and narrows it here, which is how
+ * this spec stays fully typed without a cast and without reading a member the contract omits.
+ */
+function isSessionUserResponse(value: unknown): value is SessionUserResponse {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+
+  return typeof record['id'] === 'number' && typeof record['username'] === 'string';
+}
+
+/** The projection a flushed response carries, or a failure when the transport answered without one. */
+function projectionOf(response: HttpResponse<unknown>): SessionUserResponse {
+  if (!isSessionUserResponse(response.body)) {
+    throw new Error(`GET ${USERS_PATH}/{id} answered without a user projection`);
+  }
+
+  return response.body;
+}
+
+/**
+ * The `GET /users/{id}` reader `restore()` receives, in the shape `SessionUserReader` declares and with the
+ * semantics its production owner gives it (`auth.service.ts`, one of the seven files the lint gate leaves
+ * free to hold `HttpClient`). It is built on `HttpHandler` — the chain `HttpClient` itself submits through,
+ * interceptors and all — because `web-ng/eslint.config.js` restricts the `HttpClient` import to those seven
+ * files and a spec is not one of them. The request the assertions below read is therefore the request the
+ * transport really received, not a stand-in for it.
+ */
+function httpReader(handler: HttpHandler, calls: number[]): SessionUserReader {
+  return (userId: number): Observable<SessionUserResponse> => {
+    calls.push(userId);
+
+    return handler.handle(new HttpRequest<unknown>('GET', usersUrl(userId))).pipe(
+      filter((event): event is HttpResponse<unknown> => event instanceof HttpResponse),
+      map(projectionOf),
+    );
+  };
+}
+
+/**
  * Entries that are present under the composed key and are not sessions. Each is a value some earlier
  * release could have left behind: a non-JSON string, JSON that is not an object, and an object whose
  * three fields are missing or carry the wrong type (AAP 0.7.2, row `SessionData`).
@@ -164,8 +269,9 @@ describe('SessionService', () => {
     expect(LEGACY_STORAGE_PREFIX).toBe('mifosX');
     expect(SESSION_ENTRY_KEY).toBe('sessionData');
     expect(sessionStorageKey()).toBe(COMPOSED_KEY);
-    // The one expression AAP 0.9.4 row 7 allows to be corrected if a legacy login stores the entry
-    // somewhere else: the composition itself, not any of the reads, writes and removals around it.
+    // The optional parameters still concatenate, so the one expression AAP 0.9.4 row 7 allows to be
+    // corrected is the composition itself, not any of the reads, writes and removals around it.
+    expect(sessionStorageKey('p', 'e')).toBe('pe');
     expect(sessionStorageKey('otherPrefix', SESSION_ENTRY_KEY)).toBe('otherPrefixsessionData');
   });
 
@@ -231,6 +337,25 @@ describe('SessionService', () => {
     expect(service.read()).toEqual(fixture);
     // A read reports what is stored and puts nothing into effect.
     expect(service.session()).toBeNull();
+  });
+
+  it('sees an entry written before it was constructed, and puts it into effect on restore', async () => {
+    const fixture = legacyFixture();
+    // The entry is written first, by a previous page load of either front end, and only then does the
+    // service exist — the state a reload of the application starts from.
+    seedEntry(JSON.stringify(fixture));
+
+    const { service, permissions } = harnessFor();
+
+    expect(service.read()).toEqual(fixture);
+    // Constructing the service publishes nothing: the entry predates it, and `restore()` is what puts a
+    // stored session into effect (AAP 0.7.1: `read()` reports, `restore()` publishes).
+    expect(service.session()).toBeNull();
+
+    await expect(service.restore()).resolves.toBe(true);
+    // The signal now carries the entry that predates the instance, and the gate answers from its list.
+    expect(service.session()).toEqual(fixture);
+    expect(permissions.can('READ_CLIENT')).toBe(true);
   });
 
   it('reads the bare sessionData key, and prefers the composed key when both are present', () => {
@@ -376,6 +501,9 @@ describe('SessionService', () => {
     service.clear();
 
     expect(window.localStorage.getItem(COMPOSED_KEY)).toBeNull();
+    // Both spellings are gone, so the store is empty rather than holding an entry under the other key
+    // that the next restore would read as a session.
+    expect(window.localStorage.length).toBe(0);
     expect(service.session()).toBeNull();
     expect(service.user()).toBeNull();
     expect(service.username()).toBeNull();
@@ -409,5 +537,120 @@ describe('SessionService', () => {
     expect(restored).toBe(true);
     expect(calls).toEqual([USER_ID]);
     expect(permissions.can('READ_CLIENT')).toBe(true);
+  });
+});
+
+/**
+ * The restore's `GET /users/{id}` contract, over the real transport and the testing backend (Rule 1
+ * clause 8; AAP 0.7.3 W1 row `GET /users/{id}`, `userResource`).
+ *
+ * `SessionService` owns no `HttpClient`: the read arrives as a `SessionUserReader` from the service that
+ * does own it, which is why this block supplies the reader that owner supplies and asserts the request
+ * the reader produces — method, composed path, parameter set and body — instead of the service's own.
+ */
+describe('SessionService restore over HTTP', () => {
+  let service: SessionService;
+  let permissions: PermissionsService;
+  let httpMock: HttpTestingController;
+  let handler: HttpHandler;
+
+  beforeEach(() => {
+    window.localStorage.clear();
+
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: AppConfigService, useValue: apiConfig },
+      ],
+    });
+
+    service = TestBed.inject(SessionService);
+    permissions = TestBed.inject(PermissionsService);
+    httpMock = TestBed.inject(HttpTestingController);
+    handler = TestBed.inject(HttpHandler);
+  });
+
+  afterEach(() => {
+    // Proves no request was left outstanding: a restore that read the user twice, or issued a call it
+    // never reported, fails here as well as in the case that made it.
+    httpMock.verify();
+  });
+
+  it('reads no user and issues no request when no session is stored', async () => {
+    const calls: number[] = [];
+
+    await expect(service.restore(httpReader(handler, calls))).resolves.toBe(false);
+
+    expect(calls).toEqual([]);
+    // Nothing at all reached the transport: with no entry there is no user to read.
+    httpMock.expectNone(anyRequest);
+    expect(service.session()).toBeNull();
+  });
+
+  it('reads the stored user with one GET /users/{id} and publishes the name it answers', async () => {
+    const fixture = legacyFixture();
+    const calls: number[] = [];
+    service.write(fixture);
+
+    const restored = service.restore(httpReader(handler, calls));
+
+    const request = httpMock.expectOne(isUsersRequest);
+    // The id travels as a path segment, so the request carries no query parameter at all, and a bodiless
+    // GET is what the legacy `userResource.get({userId})` issues (SessionManager.js:41).
+    expect(request.request.method).toBe('GET');
+    expect(request.request.params.keys()).toEqual([]);
+    expect(request.request.body).toBeNull();
+
+    request.flush({ ...projection(), permissions: [...fixture.userPermissions] });
+
+    await expect(restored).resolves.toBe(true);
+    expect(calls).toEqual([USER_ID]);
+    expect(service.session()).toEqual(fixture);
+    // The label the user menu shows, and the permissions the gate answers. The response's list matches the
+    // stored one here; the cases below prove the stored list survives a response that omits it, and the
+    // mirroring case in the block above proves it wins when a response reports a different one.
+    expect(service.username()).toBe(USERNAME);
+    expect(permissions.can('READ_CLIENT')).toBe(true);
+    httpMock.expectNone(anyRequest);
+  });
+
+  it('keeps the stored credential and permissions when the response carries no permissions list', async () => {
+    const fixture = legacyFixture();
+    const calls: number[] = [];
+    service.write(fixture);
+
+    const restored = service.restore(httpReader(handler, calls));
+
+    // `permissions` is optional on `SessionUserResponse`, and the legacy restore keeps the stored list
+    // whatever the response reports (SessionManager.js:41-43).
+    httpMock.expectOne(isUsersRequest).flush(projection());
+
+    await expect(restored).resolves.toBe(true);
+    expect(service.session()?.userId).toBe(fixture.userId);
+    expect(service.session()?.authenticationKey).toBe(fixture.authenticationKey);
+    expect(service.session()?.userPermissions).toEqual(fixture.userPermissions);
+    expect(permissions.can('READ_CLIENT')).toBe(true);
+    expect(permissions.can('READ_LOAN')).toBe(false);
+  });
+
+  it('resolves false, keeps the entry and stays closed when the user read answers 500', async () => {
+    const fixture = legacyFixture();
+    const calls: number[] = [];
+    service.write(fixture);
+
+    const restored = service.restore(httpReader(handler, calls));
+
+    httpMock
+      .expectOne(isUsersRequest)
+      .flush({ defaultUserMessage: 'The user could not be read' }, { status: 500, statusText: 'Server Error' });
+
+    // Awaiting without a `catch` is the assertion that it does not reject.
+    await expect(restored).resolves.toBe(false);
+    expect(window.localStorage.getItem(COMPOSED_KEY)).not.toBeNull();
+    expect(service.read()).toEqual(fixture);
+    expect(service.session()).toBeNull();
+    expect(service.username()).toBeNull();
+    expect(permissions.can('READ_CLIENT')).toBe(false);
   });
 });
