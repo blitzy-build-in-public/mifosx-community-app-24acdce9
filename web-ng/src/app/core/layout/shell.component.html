@@ -2,20 +2,27 @@
   The signed-in shell (AAP 0.2.3 `AppShell`, AAP 0.7.1 and AAP 0.8.2 "Shell and navigation"), which
   `app.routes.ts` renders behind its authenticated layout route.
 
-  Order is the design's: the 50px navigation bar, then the idle warning while a session is about to
-  expire, then the #EBEFF1 content surface holding the breadcrumb and the routed screen. No left icon
-  rail, no Accounting / Reports / Admin destination, no hamburger and no notification bell is drawn or
-  stubbed, because every module behind them stays on the legacy application during cutover
-  (AAP 0.9.2, AAP 0.10.5 item 8).
+  Order is the design's: the navigation bar, then the idle warning while a session is about to expire,
+  then the content surface holding the breadcrumb and the routed screen. No left icon rail, no
+  Accounting / Reports / Admin destination, no hamburger and no notification bell is drawn or stubbed,
+  because every module behind them stays on the legacy application during cutover (AAP 0.9.2,
+  AAP 0.10.5 item 8).
 
-  The routed screen sits beside the breadcrumb's `.container-fluid`, not inside it: each screen
-  template already opens its own page container (`features/clients/client-actions`, `features/loans/
-  loan-edit`, the savings screens), so wrapping the outlet here would nest two containers and double
-  the page gutters.
+  The surface is also the page's `main` landmark. The login screen carries its own, and every
+  authenticated screen mounts here, so this is the only place that can give them one; the change is
+  semantic only, because the global rule is keyed to the class, so the background paint, the contained
+  gutters and the outlet's position are exactly what they were.
 
-  No style attribute, no hex value and no dimension appears in this file (Rule 1 clause 6): the navbar
-  bar, the content surface, the crumb and the alert are the global rules of
-  web-ng/src/styles.scss and Bootstrap 3's own classes.
+  The routed screen sits beside the breadcrumb's `.container-fluid`, not inside it: the screens that
+  need a page container open their own (`features/clients/client-actions`, `features/loans/
+  loan-edit`, the savings screens), so a wrapper here would nest two containers and double the page
+  gutters on every one of them. This template therefore owns the surface, and each screen owns its
+  own gutter inside it.
+
+  No style attribute, no colour literal and no dimension appears in this file (Rule 1 clause 6): the
+  navbar's bar, the content surface, the crumb and the alert are the global rules of
+  web-ng/src/styles.scss — tokens color-app-bg, color-brand-blue, color-rule and color-section-rule —
+  plus Bootstrap 3's own classes.
 -->
 <app-navbar [userName]="displayName()" />
 
@@ -40,13 +47,14 @@
   </div>
 }
 
-<div class="content-wrapper">
+<main class="content-wrapper">
   <div class="container-fluid">
     <!-- The trail: the caller's `breadcrumb` input, or the active route's `data['breadcrumb']` keys
-         translated into labels (AAP 0.2.3 `Breadcrumb`). An empty trail renders nothing at all. -->
+         translated into labels (AAP 0.2.3 `Breadcrumb`). An empty trail renders nothing at all, and
+         the record screen renders its own crumb, so a route that declares none shows none here. -->
     <app-breadcrumb [items]="breadcrumbItems()" />
   </div>
 
-  <!-- The active route's screen. It owns its own page container and its own cards. -->
+  <!-- The active route's screen: its own cards, and its own page container where it needs one. -->
   <router-outlet />
-</div>
+</main>
