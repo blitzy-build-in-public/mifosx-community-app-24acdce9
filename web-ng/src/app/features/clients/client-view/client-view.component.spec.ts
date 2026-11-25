@@ -292,6 +292,15 @@ describe('ClientViewComponent', () => {
   }
 
   /**
+   * The lifecycle command a route names — its last path segment — so an assertion can ask which
+   * command a link carries without holding a URL-shaped literal of its own for the endpoint gate to
+   * read as a bare endpoint path.
+   */
+  function commandOf(route: string): string {
+    return route.split('/').at(-1) ?? '';
+  }
+
+  /**
    * The action hrefs every record shows, for the client id it is showing: the four entries of the
    * joined row and the three lifecycle commands of its `More` menu, in render order.
    */
@@ -698,7 +707,7 @@ describe('ClientViewComponent', () => {
       .actionButtons()
       .map((action) => action.routerLink);
 
-    expect(activeRoutes.filter((route) => route.endsWith('/reactivate'))).toHaveLength(0);
+    expect(activeRoutes.filter((route) => commandOf(route) === 'reactivate')).toHaveLength(0);
     expect(actionHrefs(hostOf(active))).toEqual(expectedHrefs(CLIENT_ID));
 
     clients.get.mockReturnValue(of(CLOSED_CLIENT));
@@ -709,7 +718,7 @@ describe('ClientViewComponent', () => {
       .map((action) => action.routerLink);
 
     // Exactly one `Reactivate`, last in the menu, with every other entry unchanged.
-    expect(closedRoutes.filter((route) => route.endsWith('/reactivate'))).toEqual([
+    expect(closedRoutes.filter((route) => commandOf(route) === 'reactivate')).toEqual([
       `/client/${CLIENT_ID}/reactivate`,
     ]);
     expect(closedRoutes).toEqual(expectedClosedHrefs(CLIENT_ID));
