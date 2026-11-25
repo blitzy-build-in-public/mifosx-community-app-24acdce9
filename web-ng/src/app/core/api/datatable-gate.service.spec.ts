@@ -36,6 +36,12 @@ import {
  *   even when the reads complete in the opposite order, and each result's `resultSet` is the envelope
  *   the read returned, untouched;
  * - no applicable check emits an empty array and issues no datatable request at all;
+ * - an answer the gate cannot read — a body that is not the paged envelope, a row that is not an object
+ *   or names no entity, a client row without the status or the table name the comparison needs — fails
+ *   with one described, displayable error, emitting nothing and reading no table, so an unreadable
+ *   answer can never pass as an empty gate;
+ * - another entity's unreadable row is skipped rather than failed: it is dropped on its `entity` alone,
+ *   as the legacy filter drops it, and the client checks beside it are still read in the server's order;
  * - a failure of either call reaches the subscriber as an error, with no emission and no completion, so
  *   the caller in `features/clients/client-actions/**` can block the action;
  * - an action with no mapped check status fails before any request, because a gate that cannot tell
@@ -94,6 +100,63 @@ const ACTION_STATUS: readonly (readonly [ClientActionName, ClientCheckStatus])[]
   ['reject', 'REJECTED'],
   ['withdraw', 'WITHDRAWN'],
   ['reactivate', 'ACTIVATE'],
+];
+
+/**
+ * Answers to `GET /entityDatatableChecks` the gate must not read as an empty gate, each named by what is
+ * wrong with it. Every one is a shape Fineract's `Page<EntityDataTableChecksData>` contract rules out, so
+ * none of them arrives from a healthy backend — which is why the gate has to answer them with a
+ * described, displayable failure rather than the `TypeError` a bare `.filter` or `.status.value` words.
+ *
+ * The rows are written as the raw objects a response body carries, not as {@link EntityDatatableCheck}
+ * values, because the member each case leaves out is exactly what makes it unreadable.
+ */
+const UNREADABLE_ANSWERS: readonly (readonly [string, Readonly<Record<string, unknown>>])[] = [
+  ['that carries no pageItems', { totalFilteredRecords: 0 }],
+  ['whose pageItems is null', { totalFilteredRecords: 1, pageItems: null }],
+  ['whose pageItems is a string', { totalFilteredRecords: 1, pageItems: FIRST_TABLE }],
+  ['that carries a row which is not an object', { totalFilteredRecords: 1, pageItems: [null] }],
+  [
+    'that carries a row naming no entity',
+    {
+      totalFilteredRecords: 1,
+      pageItems: [
+        {
+          status: { id: STATUS_IDS.ACTIVATE, code: 'statusEnum.activate', value: 'ACTIVATE' },
+          datatableName: FIRST_TABLE,
+        },
+      ],
+    },
+  ],
+  [
+    'that carries a client row without a status',
+    { totalFilteredRecords: 1, pageItems: [{ entity: CLIENT_ENTITY_NAME, datatableName: FIRST_TABLE }] },
+  ],
+  [
+    'that carries a client row whose status has no value',
+    {
+      totalFilteredRecords: 1,
+      pageItems: [
+        {
+          entity: CLIENT_ENTITY_NAME,
+          status: { id: STATUS_IDS.ACTIVATE, code: 'statusEnum.activate' },
+          datatableName: FIRST_TABLE,
+        },
+      ],
+    },
+  ],
+  [
+    'that carries a client check naming no datatable',
+    {
+      totalFilteredRecords: 1,
+      pageItems: [
+        {
+          entity: CLIENT_ENTITY_NAME,
+          status: { id: STATUS_IDS.ACTIVATE, code: 'statusEnum.activate', value: 'ACTIVATE' },
+        },
+      ],
+    },
+  ],
 ];
 
 /**
@@ -274,6 +337,66 @@ describe('DataTableGateService', () => {
 
     expect(emissions).toEqual([[]]);
     httpMock.expectNone(isDatatableRequest(FIRST_TABLE, CLIENT_ID));
+  });
+
+  for (const [description, answer] of UNREADABLE_ANSWERS) {
+    it(`fails with one described error and reads no table for an answer ${description}`, () => {
+      const emissions: DataTableGateResult[][] = [];
+      const failures: unknown[] = [];
+
+      service.checkClientActionGate(CLIENT_ID, 'activate').subscribe({
+        next: (results) => emissions.push(results),
+        error: (failure: unknown) => failures.push(failure),
+      });
+
+      httpMock.expectOne(isChecksRequest).flush(answer);
+
+      // One failure, no gate, no completion: an answer the gate cannot read is reported as a failure
+      // rather than emitted as the empty gate a caller would proceed on.
+      expect(emissions).toEqual([]);
+      expect(failures).toHaveLength(1);
+
+      // `failureMessage()` in the caller renders an `Error`'s own message verbatim, so the gate has to
+      // fail with a sentence a screen may show: non-empty, and not the `TypeError` wording of a bare
+      // `.filter` or `.status.value` read.
+      const failure = failures[0];
+      expect(failure).toBeInstanceOf(Error);
+      const message = failure instanceof Error ? failure.message : '';
+      expect(message).not.toBe('');
+      expect(message).not.toMatch(/TypeError|undefined|Cannot read/);
+
+      // No datatable read can be issued for an answer whose tables are unknown, and `verify()` in
+      // `afterEach` would report any that was.
+      httpMock.expectNone(isDatatableRequest(FIRST_TABLE, CLIENT_ID));
+      httpMock.expectNone(isDatatableRequest(SECOND_TABLE, CLIENT_ID));
+    });
+  }
+
+  it(`skips another entity's unreadable row and still reads the client check beside it`, () => {
+    const emissions: DataTableGateResult[][] = [];
+    const failures: unknown[] = [];
+
+    service.checkClientActionGate(CLIENT_ID, 'activate').subscribe({
+      next: (results) => emissions.push(results),
+      error: (failure: unknown) => failures.push(failure),
+    });
+
+    // `m_loan` is another entity's check. The legacy filter drops it on `entity` alone
+    // (`app/scripts/controllers/client/ClientActionsController.js:28`), so its absent `status` and
+    // `datatableName` are never read: a skip is not a failure, and the client check beside it is read.
+    httpMock.expectOne(isChecksRequest).flush({
+      totalFilteredRecords: 2,
+      pageItems: [{ entity: 'm_loan' }, checkRow(FIRST_TABLE, 'ACTIVATE')],
+    });
+
+    httpMock.expectNone(isDatatableRequest(SECOND_TABLE, CLIENT_ID));
+
+    const read = httpMock.expectOne(isDatatableRequest(FIRST_TABLE, CLIENT_ID));
+    expect(read.request.params.get('genericResultSet')).toBe('true');
+    read.flush(RESULT_SET);
+
+    expect(failures).toEqual([]);
+    expect(emissions).toEqual([[{ table: FIRST_TABLE, resultSet: RESULT_SET }]]);
   });
 
   it('propagates a failed checks call without reading a table or reporting an empty gate', () => {

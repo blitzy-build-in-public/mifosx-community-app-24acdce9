@@ -235,10 +235,12 @@ export class SearchResultsComponent {
       return of<SearchOutcome>({ rows: [], error: null });
     }
 
-    // The request body is exactly the two properties the screen knows: the text the user searched
-    // for and the scope they chose. `exactMatch` is left undefined because the navbar emits no such
-    // choice, and no other parameter is added to the call legacy made (Rule 1 clauses 2 and 3).
-    const params: GlobalSearchParams = { query: criteria.query, scope: criteria.scope };
+    // The request is exactly the two properties the screen knows: the text the user searched for and
+    // the scope they chose, which the query model carries as `resource` (AAP 0.7.2) and the service
+    // turns into the wire's `resource` parameter. `exactMatch` is left undefined because the navbar
+    // emits no such choice, and no other parameter is added to the call legacy made (Rule 1 clauses
+    // 2 and 3).
+    const params: GlobalSearchParams = { query: criteria.query, resource: criteria.scope };
 
     return this.searchService.search(params).pipe(
       map((results: readonly SearchResult[]): SearchOutcome => ({ rows: results, error: null })),

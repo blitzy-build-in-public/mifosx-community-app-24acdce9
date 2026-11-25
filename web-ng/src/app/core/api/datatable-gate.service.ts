@@ -219,6 +219,101 @@ export interface DataTableGateResult {
 }
 
 /**
+ * Whether a value is a non-null object whose members can be read by key.
+ *
+ * The checks answer, each row of it and each row's `status` arrive as `unknown`, so every member read
+ * below is guarded by this predicate instead of a cast: a value that is not a non-null object has no
+ * member the gate can read, and reaching into one anyway throws a `TypeError` out of a call whose
+ * failures are otherwise described (Rule 1 clause 4).
+ */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+/**
+ * The table names an answer to `GET /entityDatatableChecks?limit=-1` names for one client action, or
+ * `null` when the answer cannot be read.
+ *
+ * This is the whole of the legacy filter — `datatable.entity == entity && datatable.status.value ==
+ * status` over `response.pageItems`, then `_.pluck(..., 'datatableName')` at
+ * `app/scripts/controllers/client/ClientActionsController.js:27-30` — applied to an answer whose shape
+ * is Fineract's to keep, so it returns the names the gate can honour and reports the ones it cannot:
+ * - a body that is not a non-null object, or whose `pageItems` is not an array, is `null`: no check can
+ *   be read out of it;
+ * - a row that is not a non-null object, or whose `entity` is not a string, is `null`: the gate cannot
+ *   tell what that row applies to, and skipping it could drop a check that does apply;
+ * - a row of another entity is skipped on its `entity` alone, with no other member of it read, exactly
+ *   as legacy's filter drops it;
+ * - a client row whose `status` is not an object, or whose `status.value` is not a string, is `null`:
+ *   the comparison the gate exists for cannot be made;
+ * - a client row whose `status.value` is another status is skipped, as legacy skips it;
+ * - a client row that names no table — no `datatableName`, an empty one, or one that is not a string —
+ *   is `null`, because a check whose table cannot be read is not a check that passed.
+ *
+ * `noPropertyAccessFromIndexSignature` is on, so an index-signature member is read in brackets, and
+ * `Array.isArray` narrows to `any[]`, so the rows are re-typed as `unknown` before any of them is read
+ * (Rule 1 clause 4).
+ *
+ * @param answer the checks answer as it arrived, before any member of it is trusted.
+ * @param status the check status the action gates on, from {@link CLIENT_ACTION_CHECK_STATUS}.
+ * @returns the `datatableName` of every applicable check, in the order the server listed them — `[]`
+ * when no check applies — or `null` when the answer cannot be read.
+ */
+function applicableTableNames(
+  answer: unknown,
+  status: ClientCheckStatus,
+): readonly string[] | null {
+  if (!isRecord(answer)) {
+    return null;
+  }
+
+  const pageItems: unknown = answer['pageItems'];
+
+  if (!Array.isArray(pageItems)) {
+    return null;
+  }
+
+  const rows: readonly unknown[] = pageItems;
+  const tables: string[] = [];
+
+  for (const row of rows) {
+    if (!isRecord(row)) {
+      return null;
+    }
+
+    const entity: unknown = row['entity'];
+
+    if (typeof entity !== 'string') {
+      return null;
+    }
+
+    if (entity !== CLIENT_ENTITY_NAME) {
+      continue;
+    }
+
+    const checkStatus: unknown = row['status'];
+
+    if (!isRecord(checkStatus) || typeof checkStatus['value'] !== 'string') {
+      return null;
+    }
+
+    if (checkStatus['value'] !== status) {
+      continue;
+    }
+
+    const datatableName: unknown = row['datatableName'];
+
+    if (typeof datatableName !== 'string' || datatableName.length === 0) {
+      return null;
+    }
+
+    tables.push(datatableName);
+  }
+
+  return tables;
+}
+
+/**
  * The datatable gate every client lifecycle action passes through before it posts: the two-call
  * sequence legacy runs in `ClientActionsController` (AAP 0.3.4 claim 13; AAP 0.7.3 row "Client
  * actions: datatable gate"; AAP 0.4.4 decision 6 — "the datatable gate runs before each client action
@@ -232,10 +327,19 @@ export interface DataTableGateResult {
  * the first has answered, because the list of tables to read comes out of that answer, and the results
  * are emitted in the order the server listed the checks.
  *
- * **A gate, not a validator.** This service reports what the checks and their tables returned; it does
- * not decide whether an action may proceed. `features/clients/client-actions/**` is the caller that
- * blocks a lifecycle action when the gate fails or reports a table it must not pass, exactly as the
- * legacy controller only continues once its checks are in hand.
+ * **A gate, not a validator.** This service returns what the checks and their tables returned and no
+ * verdict: nothing in its answer stops an action. `features/clients/client-actions/**` is the caller,
+ * and it awaits the two legacy calls through `firstValueFrom` so the gate has completed before it
+ * renders the action form and reads the reason list that form needs
+ * (`features/clients/client-actions/client-actions.component.ts`, its screen load), discards the
+ * results the gate emitted, and stops the screen with the failure's own message when the gate fails —
+ * a call that failed, or an answer this service could not read.
+ * An answer naming no applicable check emits `[]`, an empty gate, and the caller proceeds — exactly as
+ * the legacy controller continues once its filtered check list comes back empty, that list only filling
+ * the datatable form rendered below it (`app/scripts/controllers/client/ClientActionsController.js:26-33`).
+ * A caller that had to block an action on a table that holds rows would decide that from the
+ * {@link DataTableGateResult} envelopes handed back untouched here; no such rule exists in legacy or in
+ * the plan (AAP 0.10.5 registers no such difference), so none is implemented.
  *
  * **Nothing is added to the legacy calls.** No pagination, offset, search text, caching, retry,
  * debounce, memoisation or default row set: `limit=-1` and `genericResultSet=true` are the two
@@ -283,6 +387,13 @@ export class DataTableGateService {
    * @throws through the returned observable — never synchronously — when the action has no mapped check
    * status, with no request issued. An unmapped action must fail rather than read nothing and report a
    * gate that passed.
+   * @throws through the returned observable when the checks answer cannot be read: a body that is not the
+   * paged envelope, a row that is not an object or names no entity, a client row whose `status` is not
+   * the Fineract enum the comparison needs, or a client row that names no table. Such an answer fails
+   * with one described, displayable message — no client, table or tenant datum in it, because the
+   * caller renders a failure's own message verbatim (AAP 0.14.2; Rule 1 clause 9 keeps credentials out
+   * of any output) — and issues no datatable request. It is never treated as an empty gate: a gate that
+   * reports a pass because it could not read its own answer is the one outcome an action must never see.
    */
   checkClientActionGate(
     clientId: number | string,
@@ -309,15 +420,24 @@ export class DataTableGateService {
       })
       .pipe(
         switchMap((response: EntityDatatableCheckPage) => {
-          const applicable = response.pageItems.filter(
-            (check: EntityDatatableCheck) =>
-              check.entity === CLIENT_ENTITY_NAME && check.status.value === status,
-          );
+          const tables = applicableTableNames(response, status);
+
+          // An answer the gate cannot read is not an empty gate: it fails with one described sentence
+          // rather than the `TypeError` wording an unguarded member read produces, because the caller
+          // puts a failure's own message on screen (AAP 0.14.1 "errors are values"; AAP 0.14.2).
+          if (tables === null) {
+            return throwError(
+              () =>
+                new Error(
+                  'This action cannot be prepared because its data checks could not be read; reload the page and try again.',
+                ),
+            );
+          }
 
           // No applicable check means nothing to read. Emitting the empty array explicitly, rather
           // than leaving forkJoin over an empty array to complete without a value, keeps the output
           // deterministic and issues no datatable request.
-          if (applicable.length === 0) {
+          if (tables.length === 0) {
             return of<DataTableGateResult[]>([]);
           }
 
@@ -326,16 +446,15 @@ export class DataTableGateService {
           const genericResultSet = new HttpParams().set('genericResultSet', true);
 
           return forkJoin(
-            applicable.map((check: EntityDatatableCheck) =>
+            tables.map((table: string) =>
               this.http
-                .get<DataTableRowSet>(
-                  this.appConfig.apiUrl('datatables/' + check.datatableName + '/' + clientId),
-                  { params: genericResultSet },
-                )
+                .get<DataTableRowSet>(this.appConfig.apiUrl('datatables/' + table + '/' + clientId), {
+                  params: genericResultSet,
+                })
                 .pipe(
                   map(
                     (resultSet: DataTableRowSet): DataTableGateResult => ({
-                      table: check.datatableName,
+                      table,
                       resultSet,
                     }),
                   ),

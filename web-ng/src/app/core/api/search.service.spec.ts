@@ -154,9 +154,13 @@ const IDENTIFIER_ROW: SearchResult = {
 /** The heterogeneous rows one `GET /search` answers with, in the order the server returned them. */
 const ROWS: readonly SearchResult[] = [CLIENT_ROW, LOAN_ROW, IDENTIFIER_ROW];
 
-/** The `GET /search/template` answer the search control reads its permitted resources from. */
+/**
+ * The `GET /search/template` answer as the fork sends it: the ad-hoc query template's loan-product
+ * and office options, one plain row of each.
+ */
 const SEARCH_TEMPLATE: SearchTemplate = {
-  allowedSearchResources: ['clients', 'clientIdentifiers', 'loans'],
+  loanProducts: [{ id: 1, name: 'Parity Loan' }],
+  offices: [{ id: 1, name: 'Head Office' }],
 };
 
 describe('SearchService', () => {
@@ -190,7 +194,7 @@ describe('SearchService', () => {
   for (const { scope, resource } of SCOPE_CASES) {
     it(`searches the ${scope} scope with the resource value legacy sends`, () => {
       const received: SearchResult[][] = [];
-      const params: GlobalSearchParams = { query: QUERY, scope };
+      const params: GlobalSearchParams = { query: QUERY, resource: scope };
 
       service.search(params).subscribe((rows) => received.push(rows));
 
@@ -224,7 +228,7 @@ describe('SearchService', () => {
 
   for (const { label, exactMatch, sent } of EXACT_MATCH_CASES) {
     it(`${label}`, () => {
-      service.search({ query: QUERY, scope: 'clients', exactMatch }).subscribe();
+      service.search({ query: QUERY, resource: 'clients', exactMatch }).subscribe();
 
       const request = httpMock.expectOne(isRequest('GET', searchUrl(SEARCH_PATH)));
 
@@ -251,7 +255,7 @@ describe('SearchService', () => {
   it('emits an empty array for a search that matched nothing, without inventing a row', () => {
     const received: SearchResult[][] = [];
 
-    service.search({ query: 'No Such Client', scope: 'all' }).subscribe((rows) => received.push(rows));
+    service.search({ query: 'No Such Client', resource: 'all' }).subscribe((rows) => received.push(rows));
 
     const request = httpMock.expectOne(isRequest('GET', searchUrl(SEARCH_PATH)));
 
@@ -278,18 +282,18 @@ describe('SearchService', () => {
 
     request.flush(SEARCH_TEMPLATE);
 
-    // Returned as received, with no defaulting or reshaping of the permitted resources (Rule 1
-    // clause 3).
+    // Returned as received, with no defaulting or reshaping of either option list (Rule 1 clause 3).
     expect(received).toEqual([SEARCH_TEMPLATE]);
-    expect(received[0]?.allowedSearchResources).toEqual([
-      'clients',
-      'clientIdentifiers',
-      'loans',
-    ]);
+    expect(received[0]?.loanProducts).toEqual([{ id: 1, name: 'Parity Loan' }]);
+    expect(received[0]?.offices).toEqual([{ id: 1, name: 'Head Office' }]);
+
+    // The answer carries the ad-hoc query template's two option lists and nothing else: no list of
+    // searchable resources, which the endpoint never sends (AAP 0.7.3 row "Shell: global search").
+    expect(Object.keys(received[0] ?? {}).sort()).toEqual(['loanProducts', 'offices']);
   });
 
   it('sets no authorization and no tenant header, because both belong to the HTTP interceptor', () => {
-    service.search({ query: QUERY, scope: 'clients' }).subscribe();
+    service.search({ query: QUERY, resource: 'clients' }).subscribe();
 
     const request = httpMock.expectOne(isRequest('GET', searchUrl(SEARCH_PATH)));
     const names = request.request.headers.keys().map((name) => name.toLowerCase());
@@ -305,7 +309,7 @@ describe('SearchService', () => {
     const received: SearchResult[][] = [];
     const failures: unknown[] = [];
 
-    service.search({ query: QUERY, scope: 'loans' }).subscribe({
+    service.search({ query: QUERY, resource: 'loans' }).subscribe({
       next: (rows) => received.push(rows),
       error: (failure: unknown) => failures.push(failure),
     });
@@ -324,8 +328,8 @@ describe('SearchService', () => {
   });
 
   it('re-reads the result set on every call, because a search is never cached', () => {
-    service.search({ query: QUERY, scope: 'clients' }).subscribe();
-    service.search({ query: QUERY, scope: 'clients' }).subscribe();
+    service.search({ query: QUERY, resource: 'clients' }).subscribe();
+    service.search({ query: QUERY, resource: 'clients' }).subscribe();
 
     const requests = httpMock.match(isRequest('GET', searchUrl(SEARCH_PATH)));
 

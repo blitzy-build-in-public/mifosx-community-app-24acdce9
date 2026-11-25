@@ -154,8 +154,8 @@ describe('SearchResultsComponent', () => {
 
   it('issues exactly one search for the initial navigation, with exactly two parameters', () => {
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toEqual({ query: 'Parity', scope: 'all' });
-    expect(Object.keys(calls[0]).sort()).toEqual(['query', 'scope']);
+    expect(calls[0]).toEqual({ query: 'Parity', resource: 'all' });
+    expect(Object.keys(calls[0]).sort()).toEqual(['query', 'resource']);
     expect(component.query()).toBe('Parity');
     expect(component.scope()).toBe('all');
   });
@@ -179,13 +179,13 @@ describe('SearchResultsComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
 
-    expect(calls.at(-1)?.scope).toBe('all');
+    expect(calls.at(-1)?.resource).toBe('all');
 
     queryParams.next(convertToParamMap({ scope: 'clients' }));
     fixture.detectChanges();
     await fixture.whenStable();
 
-    expect(calls.at(-1)?.scope).toBe('clients');
+    expect(calls.at(-1)?.resource).toBe('clients');
     expect(calls).toHaveLength(3);
   });
 

@@ -26,8 +26,14 @@ export interface GlobalSearchParams {
   /** The text the user searched for, sent verbatim as `query`. */
   readonly query: string;
 
-  /** The scope the user selected, translated to the `resource` parameter by {@link toResourceParam}. */
-  readonly scope: SearchScope;
+  /**
+   * The selected scope, carried under the member name AAP 0.7.2 fixes for this model: the member is
+   * the resource to search. Its value is one of {@link SearchScope}'s three, and
+   * {@link toResourceParam} is the single place that turns it into the value of the wire's
+   * `resource` parameter — the two names differ because the control offers a scope while the
+   * endpoint takes a resource list.
+   */
+  readonly resource: SearchScope;
 
   /**
    * The optional `exactMatch` flag. Left undefined, nothing is sent; an explicit `false` is still
@@ -139,18 +145,41 @@ export function toResourceParam(scope: SearchScope): string {
 }
 
 /**
- * A partial projection of the `GET /search/template` payload (AAP 0.7.3 row "Shell: global
- * search"), following the precedent `core/auth`'s `SessionUserResponse` sets for a payload larger
- * than the screen needs.
+ * One option of the `GET /search/template` answer: a loan product or an office the ad-hoc query
+ * template offers for one of its two selects (AAP 0.7.3 row "Shell: global search").
  *
- * Only the optional list of permitted search resources is declared. The endpoint's remaining
- * fields are not modelled, because the in-scope search control offers exactly the three
- * {@link SearchScope} values and reads nothing else from this answer; a field invented here would
- * be a field no screen could prove correct (Rule 1 clause 3).
+ * Narrowed to the `id`/`name` pair a select reads, following the precedent `core/auth`'s
+ * `SessionUserResponse` sets for a payload larger than the screen needs: the server's loan-product
+ * and office rows carry dozens of fields of their own, which belong to their own resources rather
+ * than to this answer.
+ */
+export interface SearchTemplateOption {
+  /** The option's identifier, as the ad-hoc query form sends it. */
+  readonly id: number;
+
+  /** The option's display name, as the server sends it and a select renders it. */
+  readonly name: string;
+}
+
+/**
+ * The `GET /search/template` answer (AAP 0.7.3 row "Shell: global search"): Fineract's **ad-hoc
+ * query template**, the payload whose two option lists populate that query screen's loan-product and
+ * office selects. It is not a list of searchable resources — the endpoint returns no such thing, and
+ * the set the global search control offers is the client-side {@link SearchScope} union, fixed at
+ * clients and loans (AAP 0.10.5 item 9), never derived from this answer.
+ *
+ * Both lists are declared as the fork's `AdHocSearchQueryData.template` builds them, each element
+ * narrowed by {@link SearchTemplateOption}. The five matched-result members that the same payload
+ * class carries (`officeName`, `loanProductName`, `count`, `loanOutStanding`, `percentage`) are
+ * deliberately not modelled: they are `null` on a template read, so a declaration of them would be
+ * a member no screen could prove the shape of (Rule 1 clause 3).
  */
 export interface SearchTemplate {
-  /** The resources the server permits searching, when it declares them. */
-  readonly allowedSearchResources?: readonly string[];
+  /** The loan products the ad-hoc query may be filtered by, when the server offers any. */
+  readonly loanProducts?: readonly SearchTemplateOption[];
+
+  /** The offices the ad-hoc query may be filtered by, when the server offers any. */
+  readonly offices?: readonly SearchTemplateOption[];
 }
 
 /**
@@ -183,13 +212,14 @@ export class SearchService {
    * method neither filters nor sorts them (Rule 1 clause 3). A failure propagates unchanged so the
    * interceptor can map it into the message the screen shows (AAP 0.4.2).
    *
-   * @param params The search text and the selected scope, with the optional exact-match flag.
+   * @param params The search text, the selected scope in its `resource` member, and the optional
+   * exact-match flag.
    * @returns the matching rows, one element per result.
    */
   search(params: GlobalSearchParams): Observable<SearchResult[]> {
     let queryParams: HttpParams = new HttpParams()
       .set('query', params.query)
-      .set('resource', toResourceParam(params.scope));
+      .set('resource', toResourceParam(params.resource));
 
     // `!== undefined`, not truthiness: legacy sends `exactMatch=false` when the user turned exact
     // matching off, and omits the parameter when the flag was never set.
@@ -204,10 +234,24 @@ export class SearchService {
    * Reads the search template: `GET /search/template`, with no parameters (AAP 0.7.3 row
    * "Shell: global search", AAP 0.10.4's template-coverage gate).
    *
-   * The answer is a partial projection of the server's payload — see {@link SearchTemplate} — and
-   * is returned as received, with no defaulting or reshaping (Rule 1 clause 3).
+   * The answer is Fineract's **ad-hoc query template** — the loan-product and office option lists
+   * that query screen's two selects are built from — and not a list of searchable resources; see
+   * {@link SearchTemplate}. It is returned as received, with no defaulting or reshaping (Rule 1
+   * clause 3).
    *
-   * @returns the search template as the server sends it.
+   * **Why no in-scope screen calls this method** (AAP 0.10.3 criterion 4, AAP 0.12). Its only
+   * legacy consumer is the ad-hoc query search screen
+   * (`app/scripts/controllers/main/AdHocQuerySearchController.js`), which this migration leaves to
+   * the legacy application (AAP 0.9.2); the shell search that is in scope
+   * (`app/scripts/controllers/main/SearchController.js`) never requests it, issuing `GET /search`
+   * alone. A screen or initialiser here that read this template would therefore add a request
+   * legacy never makes, which the parity criterion records as a request difference in the search
+   * workflow — the same reason the tenant business date is read by the harness and not by the
+   * application (AAP 0.12). The method stays because the service must own the app's equivalent of
+   * legacy's template call (AAP 0.7.1, AAP 0.10.3 criterion 6), and its contract spec asserts the
+   * parameterless request it composes.
+   *
+   * @returns the ad-hoc query template as the server sends it.
    */
   template(): Observable<SearchTemplate> {
     return this.http.get<SearchTemplate>(this.config.apiUrl('search/template'));

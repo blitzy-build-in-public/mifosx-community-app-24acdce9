@@ -38,23 +38,30 @@
  */
 import type { Locator, Page } from '@playwright/test';
 
-import { FINERACT_URL, NEXT_URL, TENANT_ID } from '../../seed/fixtures.js';
+import { FINERACT_URL, NEXT_URL, TENANT_ID } from '../../seed/fixtures';
 
 /**
  * One `localStorage` entry, described by its key and by the presence and type of the three fields the
  * session carries (AAP 0.3.4 claim 9).
  *
  * Shape only, by design: the entry's values stay in the browser and never reach a test report
- * (Rule 1 clause 9). `web-ng/e2e/pages/legacy/login.page.ts` declares the baseline application's
- * reader of the same entry, so one spec text covers both sides of the comparison.
+ * (Rule 1 clause 9). `web-ng/e2e/pages/legacy/login.page.ts` declares the counterpart for the baseline
+ * application, field for field: the same key, the same presence flags, the same four `userIdType`
+ * readings, and `readSessionEntries()` returning the same array type from both sides. That shared
+ * contract is what lets one spec text compare the two applications' session entries with no mapping
+ * of either side's types.
  */
 export interface SessionEntrySummary {
   /** The `localStorage` key exactly as the application wrote it. */
   readonly key: string;
   /** Whether the stored value carries a `userId` field. */
   readonly hasUserId: boolean;
-  /** `typeof` the stored `userId`, with `'absent'` for a missing or null field. */
-  readonly userIdType: 'number' | 'string' | 'absent';
+  /**
+   * `typeof` the stored `userId`: `'number'` or `'string'` when it holds one, `'missing'` when the
+   * field is undefined or null, and `'other'` for any other present type — a boolean, an array, an
+   * object.
+   */
+  readonly userIdType: 'number' | 'string' | 'missing' | 'other';
   /** Whether the stored value carries an `authenticationKey` field. */
   readonly hasAuthenticationKey: boolean;
   /** Whether that field holds a non-empty string — the form a usable key has. */
@@ -63,6 +70,21 @@ export interface SessionEntrySummary {
   readonly hasUserPermissions: boolean;
   /** Whether that field holds an array, which is what the permission gate iterates. */
   readonly userPermissionsIsArray: boolean;
+}
+
+/**
+ * One option of the login screen's language switcher (`LanguageSwitcher`, AAP 0.2.3; design node `1:5`
+ * shows the row "Change language:" plus its control).
+ *
+ * `web-ng/e2e/pages/legacy/login.page.ts` declares the counterpart for the baseline application, whose
+ * `readLanguages()` returns the same `{ value, label }` pairs, so one spec text compares the two
+ * switchers with no mapping of either side's types.
+ */
+export interface LanguageOptionSummary {
+  /** The language code the option submits — the code `selectLanguage()` takes. */
+  readonly value: string;
+  /** The text the option shows, trimmed. */
+  readonly label: string;
 }
 
 /** Root of the login screen: every other locator in this file is scoped to it. */
@@ -142,18 +164,18 @@ const LANDING_TIMEOUT_MS = 30_000;
 const USER_MENU_TIMEOUT_MS = 5_000;
 
 /**
- * Runs inside the page: every `<option>` value of the language switcher, in document order, with the
- * option's visible text standing in for an empty value. A locator that resolved to something other
- * than a `<select>` yields `[]` rather than a screen-reader dump of some other control.
+ * Runs inside the page: every `<option>` of the language switcher as `{ value, label }`, both trimmed,
+ * in document order. A locator that resolved to something other than a `<select>` yields `[]` rather
+ * than a screen-reader dump of some other control.
  */
-function readLanguageValues(element: HTMLElement): string[] {
+function readLanguageOptions(element: HTMLElement): LanguageOptionSummary[] {
   if (!(element instanceof HTMLSelectElement)) {
     return [];
   }
-  return Array.from(element.options).map((option) => {
-    const value = option.value.trim();
-    return value === '' ? (option.textContent ?? '').trim() : value;
-  });
+  return Array.from(element.options).map((option) => ({
+    value: option.value.trim(),
+    label: (option.textContent ?? '').trim(),
+  }));
 }
 
 /**
@@ -162,11 +184,12 @@ function readLanguageValues(element: HTMLElement): string[] {
  * The stored value is unmodelled browser storage — the application writes the legacy session object
  * and other tools may write unrelated keys — so it is parsed into `unknown` and narrowed field by
  * field (Rule 1 clause 4). A value that is not a JSON object yields an entry whose flags are all
- * false and whose `userIdType` is `'absent'`, which is the honest reading: no session fields live
+ * false and whose `userIdType` is `'missing'`, which is the honest reading: no session fields live
  * under that key. Only key names and booleans leave the page (Rule 1 clause 9).
  *
  * It declares no inner functions, because a transpiler that preserves function names would emit a
- * helper call into the serialised source that does not exist in the page.
+ * helper call into the serialised source that does not exist in the page: `userIdType` is therefore
+ * classified inline, and by the same four readings the legacy sibling classifies it by.
  */
 function summariseSessionEntries(): SessionEntrySummary[] {
   return Object.keys(window.localStorage).map((key): SessionEntrySummary => {
@@ -183,8 +206,10 @@ function summariseSessionEntries(): SessionEntrySummary[] {
     const userId = record === null ? undefined : record['userId'];
     const authenticationKey = record === null ? undefined : record['authenticationKey'];
     const userPermissions = record === null ? undefined : record['userPermissions'];
-    let userIdType: SessionEntrySummary['userIdType'] = 'absent';
-    if (typeof userId === 'number') {
+    let userIdType: SessionEntrySummary['userIdType'] = 'other';
+    if (userId === undefined || userId === null) {
+      userIdType = 'missing';
+    } else if (typeof userId === 'number') {
       userIdType = 'number';
     } else if (typeof userId === 'string') {
       userIdType = 'string';
@@ -208,6 +233,14 @@ function summariseSessionEntries(): SessionEntrySummary[] {
  *
  * Everything here is a locator or a typed reader — no assertion, and no filtering of what the screen
  * renders: differences belong in the parity report (AAP 0.10.5), not in this page object.
+ *
+ * **Shared reader contract.** `web-ng/e2e/pages/legacy/login.page.ts` declares the counterpart that
+ * drives the baseline application's same screen, and the two page objects agree on every shape a spec
+ * helper shared by both projects consumes: `readSessionEntries()` returns a `SessionEntrySummary[]`
+ * on either side, with the same four `userIdType` readings; `readLanguages()` returns the same
+ * `{ value, label }` pairs; and `readFormError()` returns `''` — never `null` — when no error is shown,
+ * and the trimmed message otherwise. What differs is only what the parity report exists to measure:
+ * the entry URL, the selectors, and the wait each application's landing needs.
  */
 export class LoginPage {
   constructor(private readonly page: Page) {}
@@ -236,9 +269,16 @@ export class LoginPage {
     await this.languageSelect().selectOption({ value: code });
   }
 
-  /** The language codes the switcher offers, in document order (AAP 0.2.3 `LanguageSwitcher`). */
-  async readLanguages(): Promise<readonly string[]> {
-    return this.languageSelect().evaluate(readLanguageValues);
+  /**
+   * The language switcher's options in document order (AAP 0.2.3 `LanguageSwitcher`). Each option's
+   * `value` is the language code the control submits — the code {@link selectLanguage} takes — and its
+   * `label` is the text the option shows, which this screen renders as that same code.
+   *
+   * `web-ng/e2e/pages/legacy/login.page.ts` returns the same `{ value, label }` pairs from the baseline
+   * switcher, so one spec text compares the two lists with no mapping of either side's types.
+   */
+  async readLanguages(): Promise<LanguageOptionSummary[]> {
+    return this.languageSelect().evaluate(readLanguageOptions);
   }
 
   /**
@@ -296,21 +336,23 @@ export class LoginPage {
   }
 
   /**
-   * The login form's error text, trimmed, or `null` when no failure is shown — the rejected-login path
+   * The login form's error text, trimmed, or `''` when no failure is shown — the rejected-login path
    * of AAP 0.10.1 W1, and the surface a Fineract validation message reaches on this screen.
    *
    * The text is returned exactly as rendered: no prefix, no capitalisation, no translation and no
    * truncation, because the parity comparison holds it against the message the backend sent (AAP 0.7.4,
    * AAP 0.10.2). The region is scoped to the login element so the application's global notification
-   * host can never be read in its place.
+   * host can never be read in its place. `''` is the ordinary answer — the design draws no error region
+   * at rest (AAP 0.2.1 Step 1) — and also the answer a banner carrying blank text gives;
+   * `web-ng/e2e/pages/legacy/login.page.ts` returns `''` for both, so one spec text can compare the two
+   * applications' failure paths.
    */
-  async readFormError(): Promise<string | null> {
+  async readFormError(): Promise<string> {
     const alert = this.root().locator(FORM_ERROR_SELECTOR).first();
     if ((await alert.count()) === 0) {
-      return null;
+      return '';
     }
-    const message = ((await alert.textContent()) ?? '').trim();
-    return message === '' ? null : message;
+    return ((await alert.textContent()) ?? '').trim();
   }
 
   /**
@@ -355,7 +397,7 @@ export class LoginPage {
    * keys is the parity report's job, not this reader's. The authentication-key value, the parsed
    * object and the array contents stay in the browser (Rule 1 clause 9).
    */
-  async readSessionEntries(): Promise<readonly SessionEntrySummary[]> {
+  async readSessionEntries(): Promise<SessionEntrySummary[]> {
     return this.page.evaluate(summariseSessionEntries);
   }
 

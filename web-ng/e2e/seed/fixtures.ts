@@ -19,11 +19,13 @@
  *   `readBusinessDate()`, the tenant's business date read over the API, never from the browser
  *   clock (Rule 1 clause 2; AAP 0.10.1, "Run date").
  *
- * It imports `request` from the already-pinned `@playwright/test` and nothing else: no new
- * dependency, no application model from `web-ng/src`, and no Node builtin (Rule 1 clauses 4 and 7).
+ * It imports `request` and the `APIResponse` type from the already-pinned `@playwright/test` and
+ * nothing else: no new dependency, no application model from `web-ng/src`, and no Node builtin
+ * (Rule 1 clauses 4 and 7).
  */
 
 import { request } from '@playwright/test';
+import type { APIResponse } from '@playwright/test';
 
 /**
  * Reads the first non-blank value among a setting's accepted variable names, falling back when none
@@ -363,6 +365,59 @@ export function parseBusinessDate(body: unknown, source = 'the business-date res
 }
 
 /**
+ * A request this module made that produced no usable answer: no HTTP response at all (the connection
+ * was refused, the TLS handshake failed or the call timed out), or a response Fineract refused.
+ *
+ * It carries the resource path below {@link API_PATH} and the HTTP status — `0` when no response
+ * arrived — which is what a caller needs to say what failed. It never carries a request header, the
+ * authentication key, a password or Playwright's own failure text: Playwright reports a failed API
+ * call together with the request's headers, and those headers carry the credential (Rule 1
+ * clause 9). `capture/state-snapshot.ts` translates it into its own `StateSnapshotError`, so a failed
+ * read of this module reaches a report or a log as a path and a status and nothing else.
+ */
+export class FixtureRequestError extends Error {
+  /** Resource path below {@link API_PATH}, e.g. `/businessdate/BUSINESS_DATE` — a path, never a host. */
+  readonly path: string;
+  /** HTTP status Fineract answered with, or `0` when no response arrived at all. */
+  readonly status: number;
+
+  constructor(path: string, status: number, message: string) {
+    super(message);
+    this.name = 'FixtureRequestError';
+    this.path = path;
+    this.status = status;
+  }
+}
+
+/** Resource path of the credential exchange, `POST /authentication` — workflow W1's first call. */
+const AUTHENTICATION_PATH = '/authentication';
+
+/** Resource path of the tenant business-date read, `GET /businessdate/BUSINESS_DATE` — harness-only
+ * because the application reads no business date (AAP 0.9.4 row 9; AAP 0.10.4, AAP 0.10.5 item 15). */
+const BUSINESS_DATE_PATH = '/businessdate/BUSINESS_DATE';
+
+/**
+ * The {@link FixtureRequestError} a transport-level failure raises: no HTTP response arrived, so the
+ * status is `0`.
+ *
+ * The caught error is deliberately neither echoed nor chained as `cause`: Playwright reports a failed
+ * API call together with the request's headers, which carry the credential (Rule 1 clause 9). Only the
+ * method, the resource path and the URL reach the message, and none of the three holds a credential.
+ *
+ * @param method HTTP method of the call that failed.
+ * @param path Resource path below {@link API_PATH} the call addressed.
+ * @param url Absolute URL the call addressed.
+ */
+function transportFailure(method: 'GET' | 'POST', path: string, url: string): FixtureRequestError {
+  return new FixtureRequestError(
+    path,
+    0,
+    `${method} ${url} produced no HTTP response: the connection was refused, the TLS handshake ` +
+      'failed or the call timed out.',
+  );
+}
+
+/**
  * The headers every Fineract request carries: the basic-auth credential, the tenant, and JSON in
  * both directions (AAP 0.7.3, "Authentication and headers"). Consumed by {@link readBusinessDate},
  * the seed script, the state snapshot and every page object's API assertions.
@@ -388,26 +443,38 @@ export function apiHeaders(authenticationKey: string): Record<string, string> {
  * capture side's job). The request context accepts the backend's self-signed certificate, which is
  * the reason Playwright's API request context is used rather than a bare `fetch`.
  *
- * @throws When credentials are missing ({@link readCredentials}), when Fineract refuses them, or
- * when it answers without the key. The message names the URL and the status.
+ * @throws {@link FixtureRequestError} when the call produces no HTTP response at all, or when
+ * Fineract refuses it: the error then carries the resource path and the status, and a transport
+ * failure names the endpoint only. `Error` when credentials are missing ({@link readCredentials}) or
+ * when the answer carries no key. Playwright's own failure text is never echoed, because it quotes
+ * the request headers (Rule 1 clause 9).
  */
 export async function authenticate(): Promise<string> {
   const credentials = readCredentials();
-  const url = apiUrl('/authentication');
+  const url = apiUrl(AUTHENTICATION_PATH);
   const context = await request.newContext({ ignoreHTTPSErrors: true });
   try {
-    const response = await context.post<unknown>(url, {
-      data: { username: credentials.username, password: credentials.password },
-      headers: {
-        [TENANT_HEADER]: TENANT_ID,
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-    });
+    let response: APIResponse;
+    try {
+      response = await context.post<unknown>(url, {
+        data: { username: credentials.username, password: credentials.password },
+        headers: {
+          [TENANT_HEADER]: TENANT_ID,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+      });
+    } catch {
+      throw transportFailure('POST', AUTHENTICATION_PATH, url);
+    }
     const status = response.status();
     const text = await response.text();
     if (!response.ok()) {
-      throw new Error(`POST ${url} failed with HTTP ${status}. Fineract answered: ${text.slice(0, 500)}`);
+      throw new FixtureRequestError(
+        AUTHENTICATION_PATH,
+        status,
+        `POST ${url} failed with HTTP ${status}. Fineract answered: ${text.slice(0, 500)}`,
+      );
     }
     const source = `POST ${url} (HTTP ${status})`;
     return parseAuthenticationKey(readJsonBody(text, source), source);
@@ -456,10 +523,13 @@ export function resetBusinessDateCache(): void {
  * rather than paying for a second `POST /authentication`; that also keeps the run's only key the one
  * the caller registered for masking (Rule 1 clause 9). Omitted or empty, this function authenticates
  * for itself, which is what a caller holding no key relies on.
- * @throws When credentials are missing, when Fineract refuses the call or answers non-2xx, or when
- * the payload is not the documented `{description, type, date: [year, month, day]}`. It never falls
- * back to the browser clock: a harness that invented a run date would date every workflow from the
- * wrong day, which is exactly what Rule 1 clause 2 forbids.
+ * @throws {@link FixtureRequestError} when the call produces no HTTP response at all, or when
+ * Fineract refuses it or answers non-2xx: the error carries the resource path and the status, and a
+ * transport failure names the endpoint only, never the request headers Playwright would quote
+ * (Rule 1 clause 9). `Error` when credentials are missing or the payload is not the documented
+ * `{description, type, date: [year, month, day]}`. It never falls back to the browser clock: a
+ * harness that invented a run date would date every workflow from the wrong day, which is exactly
+ * what Rule 1 clause 2 forbids.
  */
 export async function readBusinessDate(authenticationKey?: string): Promise<Date> {
   if (cachedBusinessDate !== null) {
@@ -471,14 +541,23 @@ export async function readBusinessDate(authenticationKey?: string): Promise<Date
     authenticationKey === undefined || authenticationKey.length === 0
       ? await authenticate()
       : authenticationKey;
-  const url = apiUrl('/businessdate/BUSINESS_DATE');
+  const url = apiUrl(BUSINESS_DATE_PATH);
   const context = await request.newContext({ ignoreHTTPSErrors: true });
   try {
-    const response = await context.get<unknown>(url, { headers: apiHeaders(key) });
+    let response: APIResponse;
+    try {
+      response = await context.get<unknown>(url, { headers: apiHeaders(key) });
+    } catch {
+      throw transportFailure('GET', BUSINESS_DATE_PATH, url);
+    }
     const status = response.status();
     const text = await response.text();
     if (!response.ok()) {
-      throw new Error(`GET ${url} failed with HTTP ${status}. Fineract answered: ${text.slice(0, 500)}`);
+      throw new FixtureRequestError(
+        BUSINESS_DATE_PATH,
+        status,
+        `GET ${url} failed with HTTP ${status}. Fineract answered: ${text.slice(0, 500)}`,
+      );
     }
     const source = `GET ${url} (HTTP ${status})`;
     const businessDate = parseBusinessDate(readJsonBody(text, source), source);

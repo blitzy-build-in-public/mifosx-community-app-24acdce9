@@ -35,7 +35,10 @@
  * as the header set `apiHeaders()` builds, inside a request context that is disposed before this module
  * returns; the file holds reduced state alone. Errors name the resource path and the HTTP status and
  * nothing else, never a response body and never Playwright's own failure text, which appends the
- * request headers to the message.
+ * request headers to the message. That covers every read here, the run-date read included: a failure
+ * to read the tenant's business date is rethrown as a {@link StateSnapshotError} naming the
+ * business-date endpoint, so the seed module's own error — which knows nothing of this module's
+ * contract — never reaches a caller's log.
  *
  * It imports the already-pinned `@playwright/test` (its `request` fixture — the API context accepts the
  * local backend's self-signed certificate), two Node builtins, and two harness modules. It adds no
@@ -52,6 +55,7 @@ import {
   apiUrl,
   authenticate,
   dayOffset,
+  FixtureRequestError,
   formatDateOnly,
   parseFineractDate,
   readBusinessDate,
@@ -525,18 +529,62 @@ function optionalResourceId(value: number | undefined, name: string): number | u
 }
 
 /**
+ * Resource path of the tenant business-date read, `GET /businessdate/BUSINESS_DATE`. Harness-only: the
+ * application derives its form dates from the browser clock exactly as legacy does, so this endpoint
+ * belongs in `web-ng/tools/parity/harness-allowlist.json` and never in the application's allowlist
+ * (AAP 0.9.4 row 9; AAP 0.10.4; AAP 0.10.5 item 15).
+ */
+const BUSINESS_DATE_ENDPOINT = '/businessdate/BUSINESS_DATE';
+
+/**
  * The run date a snapshot offsets its dates against: the caller's when it supplied one, otherwise the
  * tenant's business date read from Fineract (Rule 1 clause 2; AAP 0.10.1, "Run date"). Copied, so a caller
  * cannot change a cached value through the returned object.
  *
+ * The read goes through the seed module, whose failure carries no credential of its own but also
+ * nothing of this module's contract, so it is translated into a {@link StateSnapshotError} here: the
+ * report writer and a failing spec log whatever this module throws, and the read is made with the
+ * session headers attached.
+ *
  * @param runDate Caller-supplied run date, or `undefined` to read the business date.
+ * @throws {@link StateSnapshotError} when the business date cannot be read, carrying the endpoint and
+ * the status — `0` when no response arrived at all; `Error` when a supplied `runDate` is not a valid
+ * `Date`.
  */
 async function resolveRunDate(runDate: Date | undefined): Promise<Date> {
-  const resolved = runDate === undefined ? await readBusinessDate() : new Date(runDate.getTime());
-  if (Number.isNaN(resolved.getTime())) {
-    throw new Error(`The run date must be a valid Date; received ${String(runDate)}.`);
+  if (runDate !== undefined) {
+    const supplied = new Date(runDate.getTime());
+    if (Number.isNaN(supplied.getTime())) {
+      throw new Error(`The run date must be a valid Date; received ${String(runDate)}.`);
+    }
+    return supplied;
   }
-  return resolved;
+  let businessDate: Date;
+  try {
+    businessDate = await readBusinessDate();
+  } catch (error) {
+    // The caught error is deliberately neither echoed nor chained as `cause`: readBusinessDate sends the
+    // session headers with its call, and Playwright reports a failed API call together with those
+    // headers, which carry the credential (Rule 1 clause 9). The endpoint and the status say what failed.
+    const status = error instanceof FixtureRequestError ? error.status : 0;
+    let what =
+      `GET ${BUSINESS_DATE_ENDPOINT} did not produce a usable business date: the read reported no HTTP ` +
+      'status, so either the harness credentials are missing or the answer is not the documented ' +
+      '`{description, type, date: [year, month, day]}` payload.';
+    if (error instanceof FixtureRequestError) {
+      what =
+        status === 0
+          ? `GET ${BUSINESS_DATE_ENDPOINT} produced no HTTP response: the connection was refused, the TLS handshake failed or the call timed out.`
+          : `GET ${BUSINESS_DATE_ENDPOINT} failed with HTTP ${status}.`;
+    }
+    throw new StateSnapshotError(
+      BUSINESS_DATE_ENDPOINT,
+      status,
+      `${what} The tenant's business date is the run date every snapshot date is offset against, ` +
+        'and the browser clock is never a substitute for it (Rule 1 clause 2).',
+    );
+  }
+  return businessDate;
 }
 
 /**
@@ -563,7 +611,9 @@ async function readClient(
  *
  * @param clientId Client to read.
  * @param runDate Run date to offset the activation date against; defaults to the tenant's business date.
- * @throws {@link StateSnapshotError} when a read fails, or `Error` when `runDate` is not a valid date.
+ * @throws {@link StateSnapshotError} when a read fails — the run-date read included, which carries the
+ * business-date endpoint and the status (`0` when no response arrived); `Error` when `runDate` is not a
+ * valid date.
  */
 export async function snapshotClient(clientId: number, runDate?: Date): Promise<ClientSnapshot> {
   const id = requireResourceId(clientId, 'clientId');
@@ -608,8 +658,11 @@ export async function snapshotSavings(savingsId: number): Promise<SavingsSnapsho
  * independent: a workflow that touched only a client writes a file holding `client` and nothing else.
  *
  * @param targets What to read and the metadata the file records.
- * @throws {@link StateSnapshotError} when a read fails; `Error` when no resource was targeted, when an
- * id is not a positive integer, when `workflow` is blank, or when `runDate` is not a valid date.
+ * @throws {@link StateSnapshotError} when a read fails — the run-date read included, whose message names
+ * the business-date endpoint and the status and never the request headers; `Error` when no resource was
+ * targeted, when an id is not a positive integer, when `workflow` is blank, or when `runDate` is not a
+ * valid date. A failure of the authentication `withContext` makes surfaces as the seed module's
+ * `FixtureRequestError`, which names `/authentication` and the status and nothing else either.
  */
 export async function captureState(targets: StateTargets): Promise<WrittenStateSnapshot> {
   const clientId = optionalResourceId(targets.clientId, 'clientId');
