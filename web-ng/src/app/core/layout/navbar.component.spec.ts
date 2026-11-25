@@ -23,12 +23,12 @@ import { NavbarComponent } from './navbar.component';
  *   search, the language switcher and the user menu labelled with the authenticated account name —
  *   and renders none of the out-of-scope chrome (the hamburger, the notification bell, the
  *   Accounting / Reports / Admin items and the left icon rail), which AAP 0.10.5 items 4 and 8 fix;
- * - the "Clients" destination follows the permission the clients route declares, appearing only
- *   once that permission is held;
+ * - the "Clients" destination follows the permission the clients route declares, appearing only once
+ *   that permission is held and for a super user holding `ALL_FUNCTIONS` as it does in legacy;
  * - the user menu's label is the account name the signed-in shell hands in through its `userName`
  *   input, and the session's own `GET /users/{id}` projection when it hands none;
  * - a search reported by the search control becomes a navigation to `/search/:query` carrying the
- *   scope and the exact-match flag, and searches nothing itself;
+ *   scope the user picked and the exact-match flag, and searches nothing itself;
  * - the language switcher changes the active translation without navigating, and the selector shows
  *   the language the service actually has active, including a switch made by another switcher;
  * - sign-out clears the session **before** it navigates, which is the order AAP 0.7.1 and the W1
@@ -48,6 +48,13 @@ import { NavbarComponent } from './navbar.component';
 
 /** The permission the clients route group declares, spelled out rather than imported from routes. */
 const READ_CLIENT = 'READ_CLIENT';
+
+/**
+ * The permission Fineract returns to a user who may do everything, spelled out rather than imported:
+ * the wildcard the legacy gate answers before it considers any other code
+ * (`app/scripts/controllers/main/MainController.js:104-127`; AAP 0.3.4 claim 12).
+ */
+const ALL_FUNCTIONS = 'ALL_FUNCTIONS';
 
 /** The account name a restore resolves, which is what the user menu must show. */
 const ACCOUNT_NAME = 'mifos';
@@ -107,7 +114,7 @@ class PermissionsStub implements Pick<PermissionsService, 'has'> {
       const negated = code.slice(1).trim();
       return negated.length > 0 && !this.granted().includes(negated);
     }
-    return this.granted().includes('ALL_FUNCTIONS') || this.granted().includes(code);
+    return this.granted().includes(ALL_FUNCTIONS) || this.granted().includes(code);
   }
 
   /** Replaces the granted list, as a login or a withdrawal does. */
@@ -214,6 +221,11 @@ describe('NavbarComponent', () => {
     // destination, because every screen behind them stays on the legacy application.
     expect(host().querySelector('.navbar-toggle')).toBeNull();
     expect(host().querySelector('.fa-bell')).toBeNull();
+    // The three destinations themselves, addressed the way a link would address them: text absence
+    // alone would miss a link whose label resolved to an empty string.
+    expect(
+      host().querySelectorAll('a[href*="accounting"], a[href*="reports"], a[href*="admin"]'),
+    ).toHaveLength(0);
     expect(text).not.toContain('Accounting');
     expect(text).not.toContain('Reports');
     expect(text).not.toContain('Admin');
@@ -229,6 +241,21 @@ describe('NavbarComponent', () => {
     expect(clientsItem().style.display).toBe('');
   });
 
+  it('shows the Clients destination to a super user holding ALL_FUNCTIONS', () => {
+    // The wildcard the legacy gate answers before it considers any other code, so a user who holds it
+    // reaches the one in-scope destination with `READ_CLIENT` absent from the list entirely (AAP 0.3.4
+    // claim 12). The item is hidden first, so what this measures is the wildcard's effect and not a
+    // gate that was open all along.
+    permissions.grant([]);
+    fixture.detectChanges();
+    expect(clientsItem().style.display).toBe('none');
+
+    permissions.grant([ALL_FUNCTIONS]);
+    fixture.detectChanges();
+    expect(clientsItem().style.display).toBe('');
+    expect(host().textContent).toContain('Clients');
+  });
+
   it('navigates to the search route with the selected scope and the exact-match flag when the search control reports a search', () => {
     const field = find<HTMLInputElement>('#search');
     field.value = 'ada okafor';
@@ -241,6 +268,24 @@ describe('NavbarComponent', () => {
     // (`app/scripts/controllers/main/MainController.js:208-217`).
     expect(navigate).toHaveBeenCalledWith(['/search', 'ada okafor'], {
       queryParams: { scope: 'all', exactMatch: false },
+    });
+  });
+
+  it('carries the scope the user picked in the selector beside the search text', () => {
+    // The scope travels from the control's own selector rather than from its default: the results
+    // screen turns it into legacy's `resource` parameter, so a navigation that lost it would search a
+    // wider scope than the user asked for (AAP 0.7.3 row "Shell: global search").
+    const scope = find<HTMLSelectElement>('#search-scope');
+    scope.value = 'clients';
+    scope.dispatchEvent(new Event('change'));
+    const field = find<HTMLInputElement>('#search');
+    field.value = 'Parity Client';
+    field.dispatchEvent(new Event('input'));
+    find<HTMLFormElement>('app-global-search form').dispatchEvent(new Event('submit'));
+    fixture.detectChanges();
+
+    expect(navigate).toHaveBeenCalledWith(['/search', 'Parity Client'], {
+      queryParams: { scope: 'clients', exactMatch: false },
     });
   });
 
