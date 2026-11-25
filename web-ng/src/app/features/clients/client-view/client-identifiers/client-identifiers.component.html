@@ -1,0 +1,44 @@
+<!--
+  `Identities` tab of the individual client record (`#/viewclient/:id`): the client's identity
+  documents, read-only, in the design's four-column order (AAP 0.7.1 row `clients`, AAP 0.7.3 row
+  "W3 search and view client", AAP 0.7.4 "Client view").
+
+  This file contributes only the table or the empty state. The parent record page owns the card,
+  the heading and the work area around it, so no panel, wrapper, stylesheet, inline style or
+  colour appears here; the table's header band, rules and type come from the global legacy
+  Bootstrap 3 layer (Rule 1 clause 6).
+
+  Three exhaustive, mutually exclusive branches:
+  - a successful load that returned nothing renders the shared explicit empty state and no error;
+  - a load in flight, or one that failed, renders neither the table nor the empty state — the
+    design has no spinner or progress indicator, and `core/http/fineract.interceptor.ts` has
+    already raised the failure notification, so a second message here would duplicate it;
+  - a load with rows renders them in the order the endpoint returned them, with no sort, filter,
+    pager, row action or add/edit/delete control, because the legacy tab offers none and this
+    migration adds no capability legacy lacks (Rule 1 clause 3; AAP 0.10.5 item 6).
+-->
+@if (!loading() && !failed() && rows().length === 0) {
+  <app-empty-state message="No identifiers found." />
+} @else if (rows().length > 0) {
+  <table class="table">
+    <thead>
+      <tr>
+        <th scope="col">Document Type</th>
+        <th scope="col">Document Key</th>
+        <th scope="col">Description</th>
+        <th scope="col">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- A field the payload omits prints an empty cell: no dash, no "N/A", no placeholder text. -->
+      @for (row of rows(); track row.id) {
+        <tr>
+          <td>{{ row.documentTypeName }}</td>
+          <td>{{ row.documentKey }}</td>
+          <td>{{ row.description }}</td>
+          <td>{{ row.status }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+}
