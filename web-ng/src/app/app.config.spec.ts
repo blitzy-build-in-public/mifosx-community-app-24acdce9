@@ -75,6 +75,13 @@ function configureApplication(extra: readonly Provider[] = []): void {
   );
 
   TestBed.configureTestingModule({ providers: [...appConfig.providers, ...extra, provideHttpClientTesting()] });
+
+  // Every case starts as a visitor who has never signed in. The unit-test environment is one jsdom
+  // shared by the whole suite, so another spec file can leave the legacy session entry in
+  // `localStorage`; a start-up that found one would block on the resume read only the last case below
+  // answers, which is why the store is emptied through the service that owns its key (AAP 0.3.4
+  // claim 9).
+  TestBed.inject(SessionService).clear();
 }
 
 /**
