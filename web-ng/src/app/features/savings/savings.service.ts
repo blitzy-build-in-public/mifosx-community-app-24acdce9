@@ -37,6 +37,12 @@ import type {
  * `dateFormat` and `locale` on every body that carries a date, which is the payload contract the
  * legacy screens send (Rule 1 clause 2; AAP 0.7.2 "Date handling", AAP 0.14.1).
  *
+ * **Nothing is composed until the returned observable is subscribed.** Every call below wraps its
+ * whole request — the URL, the `HttpParams`, the body and the locale its date is written in — in
+ * `defer`, so `AppConfigService.apiUrl()`, which throws until the configuration has resolved, and the
+ * active locale, which the user may change while a form is open, are both read at subscribe time
+ * rather than when the method is called (Rule 1 clause 2; AAP 0.7.2 "Date handling").
+ *
  * **Errors are values, not exceptions.** Nothing here maps, retries, caches or swallows a failure:
  * the application's single interceptor turns a Fineract body into an `ApiError` that the screen
  * renders verbatim, and it is the only place the auth and tenant headers exist (AAP 0.4.2, AAP 0.7.4;
@@ -139,9 +145,18 @@ interface SavingsActivateBody {
 /** The wire body of `POST /savingsaccounts/{id}/transactions?command=deposit|withdrawal`. */
 interface SavingsTransactionBody {
   readonly transactionDate: string | null;
+
   readonly transactionAmount: number;
-  readonly paymentTypeId: number;
+
+  /**
+   * Payment type the form named, or `null` when it named none — the member stays on the wire in
+   * that case rather than being omitted, so the server's own required-field rule reports the
+   * absence (Rule 1 clause 3, AAP 0.4.4 decision 6).
+   */
+  readonly paymentTypeId: number | null;
+
   readonly dateFormat: AppDateFormat;
+
   readonly locale: string;
 }
 
@@ -170,13 +185,17 @@ export class SavingsService {
    * (Rule 1 clause 3).
    */
   template(clientId: number | string, productId?: number | string): Observable<SavingsTemplate> {
-    let params = new HttpParams().set('clientId', clientId);
+    return defer(() => {
+      let params = new HttpParams().set('clientId', clientId);
 
-    if (productId !== undefined) {
-      params = params.set('productId', productId);
-    }
+      if (productId !== undefined) {
+        params = params.set('productId', productId);
+      }
 
-    return this.http.get<SavingsTemplate>(this.config.apiUrl('savingsaccounts/template'), { params });
+      return this.http.get<SavingsTemplate>(this.config.apiUrl('savingsaccounts/template'), {
+        params,
+      });
+    });
   }
 
   /**
@@ -185,16 +204,18 @@ export class SavingsService {
    * the format and the locale beside it; nothing else is added to what the form collected.
    */
   create(body: SavingsApplicationInput): Observable<SavingsCreateResult> {
-    const { value, dateFormat, locale } = this.dateFields(body.submittedOnDate);
-    const request: SavingsApplicationBody = {
-      clientId: body.clientId,
-      productId: body.productId,
-      submittedOnDate: value,
-      dateFormat,
-      locale,
-    };
+    return defer(() => {
+      const { value, dateFormat, locale } = this.dateFields(body.submittedOnDate);
+      const request: SavingsApplicationBody = {
+        clientId: body.clientId,
+        productId: body.productId,
+        submittedOnDate: value,
+        dateFormat,
+        locale,
+      };
 
-    return this.http.post<SavingsCreateResult>(this.config.apiUrl('savingsaccounts'), request);
+      return this.http.post<SavingsCreateResult>(this.config.apiUrl('savingsaccounts'), request);
+    });
   }
 
   /**
@@ -204,14 +225,14 @@ export class SavingsService {
    * what makes the balance a server figure rather than arithmetic performed in the browser.
    */
   get(id: number | string): Observable<SavingsAccount> {
-    const params = new HttpParams().set('associations', 'all');
+    return defer(() => {
+      const params = new HttpParams().set('associations', 'all');
 
-    return defer(() =>
-      this.http.get<SavingsAccount>(
+      return this.http.get<SavingsAccount>(
         this.config.apiUrl(`savingsaccounts/${resourceId(id, 'SavingsService.get')}`),
         { params },
-      ),
-    );
+      );
+    });
   }
 
   /**
@@ -220,8 +241,9 @@ export class SavingsService {
    * discarded — the caller returns to the record, whose own read shows the account's new status.
    *
    * The request body follows the command the caller named, and a pair that disagrees throws before
-   * any request is issued (see `actionBody()`): that is a mistake in the screen's code rather than
-   * something the server can be asked about, and stopping here is what keeps one click to one POST.
+   * any request is issued (see `assertCommandMatchesBody()`): that is a mistake in the screen's code
+   * rather than something the server can be asked about, and stopping here is what keeps one click to
+   * one POST.
    *
    * @param id Account identifier, as the record route carries it.
    * @param command The lifecycle transition to perform.
@@ -229,18 +251,22 @@ export class SavingsService {
    * @throws Error when `command` and the body's date member disagree.
    */
   action(id: number | string, command: SavingsCommand, body: SavingsActionInput): Observable<void> {
-    // The pair check stays a synchronous throw: a caller that passes mismatched arguments has a bug
-    // this service cannot resolve, and `defer` wraps the request composition only.
-    const request = this.actionBody(command, body);
-    const params = new HttpParams().set('command', command);
+    // The pair check stays a synchronous throw, outside `defer`: a caller that passes mismatched
+    // arguments has a bug this service cannot resolve, so the refusal reaches the call site rather
+    // than a subscriber. `defer` wraps the request composition only.
+    this.assertCommandMatchesBody(command, body);
 
-    return defer(() =>
-      this.http
-        .post<unknown>(this.config.apiUrl(`savingsaccounts/${resourceId(id, 'SavingsService.action')}`), request, {
-          params,
-        })
-        .pipe(map((): void => undefined)),
-    );
+    return defer(() => {
+      const params = new HttpParams().set('command', command);
+
+      return this.http
+        .post<unknown>(
+          this.config.apiUrl(`savingsaccounts/${resourceId(id, 'SavingsService.action')}`),
+          this.actionBody(command, body),
+          { params },
+        )
+        .pipe(map((): void => undefined));
+    });
   }
 
   /**
@@ -276,25 +302,25 @@ export class SavingsService {
     command: SavingsTransactionCommand,
     body: SavingsTransactionInput,
   ): Observable<void> {
-    const { value, dateFormat, locale } = this.dateFields(body.transactionDate);
-    const request: SavingsTransactionBody = {
-      transactionDate: value,
-      transactionAmount: body.transactionAmount,
-      paymentTypeId: body.paymentTypeId,
-      dateFormat,
-      locale,
-    };
-    const params = new HttpParams().set('command', command);
+    return defer(() => {
+      const { value, dateFormat, locale } = this.dateFields(body.transactionDate);
+      const request: SavingsTransactionBody = {
+        transactionDate: value,
+        transactionAmount: body.transactionAmount,
+        paymentTypeId: body.paymentTypeId,
+        dateFormat,
+        locale,
+      };
+      const params = new HttpParams().set('command', command);
 
-    return defer(() =>
-      this.http
+      return this.http
         .post<unknown>(
           this.config.apiUrl(`savingsaccounts/${resourceId(id, 'SavingsService.transaction')}/transactions`),
           request,
           { params },
         )
-        .pipe(map((): void => undefined)),
-    );
+        .pipe(map((): void => undefined));
+    });
   }
 
   /**
@@ -303,9 +329,11 @@ export class SavingsService {
    *
    * The locale is the language the user currently has selected — `AppConfigService.activeLocale`, the
    * value AAP 0.1.1's date discipline requires every payload to carry — rather than the configured
-   * starting language, so a language chosen after startup reaches the next body. A field that held no
-   * date yields `null` and never an empty string, which leaves the absence for the server's own
-   * required-field rule to reject (Rule 1 clause 3).
+   * starting language, so a language chosen after startup reaches the next body. Every caller runs
+   * this inside `defer`, so that language is the one in force when the request is subscribed and not
+   * the one that stood when the method was called. A field that held no date yields `null` and never
+   * an empty string, which leaves the absence for the server's own required-field rule to reject
+   * (Rule 1 clause 3).
    *
    * The date formatted here is whatever the caller's form held, default included: a form's own default
    * comes from the browser clock exactly as the legacy screens' does, so the tenant's business date is
@@ -325,9 +353,14 @@ export class SavingsService {
   }
 
   /**
-   * The body `command` asks for, or the error that says the two disagree. The `in` test is the
+   * The body `command` asks for, with the two format members this service fills. The `in` test is the
    * narrowing: `approvedOnDate` is the member only an approval body carries, and testing for it keeps
-   * a cast out of the path a mismatched pair would otherwise travel through to the server.
+   * a cast out of the path a mismatched pair would otherwise travel through to the server. The pairing
+   * itself is checked by `assertCommandMatchesBody()`, which `action()` also runs before it defers, so
+   * both entry points share one wording.
+   *
+   * Called inside `defer`, so the body and the locale it carries are composed when the request is
+   * subscribed.
    *
    * @throws Error when the body carries the other command's date member.
    */
@@ -335,6 +368,32 @@ export class SavingsService {
     command: SavingsCommand,
     body: SavingsActionInput,
   ): SavingsApproveBody | SavingsActivateBody {
+    this.assertCommandMatchesBody(command, body);
+
+    if ('approvedOnDate' in body) {
+      const { value, dateFormat, locale } = this.dateFields(body.approvedOnDate);
+
+      return { approvedOnDate: value, dateFormat, locale };
+    }
+
+    const { value, dateFormat, locale } = this.dateFields(body.activatedOnDate);
+
+    return { activatedOnDate: value, dateFormat, locale };
+  }
+
+  /**
+   * Refuses a command and a body that name different lifecycle dates, so one action's payload can
+   * never be posted to the other action's command.
+   *
+   * Called from both entry points on purpose: `action()` runs it synchronously, before it defers, so a
+   * caller's mistake throws at the call site; `actionBody()` runs it again inside `defer`, so the body
+   * builder refuses a mismatched pair on its own. Each message is written here once.
+   *
+   * @param command The lifecycle transition the caller asked for.
+   * @param body The body the caller handed over.
+   * @throws Error when the body carries the other command's date member.
+   */
+  private assertCommandMatchesBody(command: SavingsCommand, body: SavingsActionInput): void {
     if ('approvedOnDate' in body) {
       if (command !== 'approve') {
         throw new Error(
@@ -342,9 +401,7 @@ export class SavingsService {
         );
       }
 
-      const { value, dateFormat, locale } = this.dateFields(body.approvedOnDate);
-
-      return { approvedOnDate: value, dateFormat, locale };
+      return;
     }
 
     if (command !== 'activate') {
@@ -352,9 +409,5 @@ export class SavingsService {
         `SavingsService.action: the body carries activatedOnDate, so the command must be activate; it was ${command}.`,
       );
     }
-
-    const { value, dateFormat, locale } = this.dateFields(body.activatedOnDate);
-
-    return { activatedOnDate: value, dateFormat, locale };
   }
 }

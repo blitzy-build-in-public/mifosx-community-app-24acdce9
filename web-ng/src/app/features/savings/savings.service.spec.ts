@@ -2,6 +2,7 @@ import { provideHttpClient, type HttpRequest } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal, type WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import type { Observable } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { AppConfigService } from '../../core/config/app-config.service';
@@ -343,6 +344,28 @@ const TEMPLATE_CASES: readonly {
   },
 ];
 
+/**
+ * One call of each of the service's five public methods, with the arguments that method needs, so a
+ * single case can prove that none of them composes anything before it is subscribed (Rule 1 clause 8;
+ * AAP 0.7.2 "Date handling").
+ *
+ * @param service The service under test, built by the case's own `TestBed`.
+ */
+function callsOf(
+  service: SavingsService,
+): readonly { readonly label: string; readonly call: () => Observable<unknown> }[] {
+  return [
+    { label: 'template()', call: () => service.template(CLIENT_ID) },
+    { label: 'create()', call: () => service.create(APPLICATION) },
+    { label: 'get()', call: () => service.get(ACCOUNT_ID) },
+    {
+      label: 'action()',
+      call: () => service.action(ACCOUNT_ID, 'approve', { approvedOnDate: ACTION_DATE }),
+    },
+    { label: 'transaction()', call: () => service.transaction(ACCOUNT_ID, 'deposit', TRANSACTION) },
+  ];
+}
+
 describe('SavingsService', () => {
   let service: SavingsService;
   let httpMock: HttpTestingController;
@@ -625,6 +648,31 @@ describe('SavingsService', () => {
     sent.flush({});
   });
 
+  it('sends a missing payment type as null rather than omitting it', () => {
+    service
+      .transaction(ACCOUNT_ID, 'deposit', { ...TRANSACTION, paymentTypeId: null })
+      .subscribe();
+
+    const sent = httpMock.expectOne(
+      isRequest('POST', savingsUrl('savingsaccounts', ACCOUNT_ID, 'transactions')),
+    );
+
+    // The form named no payment type, so the member is present and empty: the server's own
+    // required-field rule reports the absence, and no id this application invented reaches the
+    // request body (Rule 1 clause 3, AAP 0.4.4 decision 6).
+    expect(bodyKeys(sent.request)).toContain('paymentTypeId');
+    expect(sent.request.body.paymentTypeId).toBeNull();
+    expect(sent.request.body).toEqual({
+      transactionDate: ACTION_TEXT,
+      transactionAmount: 1000,
+      paymentTypeId: null,
+      dateFormat: FINERACT_DATE_FORMAT,
+      locale: APP_LOCALE,
+    });
+
+    sent.flush({});
+  });
+
   it('sets no authorization and no tenant header, because both belong to the HTTP interceptor', () => {
     service.create(APPLICATION).subscribe();
 
@@ -670,6 +718,50 @@ describe('SavingsService', () => {
     for (const request of requests) {
       request.flush(SAVINGS_ACCOUNT);
     }
+  });
+
+  it('composes no request until its observable is subscribed, then issues exactly that one', () => {
+    for (const { label, call } of callsOf(service)) {
+      apiUrl.mockClear();
+
+      const composed = call();
+
+      // Nothing at call time: neither the configuration's URL — which throws until it has resolved —
+      // nor the active locale, nor the transport has been touched (AAP 0.7.2 "Date handling").
+      expect(apiUrl, label).not.toHaveBeenCalled();
+      httpMock.expectNone(() => true);
+
+      const subscription = composed.subscribe();
+      const request = httpMock.expectOne(() => true);
+
+      // The whole request — URL, parameters and body — is composed from the subscription onwards.
+      expect(apiUrl, label).toHaveBeenCalledTimes(1);
+
+      request.flush({});
+      subscription.unsubscribe();
+    }
+  });
+
+  it('reads the active language when the request is subscribed, not when the method is called', () => {
+    // The call is made while English is the active language…
+    const composed = service.create(APPLICATION);
+
+    // …and the user switches language before anything is subscribed.
+    activeLocale.set('fr');
+
+    composed.subscribe();
+
+    const request = httpMock.expectOne(isRequest('POST', savingsUrl('savingsaccounts')));
+
+    // The body carries the language in force at subscribe time, month name included, so the value and
+    // the `locale` beside it describe the same language (AAP 0.7.2 "Date handling").
+    expect(request.request.body).toEqual({
+      ...APPLICATION_WIRE,
+      locale: 'fr',
+      submittedOnDate: SUBMITTED_TEXT_FR,
+    });
+
+    request.flush(CREATE_RESULT);
   });
 
   it('refuses a crafted route id with the guard message and issues no request at all', () => {

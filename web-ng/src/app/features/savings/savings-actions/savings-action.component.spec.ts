@@ -357,6 +357,34 @@ describe('SavingsActionComponent', () => {
     expect(router.navigate).toHaveBeenCalledWith(['/viewsavingaccount', ACCOUNT_ID]);
   });
 
+  it('submits a cash transaction with no payment type chosen as paymentTypeId null', async () => {
+    savings.transactionTemplate.mockReturnValue(of(PAYMENT_TYPES));
+    savings.transaction.mockReturnValue(of(void 0));
+
+    await render(ACCOUNT_ID, 'deposit');
+
+    // Only the amount is filled. The legacy form marks the date and the amount and nothing else, so
+    // an unchosen payment type must leave the form valid instead of turning the submission away.
+    component.transactionForm.controls.transactionAmount.setValue(TRANSACTION_AMOUNT);
+
+    expect(component.transactionForm.controls.paymentTypeId.value).toBeNull();
+    expect(component.transactionForm.valid).toBe(true);
+
+    const transactionDate = component.transactionForm.controls.transactionDate.value;
+
+    await component.submit();
+
+    // The form named no payment type, so `null` travels and the server's own required-field rule is
+    // what answers (AAP 0.4.4 decision 6, Rule 1 clause 3).
+    expect(savings.transaction).toHaveBeenCalledTimes(1);
+    expect(savings.transaction).toHaveBeenCalledWith(ACCOUNT_ID, 'deposit', {
+      transactionDate,
+      transactionAmount: TRANSACTION_AMOUNT,
+      paymentTypeId: null,
+    });
+    expect(router.navigate).toHaveBeenCalledWith(['/viewsavingaccount', ACCOUNT_ID]);
+  });
+
   it('posts the withdraw route segment as the transactions endpoint command', async () => {
     savings.transactionTemplate.mockReturnValue(of(PAYMENT_TYPES));
     savings.transaction.mockReturnValue(of(void 0));

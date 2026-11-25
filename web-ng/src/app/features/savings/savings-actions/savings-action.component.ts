@@ -160,10 +160,13 @@ function resolveOperation(segment: string | null): SavingsOperationEntry | null 
  *
  * **It reproduces the legacy forms rather than improving them** (Rule 1 clause 3). The payment types
  * are the transactions template's own list in the server's order, with no sort, filter, rename or
- * hard-coded fallback; the amount carries `Validators.required` and nothing else — no range, no
- * positivity rule, no balance check — because the server owns both rules and the legacy screen adds
- * neither; a 4xx's Fineract message is rendered above the form verbatim while every entered value
- * survives, and a 5xx or a network failure stays the interceptor's single notification.
+ * hard-coded fallback; the date and the amount carry `Validators.required` and nothing else — no
+ * range, no positivity rule, no balance check — because the server owns those rules and the legacy
+ * screen adds none of them; the payment type carries no client-side rule at all, since the legacy
+ * select marks neither the control nor its label, so an unchosen one travels as `null` for Fineract
+ * to answer (AAP 0.4.4 decision 6); a 4xx's Fineract message is rendered above the form verbatim
+ * while every entered value survives, and a 5xx or a network failure stays the interceptor's single
+ * notification.
  */
 @Component({
   selector: 'app-savings-action',
@@ -298,11 +301,13 @@ export class SavingsActionComponent {
    * The cash-transaction form both deposit and pay-out commands share: the date, the amount and the
    * payment type.
    *
-   * The amount is `required` and nothing more — no range, no positivity rule, no step rule — because
-   * the legacy screen adds none and the server remains the authority (Rule 1 clause 3, AAP 0.7.2
-   * `SavingsTransactionRequest`). `paymentTypeId` is widened to `SelectValue | null` only so the
-   * shared select field accepts the binding under `strictTemplates`; it is narrowed back to a
-   * `number` at the submit boundary and a string id is never sent.
+   * The date and the amount are `required` and nothing more — no range, no positivity rule, no step
+   * rule — because the legacy screen marks those two and adds none of the rest, and the server
+   * remains the authority (Rule 1 clause 3, AAP 0.7.2 `SavingsTransactionRequest`). The payment type
+   * carries no client-side rule, because legacy's transaction select marks neither the control nor
+   * its label: an empty selection is submitted, and the server's own message is what the screen shows
+   * (AAP 0.4.4 decision 6). Its `SelectValue` type is the shared select field's own value, and a value
+   * that is not a number is posted as `null` — the form's way of saying nothing was chosen.
    */
   readonly transactionForm = new FormGroup({
     transactionDate: new FormControl<Date | null>(new Date(), {
@@ -311,9 +316,7 @@ export class SavingsActionComponent {
     transactionAmount: new FormControl<number | null>(null, {
       validators: [Validators.required],
     }),
-    paymentTypeId: new FormControl<SelectValue | null>(null, {
-      validators: [Validators.required],
-    }),
+    paymentTypeId: new FormControl<SelectValue | null>(null),
   });
 
   /**
@@ -469,9 +472,11 @@ export class SavingsActionComponent {
    * Posts one cash transaction to the transactions endpoint: `?command=deposit` or the command the
    * withdraw entry carries (AAP 0.7.3 W8 row).
    *
-   * The payment type is narrowed to a `number` here and the form is refused while it is anything
-   * else, so a string id can never be posted and the shared select field's wider value type never
-   * reaches the request body.
+   * The form refuses only what it validates — a missing date or amount — and never a payment type the
+   * user left unset: a chosen id travels as the number the template's option carries, while anything
+   * else means the field holds no usable selection and is posted as `null` for the server's own rule
+   * to answer (AAP 0.4.4 decision 6, Rule 1 clause 3). A string id therefore never reaches the request
+   * body, and no submission is turned away in place of the server's message.
    *
    * @param operation the resolved deposit or withdraw entry, whose `command` is its own literal.
    * @param accountId the `:id` segment, as the route carries it.
@@ -486,16 +491,15 @@ export class SavingsActionComponent {
 
     const transactionDate = form.controls.transactionDate.value;
     const transactionAmount = form.controls.transactionAmount.value;
-    const paymentTypeId = form.controls.paymentTypeId.value;
+    const selectedPaymentType = form.controls.paymentTypeId.value;
 
-    if (
-      form.invalid ||
-      transactionDate === null ||
-      transactionAmount === null ||
-      typeof paymentTypeId !== 'number'
-    ) {
+    if (form.invalid || transactionDate === null || transactionAmount === null) {
       return;
     }
+
+    // A template's payment-type ids are numbers, so anything else means the field holds nothing
+    // usable: `null` travels and the server's own rule is what answers (Rule 1 clause 3).
+    const paymentTypeId = typeof selectedPaymentType === 'number' ? selectedPaymentType : null;
 
     const command: SavingsTransactionCommand = operation.command;
 

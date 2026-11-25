@@ -346,8 +346,13 @@ export interface SavingsTransactionRequest {
   /** Amount deposited or withdrawn as entered. */
   readonly transactionAmount: number;
 
-  /** Payment type the transaction is recorded against, from the transaction template. */
-  readonly paymentTypeId: number;
+  /**
+   * Payment type the transaction is recorded against, from the transaction template, or `null` when
+   * the form named none. The member travels as `null` in that case rather than being left out, so
+   * the server's own rule for the field is the one that answers and its message is the one the
+   * screen shows (AAP 0.4.4 decision 6, Rule 1 clause 3).
+   */
+  readonly paymentTypeId: number | null;
 
   /** Format the service writes the date in; the one the configuration fixes. */
   readonly dateFormat: AppDateFormat;
