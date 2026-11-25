@@ -1,0 +1,209 @@
+<!--
+  The create-client screen (`#/createclient`): the office and staff pickers the template fills, the
+  individual client's name fields, the two optional codes, the active/activation-date pair and the
+  submission date, above the cancel and submit controls (AAP 0.7.3 row "W2 create and activate
+  client"; AAP 0.7.4 screens; AAP 0.8.2 route `createclient`).
+
+  Every visual value comes from the global Bootstrap 3 layer `web-ng/src/styles.scss` compiles, so
+  this file carries no style, no colour and no pixel: `.container-fluid` and `.row`/`.col-md-*` are
+  the page and its grid, `.panel`/`.panel-heading`/`.panel-body` the white card with its shadow and
+  no border stroke, `.form-horizontal`/`.form-group`/`.control-label` the form layout,
+  `.form-control` the 34px input, `.checkbox` the boxed choice, `.btn.btn-primary` the brand fill and
+  `.alert.alert-danger` the failure banner (Rule 1 clause 6; AAP 0.5.2). `span.required` is the
+  legacy marker rule in `app/styles-dev/main/components/_content.scss`, consumed in place.
+
+  Field ids and `name` attributes are the legacy form's own (`officeId`, `staffId`, `firstname`,
+  `lastname`, `externalId`, `mobileNo`, `activeCheckbox`, `activationDate`, `submittedon`,
+  `save2`, `cancel2` — `app/views/clients/createclient.html`), so the parity harness addresses the
+  same controls on both applications and a label's `for` points at the control it names.
+
+  Captions and options are the legacy bundle's keys and the Fineract template's own lists: no label
+  and no option is written into this file. The required marker is rendered where this template owns
+  the `<label>`; on the fields `app-select-field` and `app-date-field` render, `[required]` carries
+  the state to assistive technology because those components own their own label markup.
+-->
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-md-12">
+      <div class="panel">
+        <div class="panel-heading">
+          <h3 class="panel-title">{{ 'label.heading.createclient' | translate }}</h3>
+        </div>
+        <div class="panel-body">
+          <!--
+            Fineract's own failure text, verbatim and unmoved by any prefix: a failed template read
+            or a rejected create. `role="alert"` announces it without a focus change, and the form
+            below keeps every entered value (AAP 0.7.4; AAP 0.14.1 "errors are values").
+          -->
+          @if (error(); as message) {
+            <div class="alert alert-danger" role="alert">{{ message }}</div>
+          }
+
+          <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+            <fieldset>
+              <div class="row">
+                <div class="col-md-6">
+                  <label class="control-label" for="officeId">
+                    {{ 'label.input.office' | translate }}<span class="required">*</span>
+                  </label>
+                  <!--
+                    No `label` input: this template renders the `<label for>` above, so the select is
+                    named by it and the field adds no second name of its own. The office list is the
+                    template's, in its order, and a change re-reads the template for that office.
+                  -->
+                  <app-select-field
+                    inputId="officeId"
+                    [control]="form.controls.officeId"
+                    [options]="officeOptions()"
+                    [required]="true"
+                  />
+                </div>
+                <div class="col-md-6">
+                  <label class="control-label" for="staffId">{{ 'label.input.staff' | translate }}</label>
+                  <!-- Optional: Fineract assigns no staff to a client whose officer the operator left
+                       unset, and the prompt row returns the picker to empty, as the legacy chosen
+                       control's prompt does. -->
+                  <app-select-field
+                    inputId="staffId"
+                    [control]="form.controls.staffId"
+                    [options]="staffOptions()"
+                    [placeholder]="'--' + ('label.menu.selectloanofficer' | translate) + '--'"
+                  />
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="form-group" [class.has-error]="showsRequiredError(form.controls.firstname)">
+                    <label class="control-label" for="firstname">
+                      {{ 'label.input.firstname' | translate }}<span class="required">*</span>
+                    </label>
+                    <input
+                      id="firstname"
+                      name="firstname"
+                      type="text"
+                      class="form-control"
+                      formControlName="firstname"
+                      autocomplete="given-name"
+                      [attr.aria-required]="true"
+                      [attr.aria-invalid]="showsRequiredError(form.controls.firstname) ? 'true' : null"
+                      [attr.aria-describedby]="showsRequiredError(form.controls.firstname) ? 'firstname-error' : null"
+                    />
+                    @if (showsRequiredError(form.controls.firstname)) {
+                      <span id="firstname-error" class="help-block">
+                        {{ 'label.requiredfield' | translate }}
+                      </span>
+                    }
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="form-group" [class.has-error]="showsRequiredError(form.controls.lastname)">
+                    <label class="control-label" for="lastname">
+                      {{ 'label.input.lastname' | translate }}<span class="required">*</span>
+                    </label>
+                    <input
+                      id="lastname"
+                      name="lastname"
+                      type="text"
+                      class="form-control"
+                      formControlName="lastname"
+                      autocomplete="family-name"
+                      [attr.aria-required]="true"
+                      [attr.aria-invalid]="showsRequiredError(form.controls.lastname) ? 'true' : null"
+                      [attr.aria-describedby]="showsRequiredError(form.controls.lastname) ? 'lastname-error' : null"
+                    />
+                    @if (showsRequiredError(form.controls.lastname)) {
+                      <span id="lastname-error" class="help-block">
+                        {{ 'label.requiredfield' | translate }}
+                      </span>
+                    }
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="form-group">
+                    <label class="control-label" for="mobileNo">{{ 'label.input.mobilenumber' | translate }}</label>
+                    <!-- No pattern: the legacy form's own numeric rule is deliberately not carried
+                         over, because Fineract alone decides what a number may look like and its
+                         message is what the user reads (Rule 1 clause 3). -->
+                    <input
+                      id="mobileNo"
+                      name="mobileNo"
+                      type="tel"
+                      class="form-control"
+                      formControlName="mobileNo"
+                      autocomplete="tel"
+                    />
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="form-group">
+                    <label class="control-label" for="externalId">{{ 'label.input.externalid' | translate }}</label>
+                    <input id="externalId" name="externalId" type="text" class="form-control" formControlName="externalId" />
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="form-group">
+                    <!--
+                      One label, wrapping the control it names, so the box reads as "Active" and the
+                      parity harness can address it through `#activeCheckbox` or that label. The
+                      legacy row is additionally gated on `ACTIVATE_CLIENT`; this screen is gated once,
+                      per route, on `CREATE_CLIENT`, so the box is not separately hidden here.
+                    -->
+                    <div class="checkbox">
+                      <label for="activeCheckbox">
+                        <input id="activeCheckbox" name="active" type="checkbox" formControlName="active" />
+                        {{ 'label.input.active' | translate }}
+                      </label>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <!--
+                    The activation date exists only while the client is to be created active, which is
+                    what legacy's `setChoice()` shows: an inactive client has no activation date, and
+                    the body leaves the member out entirely.
+                  -->
+                  @if (isActive()) {
+                    <label class="control-label" for="activationDate">{{ 'label.input.activationdate' | translate }}</label>
+                    <app-date-field inputId="activationDate" [control]="form.controls.activationDate" />
+                  }
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-6">
+                  <label class="control-label" for="submittedon">
+                    {{ 'label.input.submittedon' | translate }}<span class="required">*</span>
+                  </label>
+                  <app-date-field inputId="submittedon" [control]="form.controls.submittedOnDate" [required]="true" />
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-offset-5 col-md-7">
+                  <button id="cancel2" type="button" class="btn btn-default" (click)="cancel()">
+                    {{ 'label.button.cancel' | translate }}
+                  </button>
+                  <!--
+                    Disabled while a post is in flight: `POST /clients` is not idempotent, so the
+                    guard's busy signal is the one thing that keeps a second click from creating a
+                    second client (AAP 0.1.1; AAP 0.14.1).
+                  -->
+                  <button id="save2" type="submit" class="btn btn-primary" [disabled]="guard.busy()">
+                    {{ 'label.button.save' | translate }}
+                  </button>
+                </div>
+              </div>
+            </fieldset>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -403,9 +403,13 @@ export interface ClientIdentifierTemplate {
  * The `POST /clients` body the create screen posts (AAP 0.7.3 row "W2 create and activate client";
  * AAP 0.7.2 row `ClientCreateRequest`).
  *
- * Dates are `Date | null` and are serialised by `client.service.ts`; `dateFormat` and `locale` are
- * required members, filled by that service from `AppConfig` and never by a component, so a body
- * that omitted either would not compile (AAP 0.7.2 row `ClientCreateRequest`; Rule 1 clause 2).
+ * Dates are `Date | null` and are serialised by `client.service.ts`; the date-format pair is not a
+ * member a screen chooses. `client.service.ts` writes `dateFormat` from `AppConfig.dateFormat` and
+ * `locale` from `AppConfigService.activeLocale` when it builds the wire body, replacing whatever a
+ * caller put there, so both members are optional and the create screen leaves them out entirely: a
+ * screen that supplied them could not change what the server parses, and requiring them only made
+ * every caller carry two values it must not own (AAP 0.7.2 row `ClientCreateRequest`, "Date
+ * handling"; Rule 1 clause 2).
  *
  * `legalFormId` is required. The fork's `ClientDataValidator.validateForCreate` extracts it with
  * `notNull().inMinMaxRange(1, 2)`, so a create without it is rejected — 1 for a person, 2 for an
@@ -423,6 +427,14 @@ export interface ClientCreateRequest {
 
   /** Legal form: 1 for a person, 2 for an entity. Required by the server on create. */
   legalFormId: number;
+
+  /**
+   * Loan officer the client is assigned to, from the template's staff list; sent only when the form
+   * selected one. The legacy create form posts it from its `staffId` control, and the attribute is
+   * part of the create request the server accepts, so leaving it out would drop a choice the
+   * operator made.
+   */
+  staffId?: number;
 
   /**
    * First name; required by the server for a person (`legalFormId` 1) and left out for an entity.
@@ -459,11 +471,19 @@ export interface ClientCreateRequest {
   /** Activation date, sent when the client is created active. */
   activationDate?: Date | null;
 
-  /** Payload date format, filled by `client.service.ts` from `AppConfig.dateFormat`. */
-  dateFormat: AppDateFormat;
+  /**
+   * Payload date format. Optional, because `client.service.ts` sets it at the API boundary from
+   * `AppConfig.dateFormat` and replaces a caller's value: the create screen omits it, and the body
+   * still goes out with the one format the configuration fixes (Rule 1 clause 2).
+   */
+  dateFormat?: AppDateFormat;
 
-  /** Payload locale, filled by `client.service.ts` from `AppConfigService.activeLocale`. */
-  locale: string;
+  /**
+   * Payload locale. Optional for the same reason as `dateFormat`: `client.service.ts` sets it at the
+   * API boundary from `AppConfigService.activeLocale`, so the language the user selected is what
+   * the body carries rather than a value a screen remembered.
+   */
+  locale?: string;
 }
 
 /**

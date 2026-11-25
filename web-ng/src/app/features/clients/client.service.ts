@@ -85,6 +85,7 @@ interface ClientDateWire {
 interface ClientCreateWire extends ClientDateWire {
   officeId: number;
   legalFormId: number;
+  staffId?: number;
   firstname?: string;
   lastname?: string;
   fullname?: string;
@@ -435,6 +436,7 @@ export class ClientService {
       ...dates,
       officeId: body.officeId,
       legalFormId: body.legalFormId,
+      ...(body.staffId === undefined ? {} : { staffId: body.staffId }),
       ...(body.firstname === undefined ? {} : { firstname: body.firstname }),
       ...(body.lastname === undefined ? {} : { lastname: body.lastname }),
       ...(body.fullname === undefined ? {} : { fullname: body.fullname }),
