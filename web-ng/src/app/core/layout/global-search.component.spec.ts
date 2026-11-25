@@ -15,9 +15,10 @@ import {
  * It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands
  * with at least one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`, nothing
  * boilerplate). What it proves is the contract its parent depends on: the control reports one
- * trimmed query together with the selected scope when the form is submitted, reports nothing at
- * all when there is nothing to search for, never searches while the user is still typing, and
- * changes no text the user typed.
+ * trimmed query, the scope the user selected and legacy's exact-match flag when the form is
+ * submitted, derives that flag from the quotes legacy stripped, reports nothing at all when there is
+ * nothing to search for, never searches while the user is still typing, and changes no text the user
+ * typed.
  *
  * Providers, and what their absence proves. The translate stack is provided because the
  * placeholder, the scope labels and the two accessible names all resolve through `TranslatePipe`;
@@ -66,6 +67,22 @@ const SPEC_BUNDLE: Record<string, string> = {
   [SCOPE_FILTER_KEY]: SCOPE_FILTER_TEXT,
   ...Object.fromEntries(SCOPES.map(({ key, label }) => [key, label])),
 };
+
+/**
+ * The inputs whose surrounding quotes legacy strips before searching, with what it then searched
+ * for. `app/scripts/controllers/main/MainController.js:208-217` removes one leading and one trailing
+ * double quote — either on its own as well as both — and sets `exactMatch` when that removal changed
+ * the text, so each row is one arm of that single derivation.
+ */
+const QUOTED_INPUTS: readonly {
+  readonly label: string;
+  readonly typed: string;
+  readonly query: string;
+}[] = [
+  { label: 'a pair of quotes', typed: '"Parity Client"', query: 'Parity Client' },
+  { label: 'a leading quote alone', typed: '"Parity Client', query: 'Parity Client' },
+  { label: 'a trailing quote alone', typed: 'Parity Client"', query: 'Parity Client' },
+];
 
 describe('GlobalSearchComponent', () => {
   let fixture: ComponentFixture<GlobalSearchComponent>;
@@ -216,11 +233,11 @@ describe('GlobalSearchComponent', () => {
     expect(emitted).toEqual([]);
   });
 
-  it('emits the trimmed query with the default scope when the form is submitted', () => {
+  it('emits the trimmed query with the default scope and no exact match when the form is submitted', () => {
     type('  Parity Client  ');
     submitForm();
 
-    expect(emitted).toEqual([{ query: 'Parity Client', scope: 'all' }]);
+    expect(emitted).toEqual([{ query: 'Parity Client', scope: 'all', exactMatch: false }]);
   });
 
   it('leaves the field holding exactly what the user typed', () => {
@@ -231,6 +248,27 @@ describe('GlobalSearchComponent', () => {
     // the caret under the user while the component is still in front of them.
     expect(field().value).toBe('  Parity Client  ');
     expect(component.query.value).toBe('  Parity Client  ');
+  });
+
+  for (const { label, typed, query } of QUOTED_INPUTS) {
+    it(`strips ${label} before searching and reports exactMatch`, () => {
+      type(typed);
+      submitForm();
+
+      expect(emitted).toEqual([{ query, scope: 'all', exactMatch: true }]);
+      // Only the emitted text is unquoted: the field keeps exactly what the user typed, quotes and
+      // all, so nothing changes under them while the component is still in front of them.
+      expect(field().value).toBe(typed);
+    });
+  }
+
+  it('emits nothing for a query that is nothing but its own quotes', () => {
+    // Stripped to nothing, it is the blank search the control already refuses rather than a
+    // navigation to an empty `/search/` segment.
+    type('""');
+    submitForm();
+
+    expect(emitted).toEqual([]);
   });
 
   it('emits nothing for an empty or whitespace-only query', () => {
@@ -247,12 +285,12 @@ describe('GlobalSearchComponent', () => {
     choose('loans');
     submitForm();
 
-    expect(emitted).toEqual([{ query: 'Parity Client', scope: 'loans' }]);
+    expect(emitted).toEqual([{ query: 'Parity Client', scope: 'loans', exactMatch: false }]);
 
     choose('clients');
     submitForm();
 
-    expect(emitted.at(-1)).toEqual({ query: 'Parity Client', scope: 'clients' });
+    expect(emitted.at(-1)).toEqual({ query: 'Parity Client', scope: 'clients', exactMatch: false });
   });
 
   it('reports each submission separately, as legacy did', () => {
@@ -262,8 +300,8 @@ describe('GlobalSearchComponent', () => {
 
     expect(emitted).toHaveLength(2);
     expect(emitted).toEqual([
-      { query: 'Ada Okafor', scope: 'all' },
-      { query: 'Ada Okafor', scope: 'all' },
+      { query: 'Ada Okafor', scope: 'all', exactMatch: false },
+      { query: 'Ada Okafor', scope: 'all', exactMatch: false },
     ]);
   });
 });

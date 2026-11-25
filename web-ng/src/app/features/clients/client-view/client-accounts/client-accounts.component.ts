@@ -13,10 +13,8 @@ import { Subject, catchError, map, of, switchMap } from 'rxjs';
 
 import { ApiError } from '../../../../core/http/api-error';
 import { EmptyStateComponent } from '../../../../shared/empty-state/empty-state.component';
-import {
-  StatusSwatchComponent,
-  type StatusKey,
-} from '../../../../shared/status-swatch/status-swatch.component';
+import type { StatusKey } from '../../../../shared/status-key.util';
+import { StatusSwatchComponent } from '../../../../shared/status-swatch/status-swatch.component';
 import { toAccountStatusKey, type ClientAccountSummary } from '../../client.models';
 import { ClientService } from '../../client.service';
 

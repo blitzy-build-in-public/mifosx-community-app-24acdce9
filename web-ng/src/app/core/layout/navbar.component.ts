@@ -36,8 +36,9 @@ import { GlobalSearchComponent, type GlobalSearchSubmission } from './global-sea
  *
  * **It issues no request.** The navbar composes no URL and injects no Fineract service — not even
  * `SearchService`, which the results screen owns — so nothing here can reach the backend or hold a
- * host (Rule 1 clause 5, Rule 2). Searching is a navigation: the control reports the text and the
- * scope, and this component routes to `/search/:query`.
+ * host (Rule 1 clause 5, Rule 2). Searching is a navigation: the control reports the text, the scope
+ * and legacy's exact-match flag, and this component routes to `/search/:query` carrying both
+ * parameters.
  *
  * **Navigation is the router's.** Both destinations go through `Router`, never through a hash
  * `href` or `window.location`, which keeps the hash-location strategy of `app.routes.ts` and the
@@ -224,22 +225,32 @@ export class NavbarComponent {
   }
 
   /**
-   * Navigates to the global search results for the submitted text (AAP 0.7.4 "Shell: global search").
+   * Navigates to the global search results for the submitted text (AAP 0.7.4 "Shell: global search";
+   * AAP 0.7.3 row "Shell: global search").
    *
-   * The route is `/search/:query`, declared in `web-ng/src/app/app.routes.ts`, and the scope travels
-   * as a query parameter the results screen reads. The query is a path segment rather than a
-   * parameter of this file's making: `GlobalSearchComponent` has already trimmed it and refuses an
-   * empty search, and the router encodes it. Nothing is searched here — the request belongs to
-   * `SearchService` through the results screen (Rule 1 clause 5).
+   * The route is `/search/:query`, declared in `web-ng/src/app/app.routes.ts`, and the two
+   * parameters the results screen forwards to `SearchService.search` travel beside it: the `scope`
+   * the user chose and legacy's `exactMatch` flag, which `GlobalSearchComponent` derived from the
+   * text the user typed. That is the pair legacy put in its own URL —
+   * `location.path('/search/' + searchString).search({exactMatch: exactMatch, resource: …})`
+   * (`app/scripts/controllers/main/MainController.js:208-217`) — and it is what `SearchController`
+   * hands to the search resource, so both parameters have to reach the results screen. The query is
+   * a path segment rather than a parameter of this file's making: `GlobalSearchComponent` has already
+   * trimmed it, stripped its surrounding quotes and refused an empty search, and the router encodes
+   * it. Nothing is searched here — the request belongs to `SearchService` through the results screen
+   * (Rule 1 clause 5).
    *
-   * @param submission the search text and the selected scope, as the search control emits them.
+   * @param submission the search text, the selected scope and the exact-match flag, as the search
+   *   control emits them.
    */
   onSearch(submission: GlobalSearchSubmission): void {
     this.closeUserMenu();
     // Settled rather than dropped: a navigation the router refuses would otherwise be an unhandled
     // rejection, and the user is told the results screen did not open instead of being left in place.
     void this.router
-      .navigate(['/search', submission.query], { queryParams: { scope: submission.scope } })
+      .navigate(['/search', submission.query], {
+        queryParams: { scope: submission.scope, exactMatch: submission.exactMatch },
+      })
       .catch((cause: unknown) => {
         this.notifications.show('error', toDisplayableFailure(cause).message);
       });

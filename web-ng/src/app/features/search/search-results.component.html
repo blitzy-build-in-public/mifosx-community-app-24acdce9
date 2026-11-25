@@ -28,16 +28,18 @@
 -->
 <div class="panel panel-default">
   <div class="panel-body">
-    <!-- Fineract's own failure text, verbatim and untranslated, above whatever is already rendered:
-         a failed search leaves the screen mounted and the previous rows standing (AAP 0.7.4). The
-         region is announced because it appears after the user's action. -->
+    <!-- Fineract's own failure text for a 4xx, verbatim and untranslated, above whatever is already
+         rendered: a failed search leaves the screen mounted and the previous rows standing, while a
+         5xx or a transport failure is reported by the interceptor alone, so no alert is painted for
+         it (AAP 0.7.4). The region is announced because it appears after the user's action. -->
     @if (error(); as message) {
       <div class="alert alert-danger" id="search-results-error" role="alert">{{ message }}</div>
     }
 
     <!-- Three mutually exclusive states. Before the first response nothing is painted. A completed
          search that matched nothing renders the explicit empty state and no error; a failed one never
-         reaches it, because `isEmpty` is false whenever a message is shown (AAP 0.7.4). -->
+         reaches it, because `isEmpty` is false whenever the attempt failed, whether or not that
+         failure carried text this screen may show (AAP 0.7.4). -->
     @if (isEmpty()) {
       <app-empty-state id="search-results-empty" [message]="'label.nodatafound' | translate" />
     } @else if (rows().length > 0) {

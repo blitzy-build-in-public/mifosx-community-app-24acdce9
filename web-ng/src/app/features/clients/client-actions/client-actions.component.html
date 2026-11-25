@@ -56,10 +56,12 @@
             </div>
           } @else {
             <!--
-              The one failure region, above the form: the server's message verbatim, with no pipe
-              because it is Fineract's own text. A failed gate, a failed reason-list read and a rejected
-              command all report here, and the form below keeps every entered value (AAP 0.4.4
-              decision 6; workflow W7).
+              The one failure region, above the form: Fineract's own message for a 4xx, verbatim and
+              with no pipe because it is the server's own text. A failed gate, a failed reason-list
+              read and a rejected command all report a 4xx here, and the form below keeps every
+              entered value (AAP 0.4.4 decision 6; workflow W7). A transport failure and a 5xx leave
+              this region empty, because `core/http/fineract.interceptor.ts` has already raised the
+              one notification that carries them (AAP 0.7.4).
             -->
             @if (error(); as message) {
               <div class="alert alert-danger" role="alert">{{ message }}</div>
@@ -116,7 +118,6 @@
                           [options]="reasonOptions()"
                           [placeholder]="reasonPlaceholderKey | translate"
                           [label]="reasonLabelKey() | translate"
-                          [required]="true"
                         />
                       </div>
                     </div>
@@ -152,7 +153,6 @@
                           [options]="reasonOptions()"
                           [placeholder]="reasonPlaceholderKey | translate"
                           [label]="reasonLabelKey() | translate"
-                          [required]="true"
                         />
                       </div>
                     </div>
@@ -188,7 +188,6 @@
                           [options]="reasonOptions()"
                           [placeholder]="reasonPlaceholderKey | translate"
                           [label]="reasonLabelKey() | translate"
-                          [required]="true"
                         />
                       </div>
                     </div>

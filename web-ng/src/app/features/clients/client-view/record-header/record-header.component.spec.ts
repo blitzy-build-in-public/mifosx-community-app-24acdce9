@@ -7,7 +7,7 @@ import {
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { FineractMissingTranslationHandler } from '../../../../core/i18n/missing-translation.handler';
-import type { StatusKey } from '../../../../shared/status-swatch/status-swatch.component';
+import type { StatusKey } from '../../../../shared/status-key.util';
 import type { Client, ClientStatus } from '../../client.models';
 import { RecordHeaderComponent } from './record-header.component';
 
@@ -49,10 +49,10 @@ import { RecordHeaderComponent } from './record-header.component';
 
 /**
  * The client status codes this record can receive, paired with the indicator key each must paint,
- * taken verbatim from the fork's `ClientStatus` enum and from `toClientStatusKey`'s table in
- * `client.models.ts` — never invented here. `active`, `pending` and `closed` are the three named
- * states; `transfer.in.progress` is the representative of the codes the model maps to the neutral
- * key (AAP 0.2.3 row `StatusSwatch`).
+ * taken verbatim from the fork's `ClientStatus` enum and from the one table in
+ * `web-ng/src/app/shared/status-key.util.ts` that `toClientStatusKey` delegates to — never invented
+ * here. `active`, `pending` and `closed` are the three named states; `transfer.in.progress` is the
+ * representative of the codes the shared mapping leaves neutral (AAP 0.2.3 row `StatusSwatch`).
  */
 const STATUS_CASES: readonly (readonly [string, StatusKey])[] = [
   ['clientStatusType.active', 'active'],

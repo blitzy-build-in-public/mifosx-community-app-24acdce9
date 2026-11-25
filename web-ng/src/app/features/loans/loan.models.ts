@@ -31,7 +31,7 @@
  */
 import type { AppDateFormat } from '../../core/config/app-config.model';
 import type { FineractDate } from '../../shared/date-format.util';
-import type { StatusKey } from '../../shared/status-swatch/status-swatch.component';
+import { normaliseStatusCode, type StatusKey } from '../../shared/status-key.util';
 
 /**
  * One row of a Fineract option list — `productOptions`, `loanOfficerOptions`, `fundOptions`,
@@ -1168,11 +1168,12 @@ const STATUS_BY_ID: Readonly<Partial<Record<string, StatusKey>>> = {
 };
 
 /**
- * The same colours keyed by a `loanStatusType.*` message code, normalised the way all three
- * families normalise a status code: lower-cased, the family prefix `loanstatustype.` removed if
- * present, and every non-alphanumeric character stripped. The whole prefix-stripped code is the
- * key — never just its last dot-segment — so
- * `loanStatusType.closed.reschedule.outstanding.amount` is `closedrescheduleoutstandingamount`.
+ * The same colours keyed by a `loanStatusType.*` message code, normalised by
+ * `normaliseStatusCode` from `web-ng/src/app/shared/status-key.util.ts` — the one normalisation all
+ * three families share: lower-cased, a leading `[a-z]+statustype.` prefix removed, and every
+ * non-alphanumeric character stripped. The whole prefix-stripped code is the key — never just its
+ * last dot-segment — so `loanStatusType.closed.reschedule.outstanding.amount` is
+ * `closedrescheduleoutstandingamount`.
  *
  * The keys are the fork's own codes in `LoanStatus.java` and nothing else: the non-enum shorthands
  * (`pending`, `closed`) are gone because the enum sends neither, and `invalid`,
@@ -1190,18 +1191,6 @@ const STATUS_BY_NAME: Readonly<Partial<Record<string, StatusKey>>> = {
   closedrescheduleoutstandingamount: 'closed',
   overpaid: 'closed',
 };
-
-/**
- * The normalisation the three feature families share before a status code is looked up:
- * lower-cased, the family's own message-code prefix removed if the payload carried it, and every
- * non-alphanumeric character stripped, so the whole remaining name is the key.
- *
- * `loanStatusType.submitted.and.pending.approval`, `submittedAndPendingApproval` and
- * `SUBMITTED_AND_PENDING_APPROVAL` therefore all normalise to `submittedandpendingapproval`.
- */
-function normaliseLoanStatusCode(code: string): string {
-  return code.toLowerCase().replace(/^loanstatustype\./, '').replace(/[^a-z0-9]/g, '');
-}
 
 /**
  * The indicator colour for a loan status, from either the numeric `LoanStatus` id or a
@@ -1236,7 +1225,7 @@ export function toLoanStatusKey(code: string | number | null | undefined): Statu
 
   // A string may be the message code, or the bare id as text, so the normalised value is tried
   // against the id table as well; normalising leaves a bare number unchanged.
-  const normalised = normaliseLoanStatusCode(code);
+  const normalised = normaliseStatusCode(code);
 
   return STATUS_BY_ID[normalised] ?? STATUS_BY_NAME[normalised] ?? 'other';
 }

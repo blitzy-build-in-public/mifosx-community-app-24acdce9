@@ -15,10 +15,8 @@ import { firstValueFrom } from 'rxjs';
 
 import { ApiError } from '../../../core/http/api-error';
 import { HasPermissionDirective } from '../../../shared/has-permission.directive';
-import {
-  StatusSwatchComponent,
-  type StatusKey,
-} from '../../../shared/status-swatch/status-swatch.component';
+import type { StatusKey } from '../../../shared/status-key.util';
+import { StatusSwatchComponent } from '../../../shared/status-swatch/status-swatch.component';
 import {
   TabStripComponent,
   type TabDescriptor,

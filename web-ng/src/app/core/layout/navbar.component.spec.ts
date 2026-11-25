@@ -28,7 +28,7 @@ import { NavbarComponent } from './navbar.component';
  * - the user menu's label is the account name the signed-in shell hands in through its `userName`
  *   input, and the session's own `GET /users/{id}` projection when it hands none;
  * - a search reported by the search control becomes a navigation to `/search/:query` carrying the
- *   scope, and searches nothing itself;
+ *   scope and the exact-match flag, and searches nothing itself;
  * - the language switcher changes the active translation without navigating, and the selector shows
  *   the language the service actually has active, including a switch made by another switcher;
  * - sign-out clears the session **before** it navigates, which is the order AAP 0.7.1 and the W1
@@ -229,15 +229,32 @@ describe('NavbarComponent', () => {
     expect(clientsItem().style.display).toBe('');
   });
 
-  it('navigates to the search route with the selected scope when the search control reports a search', () => {
+  it('navigates to the search route with the selected scope and the exact-match flag when the search control reports a search', () => {
     const field = find<HTMLInputElement>('#search');
     field.value = 'ada okafor';
     field.dispatchEvent(new Event('input'));
     find<HTMLFormElement>('app-global-search form').dispatchEvent(new Event('submit'));
     fixture.detectChanges();
 
+    // The pair legacy put in its own URL, and the pair the results screen forwards to the search
+    // request: the scope beside the flag, which is `false` for text the user did not quote
+    // (`app/scripts/controllers/main/MainController.js:208-217`).
     expect(navigate).toHaveBeenCalledWith(['/search', 'ada okafor'], {
-      queryParams: { scope: 'all' },
+      queryParams: { scope: 'all', exactMatch: false },
+    });
+  });
+
+  it('navigates with exactMatch when the search text was quoted, and drops the quotes from the path', () => {
+    const field = find<HTMLInputElement>('#search');
+    field.value = '"ada okafor"';
+    field.dispatchEvent(new Event('input'));
+    find<HTMLFormElement>('app-global-search form').dispatchEvent(new Event('submit'));
+    fixture.detectChanges();
+
+    // The path segment is the unquoted text legacy searched for; the quotes survive only as the
+    // flag that asks Fineract for the literal string.
+    expect(navigate).toHaveBeenCalledWith(['/search', 'ada okafor'], {
+      queryParams: { scope: 'all', exactMatch: true },
     });
   });
 

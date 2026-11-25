@@ -11,19 +11,43 @@ import { TranslatePipe } from '@ngx-translate/core';
 import type { SearchScope } from '../api/search.service';
 
 /**
- * What this control reports when the user submits a search: the text to search for and the scope
- * they chose (AAP 0.2.3's `GlobalSearch` props `query`, `scope`, `(search)`).
+ * What this control reports when the user submits a search: the text to search for, the scope they
+ * chose and whether that text arrived quoted (AAP 0.2.3's `GlobalSearch` props `query`, `scope`,
+ * `(search)`; AAP 0.7.2's `GlobalSearchParams`).
  *
- * The query is already trimmed, and the scope is one of the three {@link SearchScope} values, so
- * the receiving screen can hand both straight to `SearchService.search` without re-checking either.
+ * The query is already trimmed and stripped of the surrounding quotes legacy removed, and the scope
+ * is one of the three {@link SearchScope} values, so the receiving screen can hand all three
+ * straight to `SearchService.search` without re-checking or re-deriving any of them: the flag is
+ * legacy's own reading of the text the user typed, and it is taken here once.
  */
 export interface GlobalSearchSubmission {
-  /** The search text, trimmed; never empty, because an empty search is not emitted at all. */
+  /**
+   * The search text, trimmed and unquoted; never empty, because an empty search is not emitted at
+   * all.
+   */
   readonly query: string;
 
   /** The scope the user selected, which `SearchService.toResourceParam` turns into `resource`. */
   readonly scope: SearchScope;
+
+  /**
+   * Legacy's `exactMatch` flag: `true` when the user quoted the text, which is how a quoted search
+   * asks Fineract for the literal string rather than a substring match, and `false` for unquoted
+   * input (AAP 0.3.4; AAP 0.7.2's `GlobalSearchParams`).
+   */
+  readonly exactMatch: boolean;
 }
+
+/**
+ * The quotes legacy strips from a submitted search, and the reason `exactMatch` exists:
+ * `app/scripts/controllers/main/MainController.js:208-217` removes one leading and one trailing
+ * double quote from the text before searching, and searches exactly when that removal changed it.
+ *
+ * The pattern is legacy's own, character for character, so the two implementations agree on inputs
+ * such as `"Ada`, `Ada"` and `""`. `String.prototype.replace` starts a global search at the
+ * beginning of the string on every call, so one instance carries no state between submissions.
+ */
+const SURROUNDING_QUOTE = /(^"|"$)/g;
 
 /**
  * Legacy translation key of each scope's label, keyed by the scope it labels.
@@ -52,7 +76,9 @@ const SCOPE_LABEL_KEYS: Record<SearchScope, string> = {
  * no service at all — the only query it holds is a view reference to its own field — so it cannot
  * reach `SearchService` or `HttpClient` (Rule 1 clause 5), and the search itself belongs to the
  * results screen that receives this component's `search` output. Nothing here is composed from the
- * Fineract contract — no query parameter, no header (Rule 1 clause 2, Rule 2).
+ * Fineract contract — no URL, no parameter spelling, no header (Rule 1 clause 2, Rule 2): the flag
+ * it reports is legacy's own reading of the typed text, and the wire's parameter names stay with
+ * `SearchService`.
  *
  * **It reproduces the legacy control rather than improving it.** Legacy's navbar search
  * (`app/views/_topnavbar.html:118-137`) is one text field with a scope selector beside it that
@@ -106,7 +132,8 @@ export class GlobalSearchComponent {
 
   /**
    * Reports a submitted search to the navbar, which navigates to `/search/:query` and carries the
-   * scope as a query parameter. Never emitted for an empty or whitespace-only query.
+   * scope and the exact-match flag as query parameters the results screen forwards. Never emitted
+   * for a query that is empty, whitespace-only or nothing but its own surrounding quotes.
    *
    * The name is fixed by the navbar's contract — `<app-global-search (search)="onSearch($event)" />`
    * (AAP 0.2.3's `(search)` prop) — and `search` is also the name of a native DOM event, which is
@@ -163,25 +190,35 @@ export class GlobalSearchComponent {
   }
 
   /**
-   * Submits the search the way legacy's `ng-submit` handler did: read the field, and do nothing at
-   * all when there is nothing to search for.
+   * Submits the search the way legacy's `ng-submit` handler did: read the field, strip the quotes
+   * legacy stripped, and do nothing at all when there is nothing left to search for.
    *
-   * The query is trimmed **before** it is emitted, because the trimmed text is what becomes a path
-   * segment of `/search/:query`; a whitespace-only query would otherwise navigate to a search for a
-   * space. The field itself keeps exactly what the user typed, so the text on screen never changes
-   * under them while they are still editing it.
+   * The query is trimmed and unquoted **before** it is emitted, because that is the text that
+   * becomes a path segment of `/search/:query`, and legacy derived both of its parameters from the
+   * very same string: `searchString.replace(/(^"|"$)/g, '')` gives what is searched for, and the
+   * flag is `true` when that removal changed the text
+   * (`app/scripts/controllers/main/MainController.js:208-217`, the contract
+   * `SearchController.js:9` forwards as `exactMatch`). A query that is whitespace alone, or a pair
+   * of quotes alone, is therefore not sent at all rather than navigating to an empty search — the
+   * blank-search rule this control already applied to whitespace, and a departure from Rule 1
+   * clause 3 only for that degenerate input, where legacy would have navigated to an empty
+   * `/search/`.
+   *
+   * The field itself keeps exactly what the user typed, quotes included, so the text on screen never
+   * changes under them while they are still editing it.
    *
    * Nothing is sent while the user is still typing — this runs only on submit — and a second
    * submission is a second search, as it is in legacy: there is no de-duplication to add here
    * (Rule 1 clause 3).
    */
   submit(): void {
-    const query = this.query.value.trim();
+    const typed = this.query.value.trim();
+    const query = typed.replace(SURROUNDING_QUOTE, '');
 
     if (query.length === 0) {
       return;
     }
 
-    this.search.emit({ query, scope: this.scope.value });
+    this.search.emit({ query, scope: this.scope.value, exactMatch: query !== typed });
   }
 }

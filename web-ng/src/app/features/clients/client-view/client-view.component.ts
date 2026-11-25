@@ -112,7 +112,8 @@ function isClientRecordTab(value: string): value is ClientRecordTab {
  * to the blocks that display them, which render through the one `DISPLAY_DATE_FORMAT` pattern and
  * parse Fineract values with `fromFineractDate` (AAP 0.7.2 "Date handling"). The status is the
  * design's colour indicator and never its word, and it is painted by `RecordHeaderComponent`
- * through the family's single `toClientStatusKey` table (AAP 0.10.5 item 11).
+ * through `toClientStatusKey`, the family's delegate to the one mapping the whole application
+ * shares in `web-ng/src/app/shared/status-key.util.ts` (AAP 0.10.5 item 11).
  *
  * **Presentation.** The template and the global Bootstrap 3 layer in `web-ng/src/styles.scss` own
  * every visual value, which is why this component declares no stylesheet, no inline style and no

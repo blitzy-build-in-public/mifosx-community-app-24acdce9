@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { toSavingsStatusKey } from './savings.models';
-import type { StatusKey } from '../../shared/status-swatch/status-swatch.component';
+import type { StatusKey } from '../../shared/status-key.util';
 
 /**
  * Every status the fork's `SavingsAccountStatusType` enum declares

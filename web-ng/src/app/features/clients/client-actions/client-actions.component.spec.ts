@@ -38,8 +38,10 @@ import { ClientActionsComponent } from './client-actions.component';
  *     not-found with no request");
  *  2. the gate's `GET /entityDatatableChecks?limit=-1` is the first request, exactly once, and
  *     nothing else is in flight until it answers;
- *  3. a failed gate leaves the form unready, publishes Fineract's message and never reads the reason
- *     list, so no field is ever enabled against a check that did not answer;
+ *  3. a failed gate leaves the form unready, publishes Fineract's own message for a 4xx, publishes
+ *     nothing for a 5xx or a transport failure — the interceptor raises that one notification, so
+ *     painting it here as well would report one problem twice — and never reads the reason list, so
+ *     no field is ever enabled against a check that did not answer;
  *  4. `close` reads `GET /clients/template?commandParam=close` once the gate has passed and offers
  *     the tenant's reasons in the server's order;
  *  5. `activate` takes no reason and therefore reads no template at all;
@@ -48,16 +50,22 @@ import { ClientActionsComponent } from './client-actions.component';
  *     id, and then returns to the record;
  *  7. a second submit while that command is in flight sends no second request, because the action
  *     endpoints are not idempotent (AAP 0.1.1 "one request per click");
- *  8. a refused command records the server's message verbatim, keeps every entered value and
- *     navigates nowhere (workflow W7);
- *  9. a `close` whose date is still empty posts nothing at all.
+ *  8. a refused command records a 4xx message verbatim, keeps every entered value and navigates
+ *     nowhere (workflow W7), while the same rejection at a 5xx leaves that region empty for the same
+ *     reason as the gate's;
+ *  9. a `close` whose date is still empty posts nothing at all;
+ * 10. the reason select of `close`, `reject` and `withdraw` announces no required constraint, because
+ *     its control carries no validator and the screen posts the reason as chosen, while the date
+ *     field beside it — whose control does carry one — announces the constraint Fineract enforces
+ *     (Rule 1 clause 3; AAP 0.4.4 decision 6).
  *
  * **The request sequence is asserted without a render.** What this screen does — the gate's order,
  * the reason list, one command per click and the body it carries — lives entirely in the component
  * and the services it calls, so those cases mount the screen and read its signals rather than a
- * fixture. One case does render, to pin the one thing only the template can show: the form appears
- * only after the gate — and, for a reason-taking command, the reason list — has answered, and its
- * primary button is disabled while a command is in flight (AAP 0.7.4; AAP 0.1.1).
+ * fixture. Two cases do render, to pin the two things only the template can show: the form appears
+ * only after the gate — and, for a reason-taking command, the reason list — has answered, with its
+ * primary button disabled while a command is in flight (AAP 0.7.4; AAP 0.1.1); and the required
+ * marker the reason select and the date field do or do not carry in `aria-required`.
  *
  * **Providers.** Each case mounts the screen for its own URL, so the module is reset first and the
  * route stub is the one provider a case supplies: `ActivatedRoute.paramMap` emits the two segments
@@ -104,9 +112,15 @@ const PAYLOAD_DATE_FORMAT = 'dd MMMM yyyy';
 const TRANSLATIONS: Readonly<Record<string, string>> = {
   'label.anchor.activate': 'Activate',
   'label.anchor.close': 'Close',
+  'label.anchor.reject': 'Reject',
+  'label.anchor.withdraw': 'Withdraw',
   'label.input.activationdate': 'Activation date',
   'label.input.closuredate': 'Closure date',
   'label.input.closurereason': 'Closure reason',
+  'label.input.rejectiondate': 'Rejection date',
+  'label.input.rejectionreason': 'Rejection reason',
+  'label.input.withdrawaldate': 'Withdrawal date',
+  'label.input.withdrawalreason': 'Withdrawal reason',
   'label.button.save': 'Submit',
   'label.button.cancel': 'Cancel',
   'label.select': 'Select an option',
@@ -346,16 +360,51 @@ describe('ClientActionsComponent', () => {
       .expectOne(isGateRead)
       .flush(
         { defaultUserMessage: GATE_FAILURE_MESSAGE },
-        { status: 500, statusText: 'Server Error' },
+        { status: 400, statusText: 'Bad Request' },
       );
     await settle();
 
     expect(component.ready()).toBe(false);
+    // A 4xx is Fineract answering, so its own text reaches the screen verbatim (AAP 0.7.4; workflow
+    // W7).
     expect(component.error()).toBe(GATE_FAILURE_MESSAGE);
     expect(component.reasonOptions()).toEqual([]);
     // A failed gate is never treated as a pass: the reason list is not read at all.
     expect(httpMock.match(isTemplateRead('close'))).toHaveLength(0);
     expect(httpMock.match(isCommandPost)).toHaveLength(0);
+  });
+
+  it('paints nothing for a gate that fails with a 5xx, which the interceptor has already reported', async () => {
+    await show('close');
+
+    httpMock
+      .expectOne(isGateRead)
+      .flush(
+        { defaultUserMessage: GATE_FAILURE_MESSAGE },
+        { status: 503, statusText: 'Service Unavailable' },
+      );
+    await settle();
+
+    // One failure, one report: `fineract.interceptor.ts` raised the notification for a 5xx, so this
+    // region stays empty and the form stays unrendered (AAP 0.7.4).
+    expect(component.ready()).toBe(false);
+    expect(component.error()).toBeNull();
+    expect(httpMock.match(isTemplateRead('close'))).toHaveLength(0);
+    expect(httpMock.match(isCommandPost)).toHaveLength(0);
+  });
+
+  it('paints nothing for a gate that fails in transport, whose message would carry the request URL', async () => {
+    await show('close');
+
+    httpMock.expectOne(isGateRead).flush(null, { status: 0, statusText: 'Unknown Error' });
+    await settle();
+
+    // Status `0` is the class's marker for "no HTTP answer": the interceptor notified it, and the
+    // failure's own message is Angular's, which names the configured API host (AAP 0.7.4; Rule 1
+    // clause 9).
+    expect(component.ready()).toBe(false);
+    expect(component.error()).toBeNull();
+    expect(httpMock.match(isTemplateRead('close'))).toHaveLength(0);
   });
 
   it('reads the reason list once for close and offers the tenant’s reasons in the server’s order', async () => {
@@ -465,6 +514,30 @@ describe('ClientActionsComponent', () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
+  it('paints nothing for a command that fails with a 5xx, which the interceptor has already reported', async () => {
+    await showReadyClose();
+
+    component.closeForm.controls.closureDate.setValue(CLOSURE_DATE);
+    component.closeForm.controls.closureReasonId.setValue(CHOSEN_REASON.id);
+
+    component.submit();
+
+    httpMock
+      .expectOne(isCommandPost)
+      .flush(
+        { defaultUserMessage: COMMAND_FAILURE_MESSAGE },
+        { status: 500, statusText: 'Server Error' },
+      );
+    await settle();
+
+    // The interceptor's notification is the one report of this failure, so the region stays empty
+    // while the entered values survive for the retry (AAP 0.7.4).
+    expect(component.error()).toBeNull();
+    expect(component.closeForm.controls.closureDate.value).toEqual(CLOSURE_DATE);
+    expect(component.closeForm.controls.closureReasonId.value).toBe(CHOSEN_REASON.id);
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
   it('posts nothing while the closure date is still empty', async () => {
     await showReadyClose();
 
@@ -524,4 +597,28 @@ describe('ClientActionsComponent', () => {
     httpMock.expectOne(isCommandPost).flush({ resourceId: 2, clientId: 2 });
     await settle();
   });
+
+  it.each(['close', 'reject', 'withdraw'] as const)(
+    'marks the %s date field required and leaves the optional reason select unmarked',
+    async (action) => {
+      await show(action);
+      await passGate();
+      await answerTemplate(action);
+      fixture.detectChanges();
+
+      const reasonSelect = host().querySelector<HTMLSelectElement>('app-select-field select');
+      const dateInput = host().querySelector<HTMLInputElement>('app-date-field input[type="date"]');
+
+      // The reason is posted as chosen — including nothing at all — and its control carries no
+      // validator, so the field must not announce a constraint this screen does not enforce
+      // (Rule 1 clause 3; AAP 0.4.4 decision 6).
+      expect(reasonSelect).not.toBeNull();
+      expect(reasonSelect?.hasAttribute('aria-required')).toBe(false);
+
+      // The date control does carry `Validators.required`, so the one rule Fineract states is the one
+      // assistive technology is told about.
+      expect(dateInput).not.toBeNull();
+      expect(dateInput?.getAttribute('aria-required')).toBe('true');
+    },
+  );
 });

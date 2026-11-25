@@ -16,10 +16,8 @@ import { ApiError, screenFailure, toDisplayableFailure } from '../../../core/htt
 import { DISPLAY_DATE_FORMAT, fromFineractDate } from '../../../shared/date-format.util';
 import { EmptyStateComponent } from '../../../shared/empty-state/empty-state.component';
 import { HasPermissionDirective } from '../../../shared/has-permission.directive';
-import {
-  StatusSwatchComponent,
-  type StatusKey,
-} from '../../../shared/status-swatch/status-swatch.component';
+import type { StatusKey } from '../../../shared/status-key.util';
+import { StatusSwatchComponent } from '../../../shared/status-swatch/status-swatch.component';
 import { toSavingsStatusKey, type SavingsAccount } from '../savings.models';
 import { SavingsService } from '../savings.service';
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { toLoanStatusKey } from './loan.models';
-import type { StatusKey } from '../../shared/status-swatch/status-swatch.component';
+import type { StatusKey } from '../../shared/status-key.util';
 
 /**
  * Every status the fork's `LoanStatus` enum declares (`LoanStatus.java`), by its numeric id and by

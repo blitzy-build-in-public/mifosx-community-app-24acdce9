@@ -11,7 +11,7 @@ import { SearchService } from '../../../core/api/search.service';
 import { ApiError } from '../../../core/http/api-error';
 import { EmptyStateComponent } from '../../../shared/empty-state/empty-state.component';
 import { HasPermissionDirective } from '../../../shared/has-permission.directive';
-import type { StatusKey } from '../../../shared/status-swatch/status-swatch.component';
+import type { StatusKey } from '../../../shared/status-key.util';
 import { StatusSwatchComponent } from '../../../shared/status-swatch/status-swatch.component';
 import type { Client, ClientListParams } from '../client.models';
 import { toClientStatusKey } from '../client.models';

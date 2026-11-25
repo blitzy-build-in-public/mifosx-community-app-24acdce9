@@ -1,17 +1,22 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 
+import { STATUS_KEYS, type StatusKey } from '../status-key.util';
+
 /**
- * The four keys of the client status indicator (AAP 0.2.3 component inventory row
- * `StatusSwatch`).
+ * The four keys of the status indicator, re-exported from
+ * `web-ng/src/app/shared/status-key.util.ts` so that this component's own public input type stays
+ * importable from this module (AAP 0.2.3 component inventory row `StatusSwatch`).
  *
- * The vocabulary is this component's own, not Fineract's: mapping a status code
- * (`clientStatusType.active`, `clientStatusType.pending`, …) onto one of these keys belongs to
- * the calling feature, so `shared/` carries no status-code switch and no i18n (AAP 0.14.1).
- * `active` and `pending` are the two states the design paints (Figma nodes `1:3` and `1:4`);
- * `closed` and `other` are the complementary styling for records the design does not show, and
- * they differ by colour only.
+ * The vocabulary is not this component's own. `shared/status-key.util.ts` declares the four keys,
+ * the set of them this component validates against, and the single mapping from a Fineract status
+ * code — `clientStatusType.*`, `loanStatusType.*` and `savingsAccountStatusType.*` — onto one of
+ * them, and this component imports the vocabulary and `STATUS_KEYS` from there. That is what keeps
+ * the mapping out of a component, so a model can map a status without importing one, and what
+ * stops two screens from colouring one code two ways (AAP 0.14.1). `active` and `pending` are the
+ * two states the design paints (Figma nodes `1:3` and `1:4`); `closed` and `other` are the
+ * complementary styling for records the design does not show, and they differ by colour only.
  */
-export type StatusKey = 'active' | 'pending' | 'closed' | 'other';
+export type { StatusKey };
 
 /**
  * The two geometries the design gives the same indicator: `swatch` is the 12.5px square of the
@@ -19,19 +24,6 @@ export type StatusKey = 'active' | 'pending' | 'closed' | 'other';
  * name on the record header (Figma node `1:4`). AAP 0.2.3 row `StatusSwatch`.
  */
 export type StatusSwatchVariant = 'swatch' | 'dot';
-
-/**
- * Every legal `StatusKey`, against which a key is validated before it reaches the element's
- * class list. The template cannot produce an illegal key — `strictTemplates` type-checks the
- * binding against the union — so the guard exists for a value that arrives from untyped data at
- * run time, where interpolating the raw input would write arbitrary text into the class list.
- */
-const STATUS_KEYS: ReadonlySet<StatusKey> = new Set<StatusKey>([
-  'active',
-  'pending',
-  'closed',
-  'other',
-]);
 
 /**
  * The global colour class each key maps to. The names are the ones `web-ng/src/styles.scss`
@@ -50,6 +42,11 @@ const STATUS_CLASSES: Readonly<Record<StatusKey, string>> = {
  * The colour class for a key, falling back to `status-other` for a value outside the union so
  * that an unknown key still renders the indicator's geometry in a neutral colour rather than
  * failing, and never contributes text of its own to the class list.
+ *
+ * The template cannot produce an illegal key — `strictTemplates` type-checks the binding against
+ * the union — so the guard exists for a value that arrives from untyped data at run time, where
+ * interpolating the raw input would write arbitrary text into the class list. The keys it accepts
+ * are the shared `STATUS_KEYS` of `shared/status-key.util.ts`.
  */
 function statusClass(key: StatusKey): string {
   return STATUS_KEYS.has(key) ? STATUS_CLASSES[key] : STATUS_CLASSES.other;

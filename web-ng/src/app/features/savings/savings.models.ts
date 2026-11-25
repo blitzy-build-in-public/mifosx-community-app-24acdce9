@@ -1,6 +1,6 @@
 import type { AppDateFormat } from '../../core/config/app-config.model';
 import type { FineractDate } from '../../shared/date-format.util';
-import type { StatusKey } from '../../shared/status-swatch/status-swatch.component';
+import { toStatusKey, type StatusKey } from '../../shared/status-key.util';
 
 /**
  * Every request and response shape of the saving-accounts resource family (AAP 0.7.1 Features row
@@ -366,72 +366,23 @@ export interface SavingsTransactionRequest {
 export type SavingsTransactionCommand = 'deposit' | 'withdrawal';
 
 /**
- * The savings status codes this application recognises, mapped onto the indicator vocabulary
- * `StatusSwatchComponent` owns. The keys are the fork's own `SavingsAccountStatusType` codes in
- * `SavingsAccountStatusType.java`, normalised as all three families normalise a status code, and
- * nothing else: `invalid`, `transfer.in.progress` and `transfer.on.hold` are absent by design.
+ * The status indicator's key for a Fineract savings account status code — the savings record's only
+ * status mapping (AAP 0.2.3 row `StatusSwatch`; AAP 0.7.2 row `SavingsAccount`; AAP 0.7.3 W8).
  *
- * Every terminal state of the enum is `closed` — withdrawn by applicant, rejected, closed,
- * pre-mature closure and matured — because a matured or prematurely closed account is as finished
- * as a plainly closed one, which is what a substring test on `closed` alone got wrong.
- */
-const STATUS_KEY_BY_CODE: Readonly<Partial<Record<string, StatusKey>>> = {
-  submittedandpendingapproval: 'pending',
-  approved: 'pending',
-  active: 'active',
-  withdrawnbyapplicant: 'closed',
-  rejected: 'closed',
-  closed: 'closed',
-  prematureclosure: 'closed',
-  matured: 'closed',
-};
-
-/**
- * The normalisation the three feature families share before a status code is looked up:
- * lower-cased, the family's own message-code prefix removed if the payload carried it, and every
- * non-alphanumeric character stripped, so the whole remaining name is the key.
- *
- * `savingsAccountStatusType.pre.mature.closure`, `preMatureClosure` and `PRE_MATURE_CLOSURE`
- * therefore all normalise to `prematureclosure`.
- */
-function normaliseSavingsStatusCode(code: string): string {
-  return code.toLowerCase().replace(/^savingsaccountstatustype\./, '').replace(/[^a-z0-9]/g, '');
-}
-
-/**
- * Maps a Fineract savings status code onto the status indicator's vocabulary
- * (`StatusKey`, AAP 0.2.3 component inventory row `StatusSwatch`).
- *
- * The family's only status mapping, and the reason `StatusSwatchComponent` never receives a
- * Fineract code: the indicator carries a colour and no text at all (AAP 0.10.5 deliberate
- * difference 11), so the code — not the server's display text — decides the swatch. The code is
- * lower-cased, its `savingsAccountStatusType.` prefix and every separator removed, and the whole
- * remaining name is looked up in an exact table over the fork's `SavingsAccountStatusType` enum;
- * the server's `value` display text is never consulted, because it is localised prose and would
- * change the swatch with the language.
- *
- * Mappings, by the state they indicate:
- *
- *   - `savingsAccountStatusType.active` → `active`;
- *   - `savingsAccountStatusType.submitted.and.pending.approval` and `…approved` → `pending`;
- *   - `…withdrawn.by.applicant`, `…rejected`, `…closed`, `…pre.mature.closure` and `…matured`
- *     → `closed`, because all five are terminal in the design's vocabulary;
- *   - everything else → `other`: `…invalid`, `…transfer.in.progress`, `…transfer.on.hold`, an
- *     empty string, `undefined`, and any code the enum does not declare all fall here.
- *
- * Failure is neutral, never `active`: an unrecognised or missing code must not paint a pending or
- * transferred account as active, and `other` carries a colour of its own without claiming a state.
- * Pure and total — no I/O, no logging, no throw — so it can run in a template for every row.
+ * It delegates to the single mapping in `web-ng/src/app/shared/status-key.util.ts`, which holds the
+ * four-key vocabulary and the one table over the fork's `SavingsAccountStatusType.java` codes, so a
+ * pre-mature closure, a matured account and a plain closure all reach the same finished colour and
+ * no screen can colour one code two ways. The code is the only input: the payload's `value` display
+ * text is never consulted, because it is localised prose and would change the swatch with the
+ * language. An unrecognised code — `invalid`, a transfer in progress or on hold, anything the enum
+ * adds later — and a missing one are both the neutral `other`, never `active`. Pure and total — no
+ * I/O, no logging, no throw — so it can run for every row.
  *
  * @param code The `code` member of the account's `status`, or `undefined` when the response carried
  *   none.
  * @returns The key the indicator renders.
  */
 export function toSavingsStatusKey(code: string | undefined): StatusKey {
-  if (code === undefined) {
-    return 'other';
-  }
-
-  return STATUS_KEY_BY_CODE[normaliseSavingsStatusCode(code)] ?? 'other';
+  return toStatusKey(code);
 }
 

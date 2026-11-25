@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { toAccountStatusKey, toClientStatusKey } from './client.models';
-import type { StatusKey } from '../../shared/status-swatch/status-swatch.component';
+import type { StatusKey } from '../../shared/status-key.util';
 
 /**
  * Every status the fork's `ClientStatus` enum declares (`ClientStatus.java`), with the indicator key

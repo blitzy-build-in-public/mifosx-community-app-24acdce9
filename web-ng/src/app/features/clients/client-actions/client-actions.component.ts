@@ -144,20 +144,29 @@ function todayAtLocalMidnight(): Date {
 }
 
 /**
- * The text a failed command shows, taken from the failure itself and altered in no way.
+ * The text a failed call paints on this screen: Fineract's own message for a 4xx, and nothing for a
+ * failure the interceptor has already reported.
  *
- * `ApiError` is the interceptor's mapped failure and carries Fineract's own
- * `defaultUserMessage` as its message, which is what a screen must render verbatim (AAP 0.4.4
- * decision 6, workflow W7). Anything else that can be thrown — a transport fault the interceptor
- * did not map, a programming error in a dependency — reports its own message, and a throw that is
- * not an `Error` reports nothing rather than `[object Object]`. Nothing is logged: a client id, a
- * reason id, a body or a credential must never reach the console (Rule 1 clause 9).
+ * `ApiError` is the interceptor's mapped failure and carries Fineract's own `defaultUserMessage` as
+ * its message, which is what a screen must render verbatim (AAP 0.4.4 decision 6, workflow W7). A
+ * 4xx is Fineract answering the values this form submitted, so that answer is shown and the screen
+ * stays usable (AAP 0.7.4).
+ *
+ * Every other outcome answers `null`. `core/http/fineract.interceptor.ts` raises the single
+ * notification for a failure no screen can render itself — a transport fault, which `ApiError` marks
+ * with status `0`, and any status at or above 500 (AAP 0.7.4) — so painting it here as well would
+ * report one problem twice, and a status-`0` failure carries Angular's own message, which embeds the
+ * failed request's URL. A throw that is not an `ApiError` never carries Fineract's verdict on the
+ * values this form submitted, so it paints nothing either. Nothing is logged: a client id, a reason
+ * id, a body or a credential must never reach the console (Rule 1 clause 9).
  *
  * @param error the value a failed call rejected with.
- * @returns displayable text, or `''` when the value carries none.
+ * @returns displayable text for a 4xx, or `null` when the failure must not be painted again.
  */
-function failureMessage(error: unknown): string {
-  return error instanceof ApiError ? error.message : error instanceof Error ? error.message : '';
+function failureMessage(error: unknown): string | null {
+  return error instanceof ApiError && error.status >= 400 && error.status < 500
+    ? error.message
+    : null;
 }
 
 /**
@@ -176,8 +185,9 @@ function failureMessage(error: unknown): string {
  * applicable check — and this screen neither re-implements nor reorders it (AAP 0.7.3 row "Client
  * actions: datatable gate"; AAP 0.3.4 claim 13). It runs once per screen load and never again on
  * submit, because a second gate call would add requests the legacy screen never makes. A gate that
- * fails leaves the form unrendered with the interceptor's own message on screen; a failed gate is
- * never treated as a pass.
+ * fails leaves the form unrendered, with Fineract's own message on screen when it answered with a
+ * 4xx and with the interceptor's notification alone when it did not; a failed gate is never treated
+ * as a pass.
  *
  * **Reason ids come from the tenant, never from this file.** `close`, `reject` and `withdraw` read
  * `GET /clients/template?commandParam=<command>` and render its `narrations` in the server's order,
@@ -196,11 +206,17 @@ function failureMessage(error: unknown): string {
  * **Matching legacy rather than improving it.** The only validator is the action date the server
  * requires: the reason is posted as chosen — including none at all — exactly as legacy's unvalidated
  * reason select posts it, and Fineract's own message is what reaches the user (Rule 1 clause 3;
- * AAP 0.7.4). No body is blocked by a rule Fineract does not state (AAP 0.4.4 decision 6). The
- * server's own message is rendered verbatim, the entered values survive a failure, and the screen
- * offers no note field, no confirmation dialogue, no success toast and no client summary, because the
- * legacy screen offers none. The one registered difference is the native date input the shared
- * `DateField` renders in place of the jQuery datepicker (AAP 0.10.5 item 1).
+ * AAP 0.7.4). That select carries no required marker either: legacy decorates the reason label with
+ * a bare asterisk but validates nothing, and this screen reproduces what legacy does — the reason is
+ * posted as chosen and Fineract's refusal is what reaches the user — so announcing a required
+ * constraint in `aria-required` would state a rule the form does not enforce, which is the
+ * client-side validation legacy does not perform (Rule 1 clause 3 "match legacy behavior, don't
+ * improve it"; AAP 0.4.4 decision 6, which inherits the server's rules instead of adding our own).
+ * No body is blocked by a rule Fineract does not state. The server's own message is rendered
+ * verbatim when it answers with one, the entered values survive a failure, and the screen offers no note field, no
+ * confirmation dialogue, no success toast and no client summary, because the legacy screen offers
+ * none. The one registered difference is the native date input the shared `DateField` renders in
+ * place of the jQuery datepicker (AAP 0.10.5 item 1).
  *
  * **One request per click.** Every submit goes through `shared/submit-guard.util.ts`, whose `busy`
  * signal disables the primary button while the call is in flight, so a double click posts once — the
@@ -265,8 +281,10 @@ export class ClientActionsComponent {
 
   /**
    * The one failure region, shared by a failed gate, a failed reason-list read and a failed command:
-   * the server's own message, verbatim and untranslated (AAP 0.4.4 decision 6; workflow W7). `null`
-   * while there is nothing to report.
+   * Fineract's own message for a 4xx, verbatim and untranslated (AAP 0.4.4 decision 6; workflow W7).
+   * `null` while there is nothing to report, and for the failures `core/http/fineract.interceptor.ts`
+   * has already raised a notification for — a transport fault and any status at or above 500 — so no
+   * problem is shown twice (AAP 0.7.4).
    */
   readonly error = signal<string | null>(null);
 
@@ -528,9 +546,10 @@ export class ClientActionsComponent {
    *
    * An `:id` or `:action` the route does not carry, or an `:action` outside the five commands, stops
    * here with the not-found message and no request at all. Otherwise the gate runs and is awaited
-   * first; a failed gate reports its message and stops before the reason list is read, so the form is
-   * never rendered for a client whose checks did not answer. Only `close`, `reject` and `withdraw`
-   * then read their reason list, and `ready` becomes true once everything the form needs is in hand.
+   * first; a failed gate reports what {@link failureMessage} answers — Fineract's own message for a
+   * 4xx — and stops before the reason list is read, so the form is never rendered for a client whose
+   * checks did not answer. Only `close`, `reject` and `withdraw` then read their reason list, and
+   * `ready` becomes true once everything the form needs is in hand.
    *
    * @param params the route's parameter map.
    */
@@ -591,9 +610,10 @@ export class ClientActionsComponent {
    * it is in flight, hands the command's own fields to `ClientService.action`, which supplies
    * `dateFormat` and `locale` from the configuration at the boundary, and awaits the one POST. On
    * success the screen navigates to `#/viewclient/:id` with the route's own client id, as the legacy
-   * controller does. On failure it records the mapped message verbatim and keeps every entered value,
-   * so the user can correct the field the server named; the guard releases the button in either
-   * outcome.
+   * controller does. On failure it records the message a 4xx answered with, verbatim, and keeps every
+   * entered value, so the user can correct the field the server named, while a 5xx or transport
+   * failure stays the interceptor's one notification (AAP 0.7.4); the guard releases the button in
+   * either outcome.
    *
    * @param command the command being posted, which is the one the body describes.
    * @param fields that command's own fields, as its form holds them; the date-format pair is not one

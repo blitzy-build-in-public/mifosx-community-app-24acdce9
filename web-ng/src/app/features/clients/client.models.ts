@@ -1,6 +1,6 @@
 import type { AppDateFormat } from '../../core/config/app-config.model';
 import type { FineractDate } from '../../shared/date-format.util';
-import type { StatusKey } from '../../shared/status-swatch/status-swatch.component';
+import { toStatusKey, type StatusKey } from '../../shared/status-key.util';
 
 /**
  * The single type module of the clients feature family (AAP 0.7.1 row `clients`; AAP 0.7.2 rows
@@ -13,9 +13,10 @@ import type { StatusKey } from '../../shared/status-swatch/status-swatch.compone
  * typed escape hatch anywhere inside it (Rule 1 clause 4). Two of the three imports are shared
  * declarations every family uses — the response-date value `FineractDate` from
  * `web-ng/src/app/shared/date-format.util.ts` and the payload format `AppDateFormat` from
- * `web-ng/src/app/core/config/app-config.model.ts` — and the third is the `StatusKey` vocabulary
- * the status indicator already owns, so the four-state colour vocabulary lives in exactly one
- * place and the screens' status mapping has one verdict rather than two.
+ * `web-ng/src/app/core/config/app-config.model.ts` — and the third is the shared status vocabulary
+ * `shared/status-key.util.ts` owns, which declares the four-colour `StatusKey` union and the one
+ * Fineract-code mapping this file's two status mappers delegate to, so the vocabulary and the
+ * mapping each live in exactly one place.
  *
  * **Date serialisation.** No model here stores a formatted date. A request body carries
  * `Date | null` and `client.service.ts` converts it at the API boundary with
@@ -735,159 +736,41 @@ export interface ClientMutationResponse {
 }
 
 /**
- * The client status codes this application recognises, mapped to the indicator vocabulary
- * `StatusSwatchComponent` owns. Every key is one of `ClientStatus`'s own codes in the fork's
- * `ClientStatus.java`, normalised as all three families normalise a status code, and nothing else:
- * `invalid`, `transfer.in.progress` and `transfer.on.hold` are absent by design.
+ * The status indicator's key for a Fineract client status code — the clients list and the client
+ * record header both read a client's own status through it (AAP 0.2.3 row `StatusSwatch`; AAP 0.7.2
+ * row `Client`).
  *
- * All three terminal states are `closed` — closed, rejected and withdrawn — because the design's
- * vocabulary has no colour of its own for any of them.
- */
-const STATUS_KEY_BY_CODE: Readonly<Partial<Record<string, StatusKey>>> = {
-  active: 'active',
-  pending: 'pending',
-  closed: 'closed',
-  rejected: 'closed',
-  withdraw: 'closed',
-};
-
-/**
- * The normalisation the three feature families share before a status code is looked up:
- * lower-cased, the family's own message-code prefix removed if the payload carried it, and every
- * non-alphanumeric character stripped, so the whole remaining name is the key.
- *
- * `clientStatusType.transfer.in.progress`, `TRANSFER_IN_PROGRESS` and `transferInProgress`
- * therefore all normalise to `transferinprogress`.
- */
-function normaliseClientStatusCode(code: string): string {
-  return code.toLowerCase().replace(/^clientstatustype\./, '').replace(/[^a-z0-9]/g, '');
-}
-
-/**
- * The single mapping from a Fineract client status code to the status indicator's key, shared by
- * the clients list and the client record header so both paint the same verdict for the same client
- * (AAP 0.2.3 row `StatusSwatch`; AAP 0.7.2 row `Client`).
- *
- * The lookup is exact. The code is lower-cased, its `clientStatusType.` prefix and every separator
- * removed, and the whole remaining name — never just its last dot-segment — is matched against an
- * exact table over the fork's `ClientStatus` enum.
- *
- * Recognised codes, by the state they indicate:
- *
- *   - `clientStatusType.active` → `active`;
- *   - `clientStatusType.pending` → `pending`;
- *   - `clientStatusType.closed`, `clientStatusType.rejected` and `clientStatusType.withdraw` →
- *     `closed`, because all three are terminal in the design's vocabulary;
- *   - everything else → `other`: `clientStatusType.transfer.in.progress`,
- *     `clientStatusType.transfer.on.hold`, `clientStatusType.invalid`, an empty string and
- *     `undefined` all fall here.
- *
- * Failure is neutral, never `active`: an unrecognised or missing code must not paint a pending or
- * transferred client as active, and `other` carries a colour of its own without claiming a state.
- * Pure and total — no I/O, no logging, no throw — so it can run in a template for every row.
+ * It delegates to the single mapping in `web-ng/src/app/shared/status-key.util.ts`, which holds the
+ * four-key vocabulary and the one table over the fork's `ClientStatus.java` codes, so this family
+ * and the global search results screen cannot colour one code two ways. An unrecognised code
+ * (`invalid`, a transfer in progress or on hold, anything the fork adds later) and a missing one are
+ * both the neutral `other`, which carries a colour of its own without claiming a state. Pure and
+ * total — no I/O, no logging, no throw — so it can run in a template for every row.
  *
  * @param code The `code` of a client status object, or `undefined` when a response carried none.
  * @returns One of the four keys `StatusSwatchComponent` renders.
  */
 export function toClientStatusKey(code: string | undefined): StatusKey {
-  if (code === undefined) {
-    return 'other';
-  }
-
-  return STATUS_KEY_BY_CODE[normaliseClientStatusCode(code)] ?? 'other';
+  return toStatusKey(code);
 }
 
 /**
- * The loan and savings account status codes `GET /clients/{id}/accounts` returns, mapped to the
- * indicator vocabulary `StatusSwatchComponent` owns.
- *
- * An account row carries an account-level code, not a client-level one: the fork's `LoanStatus.java`
- * sends `loanStatusType.*` and its `SavingsAccountStatusType.java` sends
- * `savingsAccountStatusType.*`, neither of which {@link STATUS_KEY_BY_CODE} claims — that table holds
- * the client family's own codes. The keys here are those two enums' codes, normalised by
- * {@link normaliseAccountStatusCode} and nothing else: `invalid`, `transfer.in.progress` and
- * `transfer.on.hold` are absent by design, because a transition this build cannot vouch for paints
- * the neutral colour rather than claiming a state.
- *
- * Every terminal state is `closed` — the loan's closed obligations met, closed written off, closed
- * with a rescheduled outstanding amount, withdrawn by client and rejected, and the savings account's
- * closed, pre-mature closure, matured, withdrawn by applicant and rejected — because the indicator's
- * vocabulary carries one colour for a finished record (AAP 0.2.3 row `StatusSwatch`). A loan
- * submitted and pending approval or approved, and a savings account in either of those two states, are
- * `pending`: nothing has been disbursed or activated yet, so neither is `active`.
- */
-const ACCOUNT_STATUS_KEY_BY_CODE: Readonly<Partial<Record<string, StatusKey>>> = {
-  active: 'active',
-
-  /** A loan awaiting approval or approved but not yet disbursed; a savings account in either state. */
-  submittedandpendingapproval: 'pending',
-  approved: 'pending',
-
-  /** Every terminal state of either family, which the indicator paints with one colour. */
-  closed: 'closed',
-  closedobligationsmet: 'closed',
-  closedwrittenoff: 'closed',
-  closedrescheduleoutstandingamount: 'closed',
-  prematureclosure: 'closed',
-  matured: 'closed',
-  rejected: 'closed',
-  withdrawnbyclient: 'closed',
-  withdrawnbyapplicant: 'closed',
-};
-
-/**
- * The normalisation an account status code is reduced to before it is looked up in
- * {@link ACCOUNT_STATUS_KEY_BY_CODE}: lower-cased, the account family's message-code prefix removed
- * when the payload carried it, and every non-alphanumeric character stripped, so the whole remaining
- * name is the key.
- *
- * `loanStatusType.closed.written.off`, `savingsAccountStatusType.pre.mature.closure` and
- * `CLOSED_OBLIGATIONS_MET` therefore normalise to `closedwrittenoff`, `prematureclosure` and
- * `closedobligationsmet`.
- *
- * The prefix is matched family-agnostically (`[a-z]+statustype.`) because one response mixes two
- * families, which is also why this table has its own normaliser rather than the client-only one
- * above.
- */
-function normaliseAccountStatusCode(code: string): string {
-  return code.toLowerCase().replace(/^[a-z]+statustype\./, '').replace(/[^a-z0-9]/g, '');
-}
-
-/**
- * The single mapping from a Fineract account status code to the status indicator's key, used for both
- * row families of the client record's accounts table (AAP 0.2.3 row `StatusSwatch`; AAP 0.7.2 rows
+ * The status indicator's key for a loan or savings account status code, used for both row families
+ * of the client record's accounts table (AAP 0.2.3 row `StatusSwatch`; AAP 0.7.2 rows
  * `ClientLoanAccountSummary` and `ClientSavingsAccountSummary`; AAP 0.7.4 `#/viewclient/:id`).
  *
  * The account's own state decides the swatch, which is the row legacy colours through its
- * `StatusLookup` (Rule 1 clause 3). The lookup is exact and is matched against the code's whole
- * normalised name — never just its last dot-segment — so
- * `loanStatusType.closed.reschedule.outstanding.amount` is `closed` and never the colour of a
- * single word inside it.
- *
- * Recognised codes, by the state they indicate:
- *
- *   - `active` → `active`, in both families;
- *   - `submittedandpendingapproval` (a loan) and `approved` (either family) → `pending`;
- *   - `closed`, `closedobligationsmet`, `closedwrittenoff`,
- *     `closedrescheduleoutstandingamount`, `prematureclosure`, `matured`, `rejected`,
- *     `withdrawnbyclient` and `withdrawnbyapplicant` → `closed`, because every terminal state shares
- *     the design's one finished colour;
- *   - everything else → `other`: `invalid`, `transfer.in.progress`, `transfer.on.hold`, any code the
- *     fork adds later, an empty string and `undefined`.
- *
- * Failure is neutral, never `active`: a code this table does not recognise must not paint a pending
- * or transferred account as active, and `other` carries a colour of its own without claiming a state.
- * The result is colour only — no status word, `title` or `aria-label` is derived here, because the
- * indicator is deliberately text-free (AAP 0.10.5 item 11; Rule 1 clause 3). Pure and total — no I/O,
- * no logging, no throw — so it can run for every row.
+ * `StatusLookup` (Rule 1 clause 3). It delegates to the single mapping in
+ * `web-ng/src/app/shared/status-key.util.ts`, which covers both families' codes — one response
+ * carries rows from `LoanStatus.java` and from `SavingsAccountStatusType.java` — and matches the
+ * whole prefix-stripped code, never one dot-segment of it. An unrecognised code and a missing one
+ * are both the neutral `other`. Pure and total — no I/O, no logging, no throw — so it can run for
+ * every row. The result is colour only: no status word, `title` or `aria-label` is derived here
+ * (AAP 0.10.5 item 11; Rule 1 clause 3).
  *
  * @param code The `code` of an account's status object, or `undefined` when a response carried none.
  * @returns One of the four keys `StatusSwatchComponent` renders.
  */
 export function toAccountStatusKey(code: string | undefined): StatusKey {
-  if (code === undefined) {
-    return 'other';
-  }
-
-  return ACCOUNT_STATUS_KEY_BY_CODE[normaliseAccountStatusCode(code)] ?? 'other';
+  return toStatusKey(code);
 }

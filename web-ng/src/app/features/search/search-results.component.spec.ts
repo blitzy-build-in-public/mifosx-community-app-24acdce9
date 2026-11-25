@@ -6,9 +6,10 @@
  * It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with
  * at least one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`, nothing
  * boilerplate). What it proves is the contract the screen advertises: exactly one search per
- * parameter set with exactly the two parameters the service takes, a trimmed query that is never sent
- * empty, a scope validated against the three the control offers, one row per result carrying the
- * server's own values, the client and loan records the rows open, the explicit empty state, a failure
+ * parameter set with exactly the three parameters the service takes, a trimmed query that is never
+ * sent empty, a scope validated against the three the control offers, the exact-match flag the URL
+ * carries together with legacy's `false` when it carries none, one row per result carrying the
+ * server's own values, the client and loan records the rows open, the explicit empty state, a 4xx
  * rendered verbatim with the previous rows kept, a parameter change that replaces the results, and a
  * loan row listed but not linked to a user without the loan read permission.
  *
@@ -78,6 +79,32 @@ const IDENTIFIER: SearchResult = {
 };
 
 const NO_DATA_TEXT = 'Nothing matched from the spec bundle';
+
+/**
+ * The rejections that carry no text for this screen, each for a reason the screen must honour: a 5xx
+ * and a transport failure (status `0`) have already raised the interceptor's single notification, and
+ * a rejection that is not an `ApiError` never came from Fineract at all — its message is Angular's
+ * or the application's own text, which can embed the request URL (AAP 0.7.4). The fourth row is a
+ * rejection that is not even an `Error`, which carries nothing to show by definition.
+ */
+const SILENT_FAILURES: readonly { readonly label: string; readonly failure: () => unknown }[] = [
+  {
+    label: 'a 5xx',
+    failure: () => new ApiError('Server is unavailable', 500),
+  },
+  {
+    label: 'a transport failure',
+    failure: () => new ApiError('The API could not be reached', 0),
+  },
+  {
+    label: 'a rejection that is not an ApiError',
+    failure: () => new Error('A fault the screen itself raised'),
+  },
+  {
+    label: 'a rejection that is not an Error',
+    failure: () => 'nothing an Error carries',
+  },
+];
 const LABELS = {
   'label.nodatafound': NO_DATA_TEXT,
   'label.heading.name': 'Name',
@@ -152,12 +179,29 @@ describe('SearchResultsComponent', () => {
     fixture.detectChanges();
   });
 
-  it('issues exactly one search for the initial navigation, with exactly two parameters', () => {
+  it('issues exactly one search for the initial navigation, with exactly three parameters', () => {
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toEqual({ query: 'Parity', resource: 'all' });
-    expect(Object.keys(calls[0]).sort()).toEqual(['query', 'resource']);
+    // The three parameters legacy's controller forwards, the flag included: an absent `exactMatch`
+    // in the URL is legacy's unquoted `false`, so it is sent rather than dropped.
+    expect(calls[0]).toEqual({ query: 'Parity', resource: 'all', exactMatch: false });
+    expect(Object.keys(calls[0]).sort()).toEqual(['exactMatch', 'query', 'resource']);
     expect(component.query()).toBe('Parity');
     expect(component.scope()).toBe('all');
+  });
+
+  it("sends the exact-match flag the URL carries, and legacy's default when it carries none", async () => {
+    queryParams.next(convertToParamMap({ scope: 'all', exactMatch: 'true' }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(calls.at(-1)?.exactMatch).toBe(true);
+
+    queryParams.next(convertToParamMap({ scope: 'all' }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(calls.at(-1)?.exactMatch).toBe(false);
+    expect(calls).toHaveLength(3);
   });
 
   it('trims the query, and an empty or blank one is never sent', async () => {
@@ -300,6 +344,26 @@ describe('SearchResultsComponent', () => {
     expect(rows()).toHaveLength(2);
   });
 
+  for (const { label, failure } of SILENT_FAILURES) {
+    it(`renders no text for ${label}, which the interceptor reports on its own`, async () => {
+      answer = () => throwError(failure);
+      params.next(convertToParamMap({ query: 'Parity' }));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      // No message and no alert region — the interceptor has already raised the one notification —
+      // and nothing on screen that could pass the failure off as a search that matched nothing.
+      expect(calls).toHaveLength(2);
+      expect(component.error()).toBeNull();
+      expect(host().querySelector('#search-results-error')).toBeNull();
+      expect(component.isEmpty()).toBe(false);
+      expect(host().querySelector('#search-results-empty')).toBeNull();
+      // The rows of the search before it stay exactly where they were.
+      expect(rows()).toHaveLength(2);
+    });
+  }
+
   it('replaces the results with exactly one new request when the parameters change', async () => {
     expect(calls).toHaveLength(1);
 
@@ -336,8 +400,12 @@ describe('SearchResultsComponent', () => {
     params.next(convertToParamMap({ query: 'first' }));
     fixture.detectChanges();
     await fixture.whenStable();
+    fixture.detectChanges();
 
-    expect(component.error()).toBe('Server is unavailable');
+    // A 5xx carries no text for this screen: it is the interceptor's notification alone (AAP 0.7.4).
+    expect(component.error()).toBeNull();
+    expect(host().querySelector('#search-results-error')).toBeNull();
+    expect(rows()).toHaveLength(2);
 
     answer = () => of([CLIENT]);
     params.next(convertToParamMap({ query: 'second' }));

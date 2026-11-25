@@ -2,10 +2,8 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 import { TranslatePipe } from '@ngx-translate/core';
 
 import { toClientStatusKey, type Client } from '../../client.models';
-import {
-  StatusSwatchComponent,
-  type StatusKey,
-} from '../../../../shared/status-swatch/status-swatch.component';
+import type { StatusKey } from '../../../../shared/status-key.util';
+import { StatusSwatchComponent } from '../../../../shared/status-swatch/status-swatch.component';
 
 /**
  * One `Key: value` run of the record header's inline metadata strip.

@@ -17,7 +17,7 @@ import { SearchService } from '../../core/api/search.service';
 import { ApiError } from '../../core/http/api-error';
 import { EmptyStateComponent } from '../../shared/empty-state/empty-state.component';
 import { HasPermissionDirective } from '../../shared/has-permission.directive';
-import type { StatusKey } from '../../shared/status-swatch/status-swatch.component';
+import { toStatusKey, type StatusKey } from '../../shared/status-key.util';
 import { StatusSwatchComponent } from '../../shared/status-swatch/status-swatch.component';
 
 /**
@@ -35,12 +35,14 @@ import { StatusSwatchComponent } from '../../shared/status-swatch/status-swatch.
  * folder. The one string it composes is a client-side navigation target, built through `Router` from
  * the route paths the clients and loans route arrays declare — never `window.location`.
  *
- * **Reading the parameters reactively.** The query is the `:query` path segment and the scope is the
- * `scope` query parameter. Both are read from the route's own observables and combined, so the
- * component re-runs the search when either changes: the navbar reuses this route for a second
- * search, and a snapshot read would answer the first search for the rest of the visit. The stream is
- * switched, not merged, so an in-flight request is superseded rather than racing its successor, and
- * it emits once for the initial navigation — one call per parameter set, never two.
+ * **Reading the parameters reactively.** The query is the `:query` path segment, and the two
+ * parameters the request is made with travel beside it as the route's own query parameters: the
+ * `scope` the user chose and legacy's `exactMatch` flag. All of them are read from the route's
+ * observables and combined, so the component re-runs the search when any of them changes: the navbar
+ * reuses this route for a second search, and a snapshot read would answer the first search for the
+ * rest of the visit. The stream is switched, not merged, so an in-flight request is superseded
+ * rather than racing its successor, and it emits once for the initial navigation — one call per
+ * parameter set, never two.
  *
  * **Which scopes exist.** The route's `scope` parameter is matched against the three scopes the
  * control offers, and any other value — the legacy scopes this migration leaves with the legacy
@@ -48,12 +50,18 @@ import { StatusSwatchComponent } from '../../shared/status-swatch/status-swatch.
  * (AAP 0.10.5 item 9; AAP 0.9.2). The value is not lower-cased or otherwise repaired: a request for
  * an out-of-scope resource must not be silently turned into a different search (Rule 1 clause 3).
  *
- * **Errors are values** (AAP 0.14.1). A failed search becomes `ApiError.message` — Fineract's own
- * text, verbatim, never translated, prefixed or trimmed (Rule 1 clause 3) — on a signal the template
- * renders, so the screen stays mounted and usable and the rows already shown are kept. The component
- * neither notifies nor logs: `core/http/fineract.interceptor.ts` owns the single notification and is
- * the only place a failure or a session detail could reach an output (Rule 1 clause 9), and nothing
- * here writes the query, a payload or an identifier to any console output at all.
+ * **Errors are values, and only a 4xx is this screen's to say** (AAP 0.14.1, AAP 0.7.4). A refused
+ * search becomes `ApiError.message` — Fineract's own text, verbatim, never translated, prefixed or
+ * trimmed (Rule 1 clause 3) — on a signal the template renders, so the screen stays mounted and
+ * usable and the rows already shown are kept. The text is limited to a 4xx, which is the convention
+ * every sibling surface keeps and the plan's own state table sets: a 5xx or a transport failure is
+ * reported by `core/http/fineract.interceptor.ts`, the owner of the single notification for exactly
+ * those statuses, so showing the same problem inline as well would report it twice. A rejection that
+ * is not an `ApiError` did not come from Fineract at all — the interceptor maps every
+ * `HttpErrorResponse` into one — so its text, which can embed the request URL, is not put on screen
+ * either. The component neither notifies nor logs: the interceptor is the only place a failure or a
+ * session detail could reach an output (Rule 1 clause 9), and nothing here writes the query, a
+ * payload or an identifier to any console output at all.
  *
  * **What it deliberately does not do** (Rule 1 clause 3, AAP 0.7.4). No spinner, skeleton or
  * placeholder — the design carries no loader asset (AAP 0.2.4); no sorting, filtering, paging or
@@ -65,7 +73,8 @@ import { StatusSwatchComponent } from '../../shared/status-swatch/status-swatch.
  *
  * **States.** Nothing painted before the first response; the rows once they arrive; the explicit
  * empty state — and no error — when a completed search matched nothing (AAP 0.7.4); Fineract's
- * message above the rows when the read failed.
+ * message above the rows when a 4xx refused the read; and the rows left standing, with the
+ * interceptor's notification as the only report, when a 5xx or a transport failure stopped it.
  */
 @Component({
   selector: 'app-search-results',
@@ -83,7 +92,10 @@ export class SearchResultsComponent {
   /** The search endpoint's only application caller: this screen composes no request of its own. */
   private readonly searchService = inject(SearchService);
 
-  /** The route whose `:query` segment and `scope` parameter select the search to run. */
+  /**
+   * The route whose `:query` segment and `scope` and `exactMatch` parameters select the search to
+   * run.
+   */
   private readonly route = inject(ActivatedRoute);
 
   /**
@@ -104,13 +116,26 @@ export class SearchResultsComponent {
   /** The rows the last successful search returned, in the server's order; kept when a later one fails. */
   private readonly results = signal<readonly SearchResult[]>([]);
 
-  /** Fineract's failure text for the last attempt, verbatim, or `null` when it succeeded. */
+  /**
+   * Fineract's own text for a 4xx of the last attempt, verbatim, or `null` when there is nothing to
+   * show: a success, a 5xx, a transport failure, or a rejection that is not an `ApiError`.
+   */
   private readonly failureMessage = signal<string | null>(null);
 
   /**
+   * Whether the last attempt failed, whatever it had to say for itself.
+   *
+   * It is separate from {@link failureMessage} because a failure does not always carry text this
+   * screen may show — a 5xx or a transport failure belongs to the interceptor alone — and the empty
+   * state must not stand in for it: without this, a failed read that renders no message would look
+   * exactly like a search that matched nothing (AAP 0.7.4).
+   */
+  private readonly failed = signal<boolean>(false);
+
+  /**
    * Whether the search on screen has answered — an emptied query or a response, successful or not.
-   * It is what keeps the empty state from painting in the frames before the first response and from
-   * standing in for a failure.
+   * It is what keeps the empty state from painting in the frames before the first response, and
+   * {@link failed} is what keeps it from standing in for a failure.
    */
   private readonly searchCompleted = signal<boolean>(false);
 
@@ -135,22 +160,23 @@ export class SearchResultsComponent {
   });
 
   /**
-   * Fineract's own message for the last attempt, verbatim, or `null` when there is nothing to say.
-   * Assigned to the template's alert region and to nothing else: the interceptor has already raised
-   * its single notification for a platform-level failure, so reporting it here again would show one
-   * problem twice (AAP 0.7.4).
+   * The message to render for the last attempt: Fineract's own text for a 4xx, verbatim and
+   * untranslated, or `null` when there is nothing to show. Assigned to the template's alert region
+   * and to nothing else — the interceptor has already raised its single notification for a 5xx, a
+   * transport failure or a rejection that never reached Fineract, so reporting one of those here as
+   * well would show one problem twice (AAP 0.7.4).
    */
   readonly error: Signal<string | null> = this.failureMessage.asReadonly();
 
   /**
    * Whether the completed search matched nothing — the state that renders the explicit empty state
    * and no error. All three conditions matter: a search must have answered (so the empty state cannot
-   * flash before the first response), the answer must not be a failure (so a failed read is never
-   * rendered as "no results"), and it must hold no rows.
+   * flash before the first response), the attempt must not have failed (so a failed read is never
+   * rendered as "no results", whether or not the failure carried text this screen may show), and it
+   * must hold no rows.
    */
   readonly isEmpty: Signal<boolean> = computed<boolean>(
-    () =>
-      this.searchCompleted() && this.failureMessage() === null && this.rows().length === 0,
+    () => this.searchCompleted() && !this.failed() && this.rows().length === 0,
   );
 
   /**
@@ -185,9 +211,10 @@ export class SearchResultsComponent {
           this.currentQuery.set(criteria.query);
           this.currentScope.set(criteria.scope);
           // A new search starts with nothing to report and no completed answer: the previous rows
-          // stay on screen while it runs, but a previous message and the empty state it would gate
-          // do not.
+          // stay on screen while it runs, but a previous message, the failure it recorded, and the
+          // empty state they gate do not.
           this.failureMessage.set(null);
+          this.failed.set(false);
           this.searchCompleted.set(false);
         }),
         switchMap((criteria: SearchCriteria) => this.search(criteria)),
@@ -196,8 +223,10 @@ export class SearchResultsComponent {
       .subscribe((outcome: SearchOutcome) => {
         this.searchCompleted.set(true);
         this.failureMessage.set(outcome.error);
+        // `null` rows is the failure case: what is already rendered is left exactly as it was, and
+        // the failure is remembered so the empty state cannot pass for an answer.
+        this.failed.set(outcome.rows === null);
 
-        // `null` rows is the failure case: what is already rendered is left exactly as it was.
         if (outcome.rows !== null) {
           this.results.set(outcome.rows);
         }
@@ -205,17 +234,20 @@ export class SearchResultsComponent {
   }
 
   /**
-   * The search one parameter set asks for: the trimmed query and the validated scope.
+   * The search one parameter set asks for: the trimmed query, the validated scope and the
+   * exact-match flag.
    *
    * @param params The route's path parameters, carrying `:query`.
-   * @param queryParams The route's query parameters, carrying `scope`.
-   * @returns The pair the request is made with; the query is trimmed and the scope is never a value
-   * outside the three the control offers.
+   * @param queryParams The route's query parameters, carrying `scope` and `exactMatch`.
+   * @returns The three values the request is made with; the query is trimmed, the scope is never a
+   * value outside the three the control offers, and the flag is legacy's own default when the URL
+   * carries none.
    */
   private toCriteria(params: ParamMap, queryParams: ParamMap): SearchCriteria {
     return {
       query: (params.get('query') ?? '').trim(),
       scope: toScope(queryParams.get('scope')),
+      exactMatch: toExactMatch(queryParams.get('exactMatch')),
     };
   }
 
@@ -227,20 +259,26 @@ export class SearchResultsComponent {
    * A failure is caught here and returned as a value, so the parameter subscription survives it and
    * the next search still runs (AAP 0.14.1).
    *
-   * @param criteria The trimmed query and validated scope to search with.
-   * @returns A stream of exactly one outcome: the rows, or Fineract's message with the rows kept.
+   * @param criteria The trimmed query, validated scope and exact-match flag to search with.
+   * @returns A stream of exactly one outcome: the rows, or the message to show beside the rows kept —
+   * `null` when the failure is the interceptor's to report.
    */
   private search(criteria: SearchCriteria): Observable<SearchOutcome> {
     if (criteria.query === '') {
       return of<SearchOutcome>({ rows: [], error: null });
     }
 
-    // The request is exactly the two properties the screen knows: the text the user searched for and
-    // the scope they chose, which the query model carries as `resource` (AAP 0.7.2) and the service
-    // turns into the wire's `resource` parameter. `exactMatch` is left undefined because the navbar
-    // emits no such choice, and no other parameter is added to the call legacy made (Rule 1 clauses
-    // 2 and 3).
-    const params: GlobalSearchParams = { query: criteria.query, resource: criteria.scope };
+    // The request carries the three parameters legacy's own controller forwards — the text, the
+    // resource and the flag that asks for the literal string: `SearchController.js:9` calls
+    // `globalSearch.search({query, resource, exactMatch})`, so all three are sent, and the flag is
+    // sent even when it is `false`, because legacy distinguishes "false" from "absent" (AAP 0.7.2's
+    // `GlobalSearchParams`; AAP 0.7.3 row "Shell: global search"). The scope reaches the model as
+    // `resource`, and no other parameter is added to the call legacy made (Rule 1 clauses 2 and 3).
+    const params: GlobalSearchParams = {
+      query: criteria.query,
+      resource: criteria.scope,
+      exactMatch: criteria.exactMatch,
+    };
 
     return this.searchService.search(params).pipe(
       map((results: readonly SearchResult[]): SearchOutcome => ({ rows: results, error: null })),
@@ -353,7 +391,14 @@ interface SearchResultRow {
   /** The loan product's name for a loan row; `''` for a client row, which has no product. */
   readonly product: string;
 
-  /** The status indicator's colour key for this row, mapped once by {@link toStatusKey}. */
+  /**
+   * The status indicator's colour key for this row, mapped once by {@link toStatusKey} — the single
+   * mapping the whole application shares, from `web-ng/src/app/shared/status-key.util.ts`. The
+   * vocabulary and its mapping are shared declarations, which is why this screen reads them from
+   * `shared/` and not from a feature model: a feature may depend on `core` and `shared` and never on
+   * another feature (AAP 0.14.1), and one code therefore has exactly one colour here and on the
+   * clients list.
+   */
   readonly status: StatusKey;
 
   /** The record the row opens: the client's or the loan's own in-scope route. */
@@ -363,93 +408,35 @@ interface SearchResultRow {
   readonly permission: 'READ_CLIENT' | 'READ_LOAN';
 }
 
-/** The two values one search is made with. */
+/** The three values one search is made with. */
 interface SearchCriteria {
-  /** The trimmed search text; empty means there is nothing to search for. */
+  /** The trimmed, unquoted search text; empty means there is nothing to search for. */
   readonly query: string;
 
   /** The scope to search, always one of the three the control offers. */
   readonly scope: SearchScope;
+
+  /**
+   * Whether the text arrived quoted — legacy's `exactMatch`, always sent and `false` when the route
+   * carried no recognised value.
+   */
+  readonly exactMatch: boolean;
 }
 
-/** What one search attempt produced: the rows to render, or the message to show beside the old ones. */
+/**
+ * What one search attempt produced: the rows to render, and the message to show beside the old ones
+ * when the failure is one this screen reports itself.
+ */
 interface SearchOutcome {
   /** The rows to render, or `null` meaning "keep what is already on screen" (a failed attempt). */
   readonly rows: readonly SearchResult[] | null;
 
-  /** Fineract's own failure text, verbatim, or `null` when the attempt succeeded. */
+  /**
+   * The text to render for a failed attempt — Fineract's own message for a 4xx — or `null` when
+   * there is nothing for this screen to show: a success, a 5xx, a transport failure, or a rejection
+   * that is not an `ApiError`, all of which are the interceptor's to report.
+   */
   readonly error: string | null;
-}
-
-/**
- * The status codes the results can carry, mapped to the four keys `StatusSwatchComponent` paints.
- *
- * Keys are the codes' normalised form (see {@link normaliseStatusCode}), so the client family's
- * `clientStatusType.active` and the loan family's `loanStatusType.active` land on the same entry.
- * Client and loan rows both reach this table, which is why the table covers both families' codes
- * rather than one family's: a client's pending state and a loan awaiting approval are the same
- * colour, and every terminal state shares `closed`, which is the design's own vocabulary
- * (AAP 0.2.3 row `StatusSwatch`; AAP 0.10.5 item 11).
- *
- * The entries are the two families' complete enumerations, read from the backend the rows come from
- * (`ClientStatus.java:28-35` — invalid, pending, active, transfer in progress, transfer on hold,
- * closed, rejected, withdraw — and `LoanStatus.java:28-39` — invalid, submitted and pending
- * approval, approved, transfer in progress, transfer on hold, withdrawn by client, rejected, closed
- * obligations met, closed written off, closed reschedule outstanding amount, overpaid). A loan that
- * is approved but not yet disbursed is `pending` rather than `active`, because nothing has been paid
- * out; the states this four-key vocabulary has no colour for — the two transfers, an overpaid loan
- * and an invalid record — are deliberately absent and paint `other`.
- *
- * The clients and loans feature models keep their own family tables for their own screens; this
- * screen may not import either, because a feature may depend on `core` and `shared` and never on
- * another feature (AAP 0.14.1).
- */
-const STATUS_KEY_BY_CODE: Readonly<Partial<Record<string, StatusKey>>> = {
-  active: 'active',
-  approved: 'pending',
-  pending: 'pending',
-  submittedandpendingapproval: 'pending',
-  closed: 'closed',
-  closedobligationsmet: 'closed',
-  closedrescheduleoutstandingamount: 'closed',
-  closedwrittenoff: 'closed',
-  rejected: 'closed',
-  withdraw: 'closed',
-  withdrawnbyclient: 'closed',
-};
-
-/**
- * The normalisation a status code is reduced to before it is looked up: lower-cased, its family's
- * message-code prefix removed when the payload carried one, and every separator dropped, so
- * `loanStatusType.submitted.and.pending.approval` and `SUBMITTED_AND_PENDING_APPROVAL` both become
- * `submittedandpendingapproval`.
- *
- * @param code The `code` of a result's status object, as Fineract sent it.
- * @returns The key to look up in {@link STATUS_KEY_BY_CODE}.
- */
-function normaliseStatusCode(code: string): string {
-  return code
-    .toLowerCase()
-    .replace(/^[a-z]+statustype\./, '')
-    .replace(/[^a-z0-9]/g, '');
-}
-
-/**
- * The status indicator's key for a result's status code.
- *
- * Failure is neutral, never `active`: a code this table does not recognise — a transfer in progress,
- * an overpaid loan, a missing status — paints `other`, which carries a colour of its own without
- * claiming a state. Pure and total, so it can run for every row.
- *
- * @param code The `code` of the row's status object, or `undefined` when the row carried none.
- * @returns One of the four keys `StatusSwatchComponent` renders.
- */
-function toStatusKey(code: string | undefined): StatusKey {
-  if (code === undefined) {
-    return 'other';
-  }
-
-  return STATUS_KEY_BY_CODE[normaliseStatusCode(code)] ?? 'other';
 }
 
 /**
@@ -477,25 +464,46 @@ function toScope(raw: string | null): SearchScope {
 }
 
 /**
+ * Legacy's `exactMatch` flag for the route's `exactMatch` parameter.
+ *
+ * Legacy derived the value in the navbar, put the literal `true` or `false` in its URL and let
+ * `SearchController` forward whatever arrived, so the parameter is always part of the request:
+ * only the literal `true` asks Fineract for the whole string, and an absent or unrecognised value is
+ * legacy's own unquoted `false` rather than a reason to drop the parameter (AAP 0.3.4; AAP 0.7.2's
+ * `GlobalSearchParams`; Rule 1 clauses 2 and 3). The value is compared exactly as it arrived — not
+ * trimmed, not lower-cased — so `TRUE` is not repaired into a flag the caller did not send.
+ *
+ * @param raw The `exactMatch` query parameter exactly as the route delivered it, or `null` when the
+ *   URL carried none.
+ * @returns `true` only when the parameter asked for an exact match.
+ */
+function toExactMatch(raw: string | null): boolean {
+  return raw === 'true';
+}
+
+/**
  * The message to render for a failed search.
  *
- * `ApiError` is what the interceptor maps every Fineract failure into, and its `message` is the
- * server's own text, which is returned unchanged — no prefix, suffix, capitalisation or translation,
- * because a server message is displayed exactly as the server wrote it (AAP 0.7.2 row
- * `FineractError`; Rule 1 clause 3). A failure that is not an `ApiError` still answers with whatever
- * its own `Error` carries, and anything else renders no message rather than an invented one.
+ * Only a 4xx of Fineract's own carries text here. `ApiError` is what the interceptor maps every
+ * Fineract failure into, and for a 4xx its `message` is the server's own text, which is returned
+ * unchanged — no prefix, suffix, capitalisation or translation, because a server message is
+ * displayed exactly as the server wrote it (AAP 0.7.2 row `FineractError`; Rule 1 clause 3).
+ *
+ * Everything else answers `null`, and every case for the same reason: the screen must not report a
+ * problem the interceptor already reported, and must not put text on screen that is not the
+ * server's. A 5xx and a transport failure (status `0`) have already raised the interceptor's single
+ * notification (`core/http/fineract.interceptor.ts:89-92`), so text here would show one problem
+ * twice. A rejection that is not an `ApiError` never came from Fineract at all — the interceptor
+ * maps every `HttpErrorResponse` into one — so a plain `Error`'s message is Angular's or the
+ * application's own text, which can embed the request URL and disclose the configured API host, and
+ * a rejection that is not an `Error` carries nothing to show. This is the same 4xx-only rule the
+ * sibling surfaces keep (`client-list.component.ts`, `client-accounts.component.ts`; AAP 0.7.4).
  *
  * @param failure Whatever the request rejected with.
- * @returns The text to show, or `''` when the failure carried none.
+ * @returns Fineract's own message for a 4xx, or `null` when this screen has nothing to show.
  */
-function toMessage(failure: unknown): string {
-  if (failure instanceof ApiError) {
-    return failure.message;
-  }
-
-  if (failure instanceof Error) {
-    return failure.message;
-  }
-
-  return '';
+function toMessage(failure: unknown): string | null {
+  return failure instanceof ApiError && failure.status >= 400 && failure.status < 500
+    ? failure.message
+    : null;
 }
