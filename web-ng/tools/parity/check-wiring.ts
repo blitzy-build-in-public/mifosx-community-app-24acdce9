@@ -7,7 +7,9 @@
 //   (c) route-drift          a route the tree declares and in-scope-routes.json does not list, or a route the list
 //                            holds and the tree does not declare — the list is the single statement of the route tree
 //                            (AAP 0.10.4 "Allowlist rules"), so the comparison runs both ways.
-//   (d) spec-without-expect  a spec file with no `expect` (Rule 1 clause 8, AAP 0.11.1).
+//   (d) spec-without-expect  a spec file with no `expect` (Rule 1 clause 8, AAP 0.11.1), and the absent or empty
+//                            `web-ng/e2e/specs` directory the Playwright config sets as its `testDir`, since a suite
+//                            that is not there runs nothing.
 //   (e) credential-literal   a property or variable named `password`, `pass`, `secret` or `authenticationKey` assigned
 //                            a non-empty string literal, with the login form's own `password` control name exempt
 //                            because it names an input rather than storing a value, and the tenant identifier
@@ -37,6 +39,13 @@
 // rule, a route file the data file's header does not name — is a `note:` line with its file and the reason. A scan root
 // that cannot be read fails at line 0 instead of passing on an empty list, because the least-checkable tree must not be
 // the one that passes.
+//
+// **There is no suppression list.** No allowlist of exempt files, components, injectables or specs exists: an
+// `@Injectable` nothing injects and a component nothing renders are violations, which is this gate's purpose. The only
+// things passed over are the ones this comment names and the run reports on its own `note:` lines — generated artefacts
+// rather than source, this gate's own file, and the shapes AAP 0.10.4 exempts by definition (an empty credential
+// literal, the login form's control name, the tenant identifier) — each counted and named, never silent. A violation is
+// fixed at its cause, never excused here.
 //
 // **Negative control.** Every class was shown biting on a planted violation in a throwaway copy of this tree outside the
 // checkout, with this tree left as found, since a violating file may never be added here to prove the gate works. The
@@ -75,6 +84,9 @@ const ROUTE_SUFFIX = '.routes.ts';
 const APP_SUFFIXES: readonly string[] = ['.ts', '.html'];
 /** Spec files, whichever runner owns them; class (d) judges each of them. */
 const SPEC_SUFFIXES: readonly string[] = ['.spec.ts', '.test.ts'];
+/** The `testDir` the Playwright config sets, holding the workflow specs `npm run e2e` executes. */
+const E2E_SPECS_ROOT = join(webNgRoot, 'e2e', 'specs');
+const E2E_SPECS_SHOWN = 'web-ng/e2e/specs';
 /** Files a credential-shaped literal can be written in: source, templates, configuration and operational scripts. */
 const TEXT_SUFFIXES: readonly string[] = ['.ts', '.html', '.json', '.sh', '.yml', '.yaml'];
 /** Generated artefacts rather than source, so no class judges them (they are gitignored build and report output). */
@@ -340,7 +352,11 @@ const BOOTSTRAPPED_ROOT = /\bbootstrapApplication\s*\(\s*([A-Za-z_$][\w$]*)/g;
  * and `=` is not taken from `==`, `===` or `=>`. Literals of all three quote forms are read, and one holding a `${…}`
  * interpolation is composed at run time rather than stored, so the caller notes it instead of failing it.
  */
-const CREDENTIAL_ASSIGNMENT = /(?:^|[^\w$])(password|pass|secret|authenticationKey)\s*(?::|=(?!=))\s*(['"`])((?:\\.|(?!\2)[^\\])*)\2/g;
+const CREDENTIAL_KEYS: readonly string[] = ['password', 'pass', 'secret', 'authenticationKey'];
+const CREDENTIAL_ASSIGNMENT = new RegExp(
+  `(?:^|[^\\w$])(${CREDENTIAL_KEYS.join('|')})\\s*(?::|=(?!=))\\s*(['"\`])((?:\\\\.|(?!\\2)[^\\\\])*)\\2`,
+  'g',
+);
 /** The login form's own `password` control name, written where the input is declared (AAP 0.10.4's exemption). */
 const LOGIN_CONTROL = /\b(?:formControlName|name)\s*=\s*["']password["']/;
 /** The login screen's own files, the only place that control name is written. */
@@ -372,6 +388,19 @@ async function scanFiles(files: readonly string[]): Promise<ScannedFile[]> {
     shown: relative(repoRoot, file).split(sep).join('/'),
     text: await readText(file),
   })));
+}
+
+/**
+ * Adds one class's scanned files to the run's distinct-file count and returns them unchanged, so the count states how
+ * much of the tree the run actually read rather than how many classes read it.
+ *
+ * @param files The files one class read.
+ * @param into The run's set of distinct repo-relative names.
+ * @returns `files`, so a caller keeps the expression it was reading.
+ */
+function countFiles<T extends ScannedFile>(files: T[], into: Set<string>): T[] {
+  for (const file of files) into.add(file.shown);
+  return files;
 }
 
 /**
@@ -447,16 +476,22 @@ if (intent.kind === 'run') await runCheck(CHECK, async (): Promise<CheckOutcome>
   let specsWithExpect = 0;
   let judgedFiles = 0;
   let credentials = 0;
+  let emptyCredentials = 0;
   let tenants = 0;
   let boundaryFiles = 0;
+  let e2eSpecs = 0;
+  const scannedFiles = new Set<string>();
+  // The keys of `scanned` are the counter names AAP 0.10.4 and this file's specification state, so the summary line
+  // answers for each of them by name; the local names say which class produced each figure.
   const outcome = (): CheckOutcome => ({
     check: CHECK,
     violations,
     notes,
     scanned: {
+      files: scannedFiles.size,
       routeFiles,
       routeDeclarations,
-      routeLeaves,
+      routes: routeLeaves,
       routesListed,
       injectables,
       injected,
@@ -464,11 +499,12 @@ if (intent.kind === 'run') await runCheck(CHECK, async (): Promise<CheckOutcome>
       routed,
       templated,
       specs,
+      e2eSpecs,
       specsWithExpect,
-      judgedFiles,
+      credentialFiles: judgedFiles,
       credentials,
       tenants,
-      boundaryFiles,
+      boundaryPaths: boundaryFiles,
     },
   });
 
@@ -501,11 +537,11 @@ if (intent.kind === 'run') await runCheck(CHECK, async (): Promise<CheckOutcome>
     violations.push(violation(ROUTE_DRIFT, APP_ROOT_SHOWN, 0, `holds no ${ROUTE_SUFFIX} file, so no route could be composed and an empty composition is not a route tree that agrees with the list`));
     return outcome();
   }
-  const scans: RouteFileScan[] = await Promise.all(files.map(async (file: string) => ({
+  const scans: RouteFileScan[] = countFiles(await Promise.all(files.map(async (file: string) => ({
     file,
     shown: relative(repoRoot, file).split(sep).join('/'),
     text: await readText(file),
-  })));
+  }))), scannedFiles);
   const count = (declarations: number): void => { routeDeclarations += declarations; };
 
   // The application route file first, because the prefixes every other file hangs off are the mounts it declares.
@@ -578,7 +614,7 @@ if (intent.kind === 'run') await runCheck(CHECK, async (): Promise<CheckOutcome>
   // (a) dead-injectable. Every `@Injectable` the application declares must be reached by a non-spec file: a service
   // nothing injects is dead code the build still ships, and the spec files are excluded because a spec injecting a
   // service is a test reaching it, not the application using it.
-  const appSource = await readRoot(APP_ROOT, ['.ts'], DEAD_INJECTABLE, violations);
+  const appSource = countFiles(await readRoot(APP_ROOT, ['.ts'], DEAD_INJECTABLE, violations), scannedFiles);
   const appTexts = appSource.filter((file) => !file.shown.endsWith('.spec.ts')).map((file) => ({ shown: file.shown, text: stripComments(file.text) }));
   for (const file of appSource) {
     if (file.shown.endsWith('.spec.ts')) continue;
@@ -617,7 +653,7 @@ if (intent.kind === 'run') await runCheck(CHECK, async (): Promise<CheckOutcome>
     notes.push(`web-ng/src/main.ts cannot be read (${describe(error)}), so the bootstrap root is credited only by the template that renders it`);
   }
   for (const match of mainText.matchAll(BOOTSTRAPPED_ROOT)) routedNames.add(match[1] ?? '');
-  const appAll = await readRoot(APP_ROOT, APP_SUFFIXES, DEAD_COMPONENT, violations);
+  const appAll = countFiles(await readRoot(APP_ROOT, APP_SUFFIXES, DEAD_COMPONENT, violations), scannedFiles);
   // Every template the application renders: the external ones, the root index.html the build serves, and each
   // component file's own text, so an inline template is read on the same footing as a separate file.
   const templateParts: string[] = appAll.map((file) => commentFree(file.shown, file.text));
@@ -645,7 +681,7 @@ if (intent.kind === 'run') await runCheck(CHECK, async (): Promise<CheckOutcome>
 
   // (d) spec-without-expect. A spec asserts behaviour only through an expect, so a file without one proves nothing
   // however much it sets up (Rule 1 clause 8).
-  const specScans = await readRoot(webNgRoot, SPEC_SUFFIXES, SPEC_WITHOUT_EXPECT, violations);
+  const specScans = countFiles(await readRoot(webNgRoot, SPEC_SUFFIXES, SPEC_WITHOUT_EXPECT, violations), scannedFiles);
   specs = specScans.length;
   for (const file of specScans) {
     if (hasExpect(file.text)) {
@@ -655,12 +691,23 @@ if (intent.kind === 'run') await runCheck(CHECK, async (): Promise<CheckOutcome>
     const described = lineOf(file.text, 'describe(');
     violations.push(violation(SPEC_WITHOUT_EXPECT, file.shown, described === 0 ? 1 : described, 'holds no expect, so it asserts nothing: a spec proves behaviour only through an expect (Rule 1 clause 8, AAP 0.10.4, criterion 7)'));
   }
+  // The workflow specs `npm run e2e` executes live in the `testDir` the Playwright config sets (AAP 0.11.1). A root that
+  // is absent or holds no spec is a suite that runs nothing, so it fails under the class that judges specs rather than
+  // passing on whatever spec files happen to sit elsewhere in the package.
+  try {
+    e2eSpecs = (await walk(E2E_SPECS_ROOT, { extensions: SPEC_SUFFIXES })).length;
+    if (e2eSpecs === 0) {
+      violations.push(violation(SPEC_WITHOUT_EXPECT, E2E_SPECS_SHOWN, 0, 'holds no workflow spec, so the parity suite `npm run e2e` executes would run nothing and no workflow would be proven (Rule 1 clause 8, AAP 0.10.4, criterion 7)'));
+    }
+  } catch (error) {
+    violations.push(violation(SPEC_WITHOUT_EXPECT, E2E_SPECS_SHOWN, 0, `cannot be read, so the workflow specs it must hold were not judged: ${describe(error).split(E2E_SPECS_ROOT).join(E2E_SPECS_SHOWN)}`));
+  }
 
   // (e) credential-literal, exactly as AAP 0.10.4 defines it: a property or variable named `password`, `pass`, `secret`
   // or `authenticationKey` assigned a non-empty string literal, the login form's own `password` control name exempt,
   // and the tenant identifier outside the gate. The value is never printed (Rule 1 clause 9).
   notes.push(`${GENERATED_SKIP.join(', ')} are generated artefacts rather than source, so the credential class does not judge them`);
-  const credentialScans = await readRoot(webNgRoot, TEXT_SUFFIXES, CREDENTIAL_LITERAL, violations, GENERATED_SKIP);
+  const credentialScans = countFiles(await readRoot(webNgRoot, TEXT_SUFFIXES, CREDENTIAL_LITERAL, violations, GENERATED_SKIP), scannedFiles);
   for (const file of credentialScans) {
     if (file.shown.endsWith(`/${SELF_SKIPPED}`)) {
       notes.push(`${file.shown} is this gate, which states the credential rule it enforces and is exempt from being judged by it`);
@@ -673,6 +720,11 @@ if (intent.kind === 'run') await runCheck(CHECK, async (): Promise<CheckOutcome>
       const name = match[1] ?? '';
       const value = match[3] ?? '';
       const line = lineAt(text, match.index);
+      if (value.length === 0) {
+        // AAP 0.10.4 forbids a NON-EMPTY literal, so an empty one is exempt by construction: it stores no secret.
+        emptyCredentials += 1;
+        continue;
+      }
       if (value.includes('${')) {
         notes.push(`${file.shown}:${line} — ${name} is assigned a template literal whose value is composed at run time rather than stored, so the credential class does not judge it`);
         continue;
@@ -688,6 +740,9 @@ if (intent.kind === 'run') await runCheck(CHECK, async (): Promise<CheckOutcome>
   }
   if (tenants > 0) {
     notes.push(`${tenants} tenant-identifier literal(s) were seen and left alone: AAP 0.10.4 keeps the tenant identifier outside the credential gate, because the build carries the tenant to call with rather than data about a real tenant`);
+  }
+  if (emptyCredentials > 0) {
+    notes.push(`${emptyCredentials} credential-shaped field(s) were assigned an empty literal and left alone: AAP 0.10.4 forbids a non-empty one, and an empty literal stores no secret`);
   }
 
   // (f) write-boundary. The work may occupy `web-ng/**` and add exactly two root files; anything else the working tree
