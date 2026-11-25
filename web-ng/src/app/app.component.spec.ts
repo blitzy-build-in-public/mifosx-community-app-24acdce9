@@ -102,6 +102,15 @@ describe('AppComponent', () => {
     fixture.detectChanges();
   });
 
+  it('creates the component once, rendering no nested copy of itself', () => {
+    expect(fixture.componentInstance).toBeInstanceOf(AppComponent);
+    // `TestBed.createComponent` mounts the component on a host element of its own rather than on
+    // the `<app-root>` `src/index.html` supplies, so this asserts the component's *output*: an
+    // `app-root` element below it would mean the root had rendered itself. The selector itself is
+    // exercised by every other case here, which all render through this component.
+    expect(host.querySelectorAll('app-root')).toHaveLength(0);
+  });
+
   it('renders exactly its two hosts — the router outlet and the single notification host — and no wrapper element', () => {
     const children = Array.from(host.children);
 
