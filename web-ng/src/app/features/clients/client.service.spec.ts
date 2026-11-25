@@ -2,6 +2,7 @@ import { provideHttpClient, type HttpRequest } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal, type WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import type { Observable } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { AppConfigService } from '../../core/config/app-config.service';
@@ -569,6 +570,58 @@ const UNREASONED_ACTION_CASES: readonly {
   },
 ];
 
+/**
+ * The two write bodies `EDIT_CASES` and `ACTION_CASES` can only prove in English, because their
+ * fixtures pin the language the suite starts in. Each case here moves the active language to French
+ * before the call and expects the whole body, month name included, so a `locale` fixed at `'en'` in
+ * `editWire` or in `actionWire` — or a date formatted with a fixed language while the member beside
+ * it follows the selection — fails here, which an English fixture cannot show (AAP 0.7.2 "Date
+ * handling"; Rule 1 clause 2).
+ */
+const LOCALISED_WRITE_CASES: readonly {
+  readonly label: string;
+  readonly method: 'PUT' | 'POST';
+  readonly send: (service: ClientService) => Observable<ClientMutationResponse>;
+  readonly params: readonly (readonly [string, string])[];
+  readonly wire: Readonly<Record<string, unknown>>;
+}[] = [
+  {
+    label: 'update',
+    method: 'PUT',
+    send: (service) =>
+      service.update(CLIENT_ID, {
+        firstname: 'Ada',
+        lastname: 'Okonkwo',
+        activationDate: CLIENT_DATE,
+      }),
+    params: [],
+    wire: {
+      dateFormat: FINERACT_DATE_FORMAT,
+      locale: 'fr',
+      firstname: 'Ada',
+      lastname: 'Okonkwo',
+      activationDate: CLIENT_DATE_TEXT_FR,
+    },
+  },
+  {
+    label: 'close action',
+    method: 'POST',
+    send: (service) =>
+      service.action(CLIENT_ID, 'close', {
+        command: 'close',
+        closureDate: CLIENT_DATE,
+        closureReasonId: 5,
+      }),
+    params: [['command', 'close']],
+    wire: {
+      dateFormat: FINERACT_DATE_FORMAT,
+      locale: 'fr',
+      closureDate: CLIENT_DATE_TEXT_FR,
+      closureReasonId: 5,
+    },
+  },
+];
+
 describe('ClientService', () => {
   let service: ClientService;
   let httpMock: HttpTestingController;
@@ -694,7 +747,9 @@ describe('ClientService', () => {
   }
 
   it('reads the client record with template=true as its only parameter', () => {
-    service.getWithTemplate(CLIENT_ID).subscribe();
+    const received: ClientTemplate[] = [];
+
+    service.getWithTemplate(CLIENT_ID).subscribe((template) => received.push(template));
 
     expect(apiUrl).toHaveBeenCalledWith('clients/2');
 
@@ -704,6 +759,15 @@ describe('ClientService', () => {
     expect(request.request.params.get('template')).toBe('true');
 
     request.flush(CLIENT_TEMPLATE);
+
+    // The caller receives the record merged with its template, its option lists included, so a
+    // projection that dropped, emptied or reordered them fails here as well as below.
+    expect(received).toEqual([CLIENT_TEMPLATE]);
+    expect(received[0]?.officeOptions.map((option) => option.name)).toEqual([
+      'Head Office',
+      'Branch 01',
+    ]);
+    expect(received[0]?.datatables).toHaveLength(1);
   });
 
   it('reads the client accounts grouped by family', () => {
@@ -748,7 +812,9 @@ describe('ClientService', () => {
   });
 
   it('reads the identifier template as the document types the tenant allows', () => {
-    service.identifiersTemplate(CLIENT_ID).subscribe();
+    const received: ClientIdentifierTemplate[] = [];
+
+    service.identifiersTemplate(CLIENT_ID).subscribe((template) => received.push(template));
 
     expect(apiUrl).toHaveBeenCalledWith('clients/2/identifiers/template');
 
@@ -759,6 +825,14 @@ describe('ClientService', () => {
     expect(request.request.params.keys()).toEqual([]);
 
     request.flush(IDENTIFIER_TEMPLATE);
+
+    // The types reach the caller under the member the tab reads and in the server's order, so a
+    // projection that renamed, emptied or reordered `allowedDocumentTypes` fails here.
+    expect(received).toEqual([IDENTIFIER_TEMPLATE]);
+    expect(received[0]?.allowedDocumentTypes.map((type) => type.name)).toEqual([
+      'Passport',
+      'National ID',
+    ]);
   });
 
   it('re-reads the record on every call, because its state changes through the commands this service posts', () => {
@@ -855,6 +929,31 @@ describe('ClientService', () => {
 
     frenchRequest.flush(MUTATION_RESULT);
   });
+
+  for (const { label, method, send, params, wire } of LOCALISED_WRITE_CASES) {
+    it(`fills the ${label} body's date-format pair from the active language, never from a fixed language`, () => {
+      const received: ClientMutationResponse[] = [];
+
+      // The language is selected before the call, because the body is built when the service method
+      // runs and not when the caller subscribed; the two members and the month names of that body are
+      // then asserted together, so a `locale` that does not follow the selection fails here.
+      activeLocale.set('fr');
+
+      send(service).subscribe((result) => received.push(result));
+
+      const sent = httpMock.expectOne(isRequest(method, clientUrl('clients', CLIENT_ID)));
+
+      expect(sent.request.params.keys()).toEqual(params.map(([name]) => name));
+      for (const [name, value] of params) {
+        expect(sent.request.params.get(name)).toBe(value);
+      }
+      expect(sent.request.body).toEqual(wire);
+
+      sent.flush(MUTATION_RESULT);
+
+      expect(received).toEqual([MUTATION_RESULT]);
+    });
+  }
 
   it('sets no authorization and no tenant header, because both belong to the HTTP interceptor', () => {
     service.create(PERSON_CREATE).subscribe();
