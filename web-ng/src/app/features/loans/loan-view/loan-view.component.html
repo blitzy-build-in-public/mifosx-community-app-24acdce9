@@ -91,15 +91,30 @@
   payload's own slices: `record.repaymentSchedule ?? null`, `record.transactions ?? []` and the
   `charges` member that same answer carried. None of the three components requests anything, so the
   record keeps making exactly the one call its typed service owns.
+
+  The ids on this page are hooks rather than styling, and each one is addressed from outside the
+  template: `loan-view` the record card, `loan-view-header` its head, `loan-view-error` and
+  `loan-view-not-found` its two failure states, `loan-summary` the figure block (also the block the
+  component's spec reads its figures from), `loan-actions` the joined action group, and
+  `loan-schedule-section`, `loan-transactions-section` and `loan-charges-section` the section each
+  tab shows. Each is what the end-to-end page objects address, and the compiler and the unit spec
+  would notice none of them: dropping one silently breaks a selector, so they stay where they are.
+
+  The three sections are tabs of one record page, not three blocks stacked at once: that arrangement
+  is what `app-tab-strip` with the component's `activeTab`, `showSchedule` and `showTransactions`
+  signals define, and what the spec asserts when it switches tabs and finds exactly one section
+  component mounted. Each section therefore carries its id only while its own tab is the active one.
 -->
 <div class="container-fluid">
   <div class="row">
     <div class="col-md-12">
-      <div class="panel">
+      <div class="panel" id="loan-view">
         <div class="panel-body">
           @if (loading()) {
           } @else if (notFound()) {
-            <p class="text-center text-muted">{{ 'error.msg.resource.not.found' | translate }}</p>
+            <!-- The same key and wording `features/not-found/not-found.component.html` renders for the
+                 unknown-path screen, so the two surfaces that mean "no such record" cannot drift. -->
+            <p class="text-center text-muted" id="loan-view-not-found">{{ 'error.msg.resource.not.found' | translate }}</p>
           } @else {
             <!--
               The one failure region this screen renders itself: a 4xx other than 404, in Fineract's
@@ -108,19 +123,21 @@
               (AAP 0.4.4 decision 6; Rule 1 clause 3).
             -->
             @if (clientError(); as failure) {
-              <div class="alert alert-danger" role="alert">{{ failure.message }}</div>
+              <div class="alert alert-danger" role="alert" id="loan-view-error">{{ failure.message }}</div>
             }
 
             @if (loan(); as record) {
-              <!-- The status colour, then the product the loan was written on. -->
-              <h3 class="record-title">
-                <app-status-swatch [status]="statusKey()" variant="dot" />{{ ' ' }}<strong>{{ record.loanProductName ?? '' }}</strong>
-              </h3>
+              <div id="loan-view-header">
+                <!-- The status colour, then the product the loan was written on. -->
+                <h3 class="record-title">
+                  <app-status-swatch [status]="statusKey()" variant="dot" />{{ ' ' }}<strong>{{ record.loanProductName ?? '' }}</strong>
+                </h3>
 
-              <div class="small text-small">
-                <span>{{ 'label.heading.accnum' | translate }}:</span>{{ ' ' }}<span>{{ record.accountNo }}</span>{{ ' ' }}<span aria-hidden="true">|</span>{{ ' ' }}
-                <span>{{ 'label.heading.clientname' | translate }}:</span>{{ ' ' }}<span>{{ record.clientName ?? '' }}</span>{{ ' ' }}<span aria-hidden="true">|</span>{{ ' ' }}
-                <span>{{ 'label.heading.principal' | translate }}:</span>{{ ' ' }}<span>{{ record.principal | number }}</span>
+                <div class="small text-small">
+                  <span>{{ 'label.heading.accnum' | translate }}:</span>{{ ' ' }}<span>{{ record.accountNo }}</span>{{ ' ' }}<span aria-hidden="true">|</span>{{ ' ' }}
+                  <span>{{ 'label.heading.clientname' | translate }}:</span>{{ ' ' }}<span>{{ record.clientName ?? '' }}</span>{{ ' ' }}<span aria-hidden="true">|</span>{{ ' ' }}
+                  <span>{{ 'label.heading.principal' | translate }}:</span>{{ ' ' }}<span>{{ record.principal | number }}</span>
+                </div>
               </div>
 
               <hr />
@@ -131,7 +148,7 @@
                 the legacy record offers no action in renders no group at all.
               -->
               @if (actions().length > 0) {
-                <div class="pull-right btn-group">
+                <div class="pull-right btn-group" id="loan-actions">
                   @for (action of actions(); track action.id) {
                     <a
                       class="btn btn-primary"
@@ -173,15 +190,21 @@
               <app-tab-strip [tabs]="tabs()" [activeId]="activeTab()" (tabChange)="activateTab($event)" />
 
               @if (showSchedule()) {
-                <app-loan-schedule [schedule]="record.repaymentSchedule ?? null" />
+                <div id="loan-schedule-section">
+                  <app-loan-schedule [schedule]="record.repaymentSchedule ?? null" />
+                </div>
               } @else if (showTransactions()) {
-                <app-loan-transactions [transactions]="record.transactions ?? []" />
+                <div id="loan-transactions-section">
+                  <app-loan-transactions [transactions]="record.transactions ?? []" />
+                </div>
               } @else if (charges() !== null) {
-                <app-loan-charges
-                  [charges]="charges() ?? []"
-                  [loanId]="record.id"
-                  [actionPermission]="actionPermission"
-                />
+                <div id="loan-charges-section">
+                  <app-loan-charges
+                    [charges]="charges() ?? []"
+                    [loanId]="record.id"
+                    [actionPermission]="actionPermission"
+                  />
+                </div>
               }
             }
           }
