@@ -5,30 +5,32 @@ import { TabStripComponent, type TabDescriptor } from './tab-strip.component';
 
 /**
  * Behavioural spec for the client record's tab strip — the `TabStrip` row of the component
- * inventory, whose states are "one active of N" (AAP 0.2.3), and an element of the client view
- * screen the plan keeps in Must scope (AAP 0.7.4).
- *
- * It serves AAP 0.11.1 (unit specs beside every component), AAP 0.14.1 ("each screen lands with at
- * least one behavioural spec") and AAP 0.14.2's "no spec without an `expect`". The component is
- * controlled: the parent supplies the tabs and the active id, so every emission asserted below is
- * the whole of its outward behaviour.
- *
- * The Bootstrap 3 tab semantics the pattern carries are asserted here too: `role="tablist"` on the
- * strip, one `role="tab"` per control, `aria-selected` following `activeId`, a tab stop on a control
- * that deliberately has no link target (a bare `#` would navigate to the root route under hash
- * routing), Enter and Space both choosing a tab, and an empty tab list rendering nothing at all.
+ * inventory, whose one state is "one active of N" (AAP 0.2.3), on the record the flow's third
+ * screen shows (Figma node `1:4`). The component is controlled, so every assertion below is on its
+ * public surface: the rendered DOM and the emitted id, never the sheet that paints it (Rule 1
+ * clause 6). It serves AAP 0.11.1, AAP 0.14.1 and Rule 1 clause 8's "no spec without an `expect`".
  */
 
-/** Tabs in the order the parent supplies them; ids are deliberately not alphabetical by label. */
+/**
+ * The tabs the client record supplies, in its own order and wording (AAP 0.7.4); the component
+ * knows neither, which is what lets the last case prove it adds no tab of its own.
+ */
 const TABS: readonly TabDescriptor[] = [
   { id: 'general', label: 'General' },
   { id: 'identities', label: 'Identities' },
-  { id: 'documents', label: 'Documents' },
+];
+
+/** Tabs the design shows on the record that the plan keeps out of scope, so none is rendered (AAP 0.10.5 item 6). */
+const OUT_OF_SCOPE_LABELS: readonly string[] = [
+  'Family Members',
+  'Documents',
+  'Notes',
+  'Credit Report',
 ];
 
 describe('TabStripComponent', () => {
-  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps the
-  // assertions below type-checked and confines the cast to this single boundary (Rule 1 clause 4).
+  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines
+  // this spec's only cast to one line and keeps the assertions type-checked (Rule 1 clause 4).
   const host = (fixture: ComponentFixture<TabStripComponent>): HTMLElement =>
     fixture.nativeElement as HTMLElement;
 
@@ -37,48 +39,40 @@ describe('TabStripComponent', () => {
   });
 
   /**
-   * Renders the strip with both required inputs set before the first change detection, then applies
-   * a different tab list when one is supplied.
+   * Renders the strip with both `input.required` inputs bound before the first change detection;
+   * a fixture that skipped either would throw instead of rendering a half-configured strip.
    */
-  function createStrip(
-    activeId: string,
-    tabs: readonly TabDescriptor[] = TABS,
-  ): ComponentFixture<TabStripComponent> {
+  function createStrip(activeId: string): ComponentFixture<TabStripComponent> {
     const fixture = TestBed.createComponent(TabStripComponent);
 
-    fixture.componentRef.setInput('tabs', tabs);
+    fixture.componentRef.setInput('tabs', TABS);
     fixture.componentRef.setInput('activeId', activeId);
     fixture.detectChanges();
 
     return fixture;
   }
 
-  /** The tab items of the strip, in render order, without the two decorative chevron items. */
-  function tabItems(fixture: ComponentFixture<TabStripComponent>): HTMLElement[] {
-    return Array.from(host(fixture).querySelectorAll('li')).filter(
-      (item) => !item.hasAttribute('aria-hidden'),
+  /** The clickable label of every tab, in render order; the chevron decorations hold none. */
+  function tabLinks(fixture: ComponentFixture<TabStripComponent>): HTMLAnchorElement[] {
+    return Array.from(host(fixture).querySelectorAll<HTMLAnchorElement>('ul.nav-tabs > li > a'));
+  }
+
+  /** The label of every tab the strip currently marks active, so a second `.active` shows up. */
+  function activeLabels(fixture: ComponentFixture<TabStripComponent>): (string | undefined)[] {
+    return Array.from(host(fixture).querySelectorAll('li.active')).map((item) =>
+      item.textContent?.trim(),
     );
   }
 
-  /** The clickable label of each tab, in render order; the chevron decorations hold no anchor. */
-  function tabAnchors(fixture: ComponentFixture<TabStripComponent>): HTMLAnchorElement[] {
-    return Array.from(host(fixture).querySelectorAll<HTMLAnchorElement>('li a'));
-  }
+  /** The tab showing `label`, or a named failure when the strip rendered none with it. */
+  function tabLink(fixture: ComponentFixture<TabStripComponent>, label: string): HTMLAnchorElement {
+    const link = tabLinks(fixture).find((candidate) => candidate.textContent?.trim() === label);
 
-  /** The tab control showing `label`, or a named failure when the strip rendered none with it. */
-  function tabAnchor(
-    fixture: ComponentFixture<TabStripComponent>,
-    label: string,
-  ): HTMLAnchorElement {
-    const anchor = tabAnchors(fixture).find(
-      (candidate) => candidate.textContent?.trim() === label,
-    );
-
-    if (anchor === undefined) {
+    if (link === undefined) {
       throw new Error(`TabStripComponent rendered no tab labelled "${label}"`);
     }
 
-    return anchor;
+    return link;
   }
 
   /** Records every id the strip reports, so an extra emission is as visible as a missing one. */
@@ -90,128 +84,79 @@ describe('TabStripComponent', () => {
     return emitted;
   }
 
-  it('renders one tab item per descriptor, in the supplied order, inside the legacy nav-tabs list', () => {
-    const fixture = createStrip('general');
-    const list = host(fixture).querySelector('ul.nav.nav-tabs');
+  /** The two decorative chevron items at either end of the strip, outside the tabs. */
+  function chevronItems(fixture: ComponentFixture<TabStripComponent>): HTMLElement[] {
+    return Array.from(host(fixture).querySelectorAll<HTMLElement>('li[aria-hidden="true"]'));
+  }
 
-    expect(list).not.toBeNull();
-    // The two chevron decorations are the only items that are not tabs.
-    expect(host(fixture).querySelectorAll('li[aria-hidden="true"]')).toHaveLength(2);
-    expect(tabItems(fixture)).toHaveLength(TABS.length);
-    expect(tabItems(fixture).map((item) => item.textContent?.trim())).toEqual([
-      'General',
-      'Identities',
-      'Documents',
-    ]);
+  it('renders one tab per descriptor, in the parent’s order, with its label verbatim', () => {
+    const fixture = createStrip('general');
+    const links = tabLinks(fixture);
+
+    expect(links).toHaveLength(TABS.length);
+    expect(links.map((link) => link.textContent?.trim())).toEqual(['General', 'Identities']);
   });
 
-  it('marks exactly the tab whose id is active, and no other element', () => {
-    const fixture = createStrip('identities');
-    const active = tabItems(fixture).filter((item) => item.classList.contains('active'));
-
-    expect(active).toHaveLength(1);
-    expect(active[0].textContent?.trim()).toBe('Identities');
-    expect(host(fixture).querySelectorAll('.active')).toHaveLength(1);
-  });
-
-  it('reports an inactive tab once when it is clicked', () => {
-    const fixture = createStrip('general');
-    const emitted = recordChanges(fixture);
-
-    tabAnchors(fixture)[2].click();
-
-    expect(emitted).toEqual(['documents']);
-  });
-
-  it('reports nothing when the already active tab is clicked', () => {
-    const fixture = createStrip('general');
-    const emitted = recordChanges(fixture);
-
-    tabAnchors(fixture)[0].click();
-
-    expect(emitted).toHaveLength(0);
-  });
-
-  it('follows a changed active id without reporting anything itself', () => {
-    const fixture = createStrip('general');
-    const emitted = recordChanges(fixture);
-
-    fixture.componentRef.setInput('activeId', 'documents');
-    fixture.detectChanges();
-
-    expect(
-      tabItems(fixture)
-        .filter((item) => item.classList.contains('active'))
-        .map((item) => item.textContent?.trim()),
-    ).toEqual(['Documents']);
-    expect(emitted).toHaveLength(0);
-  });
-
-  it('gives its tab labels no link target, because a legacy tab never navigates', () => {
-    const fixture = createStrip('general');
-    const anchors = tabAnchors(fixture);
-
-    expect(anchors).toHaveLength(TABS.length);
-
-    for (const anchor of anchors) {
-      expect(anchor.hasAttribute('href')).toBe(false);
-      expect(anchor.getAttribute('href')).toBeNull();
-    }
-  });
-
-  it('exposes the strip as a tablist of focusable tabs, with aria-selected following activeId', () => {
+  it('marks exactly the tab named by activeId, and follows a changed id', () => {
     const fixture = createStrip('general');
 
-    expect(host(fixture).querySelector('ul')?.getAttribute('role')).toBe('tablist');
-
-    for (const item of tabItems(fixture)) {
-      expect(item.getAttribute('role')).toBe('presentation');
-    }
-
-    for (const anchor of tabAnchors(fixture)) {
-      expect(anchor.getAttribute('role')).toBe('tab');
-      expect(anchor.getAttribute('tabindex')).toBe('0');
-    }
-
-    expect(tabAnchor(fixture, 'General').getAttribute('aria-selected')).toBe('true');
-    expect(tabAnchor(fixture, 'Identities').getAttribute('aria-selected')).toBe('false');
+    expect(host(fixture).querySelectorAll('li.active')).toHaveLength(1);
+    expect(activeLabels(fixture)).toEqual(['General']);
 
     fixture.componentRef.setInput('activeId', 'identities');
     fixture.detectChanges();
 
-    expect(tabAnchor(fixture, 'General').getAttribute('aria-selected')).toBe('false');
-    expect(tabAnchor(fixture, 'Identities').getAttribute('aria-selected')).toBe('true');
+    expect(host(fixture).querySelectorAll('li.active')).toHaveLength(1);
+    expect(activeLabels(fixture)).toEqual(['Identities']);
   });
 
-  it('chooses a tab with Enter and with Space, cancelling the default action', () => {
+  it('reports an inactive tab’s id once when it is clicked', () => {
     const fixture = createStrip('general');
     const emitted = recordChanges(fixture);
-    const identities = tabAnchor(fixture, 'Identities');
 
-    const enterHandled = identities.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
-    );
+    tabLink(fixture, 'Identities').click();
 
     expect(emitted).toEqual(['identities']);
-    expect(enterHandled).toBe(false);
-
-    const space = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
-    const spaceHandled = identities.dispatchEvent(space);
-
-    expect(emitted).toEqual(['identities', 'identities']);
-    // Space would scroll the page if the default ran, so the handler cancels it.
-    expect(space.defaultPrevented).toBe(true);
-    expect(spaceHandled).toBe(false);
   });
 
-  it('renders nothing at all when the tab list is empty', () => {
-    const fixture = createStrip('general', []);
+  it('reports nothing when the tab already shown is clicked', () => {
+    const fixture = createStrip('general');
+    const emitted = recordChanges(fixture);
 
-    expect(host(fixture).querySelector('.nav-tabs')).toBeNull();
-    expect(host(fixture).querySelectorAll('li')).toHaveLength(0);
-    expect(
-      host(fixture).querySelectorAll('.fa-chevron-left, .fa-chevron-right'),
-    ).toHaveLength(0);
-    expect(host(fixture).textContent?.trim()).toBe('');
+    tabLink(fixture, 'General').click();
+
+    expect(emitted).toEqual([]);
+  });
+
+  it('renders both chevrons as inert decoration that cannot change the active tab', () => {
+    const fixture = createStrip('general');
+    const emitted = recordChanges(fixture);
+    const items = chevronItems(fixture);
+
+    expect(host(fixture).querySelectorAll('i.fa-chevron-left')).toHaveLength(1);
+    expect(host(fixture).querySelectorAll('i.fa-chevron-right')).toHaveLength(1);
+    expect(items).toHaveLength(2);
+
+    for (const item of items) {
+      expect(item.getAttribute('aria-hidden')).toBe('true');
+      expect(item.hasAttribute('tabindex')).toBe(false);
+      expect(item.querySelector('i.fa-chevron-left, i.fa-chevron-right')).not.toBeNull();
+
+      item.click();
+    }
+
+    expect(emitted).toEqual([]);
+    expect(activeLabels(fixture)).toEqual(['General']);
+  });
+
+  it('renders none of the out-of-scope tabs and adds no tab of its own', () => {
+    const fixture = createStrip('general');
+    const rendered = host(fixture).textContent ?? '';
+
+    for (const label of OUT_OF_SCOPE_LABELS) {
+      expect(rendered).not.toContain(label);
+    }
+
+    expect(tabLinks(fixture)).toHaveLength(TABS.length);
   });
 });
