@@ -1,0 +1,64 @@
+<!--
+  The joined action row of the individual client record — the `ActionButtonGroup` row of the component
+  inventory (AAP 0.2.3), an element of the record screen in the "Sign in and open a client record" flow
+  (Figma node `1:4`, file `DKm5TBFbXypfqyx4xUdhBw`) — together with the `More` dropdown that closes it
+  (AAP 0.5.2 row "Dropdown menu"; AAP 0.7.4 "Client view (`#/viewclient/:id`)").
+
+  Every visual value comes from the global Bootstrap 3 layer `web-ng/src/styles.scss` compiles, so this
+  file carries no style, no colour and no pixel: `.btn-group` is the design's joined row with its 1px
+  separator and square ends, `.btn.btn-primary` its button, `.dropdown-toggle` with `.caret` the `More`
+  trigger and `.dropdown-menu` the list the `.open` class reveals (Rule 1 clause 6; AAP 0.4.4 decision
+  4). Bootstrap's own dropdown plugin needs the jQuery the migration forbids, so the open position is
+  the component's signal bound to that class and nothing else (AAP 0.5.2 row "Dropdown menu").
+
+  Nothing here requests anything: every entry is a `routerLink` to the record's own route — the
+  lifecycle commands are posted by `client-actions.component.ts` after the datatable gate (AAP 0.7.4)
+  — so the only thing interpolated is an href the parent's descriptors already carry (Rule 1
+  clause 9).
+
+  **The trigger and every entry are always rendered, each hidden by its own gate.** Legacy's record
+  built its buttons array and relied on `has-permission` to hide the options the user may not use, so
+  the element was in the markup whether or not the permission was held
+  (`app/views/clients/viewclient.html:199`). `HasPermissionDirective` reproduces exactly that: it
+  hides the host element's display and never removes it. Neither loop below therefore filters by
+  permission — a user holding none of these codes gets a `More` menu whose entries are all hidden,
+  not a menu that renders nothing, which is the legacy arrangement and the behaviour Rule 1 clause 3
+  requires be matched rather than improved.
+-->
+<div class="btn-group">
+  <!--
+    The entries of the visible row, in the parent's order and with nothing added here: a row the plan
+    keeps out of scope cannot appear, because no descriptor names it (AAP 0.10.5 items 5 and 7). The
+    glyph is the descriptor's own Font Awesome 4 class without its `fa` prefix; an entry that names no
+    icon renders its label alone, which is the shape the menu entries below have. The space between
+    the two is written as an interpolation rather than left as indentation, because the compiler's
+    whitespace handling would otherwise glue the glyph to the label.
+  -->
+  @for (action of topLevelActions(); track action.routerLink) {
+    <a class="btn btn-primary" [routerLink]="action.routerLink" [hasPermission]="action.permission">
+      @if (action.icon) {
+        <i class="fa {{ action.icon }}" aria-hidden="true"></i>{{ ' ' }}
+      }
+      {{ action.label | translate }}
+    </a>
+  }
+
+  <!--
+    The `More` menu. Bootstrap's own rule keeps the list hidden until the `open` class is set, so the
+    menu needs no conditional of its own, and Escape inside the group closes it without opening it —
+    the keyboard leaving the dropdown without the user aiming at the trigger again. Each entry carries
+    its own gate, so an entry the user may not use is hidden in place rather than left out.
+  -->
+  <div class="btn-group" [class.open]="moreOpen()" (keydown.escape)="closeMore()">
+    <button type="button" class="btn btn-primary dropdown-toggle" aria-haspopup="true" [attr.aria-expanded]="moreOpen()" (click)="toggleMore()">
+      {{ 'label.button.more' | translate }}{{ ' ' }}<span class="caret" aria-hidden="true"></span>
+    </button>
+    <ul class="dropdown-menu" role="menu">
+      @for (action of menuActions(); track action.routerLink) {
+        <li role="none">
+          <a role="menuitem" [routerLink]="action.routerLink" [hasPermission]="action.permission">{{ action.label | translate }}</a>
+        </li>
+      }
+    </ul>
+  </div>
+</div>

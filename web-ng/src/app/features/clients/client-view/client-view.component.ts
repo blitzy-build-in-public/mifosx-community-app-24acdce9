@@ -7,14 +7,17 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, RouterLink, type ParamMap } from '@angular/router';
+import { ActivatedRoute, type ParamMap } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { finalize } from 'rxjs';
 
 import { ApiError } from '../../../core/http/api-error';
-import { HasPermissionDirective } from '../../../shared/has-permission.directive';
 import type { Client } from '../client.models';
 import { ClientService } from '../client.service';
+import {
+  ActionButtonGroupComponent,
+  type ClientActionButton,
+} from './action-button-group/action-button-group.component';
 import { ClientAccountsComponent } from './client-accounts/client-accounts.component';
 import { ClientIdentifiersComponent } from './client-identifiers/client-identifiers.component';
 import { ClientSummaryComponent } from './client-summary/client-summary.component';
@@ -72,9 +75,11 @@ function isClientRecordTab(value: string): value is ClientRecordTab {
  *
  * **One id, one load per navigation.** The `:id` is read from `route.paramMap`, never from the
  * snapshot: the router reuses this component when the URL moves from one `#/viewclient/{id}` to
- * another, so every emission clears the previous client's record, message, selected tab and open
- * menu and re-reads the client the URL now names, exactly as `client-actions` and `loan-edit` handle
- * the same reuse. Because two reads can then be in flight, a response that arrives after the URL
+ * another, so every emission clears the previous client's record, message and selected tab and
+ * re-reads the client the URL now names, exactly as `client-actions` and `loan-edit` handle the same
+ * reuse. The `More` menu is not on that list: `ActionButtonGroupComponent` owns it and closes it when
+ * the descriptor list below changes, so the row cannot keep a menu the earlier client opened. Because
+ * two reads can then be in flight, a response that arrives after the URL
  * moved on is discarded rather than painted, so one client's record can never appear under another
  * client's URL (see {@link loadSequence}).
  *
@@ -100,10 +105,11 @@ function isClientRecordTab(value: string): value is ClientRecordTab {
  * plus the `More` menu holding `Activate`, `Reject`, `Withdraw` and `Reactivate` (AAP 0.7.4). Each
  * one carries the permission the legacy record gates it on — `UPDATE_CLIENT`, `CREATE_LOAN`,
  * `CREATE_SAVINGSACCOUNT`, `CLOSE_CLIENT`, `ACTIVATE_CLIENT`, `REJECT_CLIENT`, `WITHDRAW_CLIENT`
- * and `REACTIVATE_CLIENT` in `app/scripts/models/clientStatus.js` — through
- * `HasPermissionDirective`, the same service `permissionGuard` asks, so a button cannot outlive the
- * route that serves it (AAP 0.1.1 "a route guard and a template directive must agree"). The
- * lifecycle commands themselves are posted by `client-actions.component.ts` at
+ * and `REACTIVATE_CLIENT` in `app/scripts/models/clientStatus.js` — on the descriptors
+ * {@link actionButtons} builds, which `ActionButtonGroupComponent` renders and gates entry by entry
+ * through `HasPermissionDirective`, the same service `permissionGuard` asks, so a button cannot
+ * outlive the route that serves it (AAP 0.1.1 "a route guard and a template directive must agree").
+ * The lifecycle commands themselves are posted by `client-actions.component.ts` at
  * `#/client/:id/:action`; this screen only links to them, so no action is dispatched, confirmed or
  * gated a second time here. Controls AAP 0.10.5 excludes — client charges, transfer, staff
  * assignment, signature, avatar upload and camera — are not rendered.
@@ -118,17 +124,16 @@ function isClientRecordTab(value: string): value is ClientRecordTab {
  * **Presentation.** The template and the global Bootstrap 3 layer in `web-ng/src/styles.scss` own
  * every visual value, which is why this component declares no stylesheet, no inline style and no
  * colour (Rule 1 clause 6; AAP 0.4.4 decision 4). The design's joined action row is
- * `.btn-group > .btn`, its card is `.panel`, and the `More` menu is `.dropdown-menu` with Angular
- * state for its open and closed position, because Bootstrap's own plugin needs jQuery
- * (AAP 0.5.2 row "Dropdown menu"). Nothing is logged: no client id, no record body and no
- * credential reaches the console (Rule 1 clause 9).
+ * `ActionButtonGroupComponent`, which carries the `.btn-group > .btn` markup and the `.dropdown-menu`
+ * `More` menu with Angular state for its open position, because Bootstrap's own plugin needs jQuery
+ * (AAP 0.5.2 row "Dropdown menu"), and the record's card is `.panel`. Nothing is logged: no client
+ * id, no record body and no credential reaches the console (Rule 1 clause 9).
  */
 @Component({
   selector: 'app-client-view',
   imports: [
-    RouterLink,
     TranslatePipe,
-    HasPermissionDirective,
+    ActionButtonGroupComponent,
     RecordHeaderComponent,
     TabStripComponent,
     ClientSummaryComponent,
@@ -297,12 +302,6 @@ export class ClientViewComponent {
   });
 
   /**
-   * Whether the `More` menu is open. Angular state rather than Bootstrap's dropdown plugin, which
-   * needs jQuery and is not loaded (AAP 0.5.2 row "Dropdown menu").
-   */
-  readonly moreOpen = signal(false);
-
-  /**
    * Permission of the `Edit` entry point: legacy's own gate on the record's edit button
    * (`UPDATE_CLIENT`, `app/scripts/models/clientStatus.js`), which is also the code the legacy edit
    * form gates its submit control on.
@@ -345,6 +344,76 @@ export class ClientViewComponent {
    * code would then be shown a control the server refuses (Rule 1 clause 3; AAP 0.1.1).
    */
   readonly reactivatePermission = 'REACTIVATE_CLIENT';
+
+  /**
+   * The record's action row, as the descriptors `ActionButtonGroupComponent` renders (AAP 0.2.3 row
+   * `ActionButtonGroup`; AAP 0.7.4 "Client view"): `Edit`, `New Loan`, `New Saving` and `Close` in
+   * the visible row, then `Activate`, `Reject`, `Withdraw` and `Reactivate` in its `More` menu, in the
+   * order the legacy record lays them out.
+   *
+   * Every field is the legacy record's own — the shipped bundle's label key, the Font Awesome 4 class
+   * the design shows, and the permission code the constants above name — so no key, glyph or code is
+   * spelled twice and the plan's action set stays a single statement. Each `routerLink` is built from
+   * {@link clientId} rather than from a snapshot, because the router reuses this component when the
+   * URL moves from one `#/viewclient/{id}` to another: the new list is what tells the action group
+   * that the row it renders now belongs to another client, and it is what closes the `More` menu the
+   * previous client's record left open.
+   */
+  readonly actionButtons = computed<readonly ClientActionButton[]>(() => {
+    const clientId = this.clientId();
+
+    return [
+      {
+        label: 'label.button.edit',
+        icon: 'fa-edit',
+        permission: this.editPermission,
+        routerLink: `/editclient/${clientId}`,
+      },
+      {
+        label: 'label.button.newloan',
+        icon: 'fa-plus',
+        permission: this.newLoanPermission,
+        routerLink: `/newclientloanaccount/${clientId}`,
+      },
+      {
+        label: 'label.button.newsaving',
+        icon: 'fa-plus',
+        permission: this.newSavingPermission,
+        routerLink: `/new_client_saving_application/${clientId}`,
+      },
+      {
+        label: 'label.button.close',
+        icon: 'fa-times-circle-o',
+        permission: this.closePermission,
+        routerLink: `/client/${clientId}/close`,
+      },
+      {
+        label: 'label.button.activate',
+        permission: this.activatePermission,
+        routerLink: `/client/${clientId}/activate`,
+        menu: true,
+      },
+      {
+        label: 'label.button.reject',
+        permission: this.rejectPermission,
+        routerLink: `/client/${clientId}/reject`,
+        menu: true,
+      },
+      {
+        label: 'label.button.withdraw',
+        permission: this.withdrawPermission,
+        routerLink: `/client/${clientId}/withdraw`,
+        menu: true,
+      },
+      {
+        label: 'label.button.reactivate',
+        permission: this.reactivatePermission,
+        routerLink: `/client/${clientId}/reactivate`,
+        menu: true,
+      },
+    ];
+  });
+
 
   /** Legacy key of the not-found heading, the same one the unknown-path screen renders. */
   readonly notFoundHeadingKey = 'label.heading.notavailable';
@@ -453,8 +522,12 @@ export class ClientViewComponent {
 
   /**
    * Clears everything the previous client put on the screen, so a route emission for another client
-   * never shows the earlier client's record, failure, selected tab or open menu while the new read
-   * is outstanding. `loading` goes back to `true` for the same reason.
+   * never shows the earlier client's record, failure or selected tab while the new read is
+   * outstanding. `loading` goes back to `true` for the same reason.
+   *
+   * The `More` menu is deliberately not part of this reset: `ActionButtonGroupComponent` owns its open
+   * state and closes it whenever the descriptor list it renders changes, which a new {@link clientId}
+   * makes it do, so the row can never paint with the previous client's menu open.
    */
   private reset(): void {
     this.client.set(null);
@@ -462,7 +535,6 @@ export class ClientViewComponent {
     this.missingId.set(false);
     this.loading.set(true);
     this.activeTabId.set('general');
-    this.moreOpen.set(false);
   }
 
   /**
@@ -475,19 +547,6 @@ export class ClientViewComponent {
     if (isClientRecordTab(id)) {
       this.activeTabId.set(id);
     }
-  }
-
-  /** Opens the `More` menu when it is closed and closes it when it is open. */
-  toggleMore(): void {
-    this.moreOpen.update((open) => !open);
-  }
-
-  /**
-   * Closes the `More` menu without opening it, which is what the Escape key inside the menu does:
-   * the keyboard leaves the dropdown without the user aiming at the toggle again.
-   */
-  closeMore(): void {
-    this.moreOpen.set(false);
   }
 
   /**
