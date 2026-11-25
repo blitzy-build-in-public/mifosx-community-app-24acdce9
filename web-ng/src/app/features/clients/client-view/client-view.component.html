@@ -111,7 +111,16 @@
                   @if (activeTabId() === 'general') {
                     <app-client-summary [client]="record" />
                     <hr />
-                    <h4>{{ accountsHeadingKey | translate }}</h4>
+                    <!--
+                      The section heading `app-client-accounts` deliberately leaves to its caller,
+                      set at the weight the legacy record gives the same heading: legacy wraps its
+                      accounts heading in `<strong>` (`app/views/clients/viewclient.html:326-327`),
+                      and Bootstrap's own `h4` would otherwise paint 500 where the record's
+                      card-title token carries 700. `<strong>` supplies that weight from the element
+                      itself, so no class, rule or inline style is added for it (Rule 1 clauses 3
+                      and 6).
+                    -->
+                    <h4><strong>{{ accountsHeadingKey | translate }}</strong></h4>
                     <app-client-accounts [clientId]="clientId()" />
                   } @else {
                     <app-client-identifiers [clientId]="clientId()" />
