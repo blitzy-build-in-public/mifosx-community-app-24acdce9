@@ -1,0 +1,153 @@
+<!--
+  The savings action screen: one route (`#/savingaccount/:id/:action`), four screens selected by the
+  `:action` segment — approve, activate, deposit and withdraw — plus the not-found outcome for any
+  other segment or a route carrying no account id (AAP 0.7.3 W8 row, AAP 0.7.4 screens, AAP 0.8.2
+  `savings.routes.ts`).
+
+  One card per screen (AAP 0.7.4). Every visual value comes from the global Bootstrap 3 layer
+  compiled in `web-ng/src/styles.scss`, so this file carries no style block, no style attribute and no
+  colour literal (Rule 1 clause 6): `.container-fluid`/`.row`/`.col-md-12` is the page grid, `.panel`
+  the white square surface with its shadow and no border stroke, `.panel-body` the card's body,
+  `.panel-title` the card-title treatment, `.form-group`/`.control-label`/`.help-block` the field
+  layout and its invalid state, `.alert.alert-danger` the verbatim Fineract failure, and
+  `.btn.btn-primary`/`.btn.btn-default` the primary action and its cancel.
+
+  The two shared field components render their own `.form-group`/`.control-label`/`.form-control`
+  markup, so the date and the payment type are drawn by `app-date-field` and `app-select-field` rather
+  than by anything here — the native controls that replace the forbidden jQuery plugins (AAP 0.10.5
+  items 1 and 2).
+
+  What is deliberately absent, because the legacy forms have none of it and the migration reproduces
+  behaviour rather than improving it (Rule 1 clause 3): no native `required` attribute (the browser
+  would block a submission Fineract alone decides, so `required` reaches assistive technology as
+  `aria-required`), no confirmation step, no success message, no balance check and no note field.
+
+  Wording resolves through `TranslatePipe` from the legacy bundles: the mode-dependent heading and
+  primary label come from the component's single operation table, and the field captions are the
+  legacy `label.input.*` / `label.heading.*` keys. The server's own failure text is the one string
+  rendered untranslated, because the parity comparison reads it character for character (AAP 0.4.4
+  decision 6).
+-->
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-md-12">
+      <div class="panel panel-default">
+        <div class="panel-body">
+          @if (notFound()) {
+            <div class="text-center text-muted">
+              <h4 class="panel-title">{{ notFoundHeadingKey | translate }}</h4>
+              <p>{{ notFoundMessageKey | translate }}</p>
+            </div>
+          } @else if (operation; as op) {
+            @if (error(); as message) {
+              <div class="alert alert-danger" role="alert">{{ message }}</div>
+            }
+
+            <h4 class="panel-title">{{ op.headingKey | translate }}</h4>
+
+            @if (op.mode === 'action') {
+              @if (op.command === 'approve') {
+                <form [formGroup]="approveForm" (ngSubmit)="submit()" novalidate>
+                  <app-date-field
+                    inputId="approvedOnDate"
+                    [label]="dateLabel()"
+                    [control]="approveForm.controls.approvedOnDate"
+                    [required]="true"
+                  />
+
+                  <div class="form-group">
+                    <!-- Disabled while the post is in flight: one click sends one request (AAP 0.4.2). -->
+                    <button
+                      type="submit"
+                      class="btn btn-primary"
+                      [disabled]="guard.busy()"
+                      [hasPermission]="submitPermission"
+                    >
+                      {{ op.submitKey | translate }}
+                    </button>
+                    <a class="btn btn-default" [routerLink]="['/viewsavingaccount', id]">{{
+                      'label.button.cancel' | translate
+                    }}</a>
+                  </div>
+                </form>
+              } @else {
+                <form [formGroup]="activateForm" (ngSubmit)="submit()" novalidate>
+                  <app-date-field
+                    inputId="activatedOnDate"
+                    [label]="dateLabel()"
+                    [control]="activateForm.controls.activatedOnDate"
+                    [required]="true"
+                  />
+
+                  <div class="form-group">
+                    <button
+                      type="submit"
+                      class="btn btn-primary"
+                      [disabled]="guard.busy()"
+                      [hasPermission]="submitPermission"
+                    >
+                      {{ op.submitKey | translate }}
+                    </button>
+                    <a class="btn btn-default" [routerLink]="['/viewsavingaccount', id]">{{
+                      'label.button.cancel' | translate
+                    }}</a>
+                  </div>
+                </form>
+              }
+            } @else {
+              <form [formGroup]="transactionForm" (ngSubmit)="submit()" novalidate>
+                <app-date-field
+                  inputId="transactionDate"
+                  [label]="transactionDateLabel()"
+                  [control]="transactionForm.controls.transactionDate"
+                  [required]="true"
+                />
+
+                <!-- The amount is required-only: no range, step or balance rule the legacy form lacks. -->
+                @let amount = transactionForm.controls.transactionAmount;
+                <div class="form-group" [class.has-error]="amount.invalid && amount.touched">
+                  <label class="control-label" for="transactionAmount">{{ amountLabel() }}</label>
+                  <input
+                    type="number"
+                    class="form-control"
+                    id="transactionAmount"
+                    formControlName="transactionAmount"
+                    step="any"
+                    aria-required="true"
+                    [attr.aria-invalid]="amount.invalid && amount.touched ? 'true' : null"
+                  />
+                  @if (amount.invalid && amount.touched) {
+                    <span class="help-block">{{ 'label.requiredfield' | translate }}</span>
+                  }
+                </div>
+
+                <app-select-field
+                  inputId="paymentTypeId"
+                  [label]="paymentTypeLabel()"
+                  [options]="paymentTypes()"
+                  [control]="transactionForm.controls.paymentTypeId"
+                  [placeholder]="paymentTypePlaceholder()"
+                  [required]="true"
+                />
+
+                <div class="form-group">
+                  <button
+                    type="submit"
+                    class="btn btn-primary"
+                    [disabled]="guard.busy()"
+                    [hasPermission]="submitPermission"
+                  >
+                    {{ op.submitKey | translate }}
+                  </button>
+                  <a class="btn btn-default" [routerLink]="['/viewsavingaccount', id]">{{
+                    'label.button.cancel' | translate
+                  }}</a>
+                </div>
+              </form>
+            }
+          }
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
