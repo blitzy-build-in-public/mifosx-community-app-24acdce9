@@ -53,9 +53,10 @@ function createSwatch(
 }
 
 /**
- * The fixture's host element. `ComponentFixture.nativeElement` is typed `any` by Angular;
- * narrowing it once here keeps every assertion below type-checked and confines this spec's only
- * cast to this line (Rule 1 clause 4).
+ * The fixture's host element. `ComponentFixture.nativeElement` is typed `any` by Angular, so
+ * narrowing it once here keeps every assertion below type-checked and keeps the fixture's cast on
+ * this line; the spec's one other cast is the commented untyped-input boundary further down
+ * (Rule 1 clause 4).
  */
 function hostOf(fixture: ComponentFixture<StatusSwatchComponent>): HTMLElement {
   return fixture.nativeElement as HTMLElement;
