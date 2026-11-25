@@ -13,7 +13,6 @@ import type {
   LoanActionRequest,
   LoanActionTemplate,
   LoanApplicationRequest,
-  LoanCharge,
   LoanChargeActionCommand,
   LoanChargeActionRequest,
   LoanChargeRequest,
@@ -113,11 +112,12 @@ interface LoanApplicationBody extends LoanDateWire {
  * One row of an application body's `charges` array, as the wire carries it.
  *
  * A new application names the charge definition and the amount (`{chargeId, amount}`, which
- * `POST /loans` takes). An edit re-posts the charges `GET /loans/{id}/charges` reports, and such a row
- * also says which loan charge it keeps and when it falls due: `PUT /loans/{id}` treats the array as the
- * loan's **complete** charge set, so an absent array deletes every charge and a row without `id` is
- * deleted and re-created rather than kept (AAP 0.7.2 row `LoanApplicationRequest`; AAP 0.3.4: the
- * running fork's accepted member set wins over the plan's shorthand; Rule 1 clause 2).
+ * `POST /loans` takes). An edit re-posts the charges the loan payload reports in its `charges`
+ * member, and such a row also says which loan charge it keeps and when it falls due: `PUT
+ * /loans/{id}` treats the array as the loan's **complete** charge set, so an absent array deletes
+ * every charge and a row without `id` is deleted and re-created rather than kept (AAP 0.7.2 row
+ * `LoanApplicationRequest`; AAP 0.3.4: the running fork's accepted member set wins over the plan's
+ * shorthand; Rule 1 clause 2).
  */
 interface LoanChargeRowBody {
   /** Loan charge the row keeps, on an edit that re-posts one the loan already carries. */
@@ -341,10 +341,10 @@ export class LoanService {
    * edit form's seed (AAP 0.7.3, "Loan edit").
    *
    * The association list is the one the legacy edit screen sends, kept verbatim; on this fork the
-   * answer carries the loan's own terms and the form's option lists (`chargeOptions`, `productOptions`,
-   * the frequency, interest, strategy and officer lists) and **no** `charges` member, so the loan's
-   * charges are read separately with {@link charges} rather than taken from here (AAP 0.3.4: the
-   * running fork's payload is the contract; Rule 1 clause 2).
+   * answer carries the loan's own terms, the form's option lists (`chargeOptions`, `productOptions`,
+   * the frequency, interest, strategy and officer lists) and the loan's `charges`, which the form
+   * re-posts unchanged — the same member the legacy edit read out of this seed, and the reason no
+   * charge-list request is needed (Rule 1 clauses 2 and 3; AAP 0.7.3 "Loan edit").
    *
    * The return type is the union the agent plan specifies because the same path answers either shape
    * depending on `template=true`; `isLoanAccount()` from `./loan.models` narrows it at the call site
@@ -370,14 +370,12 @@ export class LoanService {
    * `GET /loans/{id}?associations=all` — the record page's single read, and W6's read-back (AAP 0.7.3,
    * "W6 repayment").
    *
-   * `associations=all` carries the repayment schedule and the transactions, and the schedule carries
-   * every loan-wide money total the record's summary block prints. It carries **no** `charges` member
-   * on this fork — no `associations` value produces one — so a screen that lists the loan's charges
-   * reads them with {@link charges}, the same second request the endpoint's own contract requires
-   * (AAP 0.3.4: the running fork's payload is the contract; Rule 1 clause 2).
+   * `associations=all` carries the repayment schedule, the transactions and the loan's charges — the
+   * schedule carries every loan-wide money total the record's summary block prints, and `charges`
+   * holds the rows the record's charge section lists (AAP 0.7.3's W6 row names all three).
    *
    * @param id Loan to read.
-   * @returns The loan record with its schedule and transactions.
+   * @returns The loan record with its schedule, transactions and charges.
    */
   get(id: number | string): Observable<LoanAccount> {
     const params = new HttpParams().set('associations', 'all');
@@ -390,30 +388,6 @@ export class LoanService {
   }
 
   /**
-   * `GET /loans/{id}/charges` — the charges the loan carries (AAP 0.7.3, "Loan charges").
-   *
-   * The record page's charge list and the loan edit's `charges` rows both come from here, because the
-   * loan itself never reports them: `GET /loans/{id}?associations=all` and
-   * `GET /loans/{id}?template=true&associations=charges,…` both answer without a `charges` member on
-   * this fork. Each row is one loan charge — its own `id`, the definition's `chargeId`, its
-   * `amountOrPercentage`, its paid, waived and outstanding amounts and its due date — which is exactly
-   * the set the record lists and the set `PUT /loans/{id}` takes back (AAP 0.3.4; Rule 1 clause 2).
-   *
-   * The endpoint takes no query parameter: legacy asked it for the loan's charge list and nothing
-   * else, and an empty array is the answer for a loan that carries none (AAP 0.7.3).
-   *
-   * @param id Loan whose charges are read.
-   * @returns The loan's charges, in the order the server reports them.
-   */
-  charges(id: number | string): Observable<readonly LoanCharge[]> {
-    return defer(() =>
-      this.http.get<readonly LoanCharge[]>(
-        this.config.apiUrl(`/loans/${resourceId(id, 'LoanService.charges')}/charges`),
-      ),
-    );
-  }
-
-  /**
    * `PUT /loans/{id}` — saves an edited application (AAP 0.7.3, "Loan edit").
    *
    * The body is the application body unchanged, serialised by the same helper `POST /loans` uses: the
@@ -421,8 +395,8 @@ export class LoanService {
    * whether the fork marks any member submit-only.
    *
    * Its `charges` member is the loan's **complete** charge set on this endpoint, so the caller re-posts
-   * every charge the loan keeps — `{id, chargeId, amount, dueDate}` rows built from the answers of
-   * `GET /loans/{id}/charges`, the endpoint that reports them — and an empty array for a loan that
+   * every charge the loan keeps — `{id, chargeId, amount, dueDate}` rows built from the `charges` the
+   * loan payload reports, the member the edit seed carries — and an empty array for a loan that
    * carries none. An absent `charges` member answers `{"changes":{"charges":[]}}` and deletes them
    * all, which is why the builder formats a row's date instead of letting it reach the wire as an ISO
    * string (AAP 0.3.4: the running fork's contract wins over the plan's shorthand; Rule 1 clause 2).

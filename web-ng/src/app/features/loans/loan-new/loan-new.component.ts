@@ -838,10 +838,10 @@ export class LoanNewComponent {
         return;
       }
 
-      // `GET /charges/{id}?template=true` answers with the charge itself, which is where the amount
-      // is; a fork that answers with the picker shape instead is read from its first option.
+      // `GET /charges/{id}?template=true` answers with the charge itself, whose declared `amount` is
+      // the figure; a payload that answers with the picker shape instead is read from its first row.
       const options: readonly LoanChargeOption[] = template.chargeOptions ?? [];
-      const amount = asNumber(toWire(template)['amount']) ?? asNumber(options[0]?.amount) ?? null;
+      const amount = template.amount ?? asNumber(options[0]?.amount) ?? null;
 
       this.chargeRows.at(rowIndex).controls.amount.setValue(amount);
     } catch (error) {

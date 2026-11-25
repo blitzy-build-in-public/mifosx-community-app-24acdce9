@@ -1,7 +1,7 @@
 <!--
   Charges section of the individual loan record (`#/viewloanaccount/:id`; AAP 0.7.1 row `loans`,
-  AAP 0.7.2 row `LoanCharge`, AAP 0.7.3 row "Loan charges"). It renders the rows the parent read with
-  `GET /loans/{id}/charges` — this fork's loan record carries no `charges` member — and issues no
+  AAP 0.7.2 row `LoanCharge`, AAP 0.7.3 row "Loan charges"). It renders the rows the parent took from
+  the loan record's own `charges` member and issues no
   request of its own (Rule 1 clause 2; Rule 2: no URL, host or endpoint appears here).
 
   Exactly one of the two branches renders. A loan that carries no charges shows the shared explicit

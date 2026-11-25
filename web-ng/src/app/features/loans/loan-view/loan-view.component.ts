@@ -127,13 +127,13 @@ function sumPeriodBalances(
  * row `loans`, which names this component `LoanViewComponent`; AAP 0.7.4's `#/viewloanaccount/:id`
  * row).
  *
- * **Two requests, both owned by the family's service.** The page reads the loan once,
+ * **One request, owned by the family's service.** The page reads the loan once,
  * `LoanService.get(id)` — `GET /loans/{id}?associations=all` (AAP 0.7.3 row "W6 repayment") — which
- * carries the repayment schedule, and with it every figure the summary block prints, plus the
- * transactions. It then reads the loan's charges once, `LoanService.charges(id)` —
- * `GET /loans/{id}/charges` (AAP 0.7.3 row "Loan charges") — because this fork's record carries no
- * `charges` member. The second read waits for the first, so a loan that does not exist is never
- * followed by a charge read, and both answers paint together. This file holds no URL, host, port,
+ * carries the repayment schedule and with it every figure the summary block prints, the transactions,
+ * and the loan's `charges`, the rows the charge section lists (AAP 0.7.3's W6 row names all three
+ * among what this answer carries, and the legacy record read the same members from the same call).
+ * That is the whole read of the screen: no section issues a request of its own and no charge-list call
+ * is made (Rule 1 clauses 2 and 3). This file holds no URL, host, port,
  * API path, HTTP method, query parameter or body, and it injects no `HttpClient`: `LoanService`
  * composes the requests through `AppConfigService.apiUrl()` and is the only HTTP holder in this
  * feature (Rule 1 clause 5, Rule 1 clause 2, Rule 2; AAP 0.14.1). It reads no business date either —
@@ -157,18 +157,18 @@ function sumPeriodBalances(
  * deliberate difference 11; Rule 1 clause 3). The summary block prints the five figures AAP 0.7.2's
  * `LoanSummary` row names — total expected repayment, total outstanding, and the principal, interest
  * and fee balances — taken from the one place this fork publishes them, the loan's
- * `repaymentSchedule` (see {@link LoanViewComponent.summaryRows}); there is no `summary` member to
- * read, and a figure the payload omits renders an empty cell rather than a zero or a word this
+ * `repaymentSchedule` (see {@link LoanViewComponent.summaryRows}); the payload's separate `summary`
+ * object is not declared on the model and no screen reads it, and a figure the payload omits renders
+ * an empty cell rather than a zero or a word this
  * screen would have invented (Rule 1 clause 3). Below them the record shows three tabs through the
  * application's one tab component, `app-tab-strip`: the repayment schedule in `app-loan-schedule`,
  * the transactions in `app-loan-transactions` and the charges in `app-loan-charges`, each the
  * committed, read-only section component that owns its table and none of them re-implemented here.
  *
- * **Charges come from their own endpoint.** `GET /loans/{id}?associations=all` carries no `charges`
- * member on this fork, so the record reads the loan's charges with {@link LoanService.charges} —
- * `GET /loans/{id}/charges` — once the loan itself has answered, and hands the rows to the charges
- * section. A failure of that read is described to the user the same way the record's own failures
- * are (see {@link LoanViewComponent.chargesError}); the record's other sections are unaffected.
+ * **Charges arrive with the record.** `GET /loans/{id}?associations=all` carries the loan's `charges`
+ * rows besides the schedule and the transactions (AAP 0.7.3's W6 row names all three), so the screen
+ * hands the payload's own rows to the charges section and issues no second request — the same single
+ * call the legacy record made, and no charge-list endpoint is used (Rule 1 clauses 2 and 3).
  *
  * **Action entry points.** Every lifecycle command and the repayment form is a permission-gated
  * `routerLink` to the segment `loan-action.component.ts` serves — `/loanaccount/:id/approve`,
@@ -262,21 +262,14 @@ export class LoanViewComponent {
   readonly loan = signal<LoanAccount | null>(null);
 
   /**
-   * The loan's charges, as `GET /loans/{id}/charges` reported them — `[]` for a loan that carries
-   * none, and `null` until that read answers or after it fails, which is what keeps the charges tab's
-   * empty state off the screen before the rows are known.
+   * The loan's charges, as the record's `charges` member reported them — `[]` for a loan that carries
+   * none, and `null` until the read answers, which is what keeps the charges tab's empty state off the
+   * screen before the rows are known.
    */
   readonly charges = signal<readonly LoanCharge[] | null>(null);
 
   /** The failure the read ended in, or `null`; the template derives its error branches from this. */
   readonly error = signal<ApiError | null>(null);
-
-  /**
-   * The failure the charge read ended in, or `null`. Kept apart from {@link error} because it
-   * describes one section of a record that loaded: the schedule, the transactions and the summary
-   * stay on screen when only the charges could not be read.
-   */
-  private readonly chargesFailure = signal<ApiError | null>(null);
 
   /** Whether the route carried no loan id at all; set by the load of the emission that named none. */
   private readonly missingId = signal(false);
@@ -321,25 +314,6 @@ export class LoanViewComponent {
     }
 
     return failure.status === 404 ? null : failure;
-  });
-
-  /**
-   * The failure the charges section renders itself: the same 4xx rule as {@link clientError}, applied
-   * to the charge read.
-   *
-   * A 5xx or a transport failure of that read has already produced exactly one notification in the
-   * interceptor, so it answers `null` here and the message is never shown twice; any 4xx answers with
-   * Fineract's own message, which the charges tab renders in place of the table. Either way the
-   * failure reaches the user — the one thing a failed read may never do is disappear (AAP 0.14.2).
-   */
-  readonly chargesError = computed<ApiError | null>(() => {
-    const failure = this.chargesFailure();
-
-    if (failure === null || failure.status < 400 || failure.status >= 500) {
-      return null;
-    }
-
-    return failure;
   });
 
   /**
@@ -459,7 +433,6 @@ export class LoanViewComponent {
   private reset(): void {
     this.loan.set(null);
     this.charges.set(null);
-    this.chargesFailure.set(null);
     this.error.set(null);
     this.missingId.set(false);
     this.activeTab.set(SCHEDULE_TAB);
@@ -467,16 +440,14 @@ export class LoanViewComponent {
   }
 
   /**
-   * Reads the loan and its charges for the emission that is current, then paints both together.
+   * Reads the loan for the emission that is current, then paints the record and its charges together.
    *
-   * Two dependent reads, in order: the record — which carries the schedule and the transactions —
-   * and then the loan's charges, so a loan the server does not have is never followed by a charge
-   * read. A failed charge read is described in {@link LoanViewComponent.chargesFailure} and leaves the
-   * rest of the record painted; a failed record read becomes {@link LoanViewComponent.error}. Neither
-   * is rethrown and neither is notified here: the interceptor has already raised the single message a
-   * 5xx or transport failure gets, and a 4xx reaches the template through `clientError` or `notFound`.
+   * One read: the record carries the schedule, the transactions and the loan's charges. A failed read
+   * becomes {@link LoanViewComponent.error}: it is not rethrown and not notified here, because the
+   * interceptor has already raised the single message a 5xx or transport failure gets, and a 4xx
+   * reaches the template through `clientError` or `notFound` (AAP 0.14.2).
    *
-   * Every run takes the next {@link LoanViewComponent.loadSequence} number, and both reads are tied to
+   * Every run takes the next {@link LoanViewComponent.loadSequence} number, and the read is tied to
    * this component's lifetime, so a run the route has since superseded — or that the screen outlived —
    * writes nothing at all: not the record, charges, failure or not-found state, and not `loading`,
    * which belongs to the run that replaced it.
@@ -504,14 +475,8 @@ export class LoanViewComponent {
         return;
       }
 
-      const charges = await this.readCharges(loanId, load);
-
-      if (!this.isCurrent(load)) {
-        return;
-      }
-
       this.loan.set(loaded);
-      this.charges.set(charges);
+      this.charges.set(loaded.charges ?? []);
     } catch (cause: unknown) {
       if (!this.isCurrent(load)) {
         return;
@@ -524,27 +489,6 @@ export class LoanViewComponent {
       if (this.isCurrent(load)) {
         this.loading.set(false);
       }
-    }
-  }
-
-  /**
-   * The loan's charges for the run that is still current — `null` when the read failed, which is the
-   * case the charges tab renders as a described failure rather than as an empty list.
-   *
-   * @param loanId the loan the run addresses.
-   * @param load the run's sequence number, so a failure the route has superseded is not recorded.
-   */
-  private async readCharges(loanId: string, load: number): Promise<readonly LoanCharge[] | null> {
-    try {
-      return await firstValueFrom(
-        this.loans.charges(loanId).pipe(takeUntilDestroyed(this.destroyRef)),
-      );
-    } catch (cause: unknown) {
-      if (this.isCurrent(load)) {
-        this.chargesFailure.set(this.asApiError(cause));
-      }
-
-      return null;
     }
   }
 

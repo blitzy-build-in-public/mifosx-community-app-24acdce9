@@ -35,14 +35,14 @@ import { LoanEditComponent } from './loan-edit.component';
  *
  * Four properties are pinned, each one a defect the screen had:
  *
- *   - the save body carries the loan's own charges, read from `GET /loans/{id}/charges` because this
- *     fork's edit seed carries no `charges` member, so `PUT /loans/{id}` keeps them instead of
- *     answering `{"changes":{"charges":[]}}` and deleting every charge (AAP 0.3.4: the running fork's
- *     contract decides; Rule 1 clause 2);
- *   - a charge read that fails aborts the load with a rendered message and sends no save, rather than
- *     leaving the form able to post an empty array over the loan's charges (AAP 0.14.2);
+ *   - the load is one read — `GET /loans/{id}?template=true&associations=…`, the row AAP 0.7.3 declares
+ *     for this screen — whose own `charges` member the save re-posts, so `PUT /loans/{id}` keeps the
+ *     loan's charges instead of answering `{"changes":{"charges":[]}}` and deleting every charge, and
+ *     no charge-list request is issued for any of it (Rule 1 clauses 2 and 3; AAP 0.7.3 "Loan edit";
+ *     AAP 0.3.4: the running fork's contract decides);
  *   - a record the body cannot be built from renders a message and keeps the form and its values,
- *     rather than leaving Save a silent no-op with an unhandled rejection (AAP 0.14.2);
+ *     rather than leaving Save a silent no-op with an unhandled rejection, and no body that would post
+ *     an empty charge array over the loan's charges is ever sent (AAP 0.14.2);
  *   - every emission of `route.paramMap` re-reads the loan, so an in-place move from one edit URL to
  *     another cannot leave the previous loan's values on screen;
  *   - a read the route has since moved past is discarded when it answers, so the loan it names cannot
@@ -74,9 +74,6 @@ const RECORD_ROUTE = ['/viewloanaccount', LOAN_ID];
 
 /** The associations the edit seed is read with, exactly as AAP 0.7.3's "Loan edit" row spells them. */
 const EDIT_SEED_ASSOCIATIONS = 'charges,collateral,meeting,multiDisburseDetails';
-
-/** The message a failed charge read answers with, quoted from Fineract's own `defaultUserMessage`. */
-const CHARGES_FAILURE_MESSAGE = 'The loan charges could not be listed.';
 
 /**
  * The legacy captions this screen resolves through the translation pipe. Only the ones a case below
@@ -145,21 +142,26 @@ const CHARGE_ROW_WIRE: Readonly<Record<string, unknown>> = {
 };
 
 /**
- * The `GET /loans/{id}/charges` answer for the fixture loan: one charge, shaped exactly as the fork
- * reports it. This endpoint, not the edit seed, is where the loan's charge set comes from.
+ * The seed's own `charges` member for the fixture loan: one charge, shaped exactly as the fork reports
+ * it inside `GET /loans/{id}?template=true&associations=…`. That member is where the save body's rows
+ * come from, and the row AAP 0.7.3's "Loan edit" declares for this screen is the whole read — no
+ * charge-list request is issued (Rule 1 clauses 2 and 3).
  */
 const LOAN_CHARGES: readonly LoanCharge[] = [CHARGE];
 
-/** The same read for a loan that carries no charges, so the save must still post the empty array. */
-const NO_CHARGES: readonly LoanCharge[] = [];
-
 /**
- * The same charge, answered without the definition id the body has to re-post. The cast is the one
- * boundary this fixture needs: the wire can answer a charge without `chargeId` although `LoanCharge`
- * declares it, and the case that uses this answer asserts what the screen does with it.
+ * The same charge without the definition id the body has to re-post. The cast is the one boundary this
+ * fixture needs: the wire can answer a charge without `chargeId` although `LoanCharge` declares it,
+ * and the case that uses this seed asserts what the screen does with such a row.
  */
-const CHARGES_WITHOUT_DEFINITION: readonly LoanCharge[] = [
-  { ...CHARGE, chargeId: undefined } as unknown as LoanCharge,
+const CHARGE_WITHOUT_DEFINITION: LoanCharge = {
+  ...CHARGE,
+  chargeId: undefined,
+} as unknown as LoanCharge;
+
+/** The charges a second route emission's loan carries, distinct from the first loan's set. */
+const SECOND_CHARGES: readonly LoanCharge[] = [
+  { ...CHARGE, id: 13, name: 'Second Parity Fee', amountOrPercentage: 40 },
 ];
 
 /** The loan a first `#/editloanaccount/:id` URL addresses. */
@@ -186,9 +188,16 @@ const SEED: LoanEditSeed = {
   interestType: { id: 0 },
   interestCalculationPeriodType: { id: 1 },
   transactionProcessingStrategyCode: 'mifos-standard-strategy',
+  charges: LOAN_CHARGES,
 };
 
-/** The loan a second emission addresses: different terms, so a stale form cannot hide. */
+/**
+ * The seed for a loan that carries no charge: the fork leaves the `charges` member out entirely, and
+ * the save must still post the empty array rather than leaving the member absent.
+ */
+const UNCHARGED_SEED: LoanEditSeed = { ...SEED, charges: undefined };
+
+/** The loan a second emission addresses: different terms and charges, so a stale form cannot hide. */
 const SECOND_SEED: LoanEditSeed = {
   ...SEED,
   id: 12,
@@ -196,31 +205,29 @@ const SECOND_SEED: LoanEditSeed = {
   principal: 7000,
   numberOfRepayments: 6,
   termFrequency: 6,
+  charges: SECOND_CHARGES,
 };
 
 /**
  * The records the body cannot be built from, each with the message the screen must render for it.
  *
- * They differ only in which member is missing, so one case per answer is the same behaviour over two
+ * They differ only in which member is missing, so one case per seed is the same behaviour over two
  * inputs: a record the form can display but the request contract cannot describe, and a charge the
- * charge read answers without the definition id the body must re-post (AAP 0.14.2).
+ * seed carries without the definition id the body must re-post (AAP 0.14.2).
  */
 const LOCAL_FAULTS: readonly {
   readonly label: string;
   readonly seed: LoanEditSeed;
-  readonly charges: readonly LoanCharge[];
   readonly message: string;
 }[] = [
   {
     label: 'a record without the product id the body must echo',
     seed: { ...SEED, loanProductId: undefined },
-    charges: LOAN_CHARGES,
     message: 'The loan edit form has no productId value to post.',
   },
   {
     label: 'a charge row without the definition id the body must re-post',
-    seed: SEED,
-    charges: CHARGES_WITHOUT_DEFINITION,
+    seed: { ...SEED, charges: [CHARGE_WITHOUT_DEFINITION] },
     message: 'The loaded loan carries a charge this form cannot re-post.',
   },
 ];
@@ -236,10 +243,13 @@ function isEditSeedRead(id: string): (request: TestRequest['request']) => boolea
 }
 
 /**
- * Matches the loan's charge read — `GET /loans/{id}/charges` — which is where the save body's
- * `charges` rows come from, because the edit seed carries none on this fork.
+ * Matches the charge-list read `GET /loans/{id}/charges`, which this screen must never send: it is not
+ * a row of AAP 0.7.3's endpoint table for the loan edit — that row is the seed read and the save — the
+ * legacy edit never called it, and the app allowlist holds the path for the charge POSTs alone (Rule 1
+ * clauses 2 and 3). The first case asserts its absence explicitly, and `httpMock.verify()` fails on it
+ * in every case.
  */
-function isChargesRead(id: string): (request: TestRequest['request']) => boolean {
+function isChargeListRead(id: string): (request: TestRequest['request']) => boolean {
   return (request) => request.method === 'GET' && request.url === `${loanUrl(id)}/charges`;
 }
 
@@ -320,29 +330,17 @@ describe('LoanEditComponent', () => {
   }
 
   /**
-   * Answers the two reads the screen makes, in the order it makes them — the edit seed, then the
-   * loan's charges — and renders the seeded form.
+   * Answers the one read the screen makes — the edit seed, whose own `charges` member carries the
+   * loan's charge set — and renders the seeded form.
    *
-   * @param seed the `GET /loans/{id}?template=true&associations=…` payload.
-   * @param charges the `GET /loans/{id}/charges` payload: one charge by default, and `[]` for a loan
-   *   that carries none.
-   * @param id the loan both reads address.
+   * @param seed the `GET /loans/{id}?template=true&associations=…` payload, `charges` included.
+   * @param id the loan the read addresses.
    */
-  async function settle(
-    seed: LoanEditSeed,
-    charges: readonly LoanCharge[] = LOAN_CHARGES,
-    id: string = LOAN_ID,
-  ): Promise<void> {
+  async function settle(seed: LoanEditSeed, id: string = LOAN_ID): Promise<void> {
     const pending = httpMock.match(isEditSeedRead(id));
 
     expect(pending).toHaveLength(1);
     pending[0].flush(seed);
-    await fixture.whenStable();
-
-    const chargeRead = httpMock.match(isChargesRead(id));
-
-    expect(chargeRead).toHaveLength(1);
-    chargeRead[0].flush(charges);
     await fixture.whenStable();
     fixture.detectChanges();
   }
@@ -372,7 +370,7 @@ describe('LoanEditComponent', () => {
     vi.unstubAllGlobals();
   });
 
-  it('reads the edit seed and the loan’s charges for the routed loan, and seeds every control', async () => {
+  it('reads the edit seed for the routed loan, and seeds every control and the charge set', async () => {
     await show();
 
     const read = httpMock.expectOne(isEditSeedRead(LOAN_ID));
@@ -384,16 +382,11 @@ describe('LoanEditComponent', () => {
 
     read.flush(SEED);
     await fixture.whenStable();
-
-    // The second read is the loan's charge list, with no parameter: the edit seed carries no `charges`
-    // member on this fork, and the save re-posts the rows this endpoint answers (AAP 0.7.3 rows
-    // "Loan edit" and "Loan charges"; AAP 0.3.4).
-    const chargeRead = httpMock.expectOne(isChargesRead(LOAN_ID));
-
-    expect(chargeRead.request.params.keys()).toEqual([]);
-    chargeRead.flush(LOAN_CHARGES);
-    await fixture.whenStable();
     fixture.detectChanges();
+
+    // The seed is the whole load: its own `charges` member is the loan's charge set, so no charge-list
+    // request follows it (AAP 0.7.3 "Loan edit"; Rule 1 clauses 2 and 3).
+    httpMock.expectNone(isChargeListRead(LOAN_ID));
 
     expect(component.controls.principal.value).toBe(5000);
     expect(component.controls.numberOfRepayments.value).toBe(12);
@@ -401,7 +394,7 @@ describe('LoanEditComponent', () => {
     expect(component.controls.expectedDisbursementDate.value).toEqual(new Date(2026, 10, 24));
     expect(component.charges()).toEqual(LOAN_CHARGES);
     expect(component.loading()).toBe(false);
-    // Two reads are the whole load: nothing is saved until the user asks for it.
+    // One read is the whole load: nothing is saved until the user asks for it.
     httpMock.expectNone(isEditSave(LOAN_ID));
   });
 
@@ -436,59 +429,25 @@ describe('LoanEditComponent', () => {
 
   it('posts the empty charges array for a loan that carries none', async () => {
     await show();
-    await settle(SEED, NO_CHARGES);
+    await settle(UNCHARGED_SEED);
 
     const submission = component.submit();
     const save = httpMock.expectOne(isEditSave(LOAN_ID));
 
-    // The member is always present: an absent one is what deletes the charges, so "none" is the
-    // empty array and never a missing member (AAP 0.3.4; legacy posts the array unconditionally).
+    // The payload omitted the member, and the body still carries it: an absent one is what deletes
+    // the charges, so "none" is the empty array and never a missing member (AAP 0.3.4; legacy posts
+    // the array unconditionally).
+    expect(component.charges()).toEqual([]);
     expect(bodyOf(save.request)['charges']).toEqual([]);
 
     save.flush({ resourceId: 11 });
     await submission;
   });
 
-  it.each<[string, number]>([
-    ['a 4xx refusal', 400],
-    ['a 5xx failure', 503],
-  ])('aborts the load on %s of the charge read and sends no save', async (_label, status) => {
-    await show();
-
-    const read = httpMock.expectOne(isEditSeedRead(LOAN_ID));
-
-    read.flush(SEED);
-    await fixture.whenStable();
-
-    const chargeRead = httpMock.expectOne(isChargesRead(LOAN_ID));
-
-    chargeRead.flush(
-      { defaultUserMessage: CHARGES_FAILURE_MESSAGE },
-      { status, statusText: 'Failed' },
-    );
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    // The form is never seeded from a loan whose charge set is unknown, so no body can be built and
-    // an empty `charges` array can never be posted over the charges the loan carries (AAP 0.3.4).
-    expect(component.loading()).toBe(false);
-    expect(component.charges()).toBeNull();
-    expect(component.account()).toBeNull();
-    expect(component.error()?.message).toBe(CHARGES_FAILURE_MESSAGE);
-    expect(host().querySelector('[role="alert"]')?.textContent?.trim()).toBe(CHARGES_FAILURE_MESSAGE);
-    expect(() => component.buildRequest()).toThrow('The loan edit form has no loaded loan to save.');
-
-    await component.submit();
-
-    // Nothing reaches `PUT /loans/{id}`, so the loan's charges are left exactly as they were.
-    httpMock.expectNone(isEditSave(LOAN_ID));
-    expect(navigate).not.toHaveBeenCalled();
-  });
-
-  for (const { label, seed, charges, message } of LOCAL_FAULTS) {
+  for (const { label, seed, message } of LOCAL_FAULTS) {
     it(`renders a message for ${label} and keeps the form and its values`, async () => {
       await show();
-      await settle(seed, charges);
+      await settle(seed);
 
       await component.submit();
       fixture.detectChanges();
@@ -506,27 +465,32 @@ describe('LoanEditComponent', () => {
     });
   }
 
-  it('re-reads the loan for each route emission and replaces the previous loan’s values', async () => {
+  it('re-reads the loan for each route emission and replaces the previous loan’s values and charges', async () => {
     await show();
     await settle(SEED);
 
     expect(component.controls.principal.value).toBe(5000);
+    expect(component.charges()).toEqual(LOAN_CHARGES);
 
     // The router reuses this component when the URL moves to another edit route, so a second emission
     // is what an in-place move looks like.
     routeParams.next(paramsFor(SECOND_LOAN_ID));
     fixture.detectChanges();
 
-    // The previous loan is gone before the new answer arrives: no stale form, no stale message.
+    // The previous loan is gone before the new answer arrives: no stale form, no stale charge set, no
+    // stale message.
     expect(component.loanId()).toBe(SECOND_LOAN_ID);
     expect(component.account()).toBeNull();
     expect(component.controls.principal.value).toBeNull();
+    expect(component.charges()).toBeNull();
     expect(component.loading()).toBe(true);
 
-    await settle(SECOND_SEED, LOAN_CHARGES, SECOND_LOAN_ID);
+    await settle(SECOND_SEED, SECOND_LOAN_ID);
 
     expect(component.controls.principal.value).toBe(7000);
     expect(component.controls.numberOfRepayments.value).toBe(6);
+    // The charge set follows the record: a save now re-posts loan 12's rows, never loan 11's.
+    expect(component.charges()).toEqual(SECOND_CHARGES);
     expect(component.loading()).toBe(false);
     // Each emission addresses its own loan, and the first was read once.
     httpMock.expectNone(isEditSeedRead(LOAN_ID));
@@ -547,13 +511,13 @@ describe('LoanEditComponent', () => {
     // cleared that: `loading` belongs to the run the URL now names.
     expect(component.loading()).toBe(true);
 
-    await settle(SECOND_SEED, LOAN_CHARGES, SECOND_LOAN_ID);
+    await settle(SECOND_SEED, SECOND_LOAN_ID);
 
     expect(component.controls.principal.value).toBe(7000);
     expect(component.loading()).toBe(false);
 
     // The earlier answer lands last. It must be dropped rather than applied, or loan 11's values would
-    // appear under loan 12's URL — and Save would post them to loan 12.
+    // appear under loan 12's URL — and Save would post them, its charge set included, to loan 12.
     superseded.flush(SEED);
     await fixture.whenStable();
     fixture.detectChanges();
@@ -562,6 +526,7 @@ describe('LoanEditComponent', () => {
     expect(component.account()?.id).toBe(SECOND_SEED.id);
     expect(component.controls.principal.value).toBe(7000);
     expect(component.controls.numberOfRepayments.value).toBe(6);
+    expect(component.charges()).toEqual(SECOND_CHARGES);
     expect(component.loading()).toBe(false);
     expect(component.notFound()).toBe(false);
     expect(component.error()).toBeNull();

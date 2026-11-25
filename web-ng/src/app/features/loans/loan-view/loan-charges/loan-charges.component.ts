@@ -28,9 +28,9 @@ type ChargeRow = Omit<LoanCharge, 'dueDate'> & { readonly dueDate: Date | null }
  * which names `LoanChargesComponent`; AAP 0.7.2 row `LoanCharge`; AAP 0.7.4, whose list of surfaces
  * requiring an explicit empty state includes the loan view's charge list).
  *
- * **Where the rows come from.** The parent reads them with `LoanService.charges(id)` —
- * `GET /loans/{id}/charges` (AAP 0.7.3 row "Loan charges") — because this fork's loan record carries
- * no `charges` member. This component issues no request of its own, so the record screen keeps making
+ * **Where the rows come from.** The parent passes the loan record's own `charges` member, which
+ * `GET /loans/{id}?associations=all` carries (AAP 0.7.3 row "W6 repayment"). This component issues no
+ * request of its own, so the record screen keeps making
  * exactly the calls its typed service owns (AAP 0.4.2; Rule 1 clause 2), and it injects no
  * collaborator, subscribes to nothing and holds no state that it writes.
  *
@@ -66,8 +66,8 @@ type ChargeRow = Omit<LoanCharge, 'dueDate'> & { readonly dueDate: Date | null }
 })
 export class LoanChargesComponent {
   /**
-   * The loan's charges, as `GET /loans/{id}/charges` reported them. Defaults to an empty array so a
-   * loan with no charges renders the explicit empty state without the parent passing anything, and is
+   * The loan's charges, as the record's `charges` member reported them. Defaults to an empty array so
+   * a loan with no charges renders the explicit empty state without the parent passing anything, and is
    * `readonly` so the array order — the API's own — cannot be rearranged here.
    */
   readonly charges = input<readonly LoanCharge[]>([]);

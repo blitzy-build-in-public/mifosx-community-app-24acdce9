@@ -408,10 +408,10 @@ function toDisplayableFailure(cause: unknown): ApiError {
  *
  * `id` and `chargeId` are both required by `PUT /loans/{id}`, and for different reasons: `id` is the
  * loan charge the row keeps, so a row without it is deleted and re-created instead of preserved, and
- * `chargeId` names the charge definition that is applied. A charge the charge read answers without
- * either one therefore cannot be re-posted at all; it reports itself as a fault this screen renders
- * rather than being dropped, because a dropped charge is exactly the deletion this body exists to
- * prevent (AAP 0.3.4: the running fork's accepted member set is the contract).
+ * `chargeId` names the charge definition that is applied. A charge the payload's `charges` row carries
+ * without either one therefore cannot be re-posted at all; it reports itself as a fault this screen
+ * renders rather than being dropped, because a dropped charge is exactly the deletion this body exists
+ * to prevent (AAP 0.3.4: the running fork's accepted member set is the contract).
  *
  * The amount is the charge's own `amountOrPercentage`, the member legacy's edit posts back, and the
  * due date stays a `Date` here: `LoanService.update` formats it at the boundary, so no payload date is
@@ -419,7 +419,7 @@ function toDisplayableFailure(cause: unknown): ApiError {
  * template"; Rule 1 clause 2). A charge with no due date posts no `dueDate` member at all, exactly as
  * legacy sent it.
  *
- * @param charge One row of `GET /loans/{id}/charges`.
+ * @param charge One row of the loan payload's `charges`.
  * @returns The row the body carries, with its date still a `Date`.
  */
 function chargeRow(charge: LoanCharge): LoanChargeRow {
@@ -443,11 +443,11 @@ function chargeRow(charge: LoanCharge): LoanChargeRow {
  * Edit form of an individual loan application: the persisted application, re-read from Fineract and
  * posted back to the endpoint that saves it.
  *
- * **Three calls, and nothing else.** Two reads and one write:
+ * **Two calls, and nothing else.** One read and one write:
  * `GET /loans/{id}?template=true&associations=charges,collateral,meeting,multiDisburseDetails` seeds
- * the screen through `LoanService.getWithTemplate`, `GET /loans/{id}/charges` supplies the charge set
- * the save must re-post through `LoanService.charges`, and `PUT /loans/{id}` saves it through
- * `LoanService.update`. All three live in `loan.service.ts`, which owns every loans URL, so this file
+ * the screen through `LoanService.getWithTemplate`, its `charges` member included, and
+ * `PUT /loans/{id}` saves the application through `LoanService.update`. Both live in
+ * `loan.service.ts`, which owns every loans URL, so this file
  * holds no host, path, query parameter, `dateFormat` or `locale` literal (Rule 1 clauses 2 and 5;
  * Rule 2). It never imports `HttpClient`, notifies nothing and retries nothing.
  *
@@ -475,15 +475,14 @@ function chargeRow(charge: LoanCharge): LoanChargeRow {
  *
  * **The loan's own charges are re-posted, not edited.** `PUT /loans/{id}` treats `charges` as the
  * loan's complete charge set: an absent array answers `{"changes":{"charges":[]}}` and deletes every
- * charge, and a row without its loan-charge `id` is deleted and re-created. This fork's edit seed
- * carries no `charges` member at all, so the screen reads them from the endpoint that has them,
- * `GET /loans/{id}/charges` through {@link LoanService.charges}, and {@link buildRequest} posts one
- * row per charge — `{id, chargeId, amount: amountOrPercentage, dueDate}`, the four members legacy's
- * `EditLoanAccAppController.submit` posts — and the empty array for a loan that carries none.
- * A failed charge read aborts the load and is rendered like any other failure, because a form whose
- * charge set is unknown would save a deletion nobody asked for. This adds no charge editor: the rows
- * are the loan's own charges carried through the save unchanged, which is what keeps an edit from
- * being a deletion (Rule 1 clause 2; AAP 0.3.4: the running fork's contract decides).
+ * charge, and a row without its loan-charge `id` is deleted and re-created. The edit seed carries that
+ * set in its own `charges` member — the member the legacy edit read from the same request — so the
+ * screen keeps it as it loads and {@link buildRequest} posts one row per charge
+ * — `{id, chargeId, amount: amountOrPercentage, dueDate}`, the four members legacy's
+ * `EditLoanAccAppController.submit` posts — and the empty array for a loan that carries none. This
+ * adds no charge editor: the rows are the loan's own charges carried through the save unchanged, which
+ * is what keeps an edit from being a deletion, and no charge-list request is issued for any of it
+ * (Rule 1 clauses 2 and 3; AAP 0.7.3 "Loan edit"; AAP 0.3.4: the running fork's contract decides).
  *
  * **One id, one load per navigation.** `:id` is read from `route.paramMap`, never from the snapshot:
  * the router reuses this component when the URL moves from one `#/editloanaccount/{id}` to another, so
@@ -551,12 +550,11 @@ export class LoanEditComponent {
   readonly account = signal<LoanAccount | null>(null);
 
   /**
-   * The charges the loan carries, as `GET /loans/{id}/charges` reported them — the rows the save
-   * re-posts, and the reason this screen reads that endpoint at all: the edit seed carries no
-   * `charges` member on this fork, and `PUT /loans/{id}` treats an absent or empty array as "delete
-   * every charge" (AAP 0.7.3 rows "Loan edit" and "Loan charges"; AAP 0.3.4).
+   * The charges the loan carries, as the edit seed's `charges` member reported them — the rows the save
+   * re-posts, and the reason the load keeps that member: `PUT /loans/{id}` treats an absent or empty
+   * array as "delete every charge" (AAP 0.7.3 "Loan edit"; AAP 0.3.4).
    *
-   * `null` until the charge read answers, which is also the state in which {@link buildRequest}
+   * `null` until the seed answers, which is also the state in which {@link buildRequest}
    * refuses to assemble a body: a save that cannot name the loan's charges must not run at all.
    */
   readonly charges = signal<readonly LoanCharge[] | null>(null);
@@ -672,12 +670,12 @@ export class LoanEditComponent {
    * identifiers the form does not edit are echoed unchanged from the record. A member the form left
    * empty is posted as absent by the serialiser, so the server's own required-field rule reports it.
    *
-   * One member comes from the loan's charge read rather than from a control: `charges`. The array is
-   * always posted, one row per charge `GET /loans/{id}/charges` answered and empty for a loan that
+   * One member comes from the loaded payload rather than from a control: `charges`. The array is
+   * always posted, one row per charge the seed's `charges` member carried and empty for a loan that
    * carries none, because the endpoint treats its absence as "delete every charge" (AAP 0.3.4;
    * Rule 1 clause 2).
    *
-   * @throws Error when no loan is loaded, or when its charges were never read, so a save that could
+   * @throws Error when no loan is loaded, or before its charges arrived, so a save that could
    *   only delete them is refused before a request is made.
    */
   buildRequest(): LoanEditRequest {
@@ -743,13 +741,13 @@ export class LoanEditComponent {
   }
 
   /**
-   * The save body's `charges` rows: one per charge the loan carries, built from the charge read.
+   * The save body's `charges` rows: one per charge the loan carries, built from the seed's member.
    *
    * The rows are the loan's own charges carried through unchanged, and the array is posted even when
    * it is empty, because `PUT /loans/{id}` reads an absent array as "delete every charge".
    *
-   * @throws Error when the charge read never answered, so the form cannot state the loan's charge set:
-   *   posting an empty array in that case would delete charges nobody asked to delete.
+   * @throws Error when the payload's charges are not loaded yet, so the form cannot state the loan's
+   *   charge set: posting an empty array in that case would delete charges nobody asked to delete.
    */
   private chargeRows(): LoanChargeRow[] {
     const charges = this.charges();
@@ -782,16 +780,17 @@ export class LoanEditComponent {
   }
 
   /**
-   * Reads the loan and its charges, then seeds the form from them.
+   * Reads the loan and seeds the form from it.
    *
-   * Two reads, in order: the edit seed (`GET /loans/{id}?template=true&associations=…`) and then the
-   * loan's charges (`GET /loans/{id}/charges`), because the seed carries no `charges` member and the
-   * save re-posts that set. A failure of either is rendered: a `404` and a body the guard rejects
-   * become the not-found block, which is the only state in which the form is never shown, and any
-   * other failure is kept for the error region with the form drawn from whatever loaded, a rejection
-   * of another shape included, so no failure path ends without a message (AAP 0.14.2). A failed
-   * charge read therefore aborts the load instead of letting the form save an empty array over the
-   * loan's charges. `loading` is cleared on every path.
+   * One read: the edit seed (`GET /loans/{id}?template=true&associations=…`) carries the loan's own
+   * terms, the form's option lists and the loan's `charges`, which the save re-posts unchanged — the
+   * same member, from the same request, that the legacy edit seeded its charge list from (Rule 1
+   * clauses 2 and 3; AAP 0.7.3 "Loan edit"). A `404` and a body the guard rejects become the not-found
+   * block, which is the only state in which the form is never shown, and any other failure is kept for
+   * the error region with the form drawn from whatever loaded, a rejection of another shape included,
+   * so no failure path ends without a message (AAP 0.14.2); because the charge list arrives with the
+   * record, a failed read can never leave the form able to save an empty array over the loan's
+   * charges. `loading` is cleared on every path.
    *
    * Every run takes the next {@link loadSequence} number and a run the route has since superseded
    * writes nothing at all — not the seeded record, charges, options or form, not the not-found or
@@ -812,8 +811,8 @@ export class LoanEditComponent {
     try {
       const payload = await firstValueFrom(this.loans.getWithTemplate(loanId));
 
-      // One await is the whole read, so this check covers every write below it: a superseded loan's
-      // answer is dropped here rather than seeded under the loan the URL now names.
+      // The single await is the whole read, so this check covers every write below it: a superseded
+      // loan's answer is dropped here rather than seeded under the loan the URL now names.
       if (load !== this.loadSequence) {
         return;
       }
@@ -824,18 +823,10 @@ export class LoanEditComponent {
         return;
       }
 
-      const charges = await firstValueFrom(this.loans.charges(loanId));
-
-      // The same guard after the second await: the charges of the loan the URL has since left must
-      // not land under the loan it now names either.
-      if (load !== this.loadSequence) {
-        return;
-      }
-
       const template = readTemplateFields(payload);
 
       this.account.set(payload);
-      this.charges.set(charges);
+      this.charges.set(payload.charges ?? []);
       this.template.set(template);
       this.loanOfficerOptions.set(template.loanOfficerOptions);
       this.fundOptions.set(template.fundOptions);

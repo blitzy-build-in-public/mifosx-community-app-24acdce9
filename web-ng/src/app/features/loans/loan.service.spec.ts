@@ -181,11 +181,13 @@ const PRODUCT_TEMPLATE: LoanTemplate = {
   transactionProcessingStrategyCode: 'mifos-standard-strategy',
 };
 
-/** The `GET /charges/{id}?template=true` answer: one charge's own amount and currency. */
+/**
+ * The `GET /charges/{id}?template=true` answer: one charge carrying its own top-level `amount` and
+ * currency, and no `chargeOptions` list — the shape the running fork sends and the member
+ * `LoanNewComponent.readChargeAmount` reads.
+ */
 const CHARGE_TEMPLATE: ChargeTemplate = {
-  chargeOptions: [
-    { id: PICKED_CHARGE_ID, name: 'Parity Fee', amount: 25, currency: { code: 'USD' } },
-  ],
+  amount: 25,
   chargeAppliesTo: { id: 1, value: 'Loan' },
   currency: { code: 'USD', displaySymbol: 'US$', name: 'US Dollar' },
 };
@@ -225,28 +227,11 @@ const SCHEDULE: RepaymentSchedule = {
   loanTermInDays: 365,
 };
 
-/** The `GET /loans/{id}?associations=all` answer the record page renders. */
-const LOAN_ACCOUNT: LoanAccount = {
-  id: LOAN_ID,
-  accountNo: '000000031',
-  clientId: CLIENT_ID,
-  clientName: 'Ada Okafor',
-  loanProductId: PRODUCT_ID,
-  loanProductName: 'Parity Loan',
-  principal: 5000,
-  numberOfRepayments: 12,
-  repaymentEvery: 1,
-  interestRatePerPeriod: 12,
-  status: { id: 300, code: 'loanStatusType.active', value: 'Active' },
-  repaymentSchedule: SCHEDULE,
-  transactions: [],
-};
-
 /**
- * The `GET /loans/{id}/charges` answer: the charges the loan carries, exactly as the fork reports
- * them — the loan charge's own id, the definition it applies, its amounts and the date it falls due.
- * The record's charge section and the edit's re-posted rows are both built from this answer, because
- * the loan record itself carries no `charges` member (AAP 0.7.3 row "Loan charges").
+ * The loan's `charges` rows, exactly as the fork reports them inside the loan payload — the loan
+ * charge's own id, the definition it applies, its amounts and the date it falls due. The record's
+ * charge section and the edit's re-posted rows are both built from this member of the loan read
+ * (AAP 0.7.3 rows "W6 repayment" and "Loan edit").
  */
 const LOAN_CHARGES: readonly LoanCharge[] = [
   {
@@ -275,6 +260,24 @@ const LOAN_CHARGES: readonly LoanCharge[] = [
     chargeCalculationType: { id: 1, value: 'Flat' },
   },
 ];
+
+/** The `GET /loans/{id}?associations=all` answer the record page renders. */
+const LOAN_ACCOUNT: LoanAccount = {
+  id: LOAN_ID,
+  accountNo: '000000031',
+  clientId: CLIENT_ID,
+  clientName: 'Ada Okafor',
+  loanProductId: PRODUCT_ID,
+  loanProductName: 'Parity Loan',
+  principal: 5000,
+  numberOfRepayments: 12,
+  repaymentEvery: 1,
+  interestRatePerPeriod: 12,
+  status: { id: 300, code: 'loanStatusType.active', value: 'Active' },
+  repaymentSchedule: SCHEDULE,
+  transactions: [],
+  charges: LOAN_CHARGES,
+};
 
 /** The envelope every loan write answers with, carrying the ids a screen navigates by. */
 const ACTION_RESULT: LoanActionResult = {
@@ -689,7 +692,7 @@ describe('LoanService', () => {
     request.flush(CHARGE_TEMPLATE);
 
     expect(received).toEqual([CHARGE_TEMPLATE]);
-    expect(received[0]?.chargeOptions[0]?.amount).toBe(25);
+    expect(received[0]?.amount).toBe(25);
   });
 
   it('previews the schedule with the application body, its dates as dd MMMM yyyy and the date-format pair', () => {
@@ -820,8 +823,8 @@ describe('LoanService', () => {
       const request = httpMock.expectOne(isRequest('GET', loanUrl('loans', LOAN_ID)));
 
       // One parameter, because `associations=all` is what carries the repayment schedule — and with
-      // it the loan's money totals — beside the transactions (AAP 0.7.3 row "W6 repayment"). The
-      // record's charges are a separate read: this fork answers no `charges` member here at all.
+      // it the loan's money totals — beside the transactions and the loan's own charges (AAP 0.7.3
+      // row "W6 repayment"). No charge-list request is issued for a record: the rows arrive here.
       expect(request.request.params.keys()).toEqual(['associations']);
       expect(request.request.params.get('associations')).toBe('all');
       expect(request.request.body).toBeNull();
@@ -830,31 +833,13 @@ describe('LoanService', () => {
 
       expect(received).toEqual([LOAN_ACCOUNT]);
       expect(received[0]?.repaymentSchedule?.periods).toHaveLength(1);
-    });
-  }
 
-  for (const id of [LOAN_ID, LOAN_ID_TEXT] as const) {
-    it(`reads the loan's charges by its ${typeof id} route parameter, and no other parameter`, () => {
-      const received: (readonly LoanCharge[])[] = [];
-
-      service.charges(id).subscribe((charges) => received.push(charges));
-
-      expect(apiUrl).toHaveBeenCalledWith('/loans/31/charges');
-
-      const request = httpMock.expectOne(isRequest('GET', loanUrl('loans', LOAN_ID, 'charges')));
-
-      // No parameter and no body: the endpoint answers the loan's charge list, and the record needs
-      // nothing else from it (AAP 0.7.3 row "Loan charges"; Rule 1 clause 2).
-      expect(request.request.params.keys()).toEqual([]);
-      expect(request.request.body).toBeNull();
-
-      request.flush(LOAN_CHARGES);
-
-      // The rows arrive with the members the record lists and the edit re-posts, unchanged: the
-      // loan-charge id beside the definition id, the amounts, and the due date as the server sent it.
-      expect(received).toEqual([LOAN_CHARGES]);
-      expect(received[0]?.[0]?.chargeId).toBe(PICKED_CHARGE_ID);
-      expect(received[0]?.[1]?.dueDate).toBeUndefined();
+      // The charges the record's charge section lists and the edit re-posts come out of this same
+      // answer, unchanged: the loan-charge id beside the definition id, the amounts, and the due
+      // date as the server sent it (AAP 0.7.3; Rule 1 clause 2).
+      expect(received[0]?.charges).toEqual(LOAN_CHARGES);
+      expect(received[0]?.charges?.[0]?.chargeId).toBe(PICKED_CHARGE_ID);
+      expect(received[0]?.charges?.[1]?.dueDate).toBeUndefined();
     });
   }
 

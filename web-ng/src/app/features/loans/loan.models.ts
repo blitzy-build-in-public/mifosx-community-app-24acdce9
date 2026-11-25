@@ -335,18 +335,23 @@ export interface LoanTimeline {
  * and the transaction list is empty rather than missing for a loan that has none. A screen renders
  * what it receives and shows its empty state for the rest (AAP 0.7.4).
  *
- * **No `summary` member and no `charges` member, because the fork sends neither.** AAP 0.7.2's row for
- * this model lists both. This fork's `LoanAccountData` carries no `summary` on any answer
- * `GET /loans/{id}` gives — with `associations=all`, `associations=summary`, or `template=true` — and
- * no `charges` array either, whatever association set is asked for. It publishes the loan's money
- * totals inside `repaymentSchedule` instead: the loan-wide figures as `totalRepaymentExpected`,
- * `totalOutstanding`, `totalPrincipalExpected`, `totalPrincipalPaid`, `totalInterestCharged`,
- * `totalFeeChargesCharged`, `totalPenaltyChargesCharged`, `totalWaived` and `totalWrittenOff`, and the
- * principal, interest, fee and penalty balances as the per-period outstanding members of
- * {@link RepaymentPeriod}. The charges come from their own endpoint, `GET /loans/{id}/charges`, which
- * `LoanService.charges` reads. Neither member is modelled here, so no screen can read one and paint an
- * empty figure or save an empty charge list from it again (AAP 0.3.4: the running fork's payload is
- * the contract; Rule 1 clause 2).
+ * **The loan's charges travel with this payload.** Both answers a screen reads carry them —
+ * `GET /loans/{id}?associations=all` for the record and
+ * `GET /loans/{id}?template=true&associations=…` for the edit seed — as the `charges` member modelled
+ * below, and the server leaves the member out entirely for a loan that carries none, so a reader
+ * takes `charges ?? []` (AAP 0.7.2's row for this model lists `charges[]`; AAP 0.7.3's "W6 repayment"
+ * row names the charges among what `associations=all` answers). That is also where the legacy screens
+ * took them: the legacy edit read `loanaccountinfo.charges` out of the same seed
+ * (`app/scripts/controllers/loanAccount/EditLoanAccAppController.js:121`), and no legacy screen calls
+ * a charge-list endpoint, so neither does this app (Rule 1 clauses 2 and 3).
+ *
+ * The money totals the record's summary block prints come from `repaymentSchedule`, read whole and
+ * summed per member: the loan-wide figures as `totalRepaymentExpected`, `totalOutstanding`,
+ * `totalPrincipalExpected`, `totalPrincipalPaid`, `totalInterestCharged`, `totalFeeChargesCharged`,
+ * `totalPenaltyChargesCharged`, `totalWaived` and `totalWrittenOff`, and the principal, interest, fee
+ * and penalty balances as the per-period outstanding members of {@link RepaymentPeriod}. The payload
+ * also carries a `summary` object with its own totals; no screen reads it, so it is not modelled
+ * (AAP 0.3.4: the running fork's payload is the contract; Rule 1 clause 2).
  */
 export interface LoanAccount {
   /** Loan id, the `{id}` of every loan endpoint. */
@@ -402,6 +407,16 @@ export interface LoanAccount {
 
   /** Transactions posted against the loan, oldest first as the server returns them. */
   readonly transactions?: readonly LoanTransaction[];
+
+  /**
+   * Charges attached to the loan, in the server's order — the rows the record's charge section lists
+   * and the set `PUT /loans/{id}` takes back, which is why the edit form re-posts them unchanged.
+   *
+   * Optional because the server omits the member for a loan that carries no charge at all rather than
+   * answering an empty array; a reader takes `charges ?? []` (see this interface's note on the
+   * member).
+   */
+  readonly charges?: readonly LoanCharge[];
 }
 
 /**
@@ -585,14 +600,17 @@ export interface LoanTransaction {
 }
 
 /**
- * A charge attached to a loan, as `GET /loans/{id}/charges` reports it (AAP 0.7.2 row `LoanCharge`;
- * AAP 0.7.3 row "Loan charges").
+ * A charge attached to a loan, as the loan's own reads report it: the `charges` array of
+ * `GET /loans/{id}?associations=all` and of the edit seed
+ * `GET /loans/{id}?template=true&associations=charges,…` (AAP 0.7.2 row `LoanCharge`; AAP 0.7.3 rows
+ * "W6 repayment" and "Loan edit").
  *
- * This endpoint is the only place a loan's charges are reported: the loan record
- * (`GET /loans/{id}?associations=all`) and the edit seed
- * (`GET /loans/{id}?template=true&associations=charges,…`) both answer without a `charges` member on
- * this fork. The record's charge section lists these rows and the loan edit re-posts them, which is
- * why every member the pay, waive and re-post bodies need is declared here.
+ * Both reads send the same rows — the loan-charge `id` beside the definition's `chargeId`, the
+ * amounts and the timing — which is why the record's charge section and the loan edit's re-post read
+ * this one member off the loan payload the screen already loaded. `GET /loans/{id}/charges` answers
+ * the same rows as a list of its own, and nothing in this app calls it: it is not an AAP 0.7.3 row,
+ * the legacy screens never sent it, and the app allowlist holds that path for the charge POSTs alone
+ * (Rule 1 clauses 2 and 3).
  *
  * The paid, waived and outstanding amounts are separate members because the charge list shows them
  * separately and the pay and waive forms act on the outstanding portion.
@@ -654,18 +672,36 @@ export interface LoanCharge {
 }
 
 /**
- * The charge template that feeds the add-charge form's charge picker: the response of both
- * `GET /charges/{id}?template=true` and `GET /loans/{id}/charges/template` (AAP 0.7.3,
- * "Loan charges").
+ * The charge payload the two charge readers share: the answer of `GET /loans/{id}/charges/template`,
+ * which offers the loan's applicable charges as `chargeOptions`, and the answer of
+ * `GET /charges/{id}?template=true`, which is one charge carrying its own top-level `amount`
+ * (AAP 0.7.3 rows "W4 loan application" and "Loan charges").
  *
- * Both endpoints are modelled by this one interface because both are read for the same thing, the
- * list of charges applicable to the loan. The endpoint returns further members besides these three
- * and the plan models none of them; the parity run records whichever else it observes rather than
- * this module claiming a shape nobody verified (Rule 1 clause 4).
+ * One interface models both because the two payloads describe one resource under one key set, and
+ * each reader takes only the member its own endpoint sends: the add-charge picker reads
+ * `chargeOptions ?? []` and the application's charge row reads `amount`. Neither payload carries
+ * every member, so both are optional and a reader never assumes the other's list or figure is there.
+ * The endpoints return further members besides these and the plan models none of them; the parity
+ * run records whichever else it observes rather than this module claiming a shape nobody verified
+ * (Rule 1 clause 4).
  */
 export interface ChargeTemplate {
-  /** Charges applicable to the loan, rendered as the charge picker in the received order. */
-  readonly chargeOptions: readonly LoanChargeOption[];
+  /**
+   * Charges applicable to the loan, rendered as the charge picker in the received order.
+   *
+   * `GET /loans/{id}/charges/template` sends this list. `GET /charges/{id}?template=true` sends one
+   * charge instead and carries no `chargeOptions` key at all, so the member is optional and a reader
+   * takes `template.chargeOptions ?? []`: a payload without the key then offers an empty picker
+   * rather than handing `undefined` to the shared select field (AAP 0.7.2; Rule 1 clause 4).
+   */
+  readonly chargeOptions?: readonly LoanChargeOption[];
+
+  /**
+   * The charge's own amount, as `GET /charges/{id}?template=true` reports it at the top level — the
+   * figure a picked charge seeds into the application's amount field. Absent from
+   * `GET /loans/{id}/charges/template`, whose amounts sit on each `chargeOptions` row instead.
+   */
+  readonly amount?: number;
 
   /** What the charge applies to, as the server reports it. */
   readonly chargeAppliesTo?: {
@@ -780,12 +816,13 @@ export interface LoanApplicationRequest {
    * Charges carried by the body, one row per charge, in the order the form lists them.
    *
    * A new application names the charge definition and the amount (`{chargeId, amount}`), which is
-   * what `POST /loans` takes. A loan edit re-posts the charges `GET /loans/{id}/charges` reports, and
-   * such a row also says which loan charge it keeps and when it falls due: `PUT /loans/{id}` treats the
-   * array as the loan's **complete** charge set, so an absent array deletes every charge and a row
-   * without `id` is deleted and re-created rather than kept (legacy `EditLoanAccAppController.submit`
-   * posts the same four members; AAP 0.7.2 row `LoanApplicationRequest`; AAP 0.3.4: the running
-   * fork's accepted member set wins over the plan's shorthand).
+   * what `POST /loans` takes. A loan edit re-posts the charges the loan payload's own `charges`
+   * member reports, and such a row also says which loan charge it keeps and when it falls due:
+   * `PUT /loans/{id}` treats the array as the loan's **complete** charge set, so an absent array
+   * deletes every charge and a row without `id` is deleted and re-created rather than kept (legacy
+   * `EditLoanAccAppController.submit` posts the same four members; AAP 0.7.2 row
+   * `LoanApplicationRequest`; AAP 0.3.4: the running fork's accepted member set wins over the
+   * plan's shorthand).
    */
   charges?: readonly {
     /** Loan charge the row keeps, on an edit that re-posts a charge the loan already carries. */
@@ -822,7 +859,7 @@ export interface LoanApplicationRequest {
  * locally invented rule (Rule 1 clause 3).
  *
  * One member is not merely echoed: `charges`. This endpoint treats the array as the loan's complete
- * charge set, so the edit form re-posts the charges `GET /loans/{id}/charges` reports —
+ * charge set, so the edit form re-posts the charges the edit seed's own `charges` member reports —
  * `{id, chargeId, amount, dueDate}` rows — and posts the empty array for a loan that has none, instead
  * of letting an absent member delete them (AAP 0.3.4: the running fork's contract decides).
  */

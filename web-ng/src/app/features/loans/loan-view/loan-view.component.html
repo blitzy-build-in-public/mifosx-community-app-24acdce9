@@ -4,11 +4,10 @@
   `loans`, which names `LoanViewComponent` and places `LoanScheduleComponent` and
   `LoanTransactionsComponent` inside it).
 
-  Everything on the page comes from the two reads the component makes — `GET /loans/{id}?associations=all`
-  through `LoanService.get(id)` (AAP 0.7.3 row "W6 repayment"), which the summary, the schedule and the
-  transactions render, and `GET /loans/{id}/charges` through `LoanService.charges(id)` (AAP 0.7.3 row
-  "Loan charges"), which the charge tab renders because this fork's loan record carries no `charges`
-  member — so no section here requests anything of its own and no Fineract path, host, tenant or
+  Everything on the page comes from the one read the component makes — `GET /loans/{id}?associations=all`
+  through `LoanService.get(id)` (AAP 0.7.3 row "W6 repayment"), which the summary, the schedule, the
+  transactions and the charge tab all render, the loan's `charges` rows included — so no section here
+  requests anything of its own, no charge-list call is issued, and no Fineract path, host, tenant or
   credential is named in this file (Rule 1 clauses 2 and 9).
 
   Every visual value is a global Bootstrap 3 class of `web-ng/src/styles.scss`, so this file carries
@@ -52,10 +51,11 @@
 
   The summary block prints the five figures AAP 0.7.2's `LoanSummary` row names — the loan's total,
   its outstanding balance and the principal, interest and fee balances — each caption and value on
-  its own row. This fork answers the record with no `summary` member at all, so the two loan-wide
-  figures are the repayment schedule's own `totalRepaymentExpected` and `totalOutstanding` and the
-  three balances are the sums of its periods' outstanding members; the component's `summaryRows`
-  documents each mapping beside the member it reads. A figure the payload does not report renders an
+  its own row. The component takes the two loan-wide figures from the repayment schedule's own
+  `totalRepaymentExpected` and `totalOutstanding` and the three balances from the sums of its periods'
+  outstanding members; the payload's separate `summary` object is unmodelled and unread, and the
+  component's `summaryRows` documents each mapping beside the member it reads. A figure the payload
+  does not report renders an
   EMPTY cell: no zero, no currency symbol, no "Not Available" and no dash, because the figure was
   never reported and inventing one would state a balance Fineract never sent (Rule 1 clause 3). The
   captions are the bundles' own legacy wording: `label.heading.total` and `label.heading.outstanding`
@@ -72,9 +72,8 @@
   read-only component that owns its table: `app-loan-schedule`, `app-loan-transactions` and
   `app-loan-charges`. No table is re-implemented here, and no column, sort control or pager is added
   beyond what those three components already declare (Rule 1 clause 3). The charge tab renders the rows
-  `GET /loans/{id}/charges` answered; when that read fails it renders Fineract's own message in place
-  of the table, and a 5xx or transport failure has already been notified once by the interceptor
-  (AAP 0.4.2; AAP 0.14.2), so no failure of it disappears.
+  the record's `charges` member carried, and for a loan that carries none it renders the explicit empty
+  state (AAP 0.7.4).
 
   The action entry points are the seven `routerLink`s to the screens this application serves: the
   five lifecycle commands and the repayment form on `#/loanaccount/:id/:action` (the segments
@@ -200,13 +199,6 @@
                 <app-loan-schedule [schedule]="record.repaymentSchedule ?? null" />
               } @else if (showTransactions()) {
                 <app-loan-transactions [transactions]="record.transactions ?? []" />
-              } @else if (chargesError(); as failure) {
-                <!--
-                  A charge read that failed with a 4xx, in Fineract's own words: the record's other
-                  sections stay usable and the message is un-piped, exactly as the record-wide failure
-                  region above renders it (AAP 0.7.4; AAP 0.14.2).
-                -->
-                <div class="alert alert-danger" role="alert">{{ failure.message }}</div>
               } @else if (charges() !== null) {
                 <app-loan-charges
                   [charges]="charges() ?? []"

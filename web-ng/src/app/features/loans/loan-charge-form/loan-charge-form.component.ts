@@ -534,15 +534,15 @@ export class LoanChargeFormComponent {
    * `GET /loans/{id}/charges/template` — the add form's charge picker, published in the server's
    * order with no sorting, filtering or renaming (AAP 0.7.3 row "Loan charges"; Rule 1 clause 3).
    *
-   * @returns the payload's `chargeOptions`, for the caller to publish once it knows the run is still
-   *   the current one.
+   * @returns the payload's `chargeOptions`, or an empty list when the payload carries none, for the
+   *   caller to publish once it knows the run is still the current one.
    */
   private async loadChargeOptions(): Promise<readonly LoanChargeOption[]> {
     const template: ChargeTemplate = await firstValueFrom(
       this.loan.chargeTemplateFor(this.loanId()).pipe(takeUntilDestroyed(this.destroyRef)),
     );
 
-    return template.chargeOptions;
+    return template.chargeOptions ?? [];
   }
 
   /**

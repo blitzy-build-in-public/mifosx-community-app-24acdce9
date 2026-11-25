@@ -25,9 +25,9 @@ import { LoanViewComponent } from './loan-view.component';
  *
  *  1. the loaded loan renders its account number, its product and its identity, from exactly one read
  *     of `LoanService.get(id)` — the `GET /loans/{id}?associations=all` answer that carries the
- *     schedule and the transactions together (AAP 0.7.3 row "W6 repayment") — followed by exactly one
- *     read of `LoanService.charges(id)`, `GET /loans/{id}/charges`, which is the only place this fork
- *     reports a loan's charges (AAP 0.7.3 row "Loan charges");
+ *     schedule, the transactions and the loan's own `charges` together (AAP 0.7.3 row "W6
+ *     repayment") — which is the record's whole read, because no charge-list endpoint is a row of the
+ *     plan's endpoint table and the legacy record read the same members from the same call;
  *  2. the record shows three tabs — the repayment schedule, the transactions and the charges — and
  *     hands each committed section component the payload's own slice, so none of them requests
  *     anything;
@@ -37,14 +37,13 @@ import { LoanViewComponent } from './loan-view.component';
  *  4. the summary block prints the loan's total and outstanding balance from the repayment
  *     schedule's own `totalRepaymentExpected` and `totalOutstanding`, and its three balances from the
  *     sums of the schedule's per-period outstanding members — this fork's record carries no `summary`
- *     member — with a figure the payload omits rendering an empty cell rather than a zero, and a
- *     non-404 failure showing Fineract's own message verbatim with the screen intact (Rule 1
- *     clause 3; AAP 0.4.4 decision 6; AAP 0.7.4);
- *  5. the charges tab renders one row per charge the charge read returned — name, due date, amount,
- *     paid and outstanding, with the two charge actions beside them, every one gated on the single
- *     permission code the record declares — shows the explicit empty state for a loan that carries
- *     none, and renders the failure of the charge read itself while the rest of the record stays
- *     mounted (AAP 0.7.4; AAP 0.14.1; AAP 0.14.2);
+ *     member — with a figure the payload omits rendering an empty cell rather than a zero; a 4xx other
+ *     than a 404 shows Fineract's own message verbatim with the screen intact, and a 5xx is left to the
+ *     interceptor's single notification (Rule 1 clause 3; AAP 0.4.2; AAP 0.4.4 decision 6; AAP 0.7.4);
+ *  5. the charges tab renders one row per charge the record's own `charges` member carried — name, due
+ *     date, amount, paid and outstanding, with the two charge actions beside them, every one gated on
+ *     the single permission code the record declares — and shows the explicit empty state for a loan
+ *     that carries none (AAP 0.7.4; AAP 0.14.1);
  *  6. every emission of `route.paramMap` re-reads the loan it names, so an in-place move from one
  *     record URL to another replaces the previous loan, its figures and its action links instead of
  *     leaving them on screen and issuing no request — and an answer for the loan the URL has left is
@@ -59,13 +58,14 @@ import { LoanViewComponent } from './loan-view.component';
  * declares (AAP 0.14.1, "Permissions are declared once per route and once per action").
  *
  * **What is stubbed, and why.** Only the two collaborations a unit test cannot own: `LoanService`,
- * which would otherwise need a transport for a request this screen's contract already fixes, and
- * `PermissionsService`, which reads the session a unit test has no business assembling — the same
- * substitution `navbar.component.spec.ts` makes for the same directive. Everything else is the
- * shipped code: the three section components, the application's tab strip, the status swatch, the
- * permission directive and the real `TranslateService` filled with the legacy captions, so a label
- * that did not resolve would show up as the missing-translation handler's wording rather than as
- * the text asserted below.
+ * which would otherwise need a transport for a request this screen's contract already fixes — and of
+ * which only the one method this screen calls, `get`, is supplied, so a stub cannot stand in for a
+ * second read the screen does not make — and `PermissionsService`, which reads the session a unit
+ * test has no business assembling — the same substitution `navbar.component.spec.ts` makes for the
+ * same directive. Everything else is the shipped code: the three section components, the
+ * application's tab strip, the status swatch, the permission directive and the real
+ * `TranslateService` filled with the legacy captions, so a label that did not resolve would show up
+ * as the missing-translation handler's wording rather than as the text asserted below.
  *
  * A rejected read reaches the component as `ApiError` because `core/http/fineract.interceptor.ts`
  * maps it there (AAP 0.4.2); the failures below are built with the production mapper `toApiError`
@@ -227,9 +227,10 @@ const TRANSACTIONS: readonly LoanTransaction[] = [
 ];
 
 /**
- * The charges the fixture loan carries, shaped as `GET /loans/{id}/charges` answers them: one charge
- * still outstanding, with a specified due date, and one already paid that falls due on disbursement
- * and so carries no date at all.
+ * The charges the fixture loan carries, shaped as the record's own `charges` member carries them —
+ * `GET /loans/{id}?associations=all` (AAP 0.7.3 row "W6 repayment"): one charge still outstanding,
+ * with a specified due date, and one already paid that falls due on disbursement and so carries no
+ * date at all.
  */
 const LOAN_CHARGES: readonly LoanCharge[] = [
   {
@@ -259,7 +260,10 @@ const LOAN_CHARGES: readonly LoanCharge[] = [
   },
 ];
 
-/** The loan the record renders: every member the page reads, with the server's own figures. */
+/**
+ * The loan the record renders: every member the page reads — its charges included, because the one
+ * read carries them — with the server's own figures.
+ */
 const LOAN: LoanAccount = {
   id: 9,
   accountNo: '000000145',
@@ -274,11 +278,38 @@ const LOAN: LoanAccount = {
   status: { id: 300, code: 'loanStatusType.active', value: 'Active' },
   repaymentSchedule: SCHEDULE,
   transactions: TRANSACTIONS,
+  charges: LOAN_CHARGES,
 };
 
 /**
- * The record the second route emission names: a loan whose every printed value differs from
- * {@link LOAN}, so a screen that kept the first record — or its action links — is caught.
+ * A loan whose payload carries no `charges` member at all, which is how the fork answers a loan that
+ * carries no charge: the record's charge tab then renders the explicit empty state rather than an
+ * empty table or an error (AAP 0.7.4).
+ */
+const UNCHARGED_LOAN: LoanAccount = { ...LOAN, charges: undefined };
+
+/**
+ * The one charge the second route's loan carries: a row of its own, so a charge list left over from
+ * the first record is caught as surely as a figure left over from it.
+ */
+const SECOND_LOAN_CHARGE: LoanCharge = {
+  id: 31,
+  chargeId: 4,
+  name: 'Second Fee',
+  amount: 60,
+  amountOrPercentage: 60,
+  amountPaid: 0,
+  amountWaived: 0,
+  amountOutstanding: 60,
+  chargeTimeType: { id: 2, value: 'Specified due date' },
+  chargeCalculationType: { id: 1, value: 'Flat' },
+  dueDate: '2027-01-24',
+};
+
+/**
+ * The record the second route emission names: a loan whose every printed value — its charge list
+ * included — differs from {@link LOAN}, so a screen that kept the first record, its action links or
+ * its charges is caught.
  */
 const SECOND_LOAN: LoanAccount = {
   ...LOAN,
@@ -286,6 +317,7 @@ const SECOND_LOAN: LoanAccount = {
   accountNo: '000000212',
   clientName: 'Second Borrower',
   principal: 12000,
+  charges: [SECOND_LOAN_CHARGE],
 };
 
 /**
@@ -325,9 +357,6 @@ const NOT_FOUND_TEXT: string = TRANSLATIONS['error.msg.resource.not.found'];
 /** The message a refused request answers with, compared character for character below. */
 const VALIDATION_MESSAGE = 'The loan cannot be disbursed because it has not been approved.';
 
-/** The message a refused charge read answers with, quoted from Fineract's own `defaultUserMessage`. */
-const CHARGE_FAILURE_MESSAGE = 'The loan charges could not be listed.';
-
 /**
  * An observable a case settles by hand, so one route's answer can be held open while the URL moves to
  * another record — the order in which a superseded read answers last.
@@ -360,10 +389,12 @@ function deferredResponse<T>(): { readonly response: Observable<T>; resolve(valu
 type LoanRead = (id: number | string) => Observable<LoanAccount>;
 
 /**
- * The charge read this screen makes of the same service — `GET /loans/{id}/charges`, which this
- * fork requires as a second request because its loan record carries no `charges` member.
+ * The slice of `LoanService` this screen is given: the one read it makes. Supplying only this member
+ * keeps a stub from standing in for a request the screen does not issue — the record carries its
+ * charges itself, and no charge-list endpoint is a row of the plan's endpoint table (AAP 0.7.3 rows
+ * "W6 repayment" and "Loan edit"; Rule 1 clause 2).
  */
-type ChargesRead = (id: number | string) => Observable<readonly LoanCharge[]>;
+type LoanServiceStub = Pick<LoanService, 'get'>;
 
 /**
  * The half of `PermissionsService` the `hasPermission` directive asks, with the legacy algebra for
@@ -393,7 +424,6 @@ describe('LoanViewComponent', () => {
   let fixture: ComponentFixture<LoanViewComponent>;
   let component: LoanViewComponent;
   let readLoan: Mock<LoanRead>;
-  let readCharges: Mock<ChargesRead>;
   let permissions: PermissionsStub;
   let routeParams: BehaviorSubject<ParamMap>;
 
@@ -477,24 +507,17 @@ describe('LoanViewComponent', () => {
   /**
    * Mounts the record for one `#/viewloanaccount/:id` URL and renders it once.
    *
-   * Every case starts here, so the route id and the two answers the service gives are the only things
+   * Every case starts here, so the route id and the one answer the service gives are the only things
    * it changes. The module is reset first because the route stub is the one provider a case supplies,
    * and a module left instantiated by the previous case cannot take a new one. The subject behind the
    * route is recreated per case, so one case's emissions cannot reach the next.
    *
    * @param id the `:id` segment, or `null` for a route that carries none.
-   * @param read the answer `LoanService.get` gives for this case.
-   * @param charges the answer `LoanService.charges` gives for this case; a loan with no charges by
-   *   default, which is the answer every case not about the charge section wants.
+   * @param read the answer `LoanService.get` gives for this case — the record, its charges included.
    */
-  async function show(
-    id: string | null,
-    read: LoanRead,
-    charges: ChargesRead = () => of([]),
-  ): Promise<void> {
+  async function show(id: string | null, read: LoanRead): Promise<void> {
     TestBed.resetTestingModule();
     readLoan.mockImplementation(read);
-    readCharges.mockImplementation(charges);
     routeParams = new BehaviorSubject<ParamMap>(paramMapFor(id));
 
     TestBed.configureTestingModule({
@@ -503,7 +526,7 @@ describe('LoanViewComponent', () => {
         provideZonelessChangeDetection(),
         provideRouter([]),
         provideTranslateService(),
-        { provide: LoanService, useValue: { get: readLoan, charges: readCharges } },
+        { provide: LoanService, useValue: { get: readLoan } satisfies LoanServiceStub },
         { provide: ActivatedRoute, useValue: { paramMap: routeParams.asObservable() } },
         { provide: PermissionsService, useValue: permissions },
       ],
@@ -534,23 +557,22 @@ describe('LoanViewComponent', () => {
 
   beforeEach(() => {
     readLoan = vi.fn<LoanRead>();
-    readCharges = vi.fn<ChargesRead>();
     permissions = new PermissionsStub();
   });
 
-  it('renders the loaded loan, from its two reads, with its account number, its product and its three tabs', async () => {
-    await show(LOAN_ID, () => of(LOAN), () => of(LOAN_CHARGES));
+  it('renders the loaded loan, from its one read, with its account number, its product and its three tabs', async () => {
+    await show(LOAN_ID, () => of(LOAN));
 
-    // One read of the record endpoint, then one of the charge endpoint the record's charge section
-    // needs — this fork's loan payload carries no `charges` member (AAP 0.7.3 rows "W6 repayment" and
-    // "Loan charges").
+    // One read of the record endpoint, and that is the whole load: the answer carries the schedule,
+    // the transactions and the loan's charges, so no second request is made (AAP 0.7.3 row "W6
+    // repayment"; Rule 1 clause 2).
     expect(readLoan).toHaveBeenCalledTimes(1);
     expect(readLoan).toHaveBeenCalledWith(LOAN_ID);
-    expect(readCharges).toHaveBeenCalledTimes(1);
-    expect(readCharges).toHaveBeenCalledWith(LOAN_ID);
     expect(component.loanId()).toBe(LOAN_ID);
     expect(component.loading()).toBe(false);
     expect(component.notFound()).toBe(false);
+    // The charges the payload carried are the record's charge list, taken from that one answer.
+    expect(component.charges()).toEqual(LOAN_CHARGES);
 
     // The record's own identity, as the payload reported it.
     expect(host().textContent).toContain(LOAN.accountNo);
@@ -567,7 +589,7 @@ describe('LoanViewComponent', () => {
   });
 
   it('hands each section the payload slice it renders, and shows one section at a time', async () => {
-    await show(LOAN_ID, () => of(LOAN), () => of(LOAN_CHARGES));
+    await show(LOAN_ID, () => of(LOAN));
 
     const schedule = fixture.debugElement.query(By.directive(LoanScheduleComponent));
 
@@ -599,9 +621,8 @@ describe('LoanViewComponent', () => {
     expect((charges.componentInstance as LoanChargesComponent).charges()).toEqual(LOAN_CHARGES);
     expect((charges.componentInstance as LoanChargesComponent).loanId()).toBe(LOAN.id);
     expect(fixture.debugElement.query(By.directive(LoanTransactionsComponent))).toBeNull();
-    // Switching tabs reads nothing: the two reads already carried every section.
+    // Switching tabs reads nothing: the one answer already carried every section.
     expect(readLoan).toHaveBeenCalledTimes(1);
-    expect(readCharges).toHaveBeenCalledTimes(1);
   });
 
   it.each<[string, string | null]>([
@@ -617,10 +638,10 @@ describe('LoanViewComponent', () => {
     expect(host().querySelector('.btn-group')).toBeNull();
     expect(host().querySelector('.alert')).toBeNull();
 
-    // A route with no id issues no request at all; a 404 is the answer to exactly one, and the charge
-    // read is never reached for a record the server does not have.
+    // A route with no id issues no request at all; a 404 is the answer to exactly one, and a record
+    // the server does not have leaves no charge list behind.
     expect(readLoan).toHaveBeenCalledTimes(id === null ? 0 : 1);
-    expect(readCharges).toHaveBeenCalledTimes(0);
+    expect(component.charges()).toBeNull();
   });
 
   it('links every action the loan family serves, each gated on the permission the route declares', async () => {
@@ -679,12 +700,29 @@ describe('LoanViewComponent', () => {
     // A refusal is not an absent record, and the panel that would hold one is still there.
     expect(component.notFound()).toBe(false);
     expect(host().querySelector('.panel-body')).not.toBeNull();
-    // A record that could not be read is never followed by a charge read.
-    expect(readCharges).toHaveBeenCalledTimes(0);
+    // A record that could not be read leaves no charge list behind, so the charge tab can neither
+    // list rows nor claim the loan carries none.
+    expect(component.charges()).toBeNull();
   });
 
-  it('renders one row per charge the charge read returned, with a gated pay and waive link each', async () => {
-    await show(LOAN_ID, () => of(LOAN), () => of(LOAN_CHARGES));
+  it('reports a 5xx only through the interceptor’s notification, leaving the shell usable', async () => {
+    await show(LOAN_ID, () => throwError(() => failure(503, VALIDATION_MESSAGE)));
+
+    // A 5xx is the interceptor's to announce exactly once (AAP 0.4.2), so the record adds neither a
+    // second copy of the message nor a not-found state of its own (AAP 0.7.4; AAP 0.14.2).
+    expect(component.error()?.status).toBe(503);
+    expect(component.clientError()).toBeNull();
+    expect(component.notFound()).toBe(false);
+    expect(host().querySelector('.alert.alert-danger')).toBeNull();
+    expect(host().querySelector('.panel-body')).not.toBeNull();
+    // Nothing of a record that never arrived is painted: no figures, no links, no charges.
+    expect(component.loan()).toBeNull();
+    expect(component.charges()).toBeNull();
+    expect(actionLinks()).toEqual([]);
+  });
+
+  it('renders one row per charge the record carried, with a gated pay and waive link each', async () => {
+    await show(LOAN_ID, () => of(LOAN));
 
     openChargesTab();
 
@@ -721,48 +759,24 @@ describe('LoanViewComponent', () => {
     expect(chargeActionLinks().every((link) => link.style.display === '')).toBe(true);
   });
 
-  it('renders the explicit empty state for a loan that carries no charges', async () => {
-    await show(LOAN_ID, () => of(LOAN), () => of([]));
+  it('renders the explicit empty state for a loan whose payload carries no charges', async () => {
+    await show(LOAN_ID, () => of(UNCHARGED_LOAN));
 
     openChargesTab();
 
     // AAP 0.7.4's empty-state rule for this surface: the shared empty state and no error, never an
-    // empty table and never a failure message.
+    // empty table and never a failure message. The server omits the member rather than answering an
+    // empty array, so the record's own default is what the tab reads.
+    expect(component.charges()).toEqual([]);
     expect(host().querySelector('#loan-charges')).toBeNull();
     expect(host().querySelector('#loan-charges-empty')?.textContent?.trim()).toBe('No Data');
     expect(host().querySelector('.alert.alert-danger')).toBeNull();
   });
 
-  it.each<[string, number, string | null]>([
-    ['a 4xx refusal', 400, CHARGE_FAILURE_MESSAGE],
-    ['a 5xx failure, whose notification the interceptor already raised', 503, null],
-  ])('describes %s of the charge read rather than swallowing it', async (_label, status, rendered) => {
-    await show(
-      LOAN_ID,
-      () => of(LOAN),
-      () => throwError(() => failure(status, CHARGE_FAILURE_MESSAGE)),
-    );
-
-    openChargesTab();
-
-    // Fineract's own message is shown verbatim for a 4xx; a 5xx or transport failure has already
-    // produced exactly one notification in the interceptor and is never reported twice here.
-    expect(host().querySelector('.alert.alert-danger')?.textContent?.trim() ?? null).toBe(rendered);
-    expect(component.chargesError()?.message ?? null).toBe(rendered);
-    // The record stays mounted, and a charge read that failed is never dressed as a loan that carries
-    // no charges.
-    expect(component.notFound()).toBe(false);
-    expect(host().textContent).toContain(LOAN.accountNo);
-    expect(host().querySelector('#loan-charges')).toBeNull();
-    expect(host().querySelector('#loan-charges-empty')).toBeNull();
-  });
-
-  it('re-reads the record for a second route id, replacing the previous loan and its action links', async () => {
+  it('re-reads the record for a second route id, replacing the previous loan, its action links and its charges', async () => {
     const answer: LoanRead = (id) => of(String(id) === SECOND_LOAN_ID ? SECOND_LOAN : LOAN);
-    const chargesFor: ChargesRead = (id) =>
-      of(String(id) === SECOND_LOAN_ID ? [] : LOAN_CHARGES);
 
-    await show(LOAN_ID, answer, chargesFor);
+    await show(LOAN_ID, answer);
 
     // The first route's record, with every action link addressed at that loan.
     expect(host().textContent).toContain(LOAN.accountNo);
@@ -770,10 +784,8 @@ describe('LoanViewComponent', () => {
 
     await navigateTo(SECOND_LOAN_ID);
 
-    // One load per emission: the record first, then that loan's own charges, both addressed by the id
-    // the URL now names.
+    // One load per emission, addressed at the id the URL now names.
     expect(readLoan.mock.calls).toEqual([[LOAN_ID], [SECOND_LOAN_ID]]);
-    expect(readCharges.mock.calls).toEqual([[LOAN_ID], [SECOND_LOAN_ID]]);
     expect(component.loanId()).toBe(SECOND_LOAN_ID);
 
     // The second record is what the screen shows, and nothing of the first remains…
@@ -784,6 +796,15 @@ describe('LoanViewComponent', () => {
     expect(actionLinks().map((link) => link.getAttribute('href'))).toEqual(
       ACTION_PATHS.map((path) => path.replace(LOAN_ID, SECOND_LOAN_ID)),
     );
+
+    // …and the charge list, which is the second payload's own: the first loan's rows are gone, not
+    // merely outweighed by the second's.
+    expect(component.charges()).toEqual([SECOND_LOAN_CHARGE]);
+
+    openChargesTab();
+
+    expect(chargeRows()).toEqual([['Second Fee', '24 January 2027', '60', '0', '60']]);
+    expect(host().textContent).not.toContain('Parity Fee');
     expect(component.loading()).toBe(false);
     expect(component.error()).toBeNull();
   });

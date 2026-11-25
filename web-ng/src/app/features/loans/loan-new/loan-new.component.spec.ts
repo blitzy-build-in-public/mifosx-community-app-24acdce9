@@ -17,6 +17,7 @@ import type {
   ChargeTemplate,
   LoanActionResult,
   LoanApplicationRequest,
+  LoanChargeOption,
   LoanTemplate,
   RepaymentSchedule,
 } from '../loan.models';
@@ -114,6 +115,20 @@ const SECOND_TEMPLATE: LoanTemplate = {
   ],
   principal: 7000,
 };
+
+/** The charge the application offers, at the amount `GET /loans/template` publishes for it. */
+const CHARGES: readonly LoanChargeOption[] = [
+  { id: 3, name: 'Parity Fee', amount: 40, chargeTimeType: { id: 2, value: 'Specified due date' } },
+];
+
+/** The charge the amount case picks from that list. */
+const PICKED_CHARGE_ID = 3;
+
+/**
+ * The `GET /charges/{id}?template=true` answer the amount case reads: the charge itself, whose own
+ * `amount` is a top-level member, and no `chargeOptions` list at all.
+ */
+const CHARGE_TEMPLATE: ChargeTemplate = { amount: 25 };
 
 /**
  * The `:clientId` segments that name no client, each described for the case's title: a non-numeric,
@@ -288,6 +303,24 @@ describe('LoanNewComponent', () => {
     // Cancel returns to the client the route names, and nothing has been posted.
     expect(cancelHref()).toBe(`/viewclient/${CLIENT_ID}`);
     expect(loanService.create).not.toHaveBeenCalled();
+  });
+
+  it('seeds a picked charge’s amount from the charge template’s own top-level amount', async () => {
+    loanService.template.mockReturnValue(of({ ...TEMPLATE, chargeOptions: CHARGES }));
+    loanService.chargeTemplate.mockReturnValue(of(CHARGE_TEMPLATE));
+
+    await show(String(CLIENT_ID));
+
+    component.addCharge();
+    component.onChargeSelect(0, PICKED_CHARGE_ID);
+    await settle();
+
+    expect(loanService.chargeTemplate.mock.calls).toEqual([[PICKED_CHARGE_ID]]);
+    expect(component.chargeRows.at(0).controls.chargeId.value).toBe(PICKED_CHARGE_ID);
+    // The charge's own template is the authority for its amount, so the row carries the figure that
+    // payload reports rather than the one `GET /loans/template` published for the same charge.
+    expect(component.chargeRows.at(0).controls.amount.value).toBe(CHARGE_TEMPLATE.amount);
+    expect(component.error()).toBeNull();
   });
 
   it.each(INVALID_CLIENT_ID_SEGMENTS)(

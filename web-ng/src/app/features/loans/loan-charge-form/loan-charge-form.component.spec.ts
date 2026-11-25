@@ -302,6 +302,27 @@ describe('LoanChargeFormComponent', () => {
     expect(cancelHref()).toBe(`/viewloanaccount/${LOAN_ID}`);
   });
 
+  it('renders an empty picker, not a failure, when the payload carries no chargeOptions', async () => {
+    // A payload that omits the key altogether: the screen must offer no charge and stay usable, rather
+    // than handing `undefined` to the shared select field's `@for` and failing the screen.
+    loan.chargeTemplateFor.mockReturnValue(of({}));
+
+    await show(LOAN_ID);
+
+    expect(loan.chargeTemplateFor.mock.calls).toEqual([[LOAN_ID]]);
+    expect(component.notFound()).toBe(false);
+    expect(component.loading()).toBe(false);
+    expect(component.error()).toBeNull();
+    expect(component.chargeOptions()).toEqual([]);
+
+    const select = chargeSelect();
+
+    expect(select).not.toBeNull();
+    // The prompt row alone: no option row exists for the picker to offer.
+    expect(optionTexts(select as HTMLSelectElement)).toEqual(['label.selectcharge']);
+    expect(host().querySelector('#save')).not.toBeNull();
+  });
+
   it.each<[string]>([['pay'], ['waive']])('reads nothing on the %s route', async (action) => {
     await show(LOAN_ID, action, CHARGE_ID);
 
@@ -353,7 +374,7 @@ describe('LoanChargeFormComponent', () => {
 
     expect(select).not.toBeNull();
     expect(optionTexts(select as HTMLSelectElement)).not.toContain(CHARGE_OPTIONS[0].name);
-    expect(optionTexts(select as HTMLSelectElement)).toContain(SECOND_TEMPLATE.chargeOptions[0].name);
+    expect(optionTexts(select as HTMLSelectElement)).toContain(SECOND_TEMPLATE.chargeOptions?.[0]?.name);
     expect(cancelHref()).toBe(`/viewloanaccount/${SECOND_LOAN_ID}`);
   });
 
@@ -392,7 +413,7 @@ describe('LoanChargeFormComponent', () => {
     await settle();
 
     expect(component.chargeOptions().map((option) => option.name)).toEqual(
-      SECOND_TEMPLATE.chargeOptions.map((option) => option.name),
+      (SECOND_TEMPLATE.chargeOptions ?? []).map((option) => option.name),
     );
     expect(component.loading()).toBe(false);
 
@@ -403,7 +424,7 @@ describe('LoanChargeFormComponent', () => {
 
     expect(component.loanId()).toBe(SECOND_LOAN_ID);
     expect(component.chargeOptions().map((option) => option.name)).toEqual(
-      SECOND_TEMPLATE.chargeOptions.map((option) => option.name),
+      (SECOND_TEMPLATE.chargeOptions ?? []).map((option) => option.name),
     );
     expect(component.loading()).toBe(false);
     expect(component.error()).toBeNull();
