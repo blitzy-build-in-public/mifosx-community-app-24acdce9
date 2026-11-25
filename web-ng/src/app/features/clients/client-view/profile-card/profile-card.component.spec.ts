@@ -13,6 +13,11 @@ import { ProfileCardComponent, type ProfileCardField } from './profile-card.comp
  * It serves AAP 0.11.1 (unit specs beside every component), AAP 0.14.1 ("each screen lands with at
  * least one behavioural spec") and AAP 0.14.2's "no spec without an `expect`".
  *
+ * Beyond that rule it pins what the design shows and what the migration must not add: the heading,
+ * one row per field in the order received, the single decorative avatar, the performance-history
+ * sub-heading, and the absence of the signature, avatar-upload and camera controls the design draws
+ * on this card but the plan keeps out of scope (AAP 0.2.1 step 3, AAP 0.10.5 item 7).
+ *
  * Every row below is synthetic display input: the component is presentational, so the spec never
  * needs a `Client` record, a service or a tenant value (Rule 1 clause 9).
  */
@@ -33,21 +38,52 @@ const FIELDS: readonly ProfileCardField[] = [
 /** The label of the row above that carries no value. */
 const EMPTY_VALUE_LABEL = 'Staff';
 
-/** Text that would stand in for a missing value, none of which this card may render (AAP 0.7.4). */
-const PLACEHOLDERS: readonly string[] = ['-', '—', 'N/A', 'n/a', 'None'];
+/**
+ * Text a missing value must never be replaced with, checked against the card's whole rendered text
+ * and not only the one value cell: the design shows a label with nothing beside it, and a stand-in
+ * anywhere would be the improvement this migration must not make (AAP 0.7.4, Rule 1 clause 3).
+ */
+const STAND_IN_TEXT: readonly string[] = ['N/A', '—', '–', 'null', 'undefined'];
+
+/** A dash alone, the stand-in a reader would mistake for a value; the empty cell carries none. */
+const LONE_DASH = /^[-–—]+$/;
+
+/**
+ * Copy of the client sub-features the plan keeps out of scope: the signature link and the avatar
+ * upload and camera overlay buttons the design draws over this card (AAP 0.10.5 item 7). The card
+ * renders no such control, so this text must appear nowhere on it.
+ */
+const OUT_OF_SCOPE_TEXT: readonly string[] = [
+  'View Client Signature',
+  'Signature',
+  'Upload',
+  'Camera',
+];
 
 /**
  * Legacy key of the sub-heading the design places beneath the label/value rows
  * (`label.heading.performancehistory`), and the label this spec serves for it.
  *
- * The card renders that label in one of two ways — resolved through the translate stack, or
- * carried as its English text — and the spec serves the same string the design shows, so the
- * assertion holds either way while still pinning that the user sees the label and never the raw
- * dotted key (AAP 0.10.2 "every label resolves", AAP 0.7.4).
+ * The card resolves that key through `TranslatePipe`; the spec serves it from an in-memory
+ * translation so the assertion pins the label the user reads in the active language, and never the
+ * raw dotted key (AAP 0.10.2 "every label resolves", AAP 0.7.4).
  */
 const SUBHEADING_KEY = 'label.heading.performancehistory';
 const SUBHEADING_LABEL = 'Performance History';
 
+/**
+ * Figma provenance of every expectation below: file `DKm5TBFbXypfqyx4xUdhBw`, frame `2:2`
+ * ("Legacy"), flow "Sign in and open a client record" — Login `1:5` → Clients list `1:3` →
+ * Individual client view `1:4` (end of flow).
+ *
+ * This spec pins the right-hand card of that last screen:
+ *   node_id: '1:4', parent_screen_node_id: '1:4', figma_screen_id: '1:4'
+ *
+ * The file decomposes no further than the screen rectangle, so no element-level node exists for the
+ * card, its rows, the avatar or the sub-heading; the raster is the reference, and where a visual
+ * comparison of screen `1:4` changes the row structure, the empty-value rendering, the avatar or the
+ * sub-heading, that change and this spec move together.
+ */
 describe('ProfileCardComponent', () => {
   // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps the
   // assertions below type-checked and confines the cast to this single boundary (Rule 1 clause 4).
@@ -56,8 +92,9 @@ describe('ProfileCardComponent', () => {
 
   beforeEach(async () => {
     // The card's sub-heading is a legacy translated label, so the spec provides the translate
-    // stack the application runs with and serves that one key in memory: the assertion then holds
-    // whether the card resolves the label or carries it as text, and neither may show the raw key.
+    // service and serves that one key in memory. `provideTranslateService()` installs the no-op
+    // loader, so the card is exercised with no HTTP provider at all: it requests nothing, and a
+    // request from it could not pass unnoticed here (Rule 1 clause 5).
     await TestBed.configureTestingModule({
       imports: [ProfileCardComponent],
       providers: [provideTranslateService()],
@@ -117,12 +154,14 @@ describe('ProfileCardComponent', () => {
       (row) => cellText(row, 'profile-field-label') === EMPTY_VALUE_LABEL,
     );
     const valueCell = emptyRow?.querySelector('[data-testid="profile-field-value"]');
+    const cardText = host(fixture).textContent ?? '';
 
     expect(emptyRow).toBeDefined();
-    expect(valueCell?.textContent).toBe('');
+    expect(valueCell?.textContent?.trim()).toBe('');
+    expect(valueCell?.textContent?.trim()).not.toMatch(LONE_DASH);
 
-    for (const placeholder of PLACEHOLDERS) {
-      expect(valueCell?.textContent).not.toContain(placeholder);
+    for (const standIn of STAND_IN_TEXT) {
+      expect(cardText.toLowerCase()).not.toContain(standIn.toLowerCase());
     }
   });
 
@@ -148,10 +187,49 @@ describe('ProfileCardComponent', () => {
     const fixture = createCard();
     const avatar = host(fixture).querySelector('img.img-responsive');
 
+    // Exactly one image: the card carries the avatar and nothing else that draws one.
+    expect(host(fixture).querySelectorAll('img')).toHaveLength(1);
     expect(avatar).not.toBeNull();
     // Decorative: the record's identity is carried by the heading, so the alt stays empty.
     expect(avatar?.getAttribute('alt')).toBe('');
+    // The attribute as written, not the resolved `.src`: the path is served in place from the
+    // legacy image tree, so a rewrite here would point the card at an asset the build never serves.
     expect(avatar?.getAttribute('src')).toBe('images/client-image-placeholder.png');
+  });
+
+  it('carries no control of the out-of-scope signature, avatar-upload or camera features', () => {
+    const fixture = createCard();
+    const card = host(fixture);
+    const cardText = (card.textContent ?? '').toLowerCase();
+
+    // The card holds no button, link, file input or capture attribute at all: the two overlay
+    // buttons and the signature link the design draws here are out-of-scope client sub-features
+    // (AAP 0.10.5 item 7), and a rendered control that opens nothing would be a broken affordance.
+    expect(card.querySelectorAll('button, a, input[type="file"], [capture]')).toHaveLength(0);
+    expect(card.querySelectorAll('img')).toHaveLength(1);
+
+    for (const outOfScope of OUT_OF_SCOPE_TEXT) {
+      expect(cardText).not.toContain(outOfScope.toLowerCase());
+    }
+  });
+
+  it('gives a row carrying a value the same structure as a row carrying none', () => {
+    const fixture = createCard();
+    const populated = rows(fixture)[0];
+
+    expect(cellText(populated, 'profile-field-label')).toBe(FIELDS[0].label);
+    expect(cellText(populated, 'profile-field-value')).toBe(FIELDS[0].value);
+    // The bold key column is the class the stylesheet styles; a row without a value keeps it.
+    expect(
+      populated.querySelector('[data-testid="profile-field-label"]')?.classList.contains('value-key'),
+    ).toBe(true);
+
+    // One label element and one value element per row, for the populated row and the empty one
+    // alike, which is what puts every value at one fixed offset (jsdom has no layout to measure).
+    for (const row of rows(fixture)) {
+      expect(row.querySelectorAll('[data-testid="profile-field-label"]')).toHaveLength(1);
+      expect(row.querySelectorAll('[data-testid="profile-field-value"]')).toHaveLength(1);
+    }
   });
 
   it('renders the heading and no rows at all when there are no fields', () => {
