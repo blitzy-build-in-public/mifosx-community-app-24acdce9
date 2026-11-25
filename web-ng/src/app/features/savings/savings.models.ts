@@ -18,6 +18,17 @@ import type { StatusKey } from '../../shared/status-swatch/status-swatch.compone
  * it builds the payload, so no component formats a date and no model stores a formatted date
  * (AAP 0.7.2 "Date handling", AAP 0.14.1 "Dates never travel as strings built in a template").
  *
+ * **Recorded contract divergence, and the source that settles it.** AAP 0.7.2 names the account's two
+ * product members `productId` and `productName`; the fork answers the record read,
+ * `GET /savingsaccounts/{id}?associations=all`, with `savingsProductId` and `savingsProductName` —
+ * its `SavingsAccountsApiResourceSwagger` declares those two on `GetSavingsAccountsResponse` and no
+ * unprefixed pair — and the template read, `GET /savingsaccounts/template?clientId=&productId=`,
+ * echoes the chosen product the same way. The fork's OpenAPI document is the contract's source of
+ * truth (AAP 0.7.3) and Rule 1 clause 2 requires the fields the server actually carries, so
+ * `SavingsAccount` and `SavingsTemplate` keep the wire's spelling. The unprefixed `productId`
+ * survives only where a request sends one — `SavingsApplicationRequest.productId` and the template
+ * read's `productId` query parameter — the name the AAP row and the endpoint use for what is posted.
+ *
  * Declaration only. The single function here is `toSavingsStatusKey`; everything else disappears at
  * compile time, so a spec imports this module with no provider setup. A doc comment names the read
  * or write a shape projects, but no path is ever composed here: URL literals belong to
@@ -95,8 +106,9 @@ export interface SavingsTransaction {
  * `GET /savingsaccounts/{id}?associations=all`: one request returns the status, the summary and the
  * transactions together (AAP 0.7.1 `savings` row), which is why `transactions` is not optional — an
  * absent list would mean the request, not the account, was incomplete. Its product members carry the
- * wire's names (`savingsProductId`, `savingsProductName`), as the fork sends them, so the record's
- * product column reads a value the response actually carries (Rule 1 clause 2).
+ * wire's names (`savingsProductId`, `savingsProductName`), as the fork sends them, so a screen reads
+ * a value the response actually carries (Rule 1 clause 2) — the divergence from AAP 0.7.2's spelling
+ * is recorded at the head of this module.
  */
 export interface SavingsAccount {
   /** Account identifier. */

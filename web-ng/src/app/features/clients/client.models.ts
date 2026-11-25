@@ -621,7 +621,14 @@ export type ClientActionRequest =
       locale: string;
     }
   | {
-      /** Reactivates a closed client. */
+      /**
+       * Reactivates a closed client: `POST /clients/{id}?command=reactivate`.
+       *
+       * The command takes the date below rather than an empty body, because the endpoint refuses a
+       * reactivate without `reactivationDate`. It also does not restore the client to active: the
+       * fork's `Client.reActivate` clears the closure and sets `ClientStatus.PENDING`, so the record
+       * the command leaves behind is read back as Pending and no screen may expect Active after it.
+       */
       command: 'reactivate';
 
       /**

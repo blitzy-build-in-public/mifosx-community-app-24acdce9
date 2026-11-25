@@ -202,7 +202,8 @@ export interface LoanTemplate {
 
   /**
    * Default term length, in `termPeriodFrequencyType` units — `LoanAccountData.termFrequency` on the
-   * template, which `POST /loans` spells `loanTermFrequency`.
+   * template, which `POST /loans` spells `loanTermFrequency`. AAP 0.7.2's `LoanTemplate` row names
+   * this template member `loanTermFrequency`, which `GET /loans/template` never sends.
    */
   readonly termFrequency?: number;
 
@@ -247,6 +248,10 @@ export interface LoanTemplate {
   /**
    * Strategy the template seeds for the selected product, as the code the application posts.
    * Absent from the product-less template, like every other product-dependent default.
+   *
+   * AAP 0.7.2's `LoanTemplate` row names this member `transactionProcessingStrategy`;
+   * `GET /loans/template` sends `transactionProcessingStrategyCode`, the same code string the
+   * application posts as `LoanApplicationRequest.transactionProcessingStrategyCode`.
    */
   readonly transactionProcessingStrategyCode?: string;
 
@@ -351,7 +356,10 @@ export interface LoanSummary {
   /** Interest repaid so far. */
   readonly interestPaid?: number;
 
-  /** Fees still outstanding, the fork's `LoanSummaryData.feeChargesOutstanding`. */
+  /**
+   * Fees still outstanding, the fork's `LoanSummaryData.feeChargesOutstanding`. AAP 0.7.2 names this
+   * member `feesOutstanding`; `GET /loans/{id}?associations=all` sends no such key.
+   */
   readonly feeChargesOutstanding?: number;
 
   /** Penalty charges still outstanding. */
@@ -384,11 +392,14 @@ export interface LoanAccount {
 
   /**
    * Product id the loan was written against, the fork's `LoanAccountData.loanProductId` — the only
-   * product id `GET /loans/{id}` sends.
+   * product id `GET /loans/{id}` sends, where AAP 0.7.2 names the member `productId`.
    */
   readonly loanProductId?: number;
 
-  /** Product name, the fork's `LoanAccountData.loanProductName`, displayed on the record. */
+  /**
+   * Product name, the fork's `LoanAccountData.loanProductName`, where AAP 0.7.2 names the member
+   * `productName`; displayed on the record.
+   */
   readonly loanProductName?: string;
 
   /** Principal applied for, the amount every disbursement and schedule is based on. */
@@ -431,7 +442,10 @@ export interface LoanAccount {
  *
  * The fee, penalty and total members carry the fork's own `LoanSchedulePeriodData` names —
  * `feeChargesDue`, `penaltyChargesDue`, `totalDueForPeriod` — because those are the keys the
- * schedule sends and the columns the preview and schedule tables render (Rule 1 clause 2).
+ * schedule sends and the columns the preview and schedule tables render (Rule 1 clause 2). AAP
+ * 0.7.2 names the fee and total members `feesDue` and `totalDue` and declares no penalty member;
+ * neither `POST /loans?command=calculateLoanSchedule` nor `GET /loans/{id}?associations=all` sends
+ * either of those two names.
  *
  * `complete` is what marks a period as paid, and the first period's `totalDueForPeriod` is the
  * amount the repayment form defaults to for workflow W6: it is read from this array and never
@@ -937,9 +951,11 @@ export type LoanChargeActionRequest =
  * seed (AAP 0.7.3, "W5 approve and disburse").
  *
  * The endpoint serialises `LoanApprovalData`, not the loan's wider record, so only the approval
- * defaults it carries are declared here. The disbursement form's payment types and default amount
- * come from `LoanTransactionTemplate` — `GET /loans/{id}/transactions/template?command=disburse` —
- * never from this response.
+ * defaults it carries are declared here. Its `approvalAmount` and `approvalDate` are read-side names
+ * only: the approve request sends `approvedOnDate` and `approvedLoanAmount` instead, and the fork
+ * rejects `approvalDate` as an unsupported parameter (HTTP 400). The disbursement form's payment types
+ * and default amount come from `LoanTransactionTemplate` —
+ * `GET /loans/{id}/transactions/template?command=disburse` — never from this response.
  */
 export interface LoanActionTemplate {
   /** Approval date the template defaults to. */

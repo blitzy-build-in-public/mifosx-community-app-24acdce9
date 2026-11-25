@@ -39,9 +39,10 @@ export type ClientCheckStatus = 'ACTIVATE' | 'CLOSE' | 'REJECTED' | 'WITHDRAWN';
  * (`app/scripts/controllers/client/ClientActionsController.js:28`).
  *
  * `activate` and `close` are the two entries legacy itself uses (:81 is `'ACTIVATE'`, :108 is
- * `'CLOSE'`). `reactivate` returns a closed client to the active state, so it gates on the same
- * `ACTIVATE` transition; legacy runs no gate for it. `reject` and `withdraw` gate on the statuses those
- * transitions produce, `REJECTED` and `WITHDRAWN`.
+ * `'CLOSE'`). `reactivate` clears the closure and leaves the client Pending rather than active, so it
+ * gates on the same `ACTIVATE` transition — the transition it performs — while legacy runs no gate
+ * for it. `reject` and `withdraw` gate on the statuses those transitions produce, `REJECTED` and
+ * `WITHDRAWN`.
  *
  * The client entity's own check statuses, read from `GET /entityDatatableChecks/template`
  * (`statusClient`), are `CREATE` (100), `ACTIVATE` (300) and `CLOSE` (600): no client check can

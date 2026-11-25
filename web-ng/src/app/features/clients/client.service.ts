@@ -132,6 +132,10 @@ type ClientWithdrawalWire = ClientDateWire & {
  * date, and a blank body is refused as invalid JSON. The legacy action screen posts the same field
  * from its `reactivationDate` control, so the payload this type describes is the one both servers
  * agree on (Rule 1 clauses 2 and 3).
+ *
+ * The client the command leaves behind is Pending rather than Active: the fork's `Client.reActivate`
+ * sets `ClientStatus.PENDING` while clearing the closure, so a screen that re-reads the record after
+ * this call paints a pending swatch and expects no active one.
  */
 type ClientReactivateWire = ClientDateWire & { readonly reactivationDate: string | null };
 
