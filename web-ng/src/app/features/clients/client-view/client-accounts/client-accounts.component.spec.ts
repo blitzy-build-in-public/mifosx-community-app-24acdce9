@@ -16,7 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_APP_CONFIG } from '../../../../core/config/app-config.model';
 import { AppConfigService } from '../../../../core/config/app-config.service';
-import { toApiError } from '../../../../core/http/api-error';
+import { toApiError, type FineractError } from '../../../../core/http/api-error';
 import type {
   ClientAccountSummary,
   ClientLoanAccountSummary,
@@ -48,7 +48,12 @@ import { ClientAccountsComponent } from './client-accounts.component';
  *  6. a failed read flags the failure and leaves no rows, so the section never claims "no accounts"
  *     about a client whose accounts could not be read;
  *  7. rebinding the `clientId` input re-reads for the new client and replaces the rows, which is what
- *     keeps a record navigated to another client from showing the previous one's accounts.
+ *     keeps a record navigated to another client from showing the previous one's accounts;
+ *  8. a 4xx renders Fineract's own `defaultUserMessage` verbatim in the alert region the section
+ *     owns — the interceptor notifies for status `0` and `>= 500` alone — and still claims neither
+ *     rows nor "no accounts" (AAP 0.7.4; Rule 1 clause 3: the server's text, unaltered);
+ *  9. the read a rebinding supersedes is abandoned, so its answer can never arrive and a slow
+ *     earlier response cannot replace the accounts of the record now on screen.
  *
  * **Providers.** The configuration is loaded from a stubbed `fetch` before the component exists,
  * because the service composes the URL from it; the ngx-translate stack carries the four column
@@ -56,6 +61,13 @@ import { ClientAccountsComponent } from './client-accounts.component';
  * service: this section's only collaborator is the clients family's own service, and the error
  * mapping is the production one installed as an interceptor, so a failure arrives as the `ApiError`
  * the component catches in the application (AAP 0.4.2; Rule 1 clause 5).
+ *
+ * **Why the real service and a testing transport, not a hand-written stub.** Every spec in this
+ * feature observes the call a screen makes where the screen makes it, which is what proves the
+ * method, the path and the parameters of the call and not merely that some method was invoked; the
+ * request and response envelope remains `client.service.spec.ts`'s contract, so nothing is asserted
+ * twice. The transport is also what makes the abandoned-read case provable: a request `switchMap`
+ * supersedes is cancelled, and a cancelled request can never deliver a body.
  *
  * Figma provenance: file `DKm5TBFbXypfqyx4xUdhBw`, frame `2:2` ("Legacy"), flow "Sign in and open a
  * client record" — Login `1:5` → Clients list `1:3` → Individual client view `1:4`. The raster paints
@@ -133,6 +145,22 @@ const ACCOUNTS: ClientAccountSummary = {
  * empty, which was observed live and is what the model documents.
  */
 const NO_ACCOUNTS: ClientAccountSummary = {};
+
+/**
+ * A refusal as the fork sends one: `defaultUserMessage` is the text a screen renders verbatim,
+ * character for character, because workflow W7 compares what it shows with the server's own message
+ * rather than with a translation of it (AAP 0.7.2 row `FineractError`; Rule 1 clause 3).
+ */
+const FINERACT_REFUSAL: FineractError = {
+  defaultUserMessage: 'Client has reached the maximum number of active loan accounts',
+  userMessageGlobalisationCode: 'error.msg.client.max.accounts',
+  errors: [
+    {
+      defaultUserMessage: 'Client has reached the maximum number of active loan accounts',
+      parameterName: 'clientId',
+    },
+  ],
+};
 
 /**
  * Status words the section conveys through the swatch and never through text. Checked in lower case
@@ -248,8 +276,17 @@ describe('ClientAccountsComponent', () => {
     // The section reads only this: no record read, no template read, no client list.
     expect(httpMock.match(() => true)).toHaveLength(0);
 
+    // While the read is outstanding the section paints neither a table nor a "no accounts" claim:
+    // `loading` starts true so the empty state cannot flash before the first answer has been read.
+    expect(component.loading()).toBe(true);
+    expect(host().querySelector('#client-accounts')).toBeNull();
+    expect(host().querySelector('app-empty-state')).toBeNull();
+
     read.flush(ACCOUNTS);
     await fixture.whenStable();
+    fixture.detectChanges();
+    // A further change-detection pass — the record re-rendered for any reason at all — asks for the
+    // accounts no second time.
     fixture.detectChanges();
 
     expect(httpMock.match(() => true)).toHaveLength(0);
@@ -273,6 +310,8 @@ describe('ClientAccountsComponent', () => {
     expect(component.loading()).toBe(false);
     expect(component.failed()).toBe(false);
     expect(renderedRows()).toHaveLength(3);
+    // The design's four columns — account number, product, status and balance — and no fifth.
+    expect(Array.from(host().querySelectorAll('#client-accounts thead th'))).toHaveLength(4);
   });
 
   it('leaves the balance cell empty for a row whose family reported no figure', async () => {
@@ -304,6 +343,20 @@ describe('ClientAccountsComponent', () => {
     for (const row of renderedRows()) {
       expect(row.querySelectorAll('app-status-swatch')).toHaveLength(1);
 
+      const cell = row.cells[2];
+      const swatch = cell?.querySelector('span.status-swatch');
+
+      // The status cell is the shared indicator with the colour class the active key paints, and
+      // nothing beside it: the cell itself carries no text at all (AAP 0.2.3 row `StatusSwatch`).
+      expect(swatch).not.toBeNull();
+      expect(swatch?.classList.contains('status-active')).toBe(true);
+      expect(cell?.textContent?.trim()).toBe('');
+      // No tooltip and no accessible name turn the colour back into a word — not on the indicator,
+      // not on its host component and not anywhere else in the cell.
+      expect(cell?.querySelector('[title], [aria-label]')).toBeNull();
+      // Decorative, so the accessible content of the row stays with the cells that carry data.
+      expect(swatch?.getAttribute('aria-hidden')).toBe('true');
+
       const text = (row.textContent ?? '').toLowerCase();
 
       for (const statusWord of STATUS_TEXT) {
@@ -323,9 +376,13 @@ describe('ClientAccountsComponent', () => {
 
     expect(component.rows()).toEqual([]);
     expect(component.failed()).toBe(false);
-    // The shared explicit empty state carries the message, and no table claims rows there are none of.
-    expect(host().querySelector('app-empty-state')).not.toBeNull();
+    // The shared explicit empty state sits inside the section's own body, and no table claims rows
+    // there are none of.
+    expect(host().querySelector('.panel-body app-empty-state')).not.toBeNull();
     expect(host().querySelector('#client-accounts')).toBeNull();
+    // An empty result is not a failure: no alert region and no failure wording anywhere on screen.
+    expect(host().querySelector('.alert')).toBeNull();
+    expect((host().textContent ?? '').toLowerCase()).not.toContain('error');
   });
 
   it('flags a failed read and leaves no rows behind', async () => {
@@ -343,6 +400,60 @@ describe('ClientAccountsComponent', () => {
     expect(component.rows()).toEqual([]);
     expect(component.loading()).toBe(false);
     expect(host().querySelector('#client-accounts')).toBeNull();
+    // The screen stays usable: the section's body is still mounted, it raises no alert of its own —
+    // the interceptor has already notified with that same text for a 5xx — and it never claims the
+    // client holds no accounts (AAP 0.7.4; no second report of one failure).
+    expect(host().querySelector('.panel-body')).not.toBeNull();
+    expect(host().querySelector('.alert')).toBeNull();
+    expect(host().querySelector('app-empty-state')).toBeNull();
+  });
+
+  it('renders Fineract’s own refusal text verbatim, and still claims no accounts', async () => {
+    mount(CLIENT_ID);
+    httpMock
+      .expectOne(isAccountsRead(CLIENT_ID))
+      .flush(FINERACT_REFUSAL, { status: 403, statusText: 'Forbidden' });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const alerts = Array.from(host().querySelectorAll('.alert'));
+
+    // A 4xx is the failure the interceptor does not notify, so the section renders the server's own
+    // `defaultUserMessage` itself: exactly one region, carrying the text unaltered — no prefix, no
+    // suffix, no translation (AAP 0.7.4; Rule 1 clause 3).
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]?.textContent?.trim()).toBe(FINERACT_REFUSAL.defaultUserMessage);
+    // A refusal is not an empty account list: no table, no empty state, no rows.
+    expect(component.failed()).toBe(true);
+    expect(component.rows()).toEqual([]);
+    expect(host().querySelector('#client-accounts')).toBeNull();
+    expect(host().querySelector('app-empty-state')).toBeNull();
+  });
+
+  it('abandons the read a rebinding supersedes, so a late answer cannot replace the newer rows', async () => {
+    mount(CLIENT_ID);
+    const superseded = httpMock.expectOne(isAccountsRead(CLIENT_ID));
+
+    // The record was navigated to another client before the first client's read had answered.
+    fixture.componentRef.setInput('clientId', OTHER_CLIENT_ID);
+    fixture.detectChanges();
+
+    const current = httpMock.expectOne(isAccountsRead(OTHER_CLIENT_ID));
+
+    // `switchMap` abandons the first read instead of racing it: the transport reports that read
+    // cancelled and refuses to deliver any body for it, which is what stops a slow earlier response
+    // from replacing the accounts of the record now on screen.
+    expect(superseded.cancelled).toBe(true);
+    expect(() => superseded.flush(ACCOUNTS)).toThrow(/cancelled/i);
+
+    // The newer read is the one that lands, and the three-account summary the superseded read would
+    // have carried never reaches the table.
+    current.flush({ loanAccounts: [LOAN_ACCOUNT] });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(component.rows().map((row) => row.id)).toEqual([LOAN_ACCOUNT.id]);
+    expect(renderedRows()).toHaveLength(1);
   });
 
   it('re-reads for a newly bound client and replaces the rows', async () => {
