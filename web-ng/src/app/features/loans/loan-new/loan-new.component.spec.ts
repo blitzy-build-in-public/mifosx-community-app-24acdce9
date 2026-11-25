@@ -8,15 +8,15 @@ import {
   type ParamMap,
 } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
-import { BehaviorSubject, Observable, of } from 'rxjs';
+import { BehaviorSubject, Observable, of, throwError } from 'rxjs';
 import { beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest';
 
+import { ApiError } from '../../../core/http/api-error';
 import type {
   ChargeTemplate,
-  LoanActionResult,
-  LoanApplicationRequest,
   LoanChargeOption,
   LoanTemplate,
+  RepaymentPeriod,
   RepaymentSchedule,
 } from '../loan.models';
 import { LoanService } from '../loan.service';
@@ -27,7 +27,7 @@ import { LoanNewComponent } from './loan-new.component';
  * "W4 loan application"; AAP 0.7.4 loan screens; AAP 0.10.1), read through the one thing it inherits
  * from the router: the client the URL names.
  *
- * It pins the four things that fix must not lose and that a rewrite would get wrong:
+ * It pins the six things that fix must not lose and that a rewrite would get wrong:
  *
  *  1. the screen reads the template once for the routed client and offers the payload's option lists in
  *     the payload's order — nothing sorted, filtered or invented (Rule 1 clause 3);
@@ -41,7 +41,12 @@ import { LoanNewComponent } from './loan-new.component';
  *     route the URL has left is discarded rather than painted (the reuse fix `loan-edit`,
  *     `client-actions` and `loan-view` carry);
  *  4. the application that is posted is the one addressed by the client the URL currently names, so a
- *     move cannot submit one client's application against another.
+ *     move cannot submit one client's application against another;
+ *  5. the preview and the submission post one body, so the schedule the applicant saw is the schedule
+ *     of the loan that is created, and neither trigger reaches the API twice (workflow W4);
+ *  6. nothing on the screen bounds the principal, and a rejection is rendered as the server worded it —
+ *     verbatim on a 4xx, and not at all on a 5xx, which the interceptor has already notified (workflow
+ *     W7; AAP 0.7.2 "Rendered verbatim"; Rule 1 clause 3).
  *
  * **What is stubbed, and why.** Only the collaborations a unit test cannot own: `LoanService`, whose
  * endpoint-level contract — method, path, query parameters and the `dateFormat`/`locale` members of the
@@ -125,6 +130,41 @@ const PICKED_CHARGE_ID = 3;
 const CHARGE_TEMPLATE: ChargeTemplate = { amount: 25 };
 
 /**
+ * The principal workflow W7 submits: above the `Parity Loan` product's 10,000 maximum, so that only
+ * Fineract can refuse it. It is no boundary of this screen's, because the screen holds none — a
+ * client-side limit would block the submission W7 exists to prove (Rule 1 clause 3).
+ */
+const PRINCIPAL_ABOVE_PRODUCT_MAX = 50_000;
+
+/** The text Fineract answers W7's rejection with, which the screen renders character for character. */
+const SERVER_MESSAGE = 'The principal amount must be between 1,000 and 10,000.00 (inclusive).';
+
+/** One scheduled repayment, as `POST /loans?command=calculateLoanSchedule` reports it. */
+function scheduledPeriod(period: number): RepaymentPeriod {
+  return {
+    period,
+    fromDate: [2026, 11, 24],
+    dueDate: [2026, 12, 24],
+    principalDue: 416.67,
+    principalOriginalDue: 416.67,
+    interestDue: 50,
+    feeChargesDue: 0,
+    penaltyChargesDue: 0,
+    totalDueForPeriod: 466.67,
+    totalOriginalDueForPeriod: 466.67,
+    complete: false,
+  };
+}
+
+/** The schedule the preview answers with: one row per one of the application's twelve repayments. */
+const SCHEDULE: RepaymentSchedule = {
+  periods: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(scheduledPeriod),
+  totalPrincipalDisbursed: 5000,
+  totalRepaymentExpected: 5600,
+  totalOutstanding: 5600,
+};
+
+/**
  * The `:clientId` segments that name no client, each described for the case's title: a non-numeric,
  * zero, negative, fractional and blank segment, plus the absent parameter a URL that carries none
  * reads as. None of them may reach a request, and each must put the screen in its not-found state.
@@ -135,12 +175,19 @@ const INVALID_CLIENT_ID_SEGMENTS: [string, string | null][] = [
   ['an absent parameter', null],
 ];
 
-/** `LoanService` as this screen uses it: the template reads and the two posts, all stubbed. */
+/**
+ * `LoanService` as this screen uses it: the template reads and the two posts, all stubbed.
+ *
+ * Each stub is typed from the real service member rather than re-declared, so a change to a
+ * signature is a compile error here instead of an assertion that quietly stops describing the
+ * screen. The endpoint-level contract — method, path, query parameters and the `dateFormat`/`locale`
+ * pair of the body — belongs to `loan.service.spec.ts` (Rule 1 clauses 2 and 4).
+ */
 interface LoanServiceStub {
-  readonly template: Mock<(clientId: number, productId?: number | string) => Observable<LoanTemplate>>;
-  readonly chargeTemplate: Mock<(chargeId: number | string) => Observable<ChargeTemplate>>;
-  readonly previewSchedule: Mock<(body: LoanApplicationRequest) => Observable<RepaymentSchedule>>;
-  readonly create: Mock<(body: LoanApplicationRequest) => Observable<LoanActionResult>>;
+  readonly template: Mock<LoanService['template']>;
+  readonly chargeTemplate: Mock<LoanService['chargeTemplate']>;
+  readonly previewSchedule: Mock<LoanService['previewSchedule']>;
+  readonly create: Mock<LoanService['create']>;
 }
 
 /**
@@ -224,6 +271,23 @@ describe('LoanNewComponent', () => {
     return host().querySelector('a.btn-default')?.getAttribute('href') ?? null;
   }
 
+  /**
+   * The labels a rendered `<select>` offers, in render order — the prompt row first when the field
+   * was given one, then the options it was handed, untouched and unsorted (Rule 1 clause 3).
+   */
+  function optionLabels(selector: string): readonly string[] {
+    const select = host().querySelector(selector);
+
+    return select === null
+      ? []
+      : Array.from(select.querySelectorAll('option')).map((option) => (option.textContent ?? '').trim());
+  }
+
+  /** The form's two triggers in render order: "Preview schedule", then "Submit". */
+  function triggers(): readonly HTMLButtonElement[] {
+    return Array.from(host().querySelectorAll<HTMLButtonElement>('form button.btn-primary'));
+  }
+
   /** Lets the screen's template read answer and the first paint show it. */
   async function settle(): Promise<void> {
     await Promise.resolve();
@@ -293,6 +357,12 @@ describe('LoanNewComponent', () => {
     expect(component.productOptions().map((option) => option.name)).toEqual(PRODUCT_NAMES);
     expect(component.form.controls.principal.value).toBe(TEMPLATE.principal);
     expect(component.form.controls.numberOfRepayments.value).toBe(TEMPLATE.numberOfRepayments);
+    expect(component.form.controls.repaymentEvery.value).toBe(TEMPLATE.repaymentEvery);
+    expect(component.form.controls.interestRatePerPeriod.value).toBe(TEMPLATE.interestRatePerPeriod);
+    // Both dated fields hold a `Date`, never a formatted string: `LoanService` writes the format and
+    // the locale at the wire boundary (AAP 0.7.2 "Date handling").
+    expect(component.form.controls.expectedDisbursementDate.value).toBeInstanceOf(Date);
+    expect(component.form.controls.submittedOnDate.value).toBeInstanceOf(Date);
     // Cancel returns to the client the route names, and nothing has been posted.
     expect(cancelHref()).toBe(`/viewclient/${CLIENT_ID}`);
     expect(loanService.create).not.toHaveBeenCalled();
@@ -439,5 +509,158 @@ describe('LoanNewComponent', () => {
 
     expect(component.submittedWithoutId()).toBe(false);
     expect(host().querySelector('.alert-warning')).toBeNull();
+  });
+
+  it('offers the template’s products in its own order, with nothing sorted or filtered', async () => {
+    await show(String(CLIENT_ID));
+
+    // The shared field renders the prompt row it is given first, then the payload's rows in the
+    // payload's order — `Parity Loan` before `Ancillary Loan`, so a screen that sorted them fails.
+    expect(optionLabels('#productId')).toEqual(['label.selectloanproduct', ...PRODUCT_NAMES]);
+    expect(component.form.controls.productId.value).toBe(PRODUCTS[0].id);
+  });
+
+  it('offers only the charges the template lists, in its order', async () => {
+    loanService.template.mockReturnValue(of({ ...TEMPLATE, chargeOptions: CHARGES }));
+
+    await show(String(CLIENT_ID));
+    component.addCharge();
+    fixture.detectChanges();
+
+    // A charge the template does not list has no row to be picked in, so the application can never
+    // post a charge the server did not offer it (Rule 1 clause 2).
+    expect(optionLabels('#charge-0-chargeId')).toEqual([
+      'label.selectcharge',
+      ...CHARGES.map((charge) => charge.name),
+    ]);
+  });
+
+  it('bounds the principal nowhere, so Fineract alone can refuse an amount above the maximum', async () => {
+    await show(String(CLIENT_ID));
+
+    const principal = component.form.controls.principal;
+
+    principal.setValue(50_000_000);
+    principal.markAsTouched();
+
+    // No min, no max, no pattern: nothing in this screen stops a submission Fineract has to judge,
+    // which is what makes W7's rejection the server's own (Rule 1 clause 3; AAP 0.7.2).
+    expect(principal.errors).toBeNull();
+    expect(principal.hasError('min')).toBe(false);
+    expect(principal.hasError('max')).toBe(false);
+
+    principal.setValue(PRINCIPAL_ABOVE_PRODUCT_MAX);
+    expect(principal.errors).toBeNull();
+
+    // The browser is bound nowhere either, so it cannot block the request before the API sees it.
+    const input = host().querySelector('#principal');
+    expect(input?.getAttribute('min')).toBeNull();
+    expect(input?.getAttribute('max')).toBeNull();
+
+    // A charge row's amount carries the same `required`-only rule as the principal.
+    component.addCharge();
+    const amount = component.chargeRows.at(0).controls.amount;
+    amount.setValue(PRINCIPAL_ABOVE_PRODUCT_MAX);
+
+    expect(amount.errors).toBeNull();
+    expect(amount.hasError('max')).toBe(false);
+  });
+
+  it('previews exactly the application it submits, and opens the loan the server created', async () => {
+    loanService.previewSchedule.mockReturnValue(of(SCHEDULE));
+    loanService.create.mockReturnValue(of({ resourceId: 42 }));
+
+    await show(String(CLIENT_ID));
+    await component.preview();
+    await settle();
+
+    expect(loanService.previewSchedule).toHaveBeenCalledTimes(1);
+    const previewed = loanService.previewSchedule.mock.calls[0][0];
+    expect(previewed.clientId).toBe(CLIENT_ID);
+    expect(previewed.principal).toBe(TEMPLATE.principal);
+    // The calculated schedule is what the preview renders, period for period (AAP 0.7.4; W4).
+    expect(host().querySelectorAll('#repayment-preview tbody tr')).toHaveLength(
+      SCHEDULE.periods.length,
+    );
+
+    await component.submit();
+    await settle();
+
+    // One builder, two triggers: the previewed application is the submitted one (AAP 0.7.2, W4).
+    expect(loanService.create).toHaveBeenCalledTimes(1);
+    expect(loanService.create.mock.calls[0][0]).toEqual(previewed);
+    expect(navigate).toHaveBeenCalledWith(['/viewloanaccount', 42]);
+  });
+
+  it('renders a rejected application’s message verbatim and keeps every entered value', async () => {
+    loanService.create.mockReturnValue(throwError(() => new ApiError(SERVER_MESSAGE, 400)));
+
+    await show(String(CLIENT_ID));
+    component.form.controls.principal.setValue(PRINCIPAL_ABOVE_PRODUCT_MAX);
+    component.form.controls.numberOfRepayments.setValue(10);
+
+    await component.submit();
+    fixture.detectChanges();
+
+    // Fineract's own text, character for character: no prefix, suffix, translation or reformatting
+    // (W7; AAP 0.7.2 "Rendered verbatim"; Rule 1 clause 3).
+    expect(host().querySelector('.alert.alert-danger')?.textContent).toBe(SERVER_MESSAGE);
+    // The rejected value is the value that was posted, and it is still on the form and on screen.
+    expect(loanService.create.mock.calls[0][0].principal).toBe(PRINCIPAL_ABOVE_PRODUCT_MAX);
+    expect(component.form.controls.principal.value).toBe(PRINCIPAL_ABOVE_PRODUCT_MAX);
+    expect(component.form.controls.numberOfRepayments.value).toBe(10);
+    expect(host().querySelector('#principal')).not.toBeNull();
+    // Nothing is opened, because the loan was never created.
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('leaves a server-side failure to the interceptor’s notification alone', async () => {
+    loanService.create.mockReturnValue(
+      throwError(() => new ApiError('An unexpected error occurred.', 503)),
+    );
+
+    await show(String(CLIENT_ID));
+    await component.submit();
+    fixture.detectChanges();
+
+    // A 5xx already raised exactly one notification in the interceptor, so this screen paints no
+    // second surface for it (AAP 0.7.4; AAP 0.14.2; Rule 1 clause 3)…
+    expect(component.error()).toBeNull();
+    expect(host().querySelector('.alert.alert-danger')).toBeNull();
+    // …and the form stays usable, with the values the applicant entered.
+    expect(host().querySelector('#principal')).not.toBeNull();
+    expect(component.form.controls.principal.value).toBe(TEMPLATE.principal);
+  });
+
+  it('disables both triggers while a call is in flight and sends one request per press', async () => {
+    const pending = deferredResponse<RepaymentSchedule>();
+    loanService.previewSchedule.mockReturnValue(pending.response);
+
+    await show(String(CLIENT_ID));
+
+    component.preview();
+    fixture.detectChanges();
+
+    expect(component.guard.busy()).toBe(true);
+    expect(triggers()).toHaveLength(2);
+    const [previewTrigger, submitTrigger] = triggers();
+    expect(previewTrigger.disabled).toBe(true);
+    expect(submitTrigger.disabled).toBe(true);
+
+    // A second press of either trigger reaches nothing: the schedule calculation and the submission
+    // are not idempotent, so one press is one request (AAP 0.1.1; AAP 0.14.1 "one request per click").
+    component.preview();
+    component.submit();
+    await Promise.resolve();
+
+    expect(loanService.previewSchedule).toHaveBeenCalledTimes(1);
+    expect(loanService.create).not.toHaveBeenCalled();
+
+    pending.resolve(SCHEDULE);
+    await settle();
+
+    expect(component.guard.busy()).toBe(false);
+    expect(triggers().map((trigger) => trigger.disabled)).toEqual([false, false]);
+    expect(component.schedule()).toBe(SCHEDULE);
   });
 });

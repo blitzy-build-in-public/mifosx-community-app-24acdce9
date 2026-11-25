@@ -24,10 +24,10 @@
   AAP 0.7.4 requires of every record screen.
 
   The status indicator is a colour and never a word (AAP 0.10.5 deliberate difference 11, Rule 1
-  clause 3): `app-status-swatch` with no text, `title`, `aria-label` or hidden copy beside it. The
-  `dot` variant is the record-page geometry — the circle painted beside a record's identity on Figma
-  node `1:4` — where the default `swatch` is the clients list's 12.5px square on node `1:3`; a record
-  page that took the default would paint the list's geometry (AAP 0.2.3 row `StatusSwatch`).
+  clause 3): `app-status-swatch` with no text, `title`, `aria-label` or hidden copy beside it, and
+  with no `variant` bound, so the component's default 12.5px square is the geometry AAP 0.2.3
+  specifies for this indicator. The `dot` variant is the Figma client record header's arrangement —
+  the circle beside the client's name on node `1:4` — which this savings record does not reproduce.
 
   Every action link is gated by `[hasPermission]="actionPermission"`, so an operator without the
   savings permission sees no action at all (AAP 0.7.1 row `hasPermission`, AAP 0.9.1 item 1). They
@@ -120,7 +120,7 @@
                 </tr>
                 <tr>
                   <th scope="row">{{ 'label.heading.status' | translate }}</th>
-                  <td><app-status-swatch [status]="statusKey()" variant="dot" /></td>
+                  <td><app-status-swatch [status]="statusKey()" /></td>
                 </tr>
                 <tr>
                   <th scope="row">{{ 'label.heading.currentBalance' | translate }}</th>
