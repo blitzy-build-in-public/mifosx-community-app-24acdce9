@@ -12,6 +12,7 @@ import { permissionGuard } from './core/auth/permission.guard';
 import { ShellComponent } from './core/layout/shell.component';
 import { provideTranslate } from './core/i18n/translate.config';
 import { NotFoundComponent } from './features/not-found/not-found.component';
+import { SearchResultsComponent } from './features/search/search-results.component';
 
 /**
  * Behaviour of the application's route tree (AAP 0.8.2 "Shell and navigation" and "Feature routes";
@@ -100,19 +101,6 @@ async function composePaths(routes: readonly Route[], prefix = ''): Promise<read
   return paths;
 }
 
-/** The shell's child routes, which is where the signed-in screens and the redirects are declared. */
-function shellChildren(): readonly Route[] {
-  const shell = APP_ROUTES.find(
-    (route: Route): boolean => route.component === ShellComponent,
-  );
-
-  if (shell?.children === undefined) {
-    throw new Error('app.routes.ts declares no guarded shell route with children.');
-  }
-
-  return shell.children;
-}
-
 describe('APP_ROUTES', () => {
   it('composes exactly the nineteen in-scope paths and nothing else', async () => {
     const composed: readonly string[] = await composePaths(APP_ROUTES);
@@ -139,12 +127,20 @@ describe('APP_ROUTES', () => {
     expect(shell?.canActivate).toContain(authGuard);
   });
 
+  it('loads the search screen lazily, so its chunk stays out of the initial bundle', async () => {
+    const shell = APP_ROUTES.find((route: Route): boolean => route.component === ShellComponent);
+    const search = shell?.children?.find((route: Route): boolean => route.path === 'search/:query');
+
+    expect(search?.component).toBeUndefined();
+    expect(search?.loadComponent).toBeTypeOf('function');
+    await expect(search?.loadComponent?.()).resolves.toBe(SearchResultsComponent);
+  });
+
   it("redirects '' and 'home' to the clients list, the dashboard's stand-in", () => {
-    const children: readonly Route[] = shellChildren();
-    const root = children.find(
+    const root = APP_ROUTES.find(
       (route: Route): boolean => route.path === '' && route.redirectTo !== undefined,
     );
-    const home = children.find((route: Route): boolean => route.path === 'home');
+    const home = APP_ROUTES.find((route: Route): boolean => route.path === 'home');
 
     expect(root?.redirectTo).toBe('clients');
     expect(root?.pathMatch).toBe('full');
@@ -153,14 +149,17 @@ describe('APP_ROUTES', () => {
   });
 
   it('renders the not-found screen for an unknown path through a catch-all route', () => {
-    const wildcards: readonly Route[] = shellChildren().filter(
+    const wildcards: readonly Route[] = APP_ROUTES.filter(
       (route: Route): boolean => route.path === '**',
     );
 
     expect(wildcards).toHaveLength(1);
     expect(wildcards[0]?.component).toBe(NotFoundComponent);
     // Last in the array, so it can never shadow a declared screen.
-    expect(shellChildren().at(-1)).toBe(wildcards[0]);
+    expect(APP_ROUTES.at(-1)).toBe(wildcards[0]);
+    // Top level, outside the guarded shell: a path that does not exist is not a permission problem, so a
+    // signed-out visitor sees the not-found screen instead of the login form.
+    expect(wildcards[0]?.canActivate ?? []).not.toContain(authGuard);
   });
 
   it('gives every gated route an access code and the guard that reads it', async () => {
