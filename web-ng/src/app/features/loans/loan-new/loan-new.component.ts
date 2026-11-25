@@ -12,7 +12,6 @@ import { ActivatedRoute, Router, RouterLink, type ParamMap } from '@angular/rout
 import { TranslatePipe } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
 
-import { AppConfigService } from '../../../core/config/app-config.service';
 import { screenFailure } from '../../../core/http/api-error';
 import { DateFieldComponent } from '../../../shared/date-field/date-field.component';
 import { fromFineractDate } from '../../../shared/date-format.util';
@@ -22,13 +21,14 @@ import {
   type SelectValue,
 } from '../../../shared/select-field/select-field.component';
 import { createSubmitGuard, type SubmitGuard } from '../../../shared/submit-guard.util';
+import { readSelectedId } from '../loan.models';
 import type {
-  LoanApplicationRequest,
   LoanChargeOption,
   LoanTemplate,
   RepaymentSchedule,
 } from '../loan.models';
 import { LoanService } from '../loan.service';
+import type { LoanApplicationInput } from '../loan.service';
 import { RepaymentPreviewComponent } from './repayment-preview/repayment-preview.component';
 
 /**
@@ -168,29 +168,6 @@ function readOptionRows(value: unknown): readonly SelectOption[] {
 }
 
 /**
- * The id of a selected enumeration value, which the fork sends either as a plain number or as the
- * `{id, code, value}` object every `…Options` list is built from.
- *
- * Both forms are posted as the number, because that is what `POST /loans` takes for
- * `amortizationType`, `interestType`, `interestCalculationPeriodType`, `loanTermFrequencyType`,
- * `repaymentFrequencyType` and `interestRateFrequencyType` (AAP 0.7.2). A value that names no
- * number yields `null`, and the field then posts nothing rather than a substituted default
- * (Rule 1 clause 3).
- */
-function readSelectedId(value: unknown): number | null {
-  const direct = asNumber(value);
-  if (direct !== null) {
-    return direct;
-  }
-
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return null;
-  }
-
-  return asNumber(toWire(value)['id']);
-}
-
-/**
  * Local midnight of the browser's current date.
  *
  * A form's own default date follows the legacy screen and comes from the browser clock; the
@@ -248,12 +225,14 @@ function today(): Date {
  * not supported") and accepts `transactionProcessingStrategyCode`, which is the member
  * `LoanApplicationRequest` declares and the one posted (Rule 1 clause 2).
  *
- * **`dateFormat` and `locale` are taken from the configuration, not from the language in view.**
- * `LoanApplicationRequest` requires the pair, so `buildRequest` fills it from `AppConfigService` —
- * the same two values `LoanService` writes at the wire boundary, which overwrites them there with
- * the configured format and the active locale. Reading them from the configuration keeps the preview
- * and the submission identical by construction instead of pairing English month names with whichever
- * language happened to be selected (AAP 0.7.2 "Date handling", Rule 1 clause 2).
+ * **`dateFormat` and `locale` are not this screen's to set.** `buildRequest` returns
+ * `LoanApplicationInput` — the application body without the pair — and `LoanService` writes
+ * `dateFormat` and `locale` at the wire boundary from the configured format and the active locale,
+ * exactly as it does for every other dated loan body (`LoanRepaymentInput` and its siblings). The
+ * form therefore holds dates and values only, so this screen cannot pair a date with a format or a
+ * locale the server does not read, and the preview and the submission stay the same object by
+ * construction, because both go through that one builder (AAP 0.7.2 "Date handling", AAP 0.14.1;
+ * Rule 1 clause 2).
  *
  * **`TranslateService` is deliberately not injected.** Every visible string goes through
  * `TranslatePipe`, so a language switch re-renders the screen without a reload and no injected
@@ -300,10 +279,6 @@ export class LoanNewComponent {
 
   private readonly formBuilder = inject(FormBuilder);
 
-  /** Read only for the `dateFormat` and `locale` pair the request model requires; see the class
-   *  comment. It never composes a URL here — that is `LoanService`'s single job. */
-  private readonly appConfig = inject(AppConfigService);
-
   /**
    * The client the application is opened for, exactly as the route carries it: `null` when the URL
    * names no client.
@@ -320,6 +295,17 @@ export class LoanNewComponent {
 
   /** Fineract's own failure text for the last rejected call, rendered verbatim above the form. */
   readonly error = signal<string | null>(null);
+
+  /**
+   * True when the server accepted the application but its answer named no loan id, which leaves the
+   * screen with no record to open.
+   *
+   * `POST /loans` has already created the loan by then, so returning quietly would be a submission
+   * whose outcome nobody sees (AAP 0.14.2: every call path ends in a rendered message). The template
+   * renders a notice beside the error region instead, and the flag is cleared at the start of every
+   * submission and on every route emission, so it always describes the latest one.
+   */
+  readonly submittedWithoutId = signal(false);
 
   /** True when the route names no client, so there is nothing to open an application for and no
    *  request is made. The template renders its message in place of the form. */
@@ -488,6 +474,7 @@ export class LoanNewComponent {
     this.transactionProcessingStrategyOptions.set([]);
     this.schedule.set(null);
     this.error.set(null);
+    this.submittedWithoutId.set(false);
     this.notFound.set(false);
     this.loading.set(true);
   }
@@ -502,16 +489,16 @@ export class LoanNewComponent {
    * only when a value is selected: never an empty string and never `0`, which would name an officer
    * or a fund that does not exist.
    *
-   * @returns The body for `POST /loans` and for `POST /loans?command=calculateLoanSchedule`.
+   * @returns The body for `POST /loans` and for `POST /loans?command=calculateLoanSchedule`, without
+   *   the `dateFormat`/`locale` pair, which `LoanService` writes at the boundary.
    * @throws Error when a required field holds no value. Both triggers refuse an invalid form before
    *   they reach here, so this guard keeps the declared shape of the body honest — it never stands in
    *   for validation, and it never posts a figure the applicant did not enter (Rule 1 clause 3).
    */
-  buildRequest(): LoanApplicationRequest {
+  buildRequest(): LoanApplicationInput {
     const values = this.form.getRawValue();
-    const config = this.appConfig.config;
 
-    const request: LoanApplicationRequest = {
+    const request: LoanApplicationInput = {
       clientId: this.requireNumber(this.clientIdNumber(), 'clientId'),
       productId: this.requireNumber(values.productId, 'productId'),
       loanType: 'individual',
@@ -535,8 +522,6 @@ export class LoanNewComponent {
       ),
       expectedDisbursementDate: values.expectedDisbursementDate,
       submittedOnDate: values.submittedOnDate,
-      dateFormat: config.dateFormat,
-      locale: config.locale,
     };
 
     const loanOfficerId = asNumber(values.loanOfficerId);
@@ -593,19 +578,24 @@ export class LoanNewComponent {
    *
    * The record is addressed by the id the server reports for the new loan — `resourceId`, or the
    * `loanId` the legacy screen navigated with when a fork omits the former — and never by a value
-   * this screen derived (Rule 1 clause 2).
+   * this screen derived (Rule 1 clause 2). A response that reports neither leaves the loan created
+   * but unaddressable, so the screen renders that outcome rather than returning quietly (AAP 0.14.2).
    */
   submit(): void {
     void this.guard.runOnce(async () => {
+      this.submittedWithoutId.set(false);
+
       if (!this.isReadyToSend()) {
         return;
       }
 
       try {
         const result = await firstValueFrom(this.loanService.create(this.buildRequest()));
-        const loanId = result.resourceId ?? asNumber(toWire(result)['loanId']);
+        const loanId = result.resourceId ?? result.loanId ?? null;
 
         if (loanId === null) {
+          this.submittedWithoutId.set(true);
+
           return;
         }
 
@@ -625,8 +615,9 @@ export class LoanNewComponent {
    * previous product's preview is discarded first, because a schedule calculated for another product
    * must not stay on screen beside this one's terms.
    *
-   * @param productId The chosen product, when the caller passes it; the control's own value is used
-   *   otherwise, so both `(change)="onProductChange()"` and `onProductChange(id)` behave alike.
+   * @param productId The chosen product, as the field publishes it through `valueChange`; the
+   *   control's own value is used when the caller passes none, so both
+   *   `(valueChange)="onProductChange($event)"` and `onProductChange(id)` behave alike.
    */
   onProductChange(productId: SelectValue | null = null): void {
     const clientId = this.clientIdNumber();
@@ -913,7 +904,7 @@ export class LoanNewComponent {
     return Number.isInteger(parsed) ? parsed : null;
   }
 
-  /** A control's value as a number, or the error described on {@link LoanApplicationRequest}. */
+  /** A control's value as a number, or the error described on {@link LoanApplicationInput}. */
   private requireNumber(value: unknown, field: string): number {
     const numeric = asNumber(value);
 
@@ -924,7 +915,7 @@ export class LoanNewComponent {
     return numeric;
   }
 
-  /** A control's value as text, or the error described on {@link LoanApplicationRequest}. */
+  /** A control's value as text, or the error described on {@link LoanApplicationInput}. */
   private requireText(value: unknown, field: string): string {
     const text = asText(value);
 

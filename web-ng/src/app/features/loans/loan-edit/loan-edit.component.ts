@@ -11,7 +11,6 @@ import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
 
-import { APP_CONFIG } from '../../../core/config/app-config.token';
 import { ApiError } from '../../../core/http/api-error';
 import { fromFineractDate } from '../../../shared/date-format.util';
 import { DateFieldComponent } from '../../../shared/date-field/date-field.component';
@@ -21,9 +20,10 @@ import {
   type SelectValue,
 } from '../../../shared/select-field/select-field.component';
 import { createSubmitGuard } from '../../../shared/submit-guard.util';
-import { isLoanAccount } from '../loan.models';
+import { isLoanAccount, readSelectedId } from '../loan.models';
 import type { LoanAccount, LoanCharge, LoanEditRequest } from '../loan.models';
 import { LoanService } from '../loan.service';
+import type { LoanApplicationInput } from '../loan.service';
 
 /**
  * The sixteen controls of the edit form, in the order the application body carries them.
@@ -218,19 +218,6 @@ function readStringMember(fields: PayloadFields, key: string): string | null {
   return typeof value === 'string' && value !== '' ? value : null;
 }
 
-/** The `id` of an enumeration member such as `amortizationType`, or `null` when it is absent. */
-function readIdMember(fields: PayloadFields, key: string): number | null {
-  const value = fields.get(key);
-
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  const id = value['id'];
-
-  return typeof id === 'number' ? id : null;
-}
-
 /** The object rows of an option list, skipping anything the payload sent in another shape. */
 function readOptionRows(fields: PayloadFields, key: string): readonly Readonly<Record<string, unknown>>[] {
   const value = fields.get(key);
@@ -295,17 +282,17 @@ function readTemplateFields(account: LoanAccount): LoanEditTemplateFields {
 
   return {
     termFrequency: readNumberMember(fields, 'termFrequency'),
-    termFrequencyType: readIdMember(fields, 'termPeriodFrequencyType'),
+    termFrequencyType: readSelectedId(fields.get('termPeriodFrequencyType')),
     termFrequencyTypeOptions: readIdOptions(fields, 'termFrequencyTypeOptions'),
-    repaymentFrequencyType: readIdMember(fields, 'repaymentFrequencyType'),
+    repaymentFrequencyType: readSelectedId(fields.get('repaymentFrequencyType')),
     repaymentFrequencyTypeOptions: readIdOptions(fields, 'repaymentFrequencyTypeOptions'),
-    interestRateFrequencyType: readIdMember(fields, 'interestRateFrequencyType'),
+    interestRateFrequencyType: readSelectedId(fields.get('interestRateFrequencyType')),
     interestRateFrequencyTypeOptions: readIdOptions(fields, 'interestRateFrequencyTypeOptions'),
-    amortizationType: readIdMember(fields, 'amortizationType'),
+    amortizationType: readSelectedId(fields.get('amortizationType')),
     amortizationTypeOptions: readIdOptions(fields, 'amortizationTypeOptions'),
-    interestType: readIdMember(fields, 'interestType'),
+    interestType: readSelectedId(fields.get('interestType')),
     interestTypeOptions: readIdOptions(fields, 'interestTypeOptions'),
-    interestCalculationPeriodType: readIdMember(fields, 'interestCalculationPeriodType'),
+    interestCalculationPeriodType: readSelectedId(fields.get('interestCalculationPeriodType')),
     interestCalculationPeriodTypeOptions: readIdOptions(
       fields,
       'interestCalculationPeriodTypeOptions',
@@ -318,9 +305,9 @@ function readTemplateFields(account: LoanAccount): LoanEditTemplateFields {
       fields,
       'transactionProcessingStrategyOptions',
     ),
-    loanOfficerId: readIdMember(fields, 'loanOfficerId'),
+    loanOfficerId: readSelectedId(fields.get('loanOfficerId')),
     loanOfficerOptions: readOfficerOptions(fields, 'loanOfficerOptions'),
-    fundId: readIdMember(fields, 'fundId'),
+    fundId: readSelectedId(fields.get('fundId')),
     fundOptions: readIdOptions(fields, 'fundOptions'),
   };
 }
@@ -465,9 +452,10 @@ function chargeRow(charge: LoanCharge): LoanChargeRow {
  * **Echoed identifiers.** `LoanEditRequest` is the application body unchanged, so `clientId`,
  * `productId` and `loanType: 'individual'` are posted from the loaded record rather than offered as
  * controls: they identify the loan and the edit form never lets them change. `dateFormat` and
- * `locale` are structurally required by that type and are taken from `APP_CONFIG`, the one source of
- * the configured format; `LoanService.update` writes both on the wire from the same configuration and
- * the live locale.
+ * `locale` are not this screen's to set: {@link buildRequest} returns `LoanApplicationInput`, the body
+ * without that pair, and `LoanService.update` writes both on the wire from the configured format and
+ * the live locale, so the body can never state a locale its own dates do not use (AAP 0.7.2 "Date
+ * handling", AAP 0.14.1; Rule 1 clause 2).
  *
  * **Open item the run settles.** The body posts the application field set the plan fixes. If the
  * fork's `GET /loans/{id}?template=true` payload (or a `PUT` refusal) shows that a member is
@@ -517,8 +505,6 @@ export class LoanEditComponent {
   private readonly route = inject(ActivatedRoute);
 
   private readonly router = inject(Router);
-
-  private readonly config = inject(APP_CONFIG);
 
   private readonly formBuilder = inject(FormBuilder);
 
@@ -678,7 +664,7 @@ export class LoanEditComponent {
    * @throws Error when no loan is loaded, or before its charges arrived, so a save that could
    *   only delete them is refused before a request is made.
    */
-  buildRequest(): LoanEditRequest {
+  buildRequest(): LoanApplicationInput {
     const account = this.account();
 
     if (account === null) {
@@ -735,8 +721,6 @@ export class LoanEditComponent {
       ...(loanOfficerId === null ? {} : { loanOfficerId }),
       ...(fundId === null ? {} : { fundId }),
       charges: this.chargeRows(),
-      dateFormat: this.config.dateFormat,
-      locale: this.config.locale,
     };
   }
 

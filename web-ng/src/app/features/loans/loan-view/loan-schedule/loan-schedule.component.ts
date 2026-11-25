@@ -24,8 +24,12 @@ type LoanScheduleRow = Omit<RepaymentPeriod, 'fromDate' | 'dueDate'> & {
  *
  * It renders the payload's own values and nothing else. No figure is recomputed, rounded, summed,
  * sorted, filtered, totalled or dressed with a status word, and no column is added, because the
- * schedule states what the server computed and the repayment form reads the first period's
- * `totalDueForPeriod` from this same payload for workflow W6 (Rule 1 clause 3; AAP 0.10.1).
+ * schedule states what the server computed (Rule 1 clause 3). This table is the only consumer of that
+ * payload's periods: the repayment screen issues no record read at all and seeds its amount from its
+ * own transactions template, so nothing here feeds workflow W6. Nor may anything here be read as that
+ * default — the first row is Fineract's disbursement pseudo-period, which carries no period number and
+ * a `totalDueForPeriod` of 0.00, while the template's amount is the next period's total due
+ * (AAP 0.10.1; AAP 0.7.3 row "W6 repayment").
  *
  * Read-only and self-contained: it issues no request, injects no service, holds no state and reads
  * no clock — the record page fetched the schedule and this component only displays it (AAP 0.14.1).

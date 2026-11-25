@@ -103,14 +103,25 @@ export type LoanChargeActionCommand = 'pay' | 'waive';
  * A partial projection of the envelope every loan action POST returns: the affected entity's id
  * and the field changes the server applied.
  *
- * The endpoint returns the full loan record plus this envelope, and the action screens read only
- * these two members — enough to know the write landed before navigating back to the record. The
- * `changes` object is deliberately `unknown`-valued rather than modelled: no screen renders it,
- * and inventing its members would claim a shape the plan never verified (Rule 1 clause 4).
+ * The endpoint returns the full loan record plus this envelope, and the screens read only these
+ * members — enough to know the write landed and which loan it landed on before navigating back to
+ * the record. The `changes` object is deliberately `unknown`-valued rather than modelled: no screen
+ * renders it, and inventing its members would claim a shape the plan never verified (Rule 1
+ * clause 4).
  */
 export interface LoanActionResult {
   /** Id of the resource the action changed, when the server reports one. */
   readonly resourceId?: number;
+
+  /**
+   * Id of the loan the loan endpoints report beside `resourceId`, when they report one.
+   *
+   * `POST /loans` and `PUT /loans/{id}` answer with the loan's own id under this name — it is the
+   * member legacy's new-application and edit controllers navigate to the record with
+   * (`NewLoanAccAppController` and `EditLoanAccAppController` both open `data.loanId`) — so the
+   * new-application screen reads it after `resourceId` rather than navigating on a value it derived.
+   */
+  readonly loanId?: number;
 
   /** Field changes the server applied; read for presence only, never rendered. */
   readonly changes?: Readonly<Record<string, unknown>>;
@@ -430,9 +441,11 @@ export interface LoanAccount {
  * neither `POST /loans?command=calculateLoanSchedule` nor `GET /loans/{id}?associations=all` sends
  * either of those two names.
  *
- * `complete` is what marks a period as paid, and the first period's `totalDueForPeriod` is the
- * amount the repayment form defaults to for workflow W6: it is read from this array and never
- * hard-coded, because the figure depends on the product, the principal and the run date.
+ * `complete` is what marks a period as paid. The array holds the server's own rows, and the row the
+ * fork emits before the first period is its disbursement pseudo-period: it carries no `period` member,
+ * its `totalDueForPeriod` is 0.00 and its `dueDate` is the disbursement date. Nothing in this array is
+ * therefore the amount a repayment books — the repayment form issues no schedule read and seeds that
+ * figure from the loan's own transactions template (see `LoanRepaymentRequest`).
  *
  * **The outstanding members are the record's balances, and the fork omits the ones that carry
  * nothing.** A record's schedule sends `principalOutstanding`, `interestOutstanding`,
@@ -961,10 +974,13 @@ export type LoanActionRequest =
 /**
  * The body `POST /loans/{id}/transactions?command=repayment` posts (AAP 0.7.3, "W6 repayment").
  *
- * Both values are seeded from `GET /loans/{id}/transactions/template?command=repayment` — the read
- * legacy's own repayment form is seeded from — whose `amount` is the figure due next and whose `date`
- * is the next due date, the browser clock standing in when the template carries none (AAP 0.10.5
- * item 15). Both stay editable before submission, so neither is fixed here.
+ * The date, the amount and the payment type are seeded from
+ * `GET /loans/{id}/transactions/template?command=repayment` — the read legacy's own repayment form is
+ * seeded from — whose `amount` is the figure due next, whose `date` is the next due date (the browser
+ * clock standing in when the template carries none; AAP 0.10.5 item 15) and whose first
+ * `paymentTypeOptions` entry legacy preselects. All three stay editable before submission, so none is
+ * fixed here. Only `transactionDate` and `transactionAmount` are required, the two members AAP 0.7.2
+ * makes required and the only two the legacy form requires.
  */
 export interface LoanRepaymentRequest {
   /** Date the repayment is recorded on, as the form holds it; `null` when it is empty. */
@@ -973,8 +989,19 @@ export interface LoanRepaymentRequest {
   /** Amount repaid. */
   transactionAmount: number;
 
-  /** Payment type id chosen from `paymentTypeOptions`. */
-  paymentTypeId: number;
+  /**
+   * Payment type id, taken from the template's `paymentTypeOptions`; sent whenever the template offers
+   * a payment type, which is the ordinary case — the form preselects the first entry and the user may
+   * choose another, as the legacy repayment form does.
+   *
+   * Optional because Fineract accepts a repayment without it: the fork's
+   * `LoanTransactionValidatorImpl` validates `paymentTypeId` with `ignoreIfNull`, and the body the
+   * legacy form posts when its payment-type list is empty carries no such member either, because the
+   * value its `ng-model` then holds is undefined. A template that offers no payment type therefore
+   * still posts, and Fineract's answer — not a client-side rule legacy does not have — decides what
+   * happens (Rule 1 clause 3; AAP 0.7.2).
+   */
+  paymentTypeId?: number;
 
   /** Free-text note recorded with the repayment. */
   note?: string;
@@ -1134,6 +1161,40 @@ export function isLoanAccount(value: LoanTemplate | LoanAccount): value is LoanA
   const { id, status }: { readonly id: unknown; readonly status: unknown } = value;
 
   return typeof id === 'number' && typeof status === 'object' && status !== null;
+}
+
+/**
+ * The id of a persisted enumeration member, which the fork sends either as a plain number or as the
+ * `{id, code, value}` object every `…Options` list is built from.
+ *
+ * This is the loans family's one read of such a member, so both screens that decode a loan payload
+ * accept both shapes: the application template and the edit seed carry the same eight values — the
+ * term, repayment, interest-rate, amortisation, interest and interest-calculation-period
+ * enumerations, plus `loanOfficerId` and `fundId` — and a second reader that accepted only the
+ * object form would leave a required select empty for a payload the other screen seeds (AAP 0.7.2,
+ * `LoanApplicationRequest`: the ids are the numbers the template returned; Rule 1 clause 3: every
+ * value the record holds is shown rather than re-picked).
+ *
+ * A value that names no finite number yields `null`, so the caller's field stays empty and posts
+ * nothing rather than a substituted default (Rule 1 clause 3).
+ *
+ * @param value The member as the payload sent it: a number, or an object carrying one under `id`.
+ * @returns The id, or `null` when the member names none.
+ */
+export function readSelectedId(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return null;
+  }
+
+  // `object` exposes no members to a type, so this is the documented boundary where a payload's own
+  // shape is read: one assertion to a record of `unknown` values keeps the read below checked.
+  const id: unknown = (value as Readonly<Record<string, unknown>>)['id'];
+
+  return typeof id === 'number' && Number.isFinite(id) ? id : null;
 }
 
 /**

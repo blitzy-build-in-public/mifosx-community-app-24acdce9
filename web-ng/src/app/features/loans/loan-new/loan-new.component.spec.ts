@@ -11,8 +11,6 @@ import { TranslateService } from '@ngx-translate/core';
 import { BehaviorSubject, Observable, of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest';
 
-import { AppConfigService } from '../../../core/config/app-config.service';
-import type { AppConfig } from '../../../core/config/app-config.model';
 import type {
   ChargeTemplate,
   LoanActionResult,
@@ -47,10 +45,9 @@ import { LoanNewComponent } from './loan-new.component';
  *
  * **What is stubbed, and why.** Only the collaborations a unit test cannot own: `LoanService`, whose
  * endpoint-level contract — method, path, query parameters and the `dateFormat`/`locale` members of the
- * body — belongs to `loan.service.spec.ts`; `AppConfigService`, which loads `assets/config.json` over
- * `fetch` and whose two date members are the only ones this screen reads; and the translation stack,
- * which is asked for display text only. The router is a real `provideRouter([])`, so the Cancel link
- * renders the href the application would render.
+ * body — belongs to `loan.service.spec.ts`; and the translation stack, which is asked for display text
+ * only. The router is a real `provideRouter([])`, so the Cancel link renders the href the application
+ * would render.
  */
 
 /** The client the screen is opened for: the `:clientId` segment of the route. */
@@ -58,9 +55,6 @@ const CLIENT_ID = 2;
 
 /** The client a second emission moves the same component to. */
 const SECOND_CLIENT_ID = 12;
-
-/** The configuration the screen reads its two date members from. */
-const CONFIG: Pick<AppConfig, 'dateFormat' | 'locale'> = { dateFormat: 'dd MMMM yyyy', locale: 'en' };
 
 /**
  * The products the template offers, deliberately in a non-alphabetical order so a screen that sorted
@@ -279,7 +273,6 @@ describe('LoanNewComponent', () => {
       providers: [
         provideRouter([]),
         { provide: LoanService, useValue: loanService },
-        { provide: AppConfigService, useValue: { config: CONFIG } },
         { provide: ActivatedRoute, useValue: { paramMap: routeParams.asObservable() } },
         { provide: TranslateService, useValue: translateStub() },
       ],
@@ -418,5 +411,33 @@ describe('LoanNewComponent', () => {
       principal: SECOND_TEMPLATE.principal,
     });
     expect(navigate).toHaveBeenCalledWith(['/viewloanaccount', 41]);
+  });
+
+  it('reports a submission the server answered without a loan id, and opens no record', async () => {
+    // `POST /loans` succeeded and created the loan, but its answer names no id this screen can address
+    // the record with — the silent return this case pins (AAP 0.14.2).
+    loanService.create.mockReturnValue(of({}));
+
+    await show(String(CLIENT_ID));
+    await component.submit();
+    fixture.detectChanges();
+
+    expect(loanService.create).toHaveBeenCalledTimes(1);
+    // Nothing is opened, because there is no id to open.
+    expect(navigate).not.toHaveBeenCalled();
+    // …and the outcome is rendered rather than swallowed: the loan exists on the server, so the user
+    // has to be told the record cannot be opened from here.
+    expect(component.submittedWithoutId()).toBe(true);
+    expect(host().querySelector('.alert-warning[role="alert"]')?.textContent).toContain(
+      'the server reported no loan identifier',
+    );
+    // It is not Fineract's own failure text, so the verbatim server-message region stays empty.
+    expect(component.error()).toBeNull();
+
+    // The notice describes one submission, so the next URL's screen does not inherit it.
+    await navigateTo(String(SECOND_CLIENT_ID));
+
+    expect(component.submittedWithoutId()).toBe(false);
+    expect(host().querySelector('.alert-warning')).toBeNull();
   });
 });

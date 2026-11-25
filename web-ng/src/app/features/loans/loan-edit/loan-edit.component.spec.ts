@@ -9,7 +9,6 @@ import {
   provideHttpClientTesting,
   type TestRequest,
 } from '@angular/common/http/testing';
-import { inject } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, type ParamMap } from '@angular/router';
 import { provideTranslateService, TranslateService } from '@ngx-translate/core';
@@ -18,7 +17,6 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 
 import { DEFAULT_APP_CONFIG } from '../../../core/config/app-config.model';
 import { AppConfigService } from '../../../core/config/app-config.service';
-import { APP_CONFIG } from '../../../core/config/app-config.token';
 import { toApiError } from '../../../core/http/api-error';
 import type { LoanAccount, LoanCharge } from '../loan.models';
 import { LoanEditComponent } from './loan-edit.component';
@@ -99,6 +97,13 @@ const MAP_FINERACT_FAILURES: HttpInterceptorFn = (request, next) =>
   );
 
 /**
+ * One persisted enumeration id as the fork sends it: the `{id, code, value}` object the option lists
+ * are built from, or the plain number a payload also answers with. Both name the same id, and the
+ * screen has to seed either of them.
+ */
+type PersistedId = { readonly id: number } | number;
+
+/**
  * The edit seed as `GET /loans/{id}?template=true&associations=…` answers it: the loan record plus the
  * loan form's own members, which `LoanAccount` does not declare and this screen reads through a
  * documented partial projection.
@@ -109,13 +114,15 @@ const MAP_FINERACT_FAILURES: HttpInterceptorFn = (request, next) =>
  */
 interface LoanEditSeed extends LoanAccount {
   readonly termFrequency: number;
-  readonly termPeriodFrequencyType: { readonly id: number };
-  readonly repaymentFrequencyType: { readonly id: number };
-  readonly interestRateFrequencyType: { readonly id: number };
-  readonly amortizationType: { readonly id: number };
-  readonly interestType: { readonly id: number };
-  readonly interestCalculationPeriodType: { readonly id: number };
+  readonly termPeriodFrequencyType: PersistedId;
+  readonly repaymentFrequencyType: PersistedId;
+  readonly interestRateFrequencyType: PersistedId;
+  readonly amortizationType: PersistedId;
+  readonly interestType: PersistedId;
+  readonly interestCalculationPeriodType: PersistedId;
   readonly transactionProcessingStrategyCode: string;
+  readonly loanOfficerId?: PersistedId;
+  readonly fundId?: PersistedId;
 }
 
 /** One charge the loan carries: its own id, the definition it applies, and a specified due date. */
@@ -206,6 +213,33 @@ const SECOND_SEED: LoanEditSeed = {
   numberOfRepayments: 6,
   termFrequency: 6,
   charges: SECOND_CHARGES,
+};
+
+/**
+ * The first loan with every persisted enumeration and both optional ids in the `{id}` object form,
+ * which is one of the two shapes the edit seed answers with.
+ */
+const OBJECT_ID_SEED: LoanEditSeed = {
+  ...SEED,
+  loanOfficerId: { id: 7 },
+  fundId: { id: 2 },
+};
+
+/**
+ * The same loan with those eight members as plain numbers — the other shape the fork answers with,
+ * and the one the edit form used to drop, leaving every required select empty for a value the loan
+ * already carries.
+ */
+const NUMERIC_ID_SEED: LoanEditSeed = {
+  ...SEED,
+  termPeriodFrequencyType: 2,
+  repaymentFrequencyType: 2,
+  interestRateFrequencyType: 3,
+  amortizationType: 1,
+  interestType: 0,
+  interestCalculationPeriodType: 1,
+  loanOfficerId: 7,
+  fundId: 2,
 };
 
 /**
@@ -309,10 +343,6 @@ describe('LoanEditComponent', () => {
         provideHttpClient(withInterceptors([MAP_FINERACT_FAILURES])),
         provideHttpClientTesting(),
         provideTranslateService(),
-        // The application registers this token in `app.config.ts`, which the final boundary delivers.
-        // The factory mirrors that registration — the resolved configuration of the service the
-        // stubbed `fetch` has just answered — so the screen reads the same value it reads in the app.
-        { provide: APP_CONFIG, useFactory: () => inject(AppConfigService).config },
         { provide: Router, useValue: { navigate } },
         { provide: ActivatedRoute, useValue: { paramMap: routeParams.asObservable() } },
       ],
@@ -396,6 +426,26 @@ describe('LoanEditComponent', () => {
     expect(component.loading()).toBe(false);
     // One read is the whole load: nothing is saved until the user asks for it.
     httpMock.expectNone(isEditSave(LOAN_ID));
+  });
+
+  it.each<[string, LoanEditSeed]>([
+    ['the {id} object form', OBJECT_ID_SEED],
+    ['the plain number form', NUMERIC_ID_SEED],
+  ])('seeds every persisted enumeration and both optional ids sent in %s', async (_label, seed) => {
+    await show();
+    await settle(seed);
+
+    // The values the loan already carries, read back into the controls whichever shape the payload
+    // used: a select left empty would make the user re-pick terms the server holds on a required
+    // field (Rule 1 clause 3; AAP 0.7.2: the ids are the ones the payload returned).
+    expect(component.controls.loanTermFrequencyType.value).toBe(2);
+    expect(component.controls.repaymentFrequencyType.value).toBe(2);
+    expect(component.controls.interestRateFrequencyType.value).toBe(3);
+    expect(component.controls.amortizationType.value).toBe(1);
+    expect(component.controls.interestType.value).toBe(0);
+    expect(component.controls.interestCalculationPeriodType.value).toBe(1);
+    expect(component.controls.loanOfficerId.value).toBe(7);
+    expect(component.controls.fundId.value).toBe(2);
   });
 
   it('re-posts the loan’s charges in the save body and returns to the record', async () => {

@@ -34,10 +34,11 @@
   `locale-en.json` of the reference clone, and none is written out here. The card title is
   `label.heading.loanrepayments` because that is the key the legacy repayment screen heads itself
   with ("Loan Repayments"); `label.heading.repayment` exists but reads "Repayment Amount", which is a
-  field label rather than this screen's title. The payment-type prompt is the shipped generic
-  `label.select` ("Select an option"), which is the visible prompt row the legacy `<select>` left
-  blank, and the footer's primary control is `label.button.save` — legacy's own submit caption
-  ("Submit" in en). No field prints an id, a body or session material (Rule 1 clause 9).
+  field label rather than this screen's title. The payment-type select renders the template's own
+  option names and no prompt row, which is what legacy's `ng-options` select offers: it opens on the
+  first option the component preselects, exactly as legacy preselects it. The footer's primary control
+  is `label.button.save` — legacy's own submit caption ("Submit" in en). No field prints an id, a body
+  or session material (Rule 1 clause 9).
 
   **Assistive technology.** The invalid amount field is announced through `aria-invalid` and a
   `help-block` it is pointed at by `aria-describedby`, and it declares `aria-required` rather than the
@@ -80,8 +81,9 @@
         <!--
           The form is rendered at once, not withheld while the seed reads are in flight: legacy shows
           the same empty controls and fills them as its template answers, so gating them would be a
-          change from the screen being replaced (Rule 1 clause 3). A value the user types first is
-          never overwritten, because the component seeds the amount only while that control is empty.
+          change from the screen being replaced (Rule 1 clause 3). The controls are empty until this
+          loan's own template answers: the component empties them before every read, so a figure typed
+          or seeded for the loan the URL has left is gone by the time the new loan's seeds arrive.
         -->
         <!--
           The date field renders its own `.form-group`, `.control-label` and `input[type=date]`, and
@@ -126,15 +128,18 @@
         <!--
           The payment types are the transactions template's own list, in the server's order, with no
           sorting, filtering, relabelling or synthesised option — the component hands them over as
-          received and this template adds nothing to them (Rule 1 clauses 2 and 3).
+          received and this template adds nothing to them, opening the select on the first option it
+          preselects (Rule 1 clauses 2 and 3). No `placeholder` and no `required` is bound here:
+          legacy renders a plain `ng-options` select with no empty option and no required marker, so
+          a blank row or an app-side "required field" message would be an affordance and a rule legacy
+          does not have — one that would also refuse a repayment Fineract accepts without a payment
+          type. The `*` marker stays on the date and the amount, the two fields legacy does require.
         -->
         <app-select-field
           inputId="paymentTypeId"
           [control]="form.controls.paymentTypeId"
           [options]="paymentTypeOptions()"
           [label]="'label.input.paymenttype' | translate"
-          [placeholder]="'label.select' | translate"
-          [required]="true"
         />
 
         <!--

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 
 /**
@@ -77,4 +77,24 @@ export class SelectFieldComponent {
   /** Id of the `<select>` and of the label's `for`, defaulting to a unique `select-field-<n>`;
    *  a caller-supplied id always wins. */
   readonly inputId = input<string>(nextSelectFieldId());
+
+  /** Reports the value the caller's control holds once the user picks a row: the chosen option's
+   *  `id` with its runtime type intact, or `null` when the prompt row is chosen (AAP 0.2.3 row
+   *  `SelectField`). It exists so a consumer never depends on the host element's DOM `change` event,
+   *  which this component promises nothing about and which an inner `stopPropagation()` or a
+   *  non-bubbling wrapper would silently withhold. A programmatic write to `control` emits nothing,
+   *  so a screen that seeds a value while loading never re-runs its own selection handler. */
+  readonly valueChange = output<SelectValue | null>();
+
+  /**
+   * Publishes the selection the caller's control now holds when the user picks a row.
+   *
+   * The value is read from that control, never from the event: `[formControl]` on this same
+   * `<select>` installs `SelectControlValueAccessor`, whose own `change` listener writes the control
+   * before this one runs, and an option's DOM value is `[ngValue]`'s positional key rather than the
+   * id a request body carries.
+   */
+  protected emitSelection(): void {
+    this.valueChange.emit(this.control().value);
+  }
 }

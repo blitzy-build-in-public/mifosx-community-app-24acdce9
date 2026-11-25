@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { toLoanStatusKey } from './loan.models';
+import { readSelectedId, toLoanStatusKey } from './loan.models';
 import type { StatusKey } from '../../shared/status-key.util';
 
 /**
@@ -59,5 +59,41 @@ describe('toLoanStatusKey', () => {
     expect(toLoanStatusKey(undefined)).toBe('other');
     expect(toLoanStatusKey('')).toBe('other');
     expect(toLoanStatusKey('loanStatusType.notAStateYet')).toBe('other');
+  });
+});
+
+/**
+ * The two shapes a persisted enumeration id arrives in, each with the id it names: the plain number a
+ * payload sends for a single selection, and the `{id, code, value}` object the option lists are built
+ * from. Both name the same id, so a reader that accepted one shape would empty a select for the other.
+ */
+const SELECTED_ID_CASES: readonly [string, unknown, number][] = [
+  ['a plain number', 3, 3],
+  [
+    'the {id, code, value} object',
+    { id: 3, code: 'interestRateFrequencyType.years', value: 'Per year' },
+    3,
+  ],
+];
+
+/** The values that name no id, so the caller's field stays empty instead of posting a substitute. */
+const UNSELECTED_VALUES: readonly [string, unknown][] = [
+  ['an object without an id', { code: 'interestRateFrequencyType.years' }],
+  ['an object whose id is text', { id: '3' }],
+  ['a bare string', '3'],
+  ['an array', [3]],
+  ['null', null],
+  ['undefined', undefined],
+  ['NaN', Number.NaN],
+  ['Infinity', Number.POSITIVE_INFINITY],
+];
+
+describe('readSelectedId', () => {
+  it.each(SELECTED_ID_CASES)('reads the id of %s', (_label, value, id) => {
+    expect(readSelectedId(value)).toBe(id);
+  });
+
+  it.each(UNSELECTED_VALUES)('reads no id from %s', (_label, value) => {
+    expect(readSelectedId(value)).toBeNull();
   });
 });

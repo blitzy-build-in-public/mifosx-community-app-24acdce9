@@ -283,9 +283,13 @@ describe('ClientAccountsComponent', () => {
 
     const cells = renderedRows().map((row) => Array.from(row.cells));
 
-    // The figure cells are the fourth of each row, beneath the right-aligned balance heading.
-    expect(cells[0]?.[3]?.textContent?.trim()).toBe('5000');
-    expect(cells[1]?.[3]?.textContent?.trim()).toBe('1200.5');
+    // The figure cells are the fourth of each row, beneath the right-aligned balance heading, and
+    // they carry the figures legacy's `number` filter prints — `{{loanaccount.loanBalance|number}}`
+    // and `{{savingaccount.accountBalance|number}}` in `app/views/clients/viewclient.html:349,446` —
+    // including the thousands separator, so the record groups a balance as the legacy record did
+    // (AAP 0.10.2 "displayed data … and their formatting"; Rule 1 clause 3).
+    expect(cells[0]?.[3]?.textContent?.trim()).toBe('5,000');
+    expect(cells[1]?.[3]?.textContent?.trim()).toBe('1,200.5');
     // A missing figure is an empty cell: no zero the server never reported, no dash, no placeholder.
     expect(cells[2]?.[3]?.textContent?.trim()).toBe('');
     expect(cells[2]?.[3]?.textContent ?? '').not.toMatch(LONE_DASH);

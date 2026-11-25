@@ -57,6 +57,25 @@
       }
 
       <!--
+        The submission was accepted but its answer named no loan id, so there is no record to open:
+        the screen states that instead of returning quietly after a request that already created the
+        loan (AAP 0.14.2). It is this screen's own state, not a Fineract failure, so it stays out of
+        the verbatim server message above.
+
+        BLITZY [I18N]: this is the one string on the screen with no translation key, because no
+        shipped legacy locale bundle carries one — the legacy controller navigated with `data.loanId`
+        unconditionally and had no such state to report — and adding a key would mean editing a
+        locale file (forbidden: Rule 1 clauses 1 and 6). The wording says what happened and what the
+        user can do, rather than showing a humanised key fragment.
+      -->
+      @if (submittedWithoutId()) {
+        <div class="alert alert-warning" role="alert">
+          The application was submitted, but the server reported no loan identifier for it, so the
+          loan record cannot be opened from here. Search for the client's loan to continue.
+        </div>
+      }
+
+      <!--
         `novalidate` and no `required`, `min`, `max` or `step` anywhere: the browser must never block a
         submission Fineract alone decides, and legacy applies no bound of its own — W7 proves the server
         rejecting a principal above the product maximum (Rule 1 clause 3). The reactive form's
@@ -77,8 +96,8 @@
             <!--
               The product list is the Fineract template's own, in its order. Selecting one re-reads the
               template so the terms and defaults below become that product's: the shared field writes the
-              control and exposes no output, so the change is taken from the select's own bubbling DOM
-              event, which reaches this host after the value accessor has written the control.
+              control and reports the selection it now holds through its `valueChange` output, so this
+              screen never depends on the inner select's DOM event reaching this host.
             -->
             <app-select-field
               inputId="productId"
@@ -86,7 +105,7 @@
               [options]="productOptions()"
               [placeholder]="'label.selectloanproduct' | translate"
               [required]="true"
-              (change)="onProductChange()"
+              (valueChange)="onProductChange($event)"
             />
           </div>
         </div>
@@ -385,15 +404,15 @@
                     </label>
                     <div class="col-md-9">
                       <!-- The same change wiring as the product picker: the shared field writes the row's
-                           control and reports nothing, so the selection is taken from the select's own
-                           bubbling DOM event. -->
+                           control and reports the selection it now holds through its `valueChange`
+                           output, which names the charge the amount field below belongs to. -->
                       <app-select-field
                         [inputId]="'charge-' + $index + '-chargeId'"
                         [control]="row.controls.chargeId"
                         [options]="chargeOptions()"
                         [placeholder]="'label.selectcharge' | translate"
                         [required]="true"
-                        (change)="onChargeSelect($index)"
+                        (valueChange)="onChargeSelect($index, $event)"
                       />
                     </div>
                   </div>

@@ -17,7 +17,6 @@ import type {
   LoanChargeActionRequest,
   LoanChargeRequest,
   LoanCommand,
-  LoanEditRequest,
   LoanRepaymentRequest,
   LoanTemplate,
   LoanTransactionTemplate,
@@ -43,6 +42,11 @@ type WithoutDateGrammar<T> = T extends unknown ? Omit<T, 'dateFormat' | 'locale'
  * strings built in a template"; Rule 1 clause 2). The screen therefore holds only the values the user
  * typed or chose, plus the `Date | null` its transaction-date field carries, and can never pair a date
  * with a format or a locale that disagrees with it.
+ *
+ * `paymentTypeId` stays optional here for the reason the model gives: a repayment template that offers
+ * no payment type leaves the screen with no choice to send, and Fineract accepts a repayment without
+ * one, so the body carries the member only when the form holds a payment type (Rule 1 clause 3;
+ * AAP 0.7.2).
  */
 export type LoanRepaymentInput = Omit<LoanRepaymentRequest, 'dateFormat' | 'locale'>;
 
@@ -63,6 +67,17 @@ export type LoanChargeInput = WithoutDateGrammar<LoanChargeRequest>;
  * and nothing the endpoint refuses (see `LoanChargeActionRequest`).
  */
 export type LoanChargeActionInput = WithoutDateGrammar<LoanChargeActionRequest>;
+
+/**
+ * What the application and edit forms hand {@link LoanService.create}, {@link LoanService.previewSchedule}
+ * and {@link LoanService.update}: the models' `LoanApplicationRequest` — which is also `LoanEditRequest`,
+ * the same body posted to `PUT /loans/{id}` — without its `dateFormat` and `locale` members, because this
+ * service fills both from the runtime configuration at the boundary where the body is built (AAP 0.7.2
+ * "Date handling", AAP 0.14.1 "Dates never travel as strings built in a template"; Rule 1 clause 2). The
+ * screen therefore holds only the values the user typed or chose, plus the `Date | null` each date field
+ * carries, and can never pair a date with a format or a locale that disagrees with it.
+ */
+export type LoanApplicationInput = Omit<LoanApplicationRequest, 'dateFormat' | 'locale'>;
 
 /**
  * The two members every dated loan body carries, set together so the pattern, the month names and the
@@ -183,7 +198,8 @@ type LoanActionBody =
 interface LoanRepaymentBody extends LoanDateWire {
   transactionDate?: string | null;
   transactionAmount: number;
-  paymentTypeId: number;
+  /** Present only when the template the form was seeded from offers a payment type (AAP 0.7.2). */
+  paymentTypeId?: number;
   note?: string;
 }
 
@@ -316,7 +332,7 @@ export class LoanService {
    * @param body The application as the form holds it.
    * @returns The calculated schedule.
    */
-  previewSchedule(body: LoanApplicationRequest): Observable<RepaymentSchedule> {
+  previewSchedule(body: LoanApplicationInput): Observable<RepaymentSchedule> {
     const params = new HttpParams().set('command', 'calculateLoanSchedule');
 
     return this.http.post<RepaymentSchedule>(this.config.apiUrl('/loans'), this.toApplicationBody(body), {
@@ -332,7 +348,7 @@ export class LoanService {
    * @param body The application as the form holds it.
    * @returns The created loan's id and the changes the server applied.
    */
-  create(body: LoanApplicationRequest): Observable<LoanActionResult> {
+  create(body: LoanApplicationInput): Observable<LoanActionResult> {
     return this.http.post<LoanActionResult>(this.config.apiUrl('/loans'), this.toApplicationBody(body));
   }
 
@@ -405,7 +421,7 @@ export class LoanService {
    * @param body The application as the form holds it, its charges included.
    * @returns The loan's id and the changes the server applied.
    */
-  update(id: number | string, body: LoanEditRequest): Observable<LoanActionResult> {
+  update(id: number | string, body: LoanApplicationInput): Observable<LoanActionResult> {
     const payload = this.toApplicationBody(body);
 
     return defer(() =>
@@ -622,7 +638,7 @@ export class LoanService {
    * @param body The application as the form holds it.
    * @returns The wire body: dates formatted, `dateFormat` and `locale` set.
    */
-  private toApplicationBody(body: LoanApplicationRequest): LoanApplicationBody {
+  private toApplicationBody(body: LoanApplicationInput): LoanApplicationBody {
     const dates = this.dateWire();
 
     return {
@@ -795,7 +811,10 @@ export class LoanService {
    *
    * The amount, the payment type and the date are the form's own values, sent exactly as it holds
    * them: nothing is rounded, bounded or recomputed here (Rule 1 clause 3). A `null` date is omitted,
-   * which leaves the server's own required-field rule to report it.
+   * which leaves the server's own required-field rule to report it, and an absent payment type is
+   * omitted for the same reason — the model makes it optional because Fineract accepts a repayment
+   * without one, so the legacy body with no payment type stays byte-identical instead of gaining a
+   * `null` member the server never receives from legacy (Rule 1 clause 2; AAP 0.7.2).
    *
    * @param body The repayment as the form holds it.
    * @returns The wire body: the date formatted, `dateFormat` and `locale` set.
@@ -809,7 +828,7 @@ export class LoanService {
         ? {}
         : { transactionDate: toFineractDate(body.transactionDate, dates.locale) }),
       transactionAmount: body.transactionAmount,
-      paymentTypeId: body.paymentTypeId,
+      ...(body.paymentTypeId === undefined ? {} : { paymentTypeId: body.paymentTypeId }),
       ...(body.note === undefined ? {} : { note: body.note }),
     };
   }

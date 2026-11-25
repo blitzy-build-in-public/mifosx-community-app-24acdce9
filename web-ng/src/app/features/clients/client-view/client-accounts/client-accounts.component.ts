@@ -1,3 +1,4 @@
+import { DecimalPipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -66,6 +67,15 @@ export interface AccountRow {
  * English `status.value` reaches the screen as text — which is the deliberate difference the plan
  * registers for every status indicator in this application (AAP 0.10.5 item 11).
  *
+ * **Balance formatting.** The balance cell goes through Angular's `DecimalPipe`
+ * (`{{ row.balance | number }}`), which groups a figure exactly as AngularJS's `number` filter
+ * grouped both of legacy's balance cells (`app/views/clients/viewclient.html:349`
+ * `{{loanaccount.loanBalance|number}}` and `:446` `{{savingaccount.accountBalance|number}}`), so
+ * the record prints `5,000` where an unformatted interpolation printed `5000`. Displayed balance
+ * formatting is one of the dimensions the parity comparison decides on (AAP 0.10.2, "displayed
+ * data — status, balances … and their formatting"; Rule 1 clause 3), and this section adds nothing
+ * to the figure legacy printed beyond that grouping.
+ *
  * **Visual contract.** Every value this section produces — the white `.panel` with its shadow,
  * the `.table` header band and row rules, the 8px cell padding, the body type and the status
  * colours — comes from the global classes of `web-ng/src/styles.scss`, so this component declares
@@ -87,7 +97,7 @@ export interface AccountRow {
  */
 @Component({
   selector: 'app-client-accounts',
-  imports: [TranslatePipe, StatusSwatchComponent, EmptyStateComponent],
+  imports: [DecimalPipe, TranslatePipe, StatusSwatchComponent, EmptyStateComponent],
   templateUrl: './client-accounts.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })

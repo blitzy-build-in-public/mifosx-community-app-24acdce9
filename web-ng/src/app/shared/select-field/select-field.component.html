@@ -7,9 +7,11 @@
   FormControl are plain properties, so a computed would keep the first verdict for ever.
 
   Deliberately absent: a native `required` would let the browser block a submission that Fineract
-  alone decides (`required` reaches assistive technology as `aria-required`), and an input, change or
-  blur listener would double-write the value, since the value accessor behind `[formControl]` on this
-  same element already owns them.
+  alone decides (`required` reaches assistive technology as `aria-required`), and an input or blur
+  listener would double-write the value, since the value accessor behind `[formControl]` on this same
+  element already owns them. The one listener this template does add is the `<select>`'s own `change`,
+  which writes nothing itself: it publishes the value the accessor has just written through
+  `valueChange`, so a consumer never has to depend on this element's DOM event reaching its host.
 -->
 @let invalid = control().invalid && (control().touched || control().dirty);
 
@@ -32,6 +34,7 @@
     [attr.aria-label]="accessibleName"
     [attr.aria-required]="required() || null"
     [attr.aria-invalid]="invalid ? 'true' : null"
+    (change)="emitSelection()"
   >
     @if (placeholder()) {
       <!-- The prompt is a selectable row that returns the field to empty, matching the legacy chosen

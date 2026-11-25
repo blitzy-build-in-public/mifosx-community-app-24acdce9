@@ -1019,6 +1019,34 @@ describe('LoanService', () => {
     sent.flush(ACTION_RESULT);
   });
 
+  it('sends a repayment with no payment type without the member, leaving the choice to the server', () => {
+    // A repayment template that offers no payment type: the form has no choice to send, and the model
+    // makes the member optional because Fineract accepts a repayment without one (AAP 0.7.2).
+    service
+      .repay(LOAN_ID, {
+        transactionDate: DISBURSEMENT_DATE,
+        transactionAmount: REPAYMENT.transactionAmount,
+        note: REPAYMENT.note,
+      })
+      .subscribe();
+
+    const sent = httpMock.expectOne(
+      isRequest('POST', loanUrl('loans', LOAN_ID, 'transactions')),
+    );
+
+    expect(bodyKeys(sent.request)).not.toContain('paymentTypeId');
+    // The rest of the wire body is untouched: the date with its format pair, the amount and the note.
+    expect(sent.request.body).toEqual({
+      transactionDate: DISBURSEMENT_TEXT,
+      transactionAmount: 467,
+      note: 'First period in full',
+      dateFormat: FINERACT_DATE_FORMAT,
+      locale: APP_LOCALE,
+    });
+
+    sent.flush(ACTION_RESULT);
+  });
+
   it('reads the loan charge template with no parameter at all', () => {
     const received: ChargeTemplate[] = [];
 

@@ -140,6 +140,20 @@ describe('SelectFieldComponent', () => {
     return fixture;
   }
 
+  /**
+   * Collects every `valueChange` emission, so a case can assert both the selection the field reports
+   * and that a path which publishes nothing really stayed silent.
+   */
+  function recordValueChanges(
+    fixture: ComponentFixture<SelectFieldComponent>,
+  ): (SelectValue | null)[] {
+    const emitted: (SelectValue | null)[] = [];
+
+    fixture.componentInstance.valueChange.subscribe((value) => emitted.push(value));
+
+    return emitted;
+  }
+
   it('renders one option per entry, in the order the template endpoint returned them', () => {
     const fixture = createField(new FormControl<SelectValue | null>(null));
     const select = renderedSelect(fixture);
@@ -231,6 +245,75 @@ describe('SelectFieldComponent', () => {
 
     expect(control.value).toBe(3);
     expect(JSON.stringify({ officeId: control.value })).toBe('{"officeId":3}');
+  });
+
+  /**
+   * The contract the loan screens bind: the field publishes the selection itself, so no consumer
+   * depends on the host element's DOM `change` event. `chooseOption` dispatches a non-bubbling
+   * `change` on the `<select>`, which reaches only the listeners on that element — the value
+   * accessor's and this component's — so an emission here can only come from the field's own
+   * contract (AAP 0.2.3 row `SelectField`).
+   *
+   * It also pins the order those two listeners share: a stale emission would report the previous
+   * selection, or `null` on the first pick, because the control would not have been written yet.
+   */
+  it('publishes the newly chosen id, never the previous selection, when the select changes', () => {
+    const control = new FormControl<SelectValue | null>(null);
+    const fixture = createField(control);
+    const select = renderedSelect(fixture);
+    const emitted = recordValueChanges(fixture);
+
+    chooseOption(select, 'Branch Two');
+
+    expect(emitted).toEqual([2]);
+    expect(emitted[0]).toBe(control.value);
+
+    // 'Head Office' carries id 3 and renders first, so a positional value would report 0 here.
+    chooseOption(select, 'Head Office');
+
+    expect(emitted).toEqual([2, 3]);
+    expect(emitted[1]).toBe(control.value);
+  });
+
+  it('publishes the id with the option\'s own runtime type, never a stringified copy', () => {
+    const control = new FormControl<SelectValue | null>(null);
+    const fixture = createField(control);
+    const emitted = recordValueChanges(fixture);
+
+    chooseOption(renderedSelect(fixture), 'Branch One');
+
+    expect(emitted).toEqual([1]);
+    expect(typeof emitted[0]).toBe('number');
+    expect(JSON.stringify({ officeId: emitted[0] })).toBe('{"officeId":1}');
+  });
+
+  it('publishes null when the user chooses the prompt row', () => {
+    const control = new FormControl<SelectValue | null>(null);
+    const fixture = createField(control, { placeholder: 'Select an office' });
+    const select = renderedSelect(fixture);
+    const emitted = recordValueChanges(fixture);
+
+    chooseOption(select, 'Branch Two');
+
+    expect(emitted).toEqual([2]);
+
+    select.selectedIndex = 0;
+    select.dispatchEvent(new Event('change'));
+
+    expect(emitted).toEqual([2, null]);
+    expect(control.value).toBeNull();
+  });
+
+  it('publishes nothing when the parent writes the control programmatically', () => {
+    const control = new FormControl<SelectValue | null>(null);
+    const fixture = createField(control);
+    const emitted = recordValueChanges(fixture);
+
+    control.setValue(2);
+    fixture.detectChanges();
+
+    expect(selectedText(renderedSelect(fixture))).toBe('Branch Two');
+    expect(emitted).toEqual([]);
   });
 
   it('reflects a value written to the control in the rendered selection', () => {

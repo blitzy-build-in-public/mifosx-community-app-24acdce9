@@ -61,12 +61,18 @@
                  deliberate difference the plan registers for every status indicator in this
                  application (AAP 0.10.5 item 11; Rule 1 clause 3). -->
             <td><app-status-swatch [status]="row.status" /></td>
-            <!-- The account family's own balance figure, right-aligned beneath its header. A row
-                 whose family reported no figure leaves the cell empty: no zero, dash, currency
-                 symbol or placeholder the payload never carried (Rule 1 clause 3). -->
+            <!-- The account family's own balance figure, right-aligned beneath its header and
+                 printed through the `number` pipe, which groups a figure the way the filter legacy
+                 applies to both of its balance cells does (`app/views/clients/viewclient.html:349`
+                 `{{loanaccount.loanBalance|number}}` and `:446`
+                 `{{savingaccount.accountBalance|number}}`), so this record prints `5,000` for a
+                 five-thousand balance. Displayed balance formatting is a dimension the parity
+                 comparison decides on (AAP 0.10.2; Rule 1 clause 3). A row whose family reported no
+                 figure leaves the cell empty: no zero, dash, currency symbol or placeholder the
+                 payload never carried (AAP 0.7.4; Rule 1 clause 3). -->
             <td class="text-right">
               @if (row.balance !== null) {
-                {{ row.balance }}
+                {{ row.balance | number }}
               }
             </td>
           </tr>
