@@ -1,0 +1,78 @@
+<!--
+  The navbar's global search, reproducing the legacy control of
+  app/views/_topnavbar.html:118-137: a text field and a scope selector in one Bootstrap 3
+  `navbar-form`, submitted with Enter rather than by a button.
+
+  `role="search"` names the form as a search landmark for assistive technology; it has no visual
+  effect and legacy carried no such landmark, which is why it is the only addition here.
+
+  The submit binding runs `submit()` and then cancels the browser's own navigation: a native form
+  submit would reload the single-page application, and the legacy form's `ng-submit` cancelled it
+  the same way. Two statements rather than a `$event` parameter keep the component's `submit()`
+  the no-argument method the plan specifies.
+-->
+<form
+  class="navbar-form navbar-right"
+  role="search"
+  (submit)="submit(); $event.preventDefault()"
+>
+  <!--
+    `.input-group` attaches the two controls into one box: the field is the flexible cell and
+    `.input-group-btn` is the shrink-to-fit cell holding the scope selector, so the selector hugs
+    the field's right edge exactly as the design's attached select does. The element carries no
+    inline width: the legacy template's `style="width:250px"` sized the field against the old
+    navbar's layout, and the field here takes the width its own content needs.
+  -->
+  <div class="input-group">
+    <!--
+      `id="search"` is the id the legacy field carries, kept because the parity page objects
+      address the control by it. `type="text"` matches legacy: the element is an ordinary text
+      field, not a `type="search"` field, and changing it would change the browser's own
+      behaviour around the control.
+
+      The placeholder is the legacy bundle's own key, so the wording on screen is the wording
+      legacy shows — including the `alt+x` chord it advertises, which the component's host binding
+      implements. The `aria-label` is the field's accessible name — a placeholder is not one, and
+      without it the field would be announced unnamed; it repeats the visible notion but carries no
+      visible change. `#field` is the reference the shortcut focuses.
+    -->
+    <input
+      #field
+      id="search"
+      type="text"
+      class="form-control"
+      [formControl]="query"
+      [attr.placeholder]="'label.searchorpress' | translate"
+      [attr.aria-label]="'label.heading.search' | translate"
+    />
+
+    <span class="input-group-btn">
+      <!--
+        A native `<select>`, the Angular-native replacement for the jQuery `chosen` plugin the
+        request forbids (AAP 0.10.5 item 2), and the one control the design draws attached to the
+        field. Its options come from the component's own scope list, and each label resolves
+        through the legacy bundle so no scope ever reaches the user as a raw key.
+
+        The `aria-label` names the selector; the option text is its value, not its name. It reuses
+        the legacy bundle's own "Filter" label (`label.button.filter`), which every shipped bundle
+        carries: the selector narrows the search to one resource family, and a name taken from the
+        existing bundles introduces no new key and leaves no untranslated literal behind.
+
+        `id="search-scope"` gives the control an identity of its own: the field beside it has had
+        one since legacy (`#search`), a form control with neither `id` nor `name` is reported by
+        browser tooling as unnameable, and the id lets a test address the selector without depending
+        on its position among the field's siblings.
+      -->
+      <select
+        id="search-scope"
+        class="form-control"
+        [formControl]="scope"
+        [attr.aria-label]="'label.button.filter' | translate"
+      >
+        @for (option of scopes; track option) {
+          <option [value]="option">{{ labelKey(option) | translate }}</option>
+        }
+      </select>
+    </span>
+  </div>
+</form>
