@@ -6,27 +6,30 @@
  * `bootstrapApplication` and nothing else in the application registers these providers, which is what
  * makes the ordering below the whole of the application's start-up contract.
  *
+ * **No change-detection provider is declared.** Zoneless change detection is Angular 22's default
+ * (AAP 0.4.1), so none is listed below: declaring it would only restate what the framework already
+ * does. No zone-based provider can be registered either — no change-detection zone library is a
+ * dependency of this application, and every view here is driven by signals.
+ *
  * **Order is meaning.** The providers are listed in the order their contracts depend on each other:
  *
- * 1. `provideZonelessChangeDetection()` — Angular 22's default, stated rather than assumed so the
- *    absence of a change-detection zone is a decision this file records (AAP 0.4.1: no zone.js is
- *    installed anywhere in `web-ng/`).
- * 2. `provideRouter(APP_ROUTES, withHashLocation())` — the tree `app.routes.ts` declares, mounted on
+ * 1. `provideRouter(APP_ROUTES, withHashLocation())` — the tree `app.routes.ts` declares, mounted on
  *    the legacy URL scheme. The legacy application runs `$locationProvider.hashPrefix('')` with
  *    `html5Mode(false)` (`app/scripts/routes.js:1115-1116`), so hash URLs are what survive cutover and
  *    every route's URL keeps the `#/` form (AAP 0.3.4 claim 2, Rule 1 clause 5).
- * 3. `provideHttpClient(withInterceptors([fineractInterceptor]))` — the client every service injects,
+ * 2. `provideHttpClient(withInterceptors([fineractInterceptor]))` — the client every service injects,
  *    with the application's single interceptor as its only interceptor (Rule 1 clause 5). The
  *    interceptor owns the tenant and `Authorization` headers, the `ApiError` mapping and the 401
  *    handling, and rewrites no URL (AAP 0.4.3 row 1).
- * 4. `provideTranslate` — `TranslateService` over the legacy `global-translations/locale-*.json`
- *    bundles and the missing-translation handler that never shows a raw key. It declared this exact
- *    composition as its single call site (AAP 0.4.3 row 4), it requires `provideHttpClient()` in the
- *    same injector because its loader fetches the bundles through `HttpClient`, and this is that one
- *    place.
- * 5. `provideAppInitializer(...)` — the start-up sequence, awaited before the router performs its
+ * 3. `provideTranslate()` — `TranslateService` over the legacy `global-translations/locale-*.json`
+ *    bundles and the missing-translation handler that never shows a raw key.
+ *    `core/i18n/translate.config.ts` owns that composition as its single call site (AAP 0.4.3 row 4,
+ *    AAP 0.7.1), including the handler registration that has to follow the translate stack so it wins
+ *    over the library's key-echoing default. The stack needs `provideHttpClient()` in the same
+ *    injector because its loader fetches the bundles through `HttpClient`, and this is that one place.
+ * 4. `provideAppInitializer(...)` — the start-up sequence, awaited before the router performs its
  *    first navigation: the configuration is resolved, then the stored legacy session is restored.
- * 6. `{ provide: APP_CONFIG, ... }` — the resolved configuration as one immutable injection token, read
+ * 5. `{ provide: APP_CONFIG, ... }` — the resolved configuration as one immutable injection token, read
  *    through `inject(APP_CONFIG)`. It follows the initializer for the reason `app-config.token.ts`
  *    documents: by the time anything injects the token, `load()` has published the configuration, so
  *    the factory reads a resolved value instead of a signal that is still loading.
@@ -57,7 +60,6 @@ import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import {
   inject,
   provideAppInitializer,
-  provideZonelessChangeDetection,
   type ApplicationConfig,
 } from '@angular/core';
 import { provideRouter, withHashLocation } from '@angular/router';
@@ -71,10 +73,10 @@ import { fineractInterceptor } from './core/http/fineract.interceptor';
 import { provideTranslate } from './core/i18n/translate.config';
 
 /**
- * The application's global providers, in start-up order: zoneless change detection, the hash-located
- * router over `APP_ROUTES`, the HTTP client with the single Fineract interceptor, the translation
- * stack, the initializer that resolves the configuration and restores the stored session, and the
- * `APP_CONFIG` token the resolved configuration is published on.
+ * The application's global providers, in start-up order: the hash-located router over `APP_ROUTES`,
+ * the HTTP client with the single Fineract interceptor, the translation stack, the initializer that
+ * resolves the configuration and restores the stored session, and the `APP_CONFIG` token the resolved
+ * configuration is published on.
  *
  * Exported as one value because `web-ng/src/main.ts` bootstraps `AppComponent` with it and every unit
  * test composes its injector from it, so the providers a component runs against are the application's
@@ -82,21 +84,17 @@ import { provideTranslate } from './core/i18n/translate.config';
  */
 export const appConfig: ApplicationConfig = {
   providers: [
-    provideZonelessChangeDetection(),
     provideRouter(APP_ROUTES, withHashLocation()),
     provideHttpClient(withInterceptors([fineractInterceptor])),
     provideTranslate(),
-    provideAppInitializer((): Promise<void> => {
+    // Configuration first, then the session restore that sends `GET /users/{id}` through the interceptor
+    // and therefore needs `apiUrl()`. The header explains why both steps share this one initializer.
+    provideAppInitializer(async (): Promise<void> => {
       const configuration = inject(AppConfigService);
       const session = inject(AuthService);
 
-      // Awaited in this order, both inside this one initializer: the configuration has to be resolved
-      // before the restore issues a request through the interceptor, and the first navigation has to
-      // wait for the restore so a stored session is in effect when `authGuard` asks for it.
-      return (async (): Promise<void> => {
-        await configuration.load();
-        await session.restore();
-      })();
+      await configuration.load();
+      await session.restore();
     }),
     { provide: APP_CONFIG, useFactory: (): AppConfig => inject(AppConfigService).config },
   ],

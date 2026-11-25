@@ -109,9 +109,9 @@ export const AVAILABLE_LANGS: readonly string[] = [
  * `NullInjectorError: No provider for HttpClient` when the initial language is first loaded —
  * which happens at start-up, not on the first screen that translates something.
  * `src/app/app.config.ts` owns `provideHttpClient(withInterceptors([fineractInterceptor]))` and
- * composes this same stack inline; the two compositions must stay identical in prefix, suffix,
- * `failOnError`, `lang`, `fallbackLang` and handler class, which is why those values are exported
- * from here.
+ * installs this stack with one `provideTranslate()` call, so prefix, suffix, `failOnError`, `lang`,
+ * `fallbackLang` and handler class are composed here and nowhere else; the values stay exported so a
+ * test can assert that loader contract without restating it.
  *
  * **`lang` is the starting language only.** It is `DEFAULT_APP_CONFIG.locale`, the build-time
  * configuration default, so that the first paint has text before `AppConfigService` resolves the
