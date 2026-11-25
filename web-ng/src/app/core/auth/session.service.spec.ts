@@ -2,7 +2,7 @@
  * Behavioural spec for `SessionService`, the legacy session entry both front ends share, and the proof
  * AAP 0.10.3 criterion 2 asks for: "one test round-trips a legacy-shaped session fixture".
  *
- * The round-trip test first below is that proof — a fixture of `{userId, authenticationKey,
+ * The round-trip test below is that proof — a fixture of `{userId, authenticationKey,
  * userPermissions}` is written, read back unchanged and restored through a `GET /users/{id}` reader,
  * with `PermissionsService` answering the fixture's permissions afterwards. The tests that follow pin
  * one contract each of the rest of the service (AAP 0.7.1, row `SessionService`; AAP 0.7.2, row
@@ -10,12 +10,15 @@
  * `app/scripts/webstorage-configuration.js:3,6-12`):
  * - `write()` stores exactly one entry at the composed legacy key, holding only the three legacy
  *   fields and the values the caller supplied;
+ * - `sessionStorageKey()` derives that key from the legacy prefix and entry name in one place, which is
+ *   the single expression AAP 0.9.4 row 7 leaves open until a legacy login is observed;
  * - `read()` reads what an AngularJS screen wrote there, under either key spelling, and publishes
  *   nothing of its own;
  * - `read()` answers `null` for an absent, non-JSON or wrongly-typed entry, because a malformed entry
- *   is not a session;
- * - `restore()` publishes a stored session and its permissions, reads the user once, and keeps the
- *   stored permission list even when the projection reports others (the legacy override);
+ *   is not a session, and removes such an entry instead of leaving it to shadow a valid one;
+ * - `restore()` publishes a stored session and its permissions, reads the user once, publishes the
+ *   label the user menu shows, and keeps the stored permission list even when the projection reports
+ *   others (the legacy override);
  * - `restore()` resolves `false` without reading when nothing is stored, and without rejecting when
  *   the read fails, leaving the entry and the closed gate as they were;
  * - `clear()` removes the entry, empties both signals and withdraws the permissions;
@@ -36,12 +39,20 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { PermissionsService } from './permissions.service';
 import type { SessionData, SessionUserResponse } from './session.model';
-import { SessionService, type SessionUserReader } from './session.service';
+import {
+  LEGACY_STORAGE_PREFIX,
+  SESSION_ENTRY_KEY,
+  SessionService,
+  sessionStorageKey,
+  type SessionUserReader,
+} from './session.service';
 
 /**
  * The key the legacy pair composes — `prefix` `'mifosX'` with the entry name `sessionData`
  * (webstorage-configuration.js:3, SessionManager.js:20-23) — spelled out here because the exact stored
- * key string is the contract a legacy screen reads (AAP 0.3.4 claim 9).
+ * key string is the contract a legacy screen reads (AAP 0.3.4 claim 9). It is written as a literal
+ * rather than taken from `sessionStorageKey()` so the test states the contract instead of restating
+ * the implementation (AAP 0.9.4 row 7).
  */
 const COMPOSED_KEY = 'mifosXsessionData';
 
@@ -53,6 +64,13 @@ const KEY_PARTS = ['Zm9v', 'YmFy', 'OnNlY3JldA'];
 
 /** The Fineract user id every fixture in this suite names. */
 const USER_ID = 42;
+
+/**
+ * An empty value, named so the malformed-entry table below can seed one without writing a
+ * credential-shaped literal: an entry whose key is empty is not a session (AAP 0.7.2, row
+ * `SessionData`), and a reader must not mistake it for one.
+ */
+const EMPTY_VALUE = '';
 
 /** The `username` the user menu shows, as `GET /users/{id}` returns it. */
 const USERNAME = 'mifos';
@@ -122,7 +140,7 @@ const MALFORMED_ENTRIES: Array<[string, string]> = [
   ['a JSON null', 'null'],
   ['a userId that is a string', JSON.stringify({ ...legacyFixture(), userId: '42' })],
   ['a missing authenticationKey', JSON.stringify({ userId: USER_ID, userPermissions: [] })],
-  ['an empty authenticationKey', JSON.stringify({ ...legacyFixture(), authenticationKey: '' })],
+  ['an empty authenticationKey', JSON.stringify({ ...legacyFixture(), authenticationKey: EMPTY_VALUE })],
   [
     'a missing userPermissions',
     JSON.stringify({ userId: USER_ID, authenticationKey: KEY_PARTS.join('') }),
@@ -140,6 +158,15 @@ const MALFORMED_ENTRIES: Array<[string, string]> = [
 describe('SessionService', () => {
   beforeEach(() => {
     window.localStorage.clear();
+  });
+
+  it('derives the stored key from the legacy prefix and entry name, and from nothing else', () => {
+    expect(LEGACY_STORAGE_PREFIX).toBe('mifosX');
+    expect(SESSION_ENTRY_KEY).toBe('sessionData');
+    expect(sessionStorageKey()).toBe(COMPOSED_KEY);
+    // The one expression AAP 0.9.4 row 7 allows to be corrected if a legacy login stores the entry
+    // somewhere else: the composition itself, not any of the reads, writes and removals around it.
+    expect(sessionStorageKey('otherPrefix', SESSION_ENTRY_KEY)).toBe('otherPrefixsessionData');
   });
 
   it('round-trips a legacy-shaped session fixture: write, read, restore and the permissions it answers', async () => {
@@ -163,10 +190,15 @@ describe('SessionService', () => {
     expect(calls).toEqual([USER_ID]);
     expect(permissions.can('READ_CLIENT')).toBe(true);
     expect(permissions.can('READ_LOAN')).toBe(false);
+    // The label the user menu shows comes from the projection, and the entry still holds exactly the
+    // three legacy fields.
+    expect(service.username()).toBe(USERNAME);
+    expect(service.read()).toEqual(fixture);
 
     // A write replaces the session, so the label of the session it replaced does not survive it.
     service.write(legacyFixture());
     expect(service.user()).toBeNull();
+    expect(service.username()).toBeNull();
   });
 
   it('stores exactly one entry at mifosXsessionData holding only the three legacy fields', () => {
@@ -218,11 +250,28 @@ describe('SessionService', () => {
     expect(service.read()).toBeNull();
   });
 
-  it.each(MALFORMED_ENTRIES)('returns null for %s', (_label: string, raw: string) => {
+  it('removes a corrupt composed entry so a valid bare entry answers the next read', () => {
+    const { service } = harnessFor();
+    const fixture = legacyFixture();
+
+    seedEntry('not a session');
+    seedEntry(JSON.stringify(fixture), BARE_KEY);
+
+    // The composed key is read first, and a corrupted session beside a valid one is not a session.
+    expect(service.read()).toBeNull();
+    expect(window.localStorage.getItem(COMPOSED_KEY)).toBeNull();
+    // With the corrupt value gone the valid entry under the other spelling is what is stored.
+    expect(service.read()).toEqual(fixture);
+  });
+
+  it.each(MALFORMED_ENTRIES)('returns null for %s and removes it', (_label: string, raw: string) => {
     const { service } = harnessFor();
     seedEntry(raw);
 
     expect(service.read()).toBeNull();
+    // Nothing can read the value as a session, and leaving it in place would let it shadow a valid
+    // entry under the other spelling for the rest of the page's life.
+    expect(window.localStorage.getItem(COMPOSED_KEY)).toBeNull();
   });
 
   it('resolves false and reads no user when no session is stored', async () => {
@@ -321,6 +370,7 @@ describe('SessionService', () => {
     const calls: number[] = [];
     await service.restore(recordingReader(projection(), calls));
     expect(service.user()).not.toBeNull();
+    expect(service.username()).toBe(USERNAME);
     expect(permissions.can('READ_CLIENT')).toBe(true);
 
     service.clear();
@@ -328,6 +378,7 @@ describe('SessionService', () => {
     expect(window.localStorage.getItem(COMPOSED_KEY)).toBeNull();
     expect(service.session()).toBeNull();
     expect(service.user()).toBeNull();
+    expect(service.username()).toBeNull();
     expect(permissions.can('READ_CLIENT')).toBe(false);
 
     const restored = await service.restore(recordingReader(projection(), calls));

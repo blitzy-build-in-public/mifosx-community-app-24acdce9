@@ -1,4 +1,4 @@
-import { DOCUMENT, Injectable, inject, signal, type Signal } from '@angular/core';
+import { DOCUMENT, Injectable, computed, inject, signal, type Signal } from '@angular/core';
 import { firstValueFrom, type Observable } from 'rxjs';
 
 import { PermissionsService } from './permissions.service';
@@ -9,14 +9,14 @@ import type { SessionData, SessionUserResponse } from './session.model';
  * `app/scripts/webstorage-configuration.js:3` — under which both front ends keep the shared session
  * (AAP 0.3.4 claim 9).
  */
-const STORAGE_PREFIX = 'mifosX';
+export const LEGACY_STORAGE_PREFIX = 'mifosX';
 
 /**
  * The entry name the legacy `SessionManager` uses: `webStorage.add("sessionData", {userId,
  * authenticationKey, userPermissions})` at `app/scripts/services/SessionManager.js:20-23`,
  * `webStorage.remove("sessionData")` at :31 and `webStorage.get('sessionData')` at :37.
  */
-const SESSION_ENTRY_KEY = 'sessionData';
+export const SESSION_ENTRY_KEY = 'sessionData';
 
 /**
  * The key the legacy pair actually stores at.
@@ -27,12 +27,42 @@ const SESSION_ENTRY_KEY = 'sessionData';
  * `prefix` constant and store the bare `sessionData` key, and either front end may have written
  * either spelling on the origin the two share during cutover (AAP 0.4.2), so `read()` accepts both —
  * this composed spelling first — rather than losing the login a legacy screen wrote.
+ *
+ * This function is the single place that serialized key is derived (AAP 0.9.4 row 7): the exact key
+ * the bower library produces is an open item of the plan until a legacy login is observed, and if the
+ * observation differs from this composition the correction is this one expression and nothing else,
+ * because every storage read, write and removal below goes through it.
+ *
+ * @param prefix the legacy wrapper's configured prefix; the application always uses the default.
+ * @param entry the legacy entry name; the application always uses the default.
+ * @returns the key the shared session entry is stored under.
  */
-const COMPOSED_ENTRY_KEY = STORAGE_PREFIX + SESSION_ENTRY_KEY;
+export function sessionStorageKey(
+  prefix: string = LEGACY_STORAGE_PREFIX,
+  entry: string = SESSION_ENTRY_KEY,
+): string {
+  return prefix + entry;
+}
 
 /** A JSON object: the only shape a stored session entry may present. */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * A stored entry together with the key it was found under.
+ *
+ * The key travels with the value because `read()` accepts the composed `mifosXsessionData` spelling
+ * and the bare `sessionData` one, and a value that turns out not to be a session has to be removed
+ * from the very key it came from — removing the other spelling instead would leave the corrupt value
+ * in place and drop a valid entry beside it.
+ */
+interface StoredEntry {
+  /** The storage key the entry was read from. */
+  readonly key: string;
+
+  /** The entry's serialized value, still unparsed. */
+  readonly raw: string;
 }
 
 /**
@@ -179,15 +209,31 @@ export class SessionService {
   readonly user: Signal<SessionUserResponse | null> = this.currentUser.asReadonly();
 
   /**
+   * The account name the user menu is labelled with — `username` from `GET /users/{id}`, so `mifos`
+   * after a login as `mifos` — or `null` until a restore has resolved one.
+   *
+   * It is a projection of `user()` rather than a state of its own, so the two cannot disagree, and it
+   * is deliberately not part of the stored entry: `SessionData` keeps exactly the three legacy fields
+   * (AAP 0.7.2, row `SessionData`), and `write()` and `clear()` empty the label with the session it
+   * describes. `core/layout/navbar.component.ts` renders it and `AuthService` re-exposes it.
+   */
+  readonly username: Signal<string | null> = computed(() => this.currentUser()?.username ?? null);
+
+  /**
    * The stored session entry, or `null` when there is no entry or the entry is not a well-formed
    * session (AAP 0.7.1, `read(): SessionData | null`).
    *
-   * This is a pure storage read: it publishes nothing, so a caller can ask what is stored without
-   * putting it into effect — `restore()` is what publishes. The composed `mifosXsessionData` key is
-   * read first and the bare `sessionData` spelling second, because either front end may have written
-   * either (see `COMPOSED_ENTRY_KEY`). A malformed entry under the composed key is reported as `null`
-   * rather than falling through to the other spelling: a partly valid entry beside a valid one is a
-   * corrupted session, not a session.
+   * This is a pure storage read of the entry itself: it publishes nothing, so a caller can ask what is
+   * stored without putting it into effect — `restore()` is what publishes. The composed
+   * `mifosXsessionData` key from `sessionStorageKey()` is read first and the bare `sessionData`
+   * spelling second, because either front end may have written either. A malformed entry under the
+   * composed key is reported as `null` rather than falling through to the other spelling: a partly
+   * valid entry beside a valid one is a corrupted session, not a session.
+   *
+   * An entry that is present but is not a session is removed from the key it was found under, so a
+   * corrupt value cannot shadow a valid entry under the other spelling for the rest of the page's life
+   * and the next login writes over nothing. That removal is the only write a read performs, and it
+   * never touches an entry it could parse.
    */
   read(): SessionData | null {
     const entry = this.readEntry();
@@ -198,14 +244,20 @@ export class SessionService {
 
     let parsed: unknown;
     try {
-      parsed = JSON.parse(entry);
+      parsed = JSON.parse(entry.raw);
     } catch {
-      // Not JSON, so there is no session in it. The entry is left where it is: removing another
-      // release's data is `clear()`'s decision to make, never a read's side effect.
+      // Not JSON, so there is no session in it.
+      this.removeCorruptEntry(entry);
       return null;
     }
 
-    return toSessionData(parsed);
+    const session = toSessionData(parsed);
+
+    if (session === null) {
+      this.removeCorruptEntry(entry);
+    }
+
+    return session;
   }
 
   /**
@@ -341,22 +393,63 @@ export class SessionService {
   }
 
   /**
-   * The raw stored entry: the composed legacy key first, the bare spelling second, and the in-memory
-   * copy when the store cannot be read at all or has refused a write. Every storage exception is
-   * absorbed here, so no caller has to handle one.
+   * The raw stored entry and the key it was found under: the composed legacy key first, the bare
+   * spelling second, and the in-memory copy when the store cannot be read at all or has refused a
+   * write. Every storage exception is absorbed here, so no caller has to handle one.
+   *
+   * The memory copy is reported under the composed key because that is the key it stands in for: it
+   * holds what this instance last failed to store there, so a removal of it has to empty the copy
+   * rather than a storage key.
    */
-  private readEntry(): string | null {
+  private readEntry(): StoredEntry | null {
     const store = this.storageInSync ? this.store() : null;
 
     if (store === null) {
-      return this.memoryEntry;
+      return this.memoryEntry === null ? null : { key: sessionStorageKey(), raw: this.memoryEntry };
     }
 
     try {
-      const composed = store.getItem(COMPOSED_ENTRY_KEY);
-      return composed === null ? store.getItem(SESSION_ENTRY_KEY) : composed;
+      const composedKey = sessionStorageKey();
+      const composed = store.getItem(composedKey);
+
+      if (composed !== null) {
+        return { key: composedKey, raw: composed };
+      }
+
+      const bare = store.getItem(SESSION_ENTRY_KEY);
+      return bare === null ? null : { key: SESSION_ENTRY_KEY, raw: bare };
     } catch {
-      return this.memoryEntry;
+      return this.memoryEntry === null ? null : { key: sessionStorageKey(), raw: this.memoryEntry };
+    }
+  }
+
+  /**
+   * Drops an entry that is present but is not a session, from the key `read()` found it under.
+   *
+   * Only `read()` calls this, and only for a value it could not parse into a `SessionData`: a value
+   * that is not a session serves no caller, and leaving it in place would let it shadow a valid entry
+   * under the other spelling. A store that refuses the removal keeps the value, which nothing can read
+   * as a session anyway, so the refusal is absorbed like every other storage exception here.
+   *
+   * This is the one place the service departs from the legacy behaviour of not touching what it
+   * cannot use (Rule 1 clause 3): the legacy wrapper parses the entry on read and throws, so a corrupt
+   * value breaks its page load, and dropping it is the only recovery. No entry that parses into a
+   * session is ever removed, so no legacy screen loses a login it could have read.
+   */
+  private removeCorruptEntry(entry: StoredEntry): void {
+    if (this.memoryEntry === entry.raw) {
+      this.memoryEntry = null;
+    }
+
+    const store = this.store();
+    if (store === null) {
+      return;
+    }
+
+    try {
+      store.removeItem(entry.key);
+    } catch {
+      // The store refused the removal; the signals stay empty and the next write replaces the value.
     }
   }
 
@@ -370,7 +463,7 @@ export class SessionService {
     }
 
     try {
-      store.setItem(COMPOSED_ENTRY_KEY, entry);
+      store.setItem(sessionStorageKey(), entry);
       this.storageInSync = true;
     } catch {
       // A full or read-only store leaves the memory copy as the session's home for this page.
@@ -388,7 +481,7 @@ export class SessionService {
     }
 
     try {
-      store.removeItem(COMPOSED_ENTRY_KEY);
+      store.removeItem(sessionStorageKey());
       store.removeItem(SESSION_ENTRY_KEY);
       this.storageInSync = true;
     } catch {

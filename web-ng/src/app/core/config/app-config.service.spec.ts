@@ -1,5 +1,6 @@
-import { DOCUMENT } from '@angular/core';
+import { DOCUMENT, signal, type Provider } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { TranslateService } from '@ngx-translate/core';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import type { AppConfig } from './app-config.model';
@@ -7,9 +8,10 @@ import { AppConfigService } from './app-config.service';
 
 /**
  * Contract and behaviour spec for `AppConfigService`: the one request it makes, the three-source
- * precedence it resolves, the values it refuses, the URL composition it owns and the failure text it
- * reports. `load()` is the only method in this boundary that performs a request, so this is the
- * contract test the AAP 0.11.1 `core/config/**` row and AAP 0.14.2 require.
+ * precedence it resolves, the values it refuses, the URL composition it owns, the failure text it
+ * reports and the locale signal every date-bearing payload follows. `load()` is the only method in this
+ * boundary that performs a request, so this is the contract test the AAP 0.11.1 `core/config/**` row and
+ * AAP 0.14.2 require.
  *
  * The request is made with the platform `fetch`, not `HttpClient` — `assets/config.json` is a
  * same-origin static asset that carries no tenant or authorization header and names no Fineract
@@ -117,12 +119,20 @@ interface ConfigHarness {
  * @param search the page URL's query string, as `location.search` reports it
  * @param hash the page URL's fragment, as `location.hash` reports it
  * @param answer what the stubbed `fetch` does when the configuration is requested
+ * @param providers extra providers the case needs, such as a translate service with a language selected
  */
-function createHarness(search = '', hash = '', answer: FetchAnswer = SERVED): ConfigHarness {
+function createHarness(
+  search = '',
+  hash = '',
+  answer: FetchAnswer = SERVED,
+  providers: readonly Provider[] = [],
+): ConfigHarness {
   const fetchMock = vi.fn<typeof fetch>(() => responseFor(answer));
 
   vi.stubGlobal('fetch', fetchMock);
-  TestBed.configureTestingModule({ providers: [{ provide: DOCUMENT, useValue: fakeDocument(search, hash) }] });
+  TestBed.configureTestingModule({
+    providers: [{ provide: DOCUMENT, useValue: fakeDocument(search, hash) }, ...providers],
+  });
 
   return { service: TestBed.inject(AppConfigService), fetchMock };
 }
@@ -281,6 +291,7 @@ describe('AppConfigService', () => {
 
     const incompleteBodies: readonly (readonly [string, Record<string, unknown>, string])[] = [
       ['a missing apiBaseUrl', withoutKey('apiBaseUrl'), "'apiBaseUrl'"],
+      ['a missing apiPath', withoutKey('apiPath'), "'apiPath'"],
       ['a missing tenantId', withoutKey('tenantId'), "'tenantId'"],
       ['a dateFormat other than the Fineract contract', servedRecord({ dateFormat: 'dd/MM/yyyy' }), "'dateFormat'"],
       ['a blank locale', servedRecord({ locale: '   ' }), "'locale'"],
@@ -294,6 +305,11 @@ describe('AppConfigService', () => {
 
       expect(error.message).toContain(CONFIG_URL);
       expect(error.message).toContain(fragment);
+
+      // Nothing was published: the signal stays empty and `config` keeps throwing, so no consumer can
+      // read a configuration the service refused (AAP 0.4.4 decision 5 — no fallback).
+      expect(harness.service.changes()).toBeNull();
+      expect(() => harness.service.config).toThrow(/not resolved yet/);
     });
 
     // A schemeless or relative `apiBaseUrl` used to be accepted and resolved against the
@@ -417,6 +433,31 @@ describe('AppConfigService', () => {
       expect(harness.service.apiUrl(SLASHES_ONLY_RESOURCE_PATH)).toBe(API_ROOT_URL);
     });
 
+    it('passes a query string through untouched and never collapses an inner double slash', async () => {
+      const harness = createHarness();
+
+      await harness.service.load();
+
+      // A query string belongs to the caller's `HttpParams`; `apiUrl()` neither re-encodes nor reorders
+      // what it is handed, and an inner `//` is the caller's path rather than a join it may repair, so
+      // the URL a service sends stays byte-identical to the one the legacy application sent (Rule 1
+      // clause 2).
+      expect(harness.service.apiUrl('clients?limit=-1')).toBe(
+        'https://localhost:8443/fineract-provider/api/v1/clients?limit=-1',
+      );
+      expect(harness.service.apiUrl('loans//42')).toBe('https://localhost:8443/fineract-provider/api/v1/loans//42');
+    });
+
+    it('yields the configured base for a slash-only apiPath', async () => {
+      // A deployment may configure the API root as `/`; the join then has no root segment to add and
+      // the base alone is the composed URL, still without a trailing slash.
+      const harness = createHarness('', '', { kind: 'served', body: servedRecord({ apiPath: '/' }) });
+
+      await harness.service.load();
+
+      expect(harness.service.apiUrl(EMPTY_RESOURCE_PATH)).toBe(SERVED_CONFIG.apiBaseUrl);
+    });
+
     it('throws before the configuration is resolved instead of composing a URL against nothing', () => {
       const harness = createHarness();
 
@@ -439,13 +480,44 @@ describe('AppConfigService', () => {
       expect(error.message).not.toContain('HTTP 200');
     });
 
-    it('reports a 404 with its status and status text', async () => {
-      const harness = createHarness('', '', { kind: 'status', status: 404, statusText: 'Not Found' });
+    const serverStatuses: readonly {
+      readonly label: string;
+      readonly status: number;
+      readonly statusText: string;
+      readonly described: string;
+    }[] = [
+      {
+        label: 'a 404 with its status text',
+        status: 404,
+        statusText: 'Not Found',
+        described: 'HTTP 404 Not Found',
+      },
+      {
+        label: 'a 500 with its status text',
+        status: 500,
+        statusText: 'Server Error',
+        described: 'HTTP 500 Server Error',
+      },
+      {
+        label: 'a status the server sent no status text with',
+        status: 503,
+        statusText: '',
+        described: 'HTTP 503',
+      },
+    ];
+
+    it.each(serverStatuses)('reports $label', async ({ status, statusText, described }) => {
+      const harness = createHarness('', '', { kind: 'status', status, statusText });
 
       const error = await rejectionOf(harness.service.load());
 
       expect(error.message).toContain(CONFIG_URL);
-      expect(error.message).toContain('HTTP 404 Not Found');
+      expect(error.message).toContain(described);
+
+      // No substituted host: the rejection names the file and the fix, never a server the application
+      // could quietly call instead, and the configuration stays unresolved (AAP 0.4.4 decision 5).
+      expect(error.message).not.toContain(SERVED_CONFIG.apiBaseUrl);
+      expect(() => harness.service.config).toThrow(/not resolved yet/);
     });
 
     it('reports a request that reached no server as a network error', async () => {
@@ -456,6 +528,41 @@ describe('AppConfigService', () => {
       expect(error.message).toContain(CONFIG_URL);
       expect(error.message).toContain('a network error');
       expect(error.message).not.toContain('HTTP');
+    });
+  });
+
+  describe('activeLocale', () => {
+    it('throws before load() when no translate service can report a selected language', () => {
+      const harness = createHarness();
+
+      // Neither source exists yet: no bundle is selected and no configuration is resolved, so there is
+      // no locale to report and the read fails exactly as `config` does.
+      expect(() => harness.service.activeLocale()).toThrow(/not resolved yet/);
+    });
+
+    it('reports the configured starting language when no language has been selected', async () => {
+      const harness = createHarness();
+
+      await harness.service.load();
+
+      expect(harness.service.activeLocale()).toBe(SERVED_CONFIG.locale);
+    });
+
+    it('follows the language the translate service has selected', async () => {
+      const selected = signal('fr');
+      // Only `currentLang` is read — the signal the language switchers drive — so the cast is the one
+      // boundary where that member stands in for the service (Rule 1 clause 4).
+      const translate = { currentLang: selected.asReadonly() } as unknown as TranslateService;
+      const harness = createHarness('', '', SERVED, [{ provide: TranslateService, useValue: translate }]);
+
+      await harness.service.load();
+
+      // A language chosen after startup has to reach the next date-bearing payload, because every one
+      // of them carries `dateFormat` with this locale (AAP 0.1.1 date discipline).
+      expect(harness.service.activeLocale()).toBe('fr');
+
+      selected.set('sw');
+      expect(harness.service.activeLocale()).toBe('sw');
     });
   });
 });

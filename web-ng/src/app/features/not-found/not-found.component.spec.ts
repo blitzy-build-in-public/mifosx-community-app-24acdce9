@@ -1,136 +1,183 @@
-import { provideHttpClient } from '@angular/common/http';
-import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { TranslateService } from '@ngx-translate/core';
-import { firstValueFrom } from 'rxjs';
+import {
+  MissingTranslationHandler,
+  TranslateService,
+  provideTranslateService,
+} from '@ngx-translate/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { provideTranslate } from '../../core/i18n/translate.config';
+import {
+  FineractMissingTranslationHandler,
+  humaniseKey,
+} from '../../core/i18n/missing-translation.handler';
 import { NotFoundComponent } from './not-found.component';
 
 /**
- * Behavioural spec for the unknown-path screen — the `**` route's component, and the counterpart of
- * the legacy application's `.otherwise` fallback, which renders `views/errors/404.html` (AAP 0.9.1
- * item 1, AAP 0.7.1, AAP 0.7.4).
+ * Behaviour of the unknown-path screen: the component the router's `**` route selects, and the
+ * message a 404 from a single record endpoint puts in place of the record (AAP 0.7.1, AAP 0.7.4,
+ * AAP 0.9.1 item 1). It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1
+ * ("each screen lands with at least one behavioural spec") and Rule 1 clause 8 (no spec without an
+ * `expect`, nothing boilerplate).
  *
- * It serves three AAP rows: 0.11.1 (unit spec beside every component and service), 0.14.1 ("each
- * screen lands with at least one behavioural spec") and 0.14.2 ("no spec without an `expect`").
+ * Providers, and why each one is there. `provideRouter([])` because the template reaches the client
+ * list through `RouterLink`, which needs a router to resolve a destination; an empty route table is
+ * enough, because these tests assert what the screen renders rather than where the router takes it.
+ * The translate stack because every label resolves through `TranslatePipe`, and
+ * `provideTranslateService()` is the library's own registration of `TranslateService` — declared
+ * without `providedIn` in ngx-translate 18.1.0, so `TranslatePipe`'s non-optional
+ * `inject(TranslateService)` would fail with NG0201 without it. Its omitted slots default to the
+ * no-op loader, so no bundle is ever requested.
  *
- * The screen is exercised through the production i18n stack rather than a stubbed pipe, exactly as
- * `core/i18n/missing-translation.handler.spec.ts` does: `provideTranslate()` wires the loader to the
- * legacy asset path, the bundle arrives over `HttpTestingController`, and the spec fails if the
- * screen issues any other request.
+ * Nothing else is provided, and that is the point: this folder owns no Fineract endpoint, so no HTTP
+ * contract test belongs here and no HTTP backend is installed — `HttpClient`, the auth, permission
+ * and session services are all absent. The screen meanwhile has to render for a signed-out user
+ * before any guard has run, so rendering under an injector that holds no application service is
+ * exactly the property the last test pins.
+ *
+ * The three keys below are the ones `not-found.component.html` resolves; a key changed there
+ * changes here.
  */
 
-/** Key of the card heading the template resolves (AAP 0.7.4 "the not-found message"). */
+/** Translation key of the card heading the template resolves. */
 const HEADING_KEY = 'label.heading.notavailable';
 
-/** Key of the body sentence the template resolves. */
+/** Translation key of the body sentence the template resolves. */
 const BODY_KEY = 'error.msg.resource.not.found';
 
-/** Key of the label of the screen's single destination, the client list. */
+/** Translation key of the label on the screen's single destination, the client list. */
 const ACTION_KEY = 'label.button.clients';
 
 /**
- * Stand-in for the English bundle `app/global-translations/locale-en.json`, with one distinct value
- * per key so the spec can tell which key produced which text.
- *
- * Test input only: this is not an application translation source, it adds no locale file and it is
- * not derived from any translation text the build ships (Rule 1 clause 6).
+ * Stand-in for a shipped bundle, with one distinct value per key so an assertion can tell which key
+ * produced which text. Test input only: it adds no locale file and reproduces no shipped
+ * translation text (Rule 1 clause 6).
  */
-const EN_BUNDLE: Record<string, string> = {
+const SPEC_BUNDLE: Record<string, string> = {
   [HEADING_KEY]: 'Heading from the spec bundle',
   [BODY_KEY]: 'Explanation from the spec bundle.',
   [ACTION_KEY]: 'Return to the client list',
 };
 
 /**
- * Served path of the English bundle, written as a literal rather than composed from the loader
- * constants: a bundle that 404s at a different URL must fail this spec.
+ * What the screen reads when no bundle carries any of its keys: the missing-translation handler's
+ * humanised wording, in template order, and nothing besides it — the three labels concatenated,
+ * which is how the assertion below compares them once whitespace is taken out of the picture.
+ * Composing it from `humaniseKey` rather than writing the words out keeps this the handler's
+ * guarantee rather than a second copy of its output.
  */
-const EN_BUNDLE_URL = 'global-translations/locale-en.json';
+const FALLBACK_COPY: string = [HEADING_KEY, BODY_KEY, ACTION_KEY].map(humaniseKey).join('');
 
 describe('NotFoundComponent', () => {
   let fixture: ComponentFixture<NotFoundComponent>;
 
-  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps the
-  // assertions below type-checked and confines the cast to this single boundary (Rule 1 clause 4).
+  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps every
+  // assertion below type-checked and confines the boundary cast to this line (Rule 1 clause 4).
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
+
+  /** The card body, which holds the screen's whole message. */
+  const panelBody = (): HTMLElement => {
+    const body = host().querySelector<HTMLElement>('.panel .panel-body');
+    if (body === null) {
+      throw new Error('the screen must render its card body');
+    }
+    return body;
+  };
+
+  /**
+   * The card body's text with every whitespace character removed, so the template's own indentation
+   * and the renderer's whitespace collapsing cannot mislead a comparison. The screen's copy is three
+   * labels in three elements, and the assertion that uses this compares the labels themselves.
+   */
+  const renderedCopy = (): string => (panelBody().textContent ?? '').replace(/\s+/g, '');
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [NotFoundComponent],
       providers: [
-        // The template reaches the client list through `RouterLink`, which needs a router to
-        // resolve a destination. An empty route table is enough: this spec asserts what the screen
-        // renders, not where the router takes it.
         provideRouter([]),
-        provideTranslate(),
-        provideHttpClient(),
-        provideHttpClientTesting(),
+        provideTranslateService({
+          lang: 'en',
+          fallbackLang: 'en',
+          missingTranslationHandler: {
+            provide: MissingTranslationHandler,
+            useClass: FineractMissingTranslationHandler,
+          },
+        }),
       ],
     }).compileComponents();
-
-    const translate = TestBed.inject(TranslateService);
-    const httpMock = TestBed.inject(HttpTestingController);
-    const loaded = firstValueFrom(translate.use('en'));
-
-    httpMock.expectOne(EN_BUNDLE_URL).flush(EN_BUNDLE);
-    await loaded;
-    httpMock.verify();
 
     fixture = TestBed.createComponent(NotFoundComponent);
     fixture.detectChanges();
   });
 
-  it('resolves its heading, body and action label through TranslatePipe', () => {
-    const heading = host().querySelector('h4.panel-title');
-    const paragraphs = Array.from(host().querySelectorAll('.panel-body p'));
+  it('renders its message inside the legacy Bootstrap 3 card, with the primary-button destination', () => {
+    const panel = host().querySelector<HTMLElement>('.panel');
+    const body = panelBody();
+    const button = body.querySelector<HTMLElement>('a.btn.btn-primary');
 
-    expect(heading?.textContent?.trim()).toBe(EN_BUNDLE[HEADING_KEY]);
-    expect(paragraphs).toHaveLength(2);
-    expect(paragraphs[0].textContent?.trim()).toBe(EN_BUNDLE[BODY_KEY]);
-    expect(paragraphs[1].querySelector('a')?.textContent?.trim()).toBe(EN_BUNDLE[ACTION_KEY]);
+    expect(panel).not.toBeNull();
+    expect((body.textContent ?? '').trim().length).toBeGreaterThan(0);
+    expect(button?.tagName).toBe('A');
+    expect(button?.classList.contains('btn')).toBe(true);
+    expect(button?.classList.contains('btn-primary')).toBe(true);
   });
 
-  it('never shows a raw translation key to the user', () => {
-    const text = host().textContent ?? '';
+  it('resolves its copy through TranslatePipe', () => {
+    TestBed.inject(TranslateService).setTranslation('en', SPEC_BUNDLE);
+    fixture.detectChanges();
 
-    expect(text).toContain(EN_BUNDLE[HEADING_KEY]);
-    expect(text).toContain(EN_BUNDLE[BODY_KEY]);
-    expect(text).toContain(EN_BUNDLE[ACTION_KEY]);
+    const body = panelBody();
+    const link = body.querySelector<HTMLElement>('a');
+
+    expect(body.textContent).toContain(SPEC_BUNDLE[HEADING_KEY]);
+    expect(body.textContent).toContain(SPEC_BUNDLE[BODY_KEY]);
+    expect(link?.textContent?.trim()).toBe(SPEC_BUNDLE[ACTION_KEY]);
+  });
+
+  it('never shows a raw translation key: an absent key renders as humanised words', () => {
+    const body = panelBody();
+    const heading = body.querySelector<HTMLElement>('h4.panel-title');
+    const paragraphs = Array.from(body.querySelectorAll<HTMLElement>('p'));
+    const text = body.textContent ?? '';
+
+    expect(heading?.textContent?.trim()).toBe(humaniseKey(HEADING_KEY));
+    expect(paragraphs.map((paragraph) => paragraph.textContent?.trim())).toEqual([
+      humaniseKey(BODY_KEY),
+      humaniseKey(ACTION_KEY),
+    ]);
 
     for (const key of [HEADING_KEY, BODY_KEY, ACTION_KEY]) {
       expect(text).not.toContain(key);
     }
   });
 
-  it('offers exactly one destination, and it is the client list', () => {
-    const anchors = Array.from(host().querySelectorAll('a'));
+  it('offers the client list as its only way back', () => {
+    const link = host().querySelector<HTMLAnchorElement>('a');
 
-    expect(anchors).toHaveLength(1);
-    // The template carries no `href` of its own, so a resolved attribute can only come from
-    // `RouterLink` turning `/clients` into a destination.
-    expect(anchors[0].getAttribute('href') ?? '').toMatch(/\/clients$/);
-    expect(anchors[0].getAttribute('href')).not.toBe('#');
+    expect(link).not.toBeNull();
+    // The spec's router uses the default path location, so the destination renders as `/clients`;
+    // the shipped application uses `withHashLocation()`, where the same destination is `#/clients`.
+    expect(link?.getAttribute('href')).toBe('/clients');
   });
 
-  it('keeps the legacy Bootstrap 3 panel composition', () => {
-    const panel = host().querySelector('.panel');
-    const panelBody = panel?.querySelector('.panel-body');
-    const heading = panelBody?.querySelector('h4.panel-title');
-
-    expect(panel).not.toBeNull();
-    expect(panelBody).not.toBeNull();
-    expect(heading?.textContent?.trim()).toBe(EN_BUNDLE[HEADING_KEY]);
-    expect(host().querySelector('a')?.classList.contains('btn')).toBe(true);
-    expect(host().querySelector('a')?.classList.contains('btn-primary')).toBe(true);
-    expect(host().querySelector('a.btn.btn-primary')).not.toBeNull();
-  });
-
-  it('renders no control beyond that single routed destination', () => {
-    expect(host().querySelectorAll('input, select, textarea, button, form')).toHaveLength(0);
+  it('renders exactly one link and no other control', () => {
+    // One message and one way back is the whole surface this screen is allowed (Rule 1 clause 3):
+    // a second destination would be an out-of-scope or a broken affordance.
     expect(host().querySelectorAll('a')).toHaveLength(1);
+    expect(host().querySelectorAll('input, select, textarea, button, form')).toHaveLength(0);
+  });
+
+  it('renders for a signed-out user with no application service provided, and carries no signed-in chrome', () => {
+    // The premise is the provider list above: a router and the library's translate stack, nothing
+    // more — no HttpClient, no auth, permission or session service. Construction and rendering under
+    // that injector is what shows the screen needs none of them, which is what lets an unmatched path
+    // render before any guard has run. A dependency it gained on a service this injector does not
+    // hold would fail at creation, an inlined English label would fail the copy assertion below, and
+    // a second destination would fail the link test above.
+    expect(fixture.componentInstance).toBeInstanceOf(NotFoundComponent);
+    expect(renderedCopy()).toBe(FALLBACK_COPY);
+    // The shell owns the navbar and the breadcrumb; an unknown path renders outside it.
+    expect(host().querySelector('nav, .navbar, .breadcrumb')).toBeNull();
   });
 });
