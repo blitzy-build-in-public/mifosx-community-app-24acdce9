@@ -1,0 +1,75 @@
+<!--
+  New savings application (`#/new_client_saving_application/:clientId`), the first step of workflow W8:
+  the product, the submission date and the optional field officer, above Submit and Cancel (AAP 0.7.2
+  `SavingsApplicationRequest`, AAP 0.7.4 screens, AAP 0.8.2 route).
+
+  Every visual value comes from the global Bootstrap 3 layer `web-ng/src/styles.scss` compiles, so this
+  file carries no style block, style attribute or colour literal (Rule 1 clause 6), and the two field
+  components render their own `.form-group`/`.control-label`/`.form-control`/`.has-error` markup.
+  Captions are the legacy bundle's flat dotted keys, resolved through the translation pipe.
+-->
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-md-12">
+      <div class="panel panel-default">
+        <div class="panel-heading">
+          <h3 class="panel-title">{{ 'label.heading.savingapplication' | translate }}</h3>
+        </div>
+        <div class="panel-body">
+          <!-- Fineract's own failure text, verbatim, above the form, whose values survive it (W7). -->
+          @if (error(); as message) {
+            <div class="alert alert-danger" role="alert">{{ message }}</div>
+          }
+
+          <form [formGroup]="form" (ngSubmit)="submit()">
+            <div class="row">
+              <div class="col-md-6">
+                <app-select-field
+                  inputId="savings-product"
+                  [label]="productLabel()"
+                  [options]="productOptions()"
+                  [control]="form.controls.productId"
+                  [placeholder]="productPlaceholder()"
+                  [required]="true"
+                />
+              </div>
+              <div class="col-md-6">
+                <app-date-field
+                  inputId="savings-submitted-on"
+                  [label]="submittedOnDateLabel()"
+                  [control]="form.controls.submittedOnDate"
+                  [required]="true"
+                />
+              </div>
+            </div>
+
+            <!-- Optional: rendered only when the payload lists officers, and never required. -->
+            @if (hasFieldOfficerOptions()) {
+              <div class="row">
+                <div class="col-md-6">
+                  <app-select-field
+                    inputId="savings-field-officer"
+                    [label]="fieldOfficerLabel()"
+                    [options]="fieldOfficerOptions()"
+                    [control]="form.controls.fieldOfficerId"
+                    [placeholder]="fieldOfficerPlaceholder()"
+                  />
+                </div>
+              </div>
+            }
+
+            <div class="form-group">
+              <button type="button" class="btn btn-default" (click)="cancel()">
+                {{ 'label.button.cancel' | translate }}
+              </button>
+              <!-- Disabled while the post is in flight: one click sends one `POST /savingsaccounts`. -->
+              <button type="submit" class="btn btn-primary" [disabled]="guard.busy()">
+                {{ 'label.button.submit' | translate }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

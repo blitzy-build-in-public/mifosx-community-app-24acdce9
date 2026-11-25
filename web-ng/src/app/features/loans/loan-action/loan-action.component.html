@@ -1,0 +1,232 @@
+<!--
+  The loan lifecycle action screen: one route (`#/loanaccount/:id/:action`), six screens selected by
+  the `:action` segment, and no seventh route for any action (AAP 0.8.2; AAP 0.10.4
+  `in-scope-routes.json`).
+
+  One card per screen, whichever mode is drawn (AAP 0.7.4). The five command views and the
+  not-found message are the only modes this file wraps in its own `.panel` and `.panel-body`;
+  repayment mode renders `app-loan-repayment` directly in the `.col-md-12` grid column, because
+  `LoanRepaymentComponent` draws the whole card itself, with its own `.panel`, heading, body and
+  footer. Wrapping that card here would nest one `.panel` inside another and so double both the
+  shadow and the padding the global layer gives a card, which no legacy action screen shows
+  (Rule 1 clauses 3 and 6). Repayment mode is also the one mode with nothing to wait for: this
+  screen reads no action template for it, so the child stands outside the `loading()` gate, which
+  belongs to the reads the other five modes make.
+
+  Every visual value comes from the global Bootstrap 3 layer compiled in `web-ng/src/styles.scss`, so
+  this file carries no styling of its own (Rule 1 clause 6): `.container-fluid` is the page container,
+  `.panel` the white square surface with its shadow and no border stroke, `.panel-body` the card's
+  13px body, `.panel-title` the 18px/700 card-title treatment, `.form-group`/`.control-label`/`.help-block`
+  the field layout and its invalid state, `.alert.alert-danger` the verbatim Fineract failure, and
+  `.btn.btn-primary` the brand-blue fill with its 1px border and white label.
+
+  What is deliberately absent, because the legacy action screens have none of it and the migration
+  reproduces behaviour rather than improving it (Rule 1 clause 3):
+  - no native `required` attribute on any control: the browser would block a submission Fineract alone
+    decides, so `required` reaches assistive technology as `aria-required` only;
+  - no confirmation step, no success toast and no amount bound;
+  - no payment-type picker on the disbursement form, because the disburse body carries no such member
+    (see the departure recorded on `LoanActionComponent`).
+
+  Wording resolves through `TranslatePipe` from the legacy `label.heading.*` / `label.button.*` /
+  `label.requiredfield` families; the mode-dependent heading and primary button are read from the
+  component's single copy table, and the not-found branch reuses the keys the unknown-path screen and
+  the client-action screen already render. The server's own failure text is the one string rendered
+  untranslated, because workflow W7 compares it character for character (AAP 0.4.4 decision 6).
+-->
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-md-12">
+      @if (mode() === 'repayment') {
+        <app-loan-repayment [loanId]="id()" />
+      } @else {
+        <div class="panel">
+          <div class="panel-body">
+            @if (notFound()) {
+              <div class="text-center text-muted">
+                <h4 class="panel-title">{{ notFoundHeadingKey | translate }}</h4>
+                <p>{{ notFoundMessageKey | translate }}</p>
+              </div>
+            } @else {
+              @if (error(); as failure) {
+                <div class="alert alert-danger" role="alert">{{ failure.message }}</div>
+              }
+
+              @if (!loading()) {
+                @switch (mode()) {
+                  @case ('approve') {
+                    <form [formGroup]="approveForm" (ngSubmit)="submit()" novalidate>
+                      <h4 class="panel-title">{{ headingKey() | translate }}</h4>
+
+                      <app-date-field
+                        [control]="approveForm.controls.approvedOnDate"
+                        [label]="'label.heading.date' | translate"
+                        inputId="approvedOnDate"
+                        [required]="true"
+                      />
+
+                      @let principal = approveForm.controls.approvedLoanAmount;
+                      <div class="form-group" [class.has-error]="principal.invalid && principal.touched">
+                        <label class="control-label" for="approvedLoanAmount">{{
+                          'label.heading.principal' | translate
+                        }}</label>
+                        <input
+                          type="number"
+                          class="form-control"
+                          id="approvedLoanAmount"
+                          formControlName="approvedLoanAmount"
+                          step="any"
+                          aria-required="true"
+                          [attr.aria-invalid]="principal.invalid && principal.touched ? 'true' : null"
+                        />
+                        @if (principal.invalid && principal.touched) {
+                          <span class="help-block">{{ 'label.requiredfield' | translate }}</span>
+                        }
+                      </div>
+
+                      <div class="form-group">
+                        <label class="control-label" for="approveNote">{{
+                          'label.heading.note' | translate
+                        }}</label>
+                        <textarea class="form-control" id="approveNote" rows="2" formControlName="note"></textarea>
+                      </div>
+
+                      <div class="form-group">
+                        <button type="submit" class="btn btn-primary" [disabled]="guard.busy()">
+                          {{ submitKey() | translate }}
+                        </button>
+                        <a class="btn btn-default" [routerLink]="['/viewloanaccount', id()]">{{
+                          cancelKey | translate
+                        }}</a>
+                      </div>
+                    </form>
+                  }
+
+                  @case ('reject') {
+                    <form [formGroup]="rejectForm" (ngSubmit)="submit()" novalidate>
+                      <h4 class="panel-title">{{ headingKey() | translate }}</h4>
+
+                      <app-date-field
+                        [control]="rejectForm.controls.rejectedOnDate"
+                        [label]="'label.heading.date' | translate"
+                        inputId="rejectedOnDate"
+                        [required]="true"
+                      />
+
+                      <div class="form-group">
+                        <label class="control-label" for="rejectNote">{{
+                          'label.heading.note' | translate
+                        }}</label>
+                        <textarea class="form-control" id="rejectNote" rows="2" formControlName="note"></textarea>
+                      </div>
+
+                      <div class="form-group">
+                        <button type="submit" class="btn btn-primary" [disabled]="guard.busy()">
+                          {{ submitKey() | translate }}
+                        </button>
+                        <a class="btn btn-default" [routerLink]="['/viewloanaccount', id()]">{{
+                          cancelKey | translate
+                        }}</a>
+                      </div>
+                    </form>
+                  }
+
+                  @case ('disburse') {
+                    <form [formGroup]="disburseForm" (ngSubmit)="submit()" novalidate>
+                      <h4 class="panel-title">{{ headingKey() | translate }}</h4>
+
+                      <app-date-field
+                        [control]="disburseForm.controls.actualDisbursementDate"
+                        [label]="'label.heading.date' | translate"
+                        inputId="actualDisbursementDate"
+                        [required]="true"
+                      />
+
+                      @let disbursedAmount = disburseForm.controls.transactionAmount;
+                      <div
+                        class="form-group"
+                        [class.has-error]="disbursedAmount.invalid && disbursedAmount.touched"
+                      >
+                        <label class="control-label" for="transactionAmount">{{
+                          'label.heading.amount' | translate
+                        }}</label>
+                        <input
+                          type="number"
+                          class="form-control"
+                          id="transactionAmount"
+                          formControlName="transactionAmount"
+                          step="any"
+                          aria-required="true"
+                          [attr.aria-invalid]="disbursedAmount.invalid && disbursedAmount.touched ? 'true' : null"
+                        />
+                        @if (disbursedAmount.invalid && disbursedAmount.touched) {
+                          <span class="help-block">{{ 'label.requiredfield' | translate }}</span>
+                        }
+                      </div>
+
+                      <div class="form-group">
+                        <label class="control-label" for="disburseNote">{{
+                          'label.heading.note' | translate
+                        }}</label>
+                        <textarea class="form-control" id="disburseNote" rows="2" formControlName="note"></textarea>
+                      </div>
+
+                      <div class="form-group">
+                        <button type="submit" class="btn btn-primary" [disabled]="guard.busy()">
+                          {{ submitKey() | translate }}
+                        </button>
+                        <a class="btn btn-default" [routerLink]="['/viewloanaccount', id()]">{{
+                          cancelKey | translate
+                        }}</a>
+                      </div>
+                    </form>
+                  }
+
+                  @case ('undoapproval') {
+                    <app-empty-state [message]="headingKey() | translate" />
+
+                    <form [formGroup]="undoapprovalForm" (ngSubmit)="submit()" novalidate>
+                      <div class="form-group">
+                        <label class="control-label" for="undoapprovalNote">{{
+                          'label.heading.note' | translate
+                        }}</label>
+                        <textarea
+                          class="form-control"
+                          id="undoapprovalNote"
+                          rows="2"
+                          formControlName="note"
+                        ></textarea>
+                      </div>
+
+                      <div class="form-group">
+                        <button type="submit" class="btn btn-primary" [disabled]="guard.busy()">
+                          {{ submitKey() | translate }}
+                        </button>
+                        <a class="btn btn-default" [routerLink]="['/viewloanaccount', id()]">{{
+                          cancelKey | translate
+                        }}</a>
+                      </div>
+                    </form>
+                  }
+
+                  @case ('undodisbursal') {
+                    <app-empty-state [message]="headingKey() | translate" />
+
+                    <div class="form-group">
+                      <button type="button" class="btn btn-primary" [disabled]="guard.busy()" (click)="submit()">
+                        {{ submitKey() | translate }}
+                      </button>
+                      <a class="btn btn-default" [routerLink]="['/viewloanaccount', id()]">{{
+                        cancelKey | translate
+                      }}</a>
+                    </div>
+                  }
+                }
+              }
+            }
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+</div>

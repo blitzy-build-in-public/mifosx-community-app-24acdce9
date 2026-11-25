@@ -1,0 +1,256 @@
+<!--
+  The loan-charge screen of the individual-loan family — `#/addloancharge/:id`, which adds a charge to
+  a loan, and `#/loanaccountcharge/:id/:action/:chargeId`, which pays or waives one the loan already
+  carries (AAP 0.7.1 row `loans` → `LoanChargeFormComponent`; AAP 0.7.4: "the action screens … are
+  single-purpose forms rendered in the same card, each with a primary submit and a cancel that returns
+  to the record"; AAP 0.8.2 feature routes).
+
+  The card holds exactly three things: the heading, the form and the footer. Each is chosen by the
+  mode the class resolved before the first request — `isAddMode()`, `isPayMode()`, `isWaiveMode()` and
+  `formVisible()`, which in add mode is the legacy `isCollapsed` toggle (the amount and due date stay
+  hidden until a charge is picked) and on the action routes is "the loan's charge has been read".
+
+  Every visual value comes from the global Bootstrap 3 layer `web-ng/src/styles.scss` compiles:
+  `.container-fluid` / `.row` / `.col-md-*` for the page and its grid, `.panel` / `.panel-heading` /
+  `.panel-title` / `.panel-body` / `.panel-footer` for the white square-cornered card with its shadow,
+  `.form-horizontal` / `.form-group` / `.control-label` / `.col-md-*` for the legacy form layout,
+  `.form-control` for the 34px control, `.alert.alert-danger` for the failure banner and
+  `.btn.btn-primary` / `.btn.btn-default` for the footer controls. `span.required` is the legacy
+  asterisk marker (`app/styles-dev/main/components/_content.scss:148`), kept because it is the markup
+  the legacy forms and `client-create` render; the global layer carries no rule for it yet, so it
+  paints a plain asterisk, and a rule there — not a style in this file — is where that is settled.
+  This file therefore carries no stylesheet, no inline style, no colour and no class of its own
+  (Rule 1 clause 6), and it loads no DOM scripting plugin and no UI-widget script: AAP 0.5.1 records
+  that the design system has no JavaScript behaviour, so every interaction here is Angular state.
+
+  `.panel-default` is deliberately not applied, as `features/clients/client-view/profile-card` records
+  for the whole family: `styles.scss` clears Bootstrap's panel border and keeps the heading band
+  white, so that class would only re-introduce a colour the design does not show.
+
+  The ids are the ones the parity harness and the legacy forms already address — `chargeId`, `amount`,
+  `dueDate`, `transactionDate`, `paymentTypeId`, and `cancel` / `save` in the footer
+  (`app/views/loans/addloancharge.html`; `app/views/loans/loanaccountactions.html`) — so both
+  applications offer the same controls and every label's `for` names the control it belongs to.
+
+  Every caption is a key the shipped legacy bundles already carry, read in
+  `app/global-translations/locale-en.json`: `label.heading.addloancharge`, `label.heading.payloancharge`
+  and `label.heading.waiveloancharge` for the heading, `label.heading.notavailable` for the state this
+  screen does not serve; `label.input.charge`, `label.input.amount`, `label.input.dueon`,
+  `label.input.paymentdate`, `label.input.paymenttype` and `label.requiredfield` for the fields;
+  `label.selectcharge` for the charge picker's prompt; `label.button.cancel` and `label.button.submit`
+  for the footer; and `error.msg.resource.not.found` for the not-found message, which is the key the
+  sibling not-found screen renders. No user-facing copy is written into this file, and the registered
+  missing-translation handler humanises any key a locale lacks, so a raw dotted key never reaches the
+  screen (AAP 0.3.1).
+
+  No host, URL, endpoint, credential, authentication key or session field appears here: every path in
+  this file is a router path, and the payloads are assembled and serialised by `LoanService` (Rule 2;
+  Rule 1 clauses 2 and 9; AAP 0.14.1).
+-->
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-md-12">
+      <div class="panel">
+        <div class="panel-heading">
+          <!--
+            One heading per operation, from the key family the legacy controller itself switches on
+            (`scope.title` in `LoanAccountActionsController`). The final branch covers the resolved
+            `'notfound'` state, where the card still needs a title above the message.
+          -->
+          <h3 class="panel-title">
+            @if (isAddMode()) {
+              {{ 'label.heading.addloancharge' | translate }}
+            } @else if (isPayMode()) {
+              {{ 'label.heading.payloancharge' | translate }}
+            } @else if (isWaiveMode()) {
+              {{ 'label.heading.waiveloancharge' | translate }}
+            } @else {
+              {{ 'label.heading.notavailable' | translate }}
+            }
+          </h3>
+        </div>
+
+        <div class="panel-body">
+          <!--
+            Three mutually exclusive states, in the order a viewer meets them. An unserved route, an
+            action this application does not implement or a loan that is not there puts the message in
+            place of the form and offers no action, while the rest of the shell stays usable
+            (AAP 0.7.4 state rules).
+          -->
+          @if (notFound()) {
+            <div class="text-center text-muted">{{ 'error.msg.resource.not.found' | translate }}</div>
+          } @else if (loading()) {
+            <!-- Nothing is painted while the mode's own reads are in flight: the design carries no
+                 spinner, skeleton or placeholder (AAP 0.2.4), so emitting no half-built form is the
+                 faithful state rather than a missing one. `client-accounts` reads the same way. -->
+          } @else {
+            <!--
+              `invalid` is read from the control itself, and as a plain property: `invalid`, `touched`
+              and `dirty` are not signals, so a computed would keep its first verdict. The expression
+              matches the `shared/date-field` and `shared/select-field` rule, so the amount states its
+              error the same way the two fields beside it do.
+            -->
+            @let amountInvalid =
+              form.controls.amount.invalid &&
+              (form.controls.amount.touched || form.controls.amount.dirty);
+
+            <!--
+              Fineract's own failure text, verbatim and unmoved by any prefix: no capitalisation, no
+              translation, no truncation, and the form below keeps every value the user entered
+              (AAP 0.7.4; Rule 1 clause 3 — W7 compares the rendered text with the server's
+              `errors[].defaultUserMessage`). `role="alert"` announces it without moving focus.
+            -->
+            @if (error(); as err) {
+              <div class="alert alert-danger" role="alert">{{ err.message }}</div>
+            }
+
+            <form class="form-horizontal" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+              <fieldset>
+                <!--
+                  The picker is add mode's alone, and it renders the template's own option list in the
+                  server's order — nothing sorted, filtered or relabelled. Its prompt is the legacy
+                  `label.selectcharge` row, which is what lets the field start empty: the class seeds
+                  no charge, so a select that auto-picked its first row would show a charge the form
+                  would not post.
+                -->
+                @if (isAddMode()) {
+                  <div class="form-group">
+                    <label class="control-label col-md-3" for="chargeId">
+                      {{ 'label.input.charge' | translate }}<span class="required">*</span>
+                    </label>
+                    <div class="col-md-6">
+                      <app-select-field
+                        inputId="chargeId"
+                        [control]="form.controls.chargeId"
+                        [options]="chargeOptions()"
+                        [placeholder]="'label.selectcharge' | translate"
+                        [required]="true"
+                      />
+                    </div>
+                  </div>
+                }
+
+                @if (formVisible()) {
+                  <!--
+                    The amount the charge is added for, paid or waived: one control in all three modes,
+                    carrying the `required` validator the legacy form carries and no other. There is
+                    deliberately no `min`, `max`, `step`, `pattern` or native `required` attribute, so
+                    nothing in the browser can block or reshape a value Fineract alone validates, and
+                    the server's message stays the one the user reads (Rule 1 clause 3).
+                  -->
+                  <div class="form-group" [class.has-error]="amountInvalid">
+                    <label class="control-label col-md-3" for="amount">
+                      {{ 'label.input.amount' | translate }}<span class="required">*</span>
+                    </label>
+                    <div class="col-md-6">
+                      <input
+                        id="amount"
+                        name="amount"
+                        type="text"
+                        inputmode="decimal"
+                        class="form-control"
+                        formControlName="amount"
+                        [attr.aria-required]="true"
+                        [attr.aria-invalid]="amountInvalid ? 'true' : null"
+                        [attr.aria-describedby]="amountInvalid ? 'amount-error' : null"
+                      />
+                      @if (amountInvalid) {
+                        <span id="amount-error" class="help-block">
+                          {{ 'label.requiredfield' | translate }}
+                        </span>
+                      }
+                    </div>
+                  </div>
+
+                  <!--
+                    The due date exists only for a charge that falls due on a specified date (the
+                    legacy `chargeTimeType.id == 2` test, which the class resolves in
+                    `dueDateRequired()`), and only on the add form. Its control is the shared native
+                    date field — the registered replacement for the legacy datepicker plugin
+                    (AAP 0.10.5 item 1) — whose value is a `Date` the service formats on the way out.
+                  -->
+                  @if (isAddMode() && dueDateRequired()) {
+                    <div class="form-group">
+                      <label class="control-label col-md-3" for="dueDate">
+                        {{ 'label.input.dueon' | translate }}<span class="required">*</span>
+                      </label>
+                      <div class="col-md-6">
+                        <app-date-field
+                          inputId="dueDate"
+                          [control]="form.controls.dueDate"
+                          [required]="true"
+                        />
+                      </div>
+                    </div>
+                  }
+
+                  <!--
+                    The two payment fields belong to pay mode alone. A waiver books no money movement,
+                    so it renders neither: the server rejects a `transactionDate` or a `paymentTypeId`
+                    beside `?command=waive` (AAP 0.7.2 row `LoanChargeActionRequest`). The payment date
+                    is the legacy pay form's own control, seeded from the charge's due date and
+                    editable; the payment types are the transaction template's list in its order, with
+                    its first entry already selected by the class.
+                  -->
+                  @if (isPayMode()) {
+                    <div class="form-group">
+                      <label class="control-label col-md-3" for="transactionDate">
+                        {{ 'label.input.paymentdate' | translate }}<span class="required">*</span>
+                      </label>
+                      <div class="col-md-6">
+                        <app-date-field
+                          inputId="transactionDate"
+                          [control]="form.controls.transactionDate"
+                          [required]="true"
+                        />
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label class="control-label col-md-3" for="paymentTypeId">
+                        {{ 'label.input.paymenttype' | translate }}
+                      </label>
+                      <div class="col-md-6">
+                        <app-select-field
+                          inputId="paymentTypeId"
+                          [control]="form.controls.paymentTypeId"
+                          [options]="paymentTypes()"
+                          [required]="true"
+                        />
+                      </div>
+                    </div>
+                  }
+                }
+              </fieldset>
+            </form>
+          }
+        </div>
+
+        <!--
+          Cancel returns to the loan record and submits nothing; the primary control posts the one
+          request and disables itself while that request is in flight, because Fineract's action
+          endpoints are not idempotent and one click must send exactly one POST (AAP 0.1.1, 0.14.1;
+          W5's "one POST per action"). Both are the legacy form's own ids (`cancel`, `save`). The
+          button sits in the card's footer rather than inside the form, so `(click)` is what submits
+          it — the form's `(ngSubmit)` covers the keyboard path through the fields — and the class's
+          guard makes the two paths one request.
+        -->
+        @if (!notFound()) {
+          <div class="panel-footer">
+            <a id="cancel" class="btn btn-default" [routerLink]="['/viewloanaccount', loanId]">
+              {{ 'label.button.cancel' | translate }}
+            </a>
+            <button
+              id="save"
+              type="submit"
+              class="btn btn-primary"
+              [disabled]="guard.busy()"
+              (click)="submit()"
+            >
+              {{ 'label.button.submit' | translate }}
+            </button>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+</div>

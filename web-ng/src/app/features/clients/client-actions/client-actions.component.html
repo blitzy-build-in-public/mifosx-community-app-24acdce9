@@ -1,0 +1,241 @@
+<!--
+  The client lifecycle action screen (`#/client/:id/:action`): a single-purpose form for exactly one
+  of the five commands `activate`, `close`, `reject`, `withdraw` and `reactivate`, with the way back
+  to the record and nothing else (AAP 0.7.4 screens; AAP 0.8.2 route `client/:id/:action`).
+
+  Every visual value comes from the global Bootstrap 3 layer `web-ng/src/styles.scss` compiles, so
+  this file carries no style, no colour and no pixel: `.container-fluid` and `.row`/`.col-md-*` are
+  the page and its grid, `.panel`/`.panel-heading`/`.panel-title`/`.panel-body` the white square card
+  with its shadow, its 18px title and its 13px body, `.btn.btn-primary` the brand fill with its white
+  label, `.btn.btn-default` the cancel control and `.alert.alert-danger` the failure banner (Rule 1
+  clause 6; AAP 0.5.2). The fields are the shared `app-date-field` and `app-select-field`, which own
+  their `.form-group`, `.control-label`, `.form-control` and `.has-error` markup; this template adds
+  no `.form-group` of its own, because a second one would nest two groups and break the 34px control
+  metrics the design measures.
+
+  One `@if` branch per command, each with its own `<form>`: the commands post different bodies — a
+  date alone, a date with a reason, or a date on the reactivation form — so a single form would have
+  to render fields the current command does not send. No `novalidate` attribute is written:
+  `FormGroupDirective` adds it, which is exactly what the shared date and select fields rely on to
+  keep the browser from blocking a submission that Fineract alone decides.
+
+  Captions are the legacy bundle's own keys, translated here, and the reason options are the Fineract
+  template's own list in the server's order (AAP 0.7.1; AAP 0.4.4 decision 6). Nothing else is
+  interpolated: no payload, no header, no client id and no reason object reaches the page, and the one
+  untranslated string is Fineract's own failure message (Rule 1 clause 9).
+
+  Deliberately absent, because this screen reproduces the legacy form and the shell owns all chrome:
+  the breadcrumb and the datatable step wizard, its "proceed" button, the transfer, staff, savings and
+  note fields that belong to actions this migration does not deliver, every confirmation step and any
+  success message (Rule 1 clause 3; AAP 0.9.2; AAP 0.10.5).
+-->
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-md-12">
+      <div class="panel panel-default">
+        <!--
+          The command's own title, the legacy step title (`label.anchor.<command>`). It renders as soon
+          as the route names a command — while the gate is still answering — and not at all for an
+          unknown command, which has no action to name.
+        -->
+        @if (headingKey(); as title) {
+          <div class="panel-heading">
+            <h3 class="panel-title">{{ title | translate }}</h3>
+          </div>
+        }
+
+        <div class="panel-body">
+          <!--
+            Unknown `:action` segment: neither the gate nor the command ran, so nothing but this one
+            message renders — no form, no field, no button and no second alert. Both strings are keys
+            the legacy bundles carry, so the missing-translation handler never has to humanise one.
+          -->
+          @if (notFound()) {
+            <div class="alert alert-danger" role="alert">
+              <strong>{{ notFoundHeadingKey | translate }}</strong>{{ ' ' }}<span>{{ notFoundMessageKey | translate }}</span>
+            </div>
+          } @else {
+            <!--
+              The one failure region, above the form: the server's message verbatim, with no pipe
+              because it is Fineract's own text. A failed gate, a failed reason-list read and a rejected
+              command all report here, and the form below keeps every entered value (AAP 0.4.4
+              decision 6; workflow W7).
+            -->
+            @if (error(); as message) {
+              <div class="alert alert-danger" role="alert">{{ message }}</div>
+            }
+
+            <!--
+              The form renders only once the gate — and, for close, reject and withdraw, the reason
+              list — has resolved, so no field is ever enabled against a check that did not answer.
+            -->
+            @if (ready()) {
+              @if (command(); as activeCommand) {
+                @if (activeCommand === 'activate') {
+                  <!-- `POST /clients/{id}?command=activate`: the activation date, and nothing else. -->
+                  <form [formGroup]="activateForm" (ngSubmit)="submit()">
+                    <div class="row">
+                      <div class="col-md-6">
+                        <app-date-field
+                          inputId="client-action-activation-date"
+                          [control]="activateForm.controls.activationDate"
+                          [label]="dateLabelKey() | translate"
+                          [required]="true"
+                        />
+                      </div>
+                    </div>
+                    <div class="row">
+                      <div class="col-md-offset-5 col-md-7">
+                        <a id="cancel" class="btn btn-default" [routerLink]="['/viewclient', clientId()]">{{ cancelKey | translate }}</a>
+                        <button id="save" type="submit" class="btn btn-primary" [disabled]="guard.busy()">
+                          {{ submitKey() | translate }}
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                }
+
+                @if (activeCommand === 'close') {
+                  <!-- `POST /clients/{id}?command=close`: the closure date and the tenant's closure reasons. -->
+                  <form [formGroup]="closeForm" (ngSubmit)="submit()">
+                    <div class="row">
+                      <div class="col-md-6">
+                        <app-date-field
+                          inputId="client-action-date"
+                          [control]="closeForm.controls.closureDate"
+                          [label]="dateLabelKey() | translate"
+                          [required]="true"
+                        />
+                      </div>
+                    </div>
+                    <div class="row">
+                      <div class="col-md-6">
+                        <app-select-field
+                          inputId="client-action-reason"
+                          [control]="closeForm.controls.closureReasonId"
+                          [options]="reasonOptions()"
+                          [placeholder]="reasonPlaceholderKey | translate"
+                          [label]="reasonLabelKey() | translate"
+                          [required]="true"
+                        />
+                      </div>
+                    </div>
+                    <div class="row">
+                      <div class="col-md-offset-5 col-md-7">
+                        <a id="cancel" class="btn btn-default" [routerLink]="['/viewclient', clientId()]">{{ cancelKey | translate }}</a>
+                        <button id="save" type="submit" class="btn btn-primary" [disabled]="guard.busy()">
+                          {{ submitKey() | translate }}
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                }
+
+                @if (activeCommand === 'reject') {
+                  <!-- `POST /clients/{id}?command=reject`: the rejection date and the tenant's rejection reasons. -->
+                  <form [formGroup]="rejectForm" (ngSubmit)="submit()">
+                    <div class="row">
+                      <div class="col-md-6">
+                        <app-date-field
+                          inputId="client-action-date"
+                          [control]="rejectForm.controls.rejectionDate"
+                          [label]="dateLabelKey() | translate"
+                          [required]="true"
+                        />
+                      </div>
+                    </div>
+                    <div class="row">
+                      <div class="col-md-6">
+                        <app-select-field
+                          inputId="client-action-reason"
+                          [control]="rejectForm.controls.rejectionReasonId"
+                          [options]="reasonOptions()"
+                          [placeholder]="reasonPlaceholderKey | translate"
+                          [label]="reasonLabelKey() | translate"
+                          [required]="true"
+                        />
+                      </div>
+                    </div>
+                    <div class="row">
+                      <div class="col-md-offset-5 col-md-7">
+                        <a id="cancel" class="btn btn-default" [routerLink]="['/viewclient', clientId()]">{{ cancelKey | translate }}</a>
+                        <button id="save" type="submit" class="btn btn-primary" [disabled]="guard.busy()">
+                          {{ submitKey() | translate }}
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                }
+
+                @if (activeCommand === 'withdraw') {
+                  <!-- `POST /clients/{id}?command=withdraw`: the withdrawal date and the tenant's withdrawal reasons. -->
+                  <form [formGroup]="withdrawForm" (ngSubmit)="submit()">
+                    <div class="row">
+                      <div class="col-md-6">
+                        <app-date-field
+                          inputId="client-action-date"
+                          [control]="withdrawForm.controls.withdrawalDate"
+                          [label]="dateLabelKey() | translate"
+                          [required]="true"
+                        />
+                      </div>
+                    </div>
+                    <div class="row">
+                      <div class="col-md-6">
+                        <app-select-field
+                          inputId="client-action-reason"
+                          [control]="withdrawForm.controls.withdrawalReasonId"
+                          [options]="reasonOptions()"
+                          [placeholder]="reasonPlaceholderKey | translate"
+                          [label]="reasonLabelKey() | translate"
+                          [required]="true"
+                        />
+                      </div>
+                    </div>
+                    <div class="row">
+                      <div class="col-md-offset-5 col-md-7">
+                        <a id="cancel" class="btn btn-default" [routerLink]="['/viewclient', clientId()]">{{ cancelKey | translate }}</a>
+                        <button id="save" type="submit" class="btn btn-primary" [disabled]="guard.busy()">
+                          {{ submitKey() | translate }}
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                }
+
+                @if (activeCommand === 'reactivate') {
+                  <!--
+                    `POST /clients/{id}?command=reactivate` carries a reactivation date, so this screen
+                    renders the field the legacy form renders under `label.input.reactivationdate`
+                    instead of a confirm-only step: a screen without it would post a body the server
+                    refuses, and the legacy screen offers no such step either (Rule 1 clause 3).
+                  -->
+                  <form [formGroup]="reactivateForm" (ngSubmit)="submit()">
+                    <div class="row">
+                      <div class="col-md-6">
+                        <app-date-field
+                          inputId="client-action-reactivation-date"
+                          [control]="reactivateForm.controls.reactivationDate"
+                          [label]="dateLabelKey() | translate"
+                          [required]="true"
+                        />
+                      </div>
+                    </div>
+                    <div class="row">
+                      <div class="col-md-offset-5 col-md-7">
+                        <a id="cancel" class="btn btn-default" [routerLink]="['/viewclient', clientId()]">{{ cancelKey | translate }}</a>
+                        <button id="save" type="submit" class="btn btn-primary" [disabled]="guard.busy()">
+                          {{ submitKey() | translate }}
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                }
+              }
+            }
+          }
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
