@@ -70,6 +70,13 @@ export class HasPermissionDirective {
       // empty or whitespace-only code names nothing, so the element stays hidden however the
       // permission list is populated. A bare `!` needs no check here — the service answers its empty
       // remainder false — and every other code is the service's decision alone.
+      //
+      // This is the gate's one deliberate difference from legacy, and it is not a regression to be
+      // corrected: legacy trims the code, asks `$rootScope.hasPermission('')`, and shows the element
+      // when that answers false — or, for a holder of `ALL_FUNCTIONS`, answers true and then hides a
+      // bare `!`. Hiding a blank code in every case is what a gate that must fail closed requires, so
+      // Rule 1 clause 3 (match legacy behaviour, do not improve it) yields here to that requirement
+      // rather than the other way round.
       if (code.length > 0 && this.permissions.has(code)) {
         this.renderer.removeStyle(this.host.nativeElement, 'display');
       } else {
