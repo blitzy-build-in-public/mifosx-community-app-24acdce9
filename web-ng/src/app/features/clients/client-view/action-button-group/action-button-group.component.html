@@ -25,7 +25,7 @@
   not a menu that renders nothing, which is the legacy arrangement and the behaviour Rule 1 clause 3
   requires be matched rather than improved.
 -->
-<div class="btn-group">
+<div class="btn-group" role="group">
   <!--
     The entries of the visible row, in the parent's order and with nothing added here: a row the plan
     keeps out of scope cannot appear, because no descriptor names it (AAP 0.10.5 items 5 and 7). The
@@ -49,7 +49,7 @@
     the keyboard leaving the dropdown without the user aiming at the trigger again. Each entry carries
     its own gate, so an entry the user may not use is hidden in place rather than left out.
   -->
-  <div class="btn-group" [class.open]="moreOpen()" (keydown.escape)="closeMore()">
+  <div class="btn-group dropdown" [class.open]="moreOpen()" (keydown.escape)="closeMore()">
     <button type="button" class="btn btn-primary dropdown-toggle" aria-haspopup="true" [attr.aria-expanded]="moreOpen()" (click)="toggleMore()">
       {{ 'label.button.more' | translate }}{{ ' ' }}<span class="caret" aria-hidden="true"></span>
     </button>
