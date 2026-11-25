@@ -21,41 +21,8 @@ import {
   type SelectValue,
 } from '../../../shared/select-field/select-field.component';
 import { createSubmitGuard } from '../../../shared/submit-guard.util';
-import type { ClientActionCommand, ClientActionRequest } from '../client.models';
-import { ClientService } from '../client.service';
-
-/**
- * `Omit` for a union.
- *
- * Applied to a union, a bare `Omit` collapses it to the members every variant shares — for
- * `ClientActionRequest` that is `command` alone — which would let a `close` body be built without its
- * reason. Distributing over each variant keeps `command`, its date and its reason together.
- */
-type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
-
-/**
- * One lifecycle command's body as this screen builds it: the members that command owns and nothing
- * else, with the two date-wire members left out.
- *
- * `ClientActionRequest` declares `dateFormat` and `locale` on every variant, and
- * `ClientService.action` replaces both at the API boundary from the resolved configuration and the
- * active language (`actionWire` spreads its own pair before the command's members). A screen has no
- * business asserting either, so it composes the command's own fields here and the one merge in
- * {@link toActionRequest} puts the pair back, in one place, to satisfy the model.
- */
-type ClientActionFields = DistributiveOmit<ClientActionRequest, 'dateFormat' | 'locale'>;
-
-/**
- * The `dateFormat` and `locale` pair every date-bearing body carries, as the merge below supplies it.
- *
- * `dateFormat` is the contract's one pattern, `'dd MMMM yyyy'`, which `AppConfig.dateFormat` is typed
- * to and never varies, so the literal here cannot disagree with the configuration. `locale` is left
- * empty on purpose: the language a payload carries is the user's selected language, which this
- * component does not own and `ClientService.action` reads from `AppConfigService.activeLocale` for
- * every call, so nothing here claims a language it cannot know (AAP 0.1.1 date discipline; Rule 1
- * clause 2). Neither value reaches the wire: `actionWire` writes both from the configuration.
- */
-const ACTION_DATE_WIRE = { dateFormat: 'dd MMMM yyyy', locale: '' } as const;
+import type { ClientActionCommand } from '../client.models';
+import { ClientService, type ClientActionInput } from '../client.service';
 
 /**
  * The copy one lifecycle command renders, as translation keys of the shipped legacy bundles rather
@@ -194,23 +161,6 @@ function failureMessage(error: unknown): string {
 }
 
 /**
- * Puts a command's own fields back together with the two date-wire members `ClientActionRequest`
- * requires on every variant, which `ClientService.action` then overwrites from the resolved
- * configuration at the boundary.
- *
- * The single place this screen adds the pair, so each command below names only the fields it posts
- * and no branch can send a body shaped for another command: the spread keeps `command` and that
- * command's date and reason, and `ACTION_DATE_WIRE` supplies the two members the model types as
- * required.
- *
- * @param fields the command's own fields, as the form holds them.
- * @returns the body `ClientService.action` accepts.
- */
-function toActionRequest(fields: ClientActionFields): ClientActionRequest {
-  return { ...fields, ...ACTION_DATE_WIRE };
-}
-
-/**
  * The single-purpose form behind one client lifecycle action — `#/client/:id/:action` (AAP 0.8.2;
  * AAP 0.7.1 Features row `clients`).
  *
@@ -235,19 +185,22 @@ function toActionRequest(fields: ClientActionFields): ClientActionRequest {
  * row "Client actions"). `activate` and `reactivate` take no reason and issue no template call.
  *
  * **No URL, no HTTP, no configuration.** The family's `ClientService` composes every path and query
- * parameter and supplies `dateFormat` and `locale`; `DataTableGateService` owns the gate's two calls;
- * `core/http/fineract.interceptor.ts` adds the headers and maps failures. This file therefore holds
- * no URL literal, no HTTP client, no query builder and no configuration read (Rule 1 clauses 2 and 5;
- * AAP 0.14.1). Because a form's default date follows the browser clock (AAP 0.10.5 item 15) and the
- * run date belongs to the harness, it reads no business date either.
+ * parameter and supplies `dateFormat` and `locale` from the resolved configuration and the active
+ * language; `DataTableGateService` owns the gate's two calls; `core/http/fineract.interceptor.ts`
+ * adds the headers and maps failures. This file therefore holds no URL literal, no HTTP client, no
+ * query builder, no configuration read and no date format of its own: a form hands the command's own
+ * fields and the service supplies the pair at the boundary (Rule 1 clauses 2 and 5; AAP 0.7.2 "Date
+ * handling"; AAP 0.14.1). Because a form's default date follows the browser clock (AAP 0.10.5 item
+ * 15) and the run date belongs to the harness, it reads no business date either.
  *
- * **Matching legacy rather than improving it.** The only validators are the ones the server enforces
- * on these commands — an action date, and a reason where the command takes one — so a body is never
- * blocked by a rule Fineract does not state (Rule 1 clause 3; AAP 0.4.4 decision 6). The server's own
- * message is rendered verbatim, the entered values survive a failure, and the screen offers no note
- * field, no confirmation dialogue, no success toast and no client summary, because the legacy screen
- * offers none. The one registered difference is the native date input the shared `DateField` renders
- * in place of the jQuery datepicker (AAP 0.10.5 item 1).
+ * **Matching legacy rather than improving it.** The only validator is the action date the server
+ * requires: the reason is posted as chosen — including none at all — exactly as legacy's unvalidated
+ * reason select posts it, and Fineract's own message is what reaches the user (Rule 1 clause 3;
+ * AAP 0.7.4). No body is blocked by a rule Fineract does not state (AAP 0.4.4 decision 6). The
+ * server's own message is rendered verbatim, the entered values survive a failure, and the screen
+ * offers no note field, no confirmation dialogue, no success toast and no client summary, because the
+ * legacy screen offers none. The one registered difference is the native date input the shared
+ * `DateField` renders in place of the jQuery datepicker (AAP 0.10.5 item 1).
  *
  * **One request per click.** Every submit goes through `shared/submit-guard.util.ts`, whose `busy`
  * signal disables the primary button while the call is in flight, so a double click posts once — the
@@ -373,34 +326,32 @@ export class ClientActionsComponent {
    * The closure form: `POST /clients/{id}?command=close`.
    *
    * Its date starts empty, because AAP 0.10.5 item 15's browser-clock defaults name an activation
-   * date and not a closure, and its reason id is the tenant's configured one the select renders.
+   * date and not a closure, and the date is the form's only validated control, because the server
+   * requires it. The reason id is the tenant's configured one the select renders and carries no
+   * validator, so whatever is chosen — including nothing — is posted and Fineract's own message is
+   * what reaches the screen, exactly as legacy behaves (Rule 1 clause 3; AAP 0.7.4).
    */
   readonly closeForm = new FormGroup({
     closureDate: new FormControl<Date | null>(null, { validators: [Validators.required] }),
-    closureReasonId: new FormControl<SelectValue | null>(null, {
-      validators: [Validators.required],
-    }),
+    closureReasonId: new FormControl<SelectValue | null>(null),
   });
 
   /**
-   * The rejection form: `POST /clients/{id}?command=reject`, its date empty and its reason required.
+   * The rejection form: `POST /clients/{id}?command=reject`, its date empty and required by the
+   * server, its reason posted as chosen with no validator of this form's own.
    */
   readonly rejectForm = new FormGroup({
     rejectionDate: new FormControl<Date | null>(null, { validators: [Validators.required] }),
-    rejectionReasonId: new FormControl<SelectValue | null>(null, {
-      validators: [Validators.required],
-    }),
+    rejectionReasonId: new FormControl<SelectValue | null>(null),
   });
 
   /**
-   * The withdrawal form: `POST /clients/{id}?command=withdraw`, its date empty and its reason
-   * required.
+   * The withdrawal form: `POST /clients/{id}?command=withdraw`, its date empty and required by the
+   * server, its reason posted as chosen with no validator of this form's own.
    */
   readonly withdrawForm = new FormGroup({
     withdrawalDate: new FormControl<Date | null>(null, { validators: [Validators.required] }),
-    withdrawalReasonId: new FormControl<SelectValue | null>(null, {
-      validators: [Validators.required],
-    }),
+    withdrawalReasonId: new FormControl<SelectValue | null>(null),
   });
 
   /**
@@ -470,9 +421,11 @@ export class ClientActionsComponent {
    *
    * It does nothing until the screen is ready, marks the current form's controls as touched so an
    * empty field shows the help block the shared fields render, and returns before issuing a request
-   * when the form is invalid: the server would refuse a body missing what it requires, and no request
-   * legacy would not make is added on the way (Rule 1 clause 3). Otherwise it hands the command's own
-   * fields to {@link send}, which formats nothing and adds no date format of its own.
+   * when the form is invalid. Only the action date carries a validator, because only the date is
+   * something Fineract states and legacy blocks on; the reason travels as the user chose it, including
+   * none, and the server's own refusal is what reaches the screen (Rule 1 clause 3; AAP 0.7.4).
+   * Otherwise it hands the command's own fields to {@link send}, which formats nothing and adds no
+   * date format of its own.
    */
   submit(): void {
     const command = this.command();
@@ -505,17 +458,14 @@ export class ClientActionsComponent {
 
         const closureReasonId = this.closeForm.controls.closureReasonId.value;
 
-        // The select writes its option's id, which the reason list sends as a number; this guard
-        // keeps a value of another type out of a body field typed as an id. A required reason can
-        // only be a chosen option, so nothing valid is refused here.
-        if (typeof closureReasonId !== 'number') {
-          return;
-        }
-
+        // The select writes its option's id, which the reason list sends as a number. A reason is
+        // spread into the body only when one was chosen, so a tenant whose narration list is empty
+        // still posts the action and Fineract's own refusal reaches the screen, as legacy's
+        // unvalidated select allows (Rule 1 clause 3; AAP 0.7.4).
         this.send('close', {
           command: 'close',
           closureDate: this.closeForm.controls.closureDate.value,
-          closureReasonId,
+          ...(typeof closureReasonId === 'number' ? { closureReasonId } : {}),
         });
         return;
       }
@@ -529,14 +479,12 @@ export class ClientActionsComponent {
 
         const rejectionReasonId = this.rejectForm.controls.rejectionReasonId.value;
 
-        if (typeof rejectionReasonId !== 'number') {
-          return;
-        }
-
+        // Conditional for the same reason as the closure branch above: no chosen reason means no
+        // member, never a placeholder `null` id the server would read as a choice.
         this.send('reject', {
           command: 'reject',
           rejectionDate: this.rejectForm.controls.rejectionDate.value,
-          rejectionReasonId,
+          ...(typeof rejectionReasonId === 'number' ? { rejectionReasonId } : {}),
         });
         return;
       }
@@ -550,14 +498,11 @@ export class ClientActionsComponent {
 
         const withdrawalReasonId = this.withdrawForm.controls.withdrawalReasonId.value;
 
-        if (typeof withdrawalReasonId !== 'number') {
-          return;
-        }
-
+        // Conditional for the same reason as the closure branch above.
         this.send('withdraw', {
           command: 'withdraw',
           withdrawalDate: this.withdrawForm.controls.withdrawalDate.value,
-          withdrawalReasonId,
+          ...(typeof withdrawalReasonId === 'number' ? { withdrawalReasonId } : {}),
         });
         return;
       }
@@ -643,21 +588,23 @@ export class ClientActionsComponent {
    * Posts one command through the submit guard and returns to the client record on success.
    *
    * The guarded callback clears the previous failure so a retry does not show a stale message while
-   * it is in flight, wraps the command's own fields with the two date-wire members the model requires
-   * ({@link toActionRequest}), and awaits the one POST. On success the screen navigates to
-   * `#/viewclient/:id` with the route's own client id, as the legacy controller does. On failure it
-   * records the mapped message verbatim and keeps every entered value, so the user can correct the
-   * field the server named; the guard releases the button in either outcome.
+   * it is in flight, hands the command's own fields to `ClientService.action`, which supplies
+   * `dateFormat` and `locale` from the configuration at the boundary, and awaits the one POST. On
+   * success the screen navigates to `#/viewclient/:id` with the route's own client id, as the legacy
+   * controller does. On failure it records the mapped message verbatim and keeps every entered value,
+   * so the user can correct the field the server named; the guard releases the button in either
+   * outcome.
    *
    * @param command the command being posted, which is the one the body describes.
-   * @param fields that command's own fields, as its form holds them.
+   * @param fields that command's own fields, as its form holds them; the date-format pair is not one
+   * of them, because the service adds it from the configuration.
    */
-  private send(command: ClientActionCommand, fields: ClientActionFields): void {
+  private send(command: ClientActionCommand, fields: ClientActionInput): void {
     void this.guard.runOnce(async (): Promise<void> => {
       this.error.set(null);
 
       try {
-        await firstValueFrom(this.client.action(this.clientId(), command, toActionRequest(fields)));
+        await firstValueFrom(this.client.action(this.clientId(), command, fields));
 
         await this.router.navigate(['/viewclient', this.clientId()]);
       } catch (error: unknown) {

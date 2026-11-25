@@ -32,10 +32,11 @@ const NO_PERMISSIONS: readonly string[] = Object.freeze([]);
  * entries, the action buttons and the route guard all ask it, so the template-side gate and the
  * guard cannot disagree about what a permission code means (AAP 0.1.1).
  *
- * `AuthService` owns the list: `login()` hands over the `permissions` array of Fineract's
- * `POST /authentication` response, the session restore hands over the `GET /users/{id}` projection,
- * and logout or a 401 response clears it. Nothing else sets it, and no other copy of the permission
- * list is kept in the application.
+ * `SessionService` owns the hand-over: `restore()` publishes the stored `userPermissions` list (the
+ * one Fineract returned to the login, which wins over whatever the `GET /users/{id}` projection
+ * reports, as it does in legacy) through `setPermissions()`, and `SessionService.clear()` — driven
+ * by a logout and by a 401 response — withdraws it through `clear()`. Nothing else sets it, and no
+ * other copy of the permission list is kept in the application.
  *
  * The legacy algebra is reproduced step for step (AAP 0.3.4 claim 12, the `has-permission` directive
  * at `app/scripts/directives/HasPermissionDirective.js:5-27` and the `$rootScope.hasPermission`
@@ -73,9 +74,10 @@ export class PermissionsService {
   readonly permissions: Signal<readonly string[]> = this.granted.asReadonly();
 
   /**
-   * Replaces the permission list with the one the authentication response carries and marks the
-   * session as present. This is the seam `AuthService.login()` drives after
-   * `POST /authentication`, and the session restore drives after `GET /users/{id}`.
+   * Replaces the permission list and marks the session as present. `SessionService.restore()` is its
+   * only caller and calls it once per restore with the stored `userPermissions` list — the list the
+   * `POST /authentication` response supplied at login, never the `GET /users/{id}` projection — so a
+   * login reaches this seam only through the restore that follows it.
    *
    * The list is copied and frozen rather than kept by reference, so neither the caller's array nor a
    * reader of `permissions()` can change what the gate answers, and a second call replaces the list
@@ -119,8 +121,10 @@ export class PermissionsService {
       return true;
     }
 
-    // A blank code names no permission, and nothing else can grant it — legacy's
-    // `permission && permission != ""` guard.
+    // A blank code names no permission. The wildcard has already answered, so this test decides only
+    // the remaining case — a signed-in user without `ALL_FUNCTIONS`, whose blank code is denied
+    // rather than matched against the list. Legacy's `permission && permission != ""` guard runs in
+    // that same position, after its own wildcard branch has had its chance to answer.
     if (code.length === 0) {
       return false;
     }

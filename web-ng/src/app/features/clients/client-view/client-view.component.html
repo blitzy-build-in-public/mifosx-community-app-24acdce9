@@ -1,0 +1,154 @@
+<!--
+  The individual client record (`#/viewclient/:id`): the record header, the two-tab strip, the
+  joined action row, the tab body and the right-hand profile card (AAP 0.7.4 "Client view
+  (`#/viewclient/:id`)"; AAP 0.8.2 feature route `viewclient/:id`; Figma file
+  `DKm5TBFbXypfqyx4xUdhBw`, flow "Sign in and open a client record", step 3 of 3, screen `1:4`).
+
+  Every visual value comes from the global Bootstrap 3 layer `web-ng/src/styles.scss` compiles, so
+  this file carries no style, no colour and no pixel: `.container-fluid` and `.row`/`.col-md-*` are
+  the page and its grid, `.panel`/`.panel-body` the white square record card with its shadow,
+  `.btn-group > .btn` the design's joined action row, `.dropdown-menu` with the `.open` class the
+  `More` menu (Bootstrap's own plugin needs jQuery, AAP 0.5.2), `.nav-tabs` the strip,
+  `.alert.alert-danger` the failure and not-found banners, and `.fa` the Font Awesome 4 glyphs
+  (Rule 1 clause 6; AAP 0.5.2). The blocks the record composes — `app-record-header`,
+  `app-tab-strip`, `app-client-summary`, `app-client-accounts`, `app-client-identifiers` and
+  `app-profile-card` — own their own markup and take the loaded record or its id as an input.
+
+  Four states, in the order a viewer meets them. While the record read is outstanding nothing is
+  painted: the design carries no spinner, skeleton or placeholder (AAP 0.2.4). A 404, or a route
+  with no id, paints the not-found message in place of the record and leaves the shell usable. Any
+  other 4xx paints Fineract's own message verbatim above a record that stays usable. A 5xx or
+  transport failure paints nothing here, because the interceptor has already raised exactly one
+  notification for it (AAP 0.7.4; AAP 0.4.2).
+
+  Nothing on this screen posts anything: the record read is the screen's one request, and every
+  action is a `routerLink` to the route that serves it, gated by `HasPermissionDirective` on the
+  permission legacy's own `clientStatus.js` gives that action (Rule 1 clauses 2, 3 and 5). No
+  client id, record body, message or credential is interpolated beyond the ids the routes need
+  (Rule 1 clause 9).
+
+  Every action href and both tab inputs bind `clientId()`, the id the URL names now, because the
+  router reuses this component when the URL moves from one `#/viewclient/{id}` to another: the
+  component resets and re-reads on each route emission, so the links can never point at the client
+  the screen has moved away from.
+-->
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-md-12">
+      @if (loading()) {
+        <!-- Nothing yet: the record is not half-painted and no empty state is claimed. -->
+      } @else if (notFound()) {
+        <!--
+          No such client: the message replaces the record entirely, with no card, no tab strip and
+          no action row, so no control is offered against a record that was never read. Both strings
+          are keys the shipped legacy bundles carry, so the missing-translation handler never has to
+          humanise one.
+        -->
+        <div class="alert alert-danger" role="alert">
+          <strong>{{ notFoundHeadingKey | translate }}</strong>{{ ' ' }}<span>{{ notFoundMessageKey | translate }}</span>
+        </div>
+      } @else {
+        <!--
+          The one failure this screen renders itself: a 4xx other than 404, in the server's own
+          words and with no pipe, because it is Fineract's text and not a key. It stands outside the
+          record branch because a read that was refused leaves no record to paint, and its message
+          is still what the user must read (AAP 0.7.4; workflow W7's rule).
+        -->
+        @if (clientError(); as failure) {
+          <div class="alert alert-danger" role="alert">{{ failure.message }}</div>
+        }
+
+        @if (client(); as record) {
+          <div class="panel">
+            <div class="panel-body">
+              <!-- The record's head: the status indicator, the name and the three metadata runs. -->
+              <app-record-header [client]="record" />
+
+              <!-- The two in-scope tabs, and no others (AAP 0.10.5 item 6). -->
+              <app-tab-strip [tabs]="tabs()" [activeId]="activeTabId()" (tabChange)="selectTab($event)" />
+
+              <div class="row">
+                <div class="col-md-12">
+                  <!--
+                    The design's joined action row: one `.btn-group` of `btn-primary` links, square
+                    ended and separated by a 1px rule drawn by the stylesheet. Each link is gated on
+                    the code legacy's own record gates that action on, so an operator sees exactly
+                    the actions their permissions allow and the server would accept. `Edit`,
+                    `New Loan`, `New Saving` and `Close` sit in the group and the four lifecycle
+                    commands sit in the `More` menu, which is the arrangement AAP 0.7.4 records.
+                    Client charges, transfer, staff assignment, signature and avatar controls are
+                    deliberately absent: they belong to out-of-scope migration units (AAP 0.10.5
+                    items 5 and 7).
+                  -->
+                  <div class="btn-group">
+                    <a class="btn btn-primary" [routerLink]="['/editclient', clientId()]" [hasPermission]="editPermission">
+                      <i class="fa fa-edit" aria-hidden="true"></i>{{ ' ' }}{{ 'label.button.edit' | translate }}
+                    </a>
+                    <a class="btn btn-primary" [routerLink]="['/newclientloanaccount', clientId()]" [hasPermission]="newLoanPermission">
+                      <i class="fa fa-plus" aria-hidden="true"></i>{{ ' ' }}{{ 'label.button.newloan' | translate }}
+                    </a>
+                    <a class="btn btn-primary" [routerLink]="['/new_client_saving_application', clientId()]" [hasPermission]="newSavingPermission">
+                      <i class="fa fa-plus" aria-hidden="true"></i>{{ ' ' }}{{ 'label.button.newsaving' | translate }}
+                    </a>
+                    <a class="btn btn-primary" [routerLink]="['/client', clientId(), 'close']" [hasPermission]="closePermission">
+                      <i class="fa fa-times-circle-o" aria-hidden="true"></i>{{ ' ' }}{{ 'label.button.close' | translate }}
+                    </a>
+                    <!--
+                      The `More` menu: opened by the `.open` class bound to the component's signal.
+                      The list is always rendered and Bootstrap's own rule keeps it hidden until the
+                      class is set, so the menu needs no conditional of its own. Each entry carries
+                      its own gate, so a user holding none of these codes opens an empty menu rather
+                      than a control that would be refused.
+                    -->
+                    <div class="btn-group" [class.open]="moreOpen()" (keydown.escape)="closeMore()">
+                      <button type="button" class="btn btn-primary dropdown-toggle" aria-haspopup="true" [attr.aria-expanded]="moreOpen()" (click)="toggleMore()">
+                        {{ 'label.button.more' | translate }}{{ ' ' }}<span class="caret" aria-hidden="true"></span>
+                      </button>
+                      <ul class="dropdown-menu" role="menu">
+                        <li role="none">
+                          <a role="menuitem" [routerLink]="['/client', clientId(), 'activate']" [hasPermission]="activatePermission">{{ 'label.button.activate' | translate }}</a>
+                        </li>
+                        <li role="none">
+                          <a role="menuitem" [routerLink]="['/client', clientId(), 'reject']" [hasPermission]="rejectPermission">{{ 'label.button.reject' | translate }}</a>
+                        </li>
+                        <li role="none">
+                          <a role="menuitem" [routerLink]="['/client', clientId(), 'withdraw']" [hasPermission]="withdrawPermission">{{ 'label.button.withdraw' | translate }}</a>
+                        </li>
+                        <li role="none">
+                          <a role="menuitem" [routerLink]="['/client', clientId(), 'reactivate']" [hasPermission]="reactivatePermission">{{ 'label.button.reactivate' | translate }}</a>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!--
+                The tab body: the `General` tab's summary and accounts table on the left, the
+                profile card on the right, as the design lays the record out. The accounts section
+                heading is the caller's, because `app-client-accounts` renders the card body alone.
+                Switching tabs paints the other section and leaves the record header, the strip and
+                the action row in place.
+              -->
+              <div class="row">
+                <div class="col-md-9">
+                  @if (activeTabId() === 'general') {
+                    <app-client-summary [client]="record" />
+                    <hr />
+                    <h4>{{ accountsHeadingKey | translate }}</h4>
+                    <app-client-accounts [clientId]="clientId()" />
+                  } @else {
+                    <app-client-identifiers [clientId]="clientId()" />
+                  }
+                </div>
+                <div class="col-md-3">
+                  <app-profile-card [displayName]="record.displayName" [fields]="profileFields()" />
+                </div>
+              </div>
+            </div>
+          </div>
+        }
+      }
+    </div>
+  </div>
+</div>

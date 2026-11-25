@@ -1,5 +1,6 @@
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { DISPLAY_DATE_FORMAT, fromFineractDate } from '../../../../shared/date-format.util';
 import type { Client } from '../../client.models';
@@ -13,8 +14,13 @@ import type { Client } from '../../client.models';
  * than restating the members.
  */
 export interface ClientSummaryRow {
-  /** Row label, rendered in the record's bold key column. */
-  readonly label: string;
+  /**
+   * The legacy translation key the row's key cell binds, resolved by the template through
+   * `TranslatePipe` so the block follows the language switcher (AAP 0.1.1 requirement 1;
+   * Rule 1 clause 6). The wording itself never lives in this file: it is read in place from the
+   * shipped `app/global-translations/locale-*.json` bundle.
+   */
+  readonly labelKey: string;
 
   /**
    * Row value as plain display text. Empty when the payload carries no value for the row's
@@ -51,7 +57,7 @@ export interface ClientSummaryRow {
  */
 @Component({
   selector: 'app-client-summary',
-  imports: [DatePipe],
+  imports: [DatePipe, TranslatePipe],
   templateUrl: './client-summary.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -86,27 +92,32 @@ export class ClientSummaryComponent {
   );
 
   /**
-   * The client's text rows, in the record's fixed order:
+   * The client's text rows, in the record's fixed order, each holding the legacy key its label
+   * resolves from:
    *
-   * 1. `Client Number` — `Client.accountNo`, the zero-padded number printed verbatim;
-   * 2. `External ID` — `Client.externalId`, empty when the bank assigned none;
-   * 3. `Office` — `Client.officeName`;
-   * 4. `Staff` — `Client.staffName`, empty when the client has no loan officer.
+   * 1. `label.heading.clientno` — `Client.accountNo`, the zero-padded number printed verbatim;
+   * 2. `label.input.externalid` — `Client.externalId`, empty when the bank assigned none;
+   * 3. `label.heading.office` — `Client.officeName`;
+   * 4. `label.input.staff` — `Client.staffName`, empty when the client has no loan officer.
    *
    * Four rows and no more: the activation date is the fifth row and the template renders it
    * through `DatePipe`, and no derived row (an age, a tenure) is added, because a computed value
    * the legacy record does not show would be the improvement this migration must not make
    * (AAP 0.7.4; Rule 1 clause 3). A field the payload omits yields `''`, never a dash, `'N/A'`
    * or a translated stand-in.
+   *
+   * Every key is one the shipped legacy bundle carries, so the block reads the same wording the
+   * legacy record shows and translates with the rest of the screen when the language switcher
+   * changes the active language (AAP 0.1.1 requirement 1; Rule 1 clause 6).
    */
   readonly rows = computed<readonly ClientSummaryRow[]>(() => {
     const client = this.client();
 
     return [
-      { label: 'Client Number', value: client.accountNo },
-      { label: 'External ID', value: client.externalId ?? '' },
-      { label: 'Office', value: client.officeName },
-      { label: 'Staff', value: client.staffName ?? '' },
+      { labelKey: 'label.heading.clientno', value: client.accountNo },
+      { labelKey: 'label.input.externalid', value: client.externalId ?? '' },
+      { labelKey: 'label.heading.office', value: client.officeName },
+      { labelKey: 'label.input.staff', value: client.staffName ?? '' },
     ];
   });
 }

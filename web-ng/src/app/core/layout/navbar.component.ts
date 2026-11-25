@@ -4,6 +4,7 @@ import {
   ElementRef,
   computed,
   inject,
+  input,
   signal,
   viewChild,
   type Signal,
@@ -11,16 +12,18 @@ import {
 import { Router, RouterLink } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
+import { toDisplayableFailure } from '../../core/http/api-error';
 import { HasPermissionDirective } from '../../shared/has-permission.directive';
 import { AuthService } from '../auth/auth.service';
 import { AVAILABLE_LANGS, FALLBACK_LANG } from '../i18n/translate.config';
+import { NotificationService } from '../notifications/notification.service';
 import { GlobalSearchComponent, type GlobalSearchSubmission } from './global-search.component';
 
 /**
  * The signed-in navigation bar: the `Navbar` row of the component inventory (AAP 0.2.3), part of
  * `core/layout` (AAP 0.7.1) and the chrome above the clients list of the "Sign in and open a client
  * record" flow (Figma node `1:3`, file `DKm5TBFbXypfqyx4xUdhBw`; AAP 0.7.4). The shell renders it
- * as `<app-navbar />` above its breadcrumb and its `<router-outlet>`.
+ * as `<app-navbar [userName]="…" />` above its breadcrumb and its `<router-outlet>`.
  *
  * **What it renders, and nothing besides.** The brand lockup, the one in-scope destination
  * ("Clients"), the global search, the language switcher and the user menu carrying sign-out. Every
@@ -72,6 +75,13 @@ export class NavbarComponent {
   private readonly router = inject(Router);
 
   /**
+   * The application's single user-facing channel, used for the one failure this component can
+   * suffer — a navigation the router refuses. It issues no request and holds no Fineract concern, so
+   * the navbar still reaches no backend and composes no URL (Rule 1 clause 5).
+   */
+  private readonly notifications = inject(NotificationService);
+
+  /**
    * The permission the "Clients" destination requires, which
    * `features/clients/clients.routes.ts` declares as its group's `data.permission`.
    *
@@ -100,6 +110,31 @@ export class NavbarComponent {
    * and the permission list are deliberately not exposed to the template (Rule 1 clause 9).
    */
   readonly username: Signal<string | null> = this.auth.username;
+
+  /**
+   * The account name the signed-in shell hands in, when it has one of its own (AAP 0.7.1's
+   * `ShellComponent` input chain: the shell's optional `userName` input reaches this label through
+   * {@link displayName}).
+   *
+   * Optional and `null` by default, so the navbar keeps working when nothing supplies it — the state
+   * `app.routes.ts` produces, because it renders the shell without binding the shell's own optional
+   * `userName`. A name supplied here wins over the session projection, which lets the host label the
+   * menu for an account whose `GET /users/{id}` projection has not resolved yet.
+   */
+  readonly userName = input<string | null>(null);
+
+  /**
+   * The text the user menu is labelled with: the {@link userName} input when the shell supplied one,
+   * and the authenticated account name {@link username} otherwise — `mifos` after a login as `mifos`,
+   * the value legacy printed from `currentSession.user.name` in the same place (AAP 0.7.4).
+   *
+   * It is `null` only when no name was supplied and no session restore has resolved a projection, and
+   * it stays the session's own label thereafter: the authentication key, the session object and the
+   * permission list are never exposed to the template (Rule 1 clause 9).
+   */
+  readonly displayName: Signal<string | null> = computed(
+    (): string | null => this.userName() ?? this.username(),
+  );
 
   /**
    * The active language, for the native `<select>` the switcher renders.
@@ -201,9 +236,13 @@ export class NavbarComponent {
    */
   onSearch(submission: GlobalSearchSubmission): void {
     this.closeUserMenu();
-    void this.router.navigate(['/search', submission.query], {
-      queryParams: { scope: submission.scope },
-    });
+    // Settled rather than dropped: a navigation the router refuses would otherwise be an unhandled
+    // rejection, and the user is told the results screen did not open instead of being left in place.
+    void this.router
+      .navigate(['/search', submission.query], { queryParams: { scope: submission.scope } })
+      .catch((cause: unknown) => {
+        this.notifications.show('error', toDisplayableFailure(cause).message);
+      });
   }
 
   /**
@@ -218,6 +257,11 @@ export class NavbarComponent {
   signOut(): void {
     this.closeUserMenu();
     this.auth.logout();
-    void this.router.navigate(['/login']);
+    // Settled rather than dropped: a navigation the router refuses would otherwise be an unhandled
+    // rejection, and the user is told the return to the login screen did not happen. The session is
+    // already cleared above, so the message is the only thing left to report.
+    void this.router.navigate(['/login']).catch((cause: unknown) => {
+      this.notifications.show('error', toDisplayableFailure(cause).message);
+    });
   }
 }

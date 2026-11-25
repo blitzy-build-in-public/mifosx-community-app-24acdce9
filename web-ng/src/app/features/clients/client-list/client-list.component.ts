@@ -6,6 +6,8 @@ import { RouterLink } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
 import { finalize } from 'rxjs';
 
+import type { SearchResult } from '../../../core/api/search.service';
+import { SearchService } from '../../../core/api/search.service';
 import { ApiError } from '../../../core/http/api-error';
 import { EmptyStateComponent } from '../../../shared/empty-state/empty-state.component';
 import { HasPermissionDirective } from '../../../shared/has-permission.directive';
@@ -16,15 +18,47 @@ import { toClientStatusKey } from '../client.models';
 import { ClientService } from '../client.service';
 
 /**
- * One rendered row of the clients table: the API's client plus the colour key the status indicator
- * paints for it, mapped exactly once.
+ * One rendered row of the clients table: the six values the table prints, resolved once per row from
+ * whichever read produced it.
  *
  * Exported so the sibling spec types its expectations against the same declaration instead of
- * restating the pair, and `readonly` throughout so a row cannot be edited in place by a template.
+ * restating the shape, and `readonly` throughout so a row cannot be edited in place by a template.
+ *
+ * The shape is the screen's own rather than either payload's. `GET /clients` names a client through
+ * `displayName`, `accountNo`, `officeName` and `staffName`, while `GET /search` names it through
+ * `entityName`, `entityAccountNo` and `parentName`, so a row that held either payload would leave
+ * the template reading two vocabularies. A text member is the empty string when the payload carried
+ * no value for it — never a dash, a zero or an invented word, because the design shows an empty cell
+ * and legacy printed one (Rule 1 clause 3).
  */
 export interface ClientListRow {
-  /** The row as `GET /clients` returned it, untouched: no field renamed, trimmed or defaulted. */
-  readonly client: Client;
+  /**
+   * Stable key for the template's `track`, unique across both sources: the client's own id for a row
+   * of the list page, and the search row's entity type plus its entity id for a search result, so a
+   * client found by name and the same client found by an identifier never collide.
+   */
+  readonly key: string;
+
+  /** The client id a row opens: the `:id` of `#/viewclient/:id`, from `id` or from `parentId`. */
+  readonly clientId: number;
+
+  /**
+   * The name the table's first column prints: `displayName` on a page row, `entityName` on a client
+   * result and `parentName` on an identifier result — the client each of them names.
+   */
+  readonly name: string;
+
+  /** The client number, `''` when the payload carried none. */
+  readonly accountNo: string;
+
+  /** The bank-assigned external id, `''` when the payload carried none. */
+  readonly externalId: string;
+
+  /** The office name, `''` when the payload carried none. */
+  readonly officeName: string;
+
+  /** The loan officer's name, `''` when the payload carried none. */
+  readonly staffName: string;
 
   /**
    * The status indicator's key for this row, from the family's single mapping
@@ -55,19 +89,41 @@ interface ClientListToolbarValues {
  * (AAP 0.7.1 Features row `clients`; AAP 0.7.4 "Clients list (`#/clients`)"; AAP 0.8.2 route
  * `clients`; AAP 0.11.1 row for this folder).
  *
- * **What it does.** It reads one page of `GET /clients` when it is constructed and again for each
- * find it submits, and it renders the rows in the order the server returned them. Reads go through
- * `ClientService.list()` — the family's only typed Fineract caller — so this file composes no URL,
- * sets no header and injects no HTTP client: the service is the single place a client URL exists and
- * `core/http/fineract.interceptor.ts` is the single place a header, a mapped error or a 401 lives
- * (Rule 1 clause 5; AAP 0.14.1 "Every URL literal lives in a service"; AAP 0.4.2).
+ * **The two reads the screen makes.** It reads one page of `GET /clients` — `offset` and `limit`
+ * only — when it is constructed, and re-reads that same page when the find field is submitted while
+ * empty. A submit that carries text runs the legacy find instead: `GET /search` with `query` and
+ * `resource=clients,clientIdentifiers`, exactly the call the legacy `ClientController.search()` makes
+ * (`globalSearch.search({query, resource: 'clients,clientIdentifiers'})`), which is how the legacy
+ * screen finds a client by name, mobile number, client number, external id or identifier
+ * (AAP 0.7.3 row "Shell: global search"; AAP 0.10.5 item 9). Both reads go through
+ * `ClientService.list()` and `SearchService.search()` — the families' only typed Fineract callers —
+ * so this file composes no URL, sets no header and injects no HTTP client: those two services are
+ * the only places those URLs exist and `core/http/fineract.interceptor.ts` is the only place a
+ * header, a mapped error or a 401 lives (Rule 1 clause 5; AAP 0.14.1 "Every URL literal lives in a
+ * service"; AAP 0.4.2).
  *
- * **What it sends.** `offset` and `limit`, plus `searchText` only when the find field carries one —
- * the parameter set the family's `ClientListParams` declares and AAP 0.7.3 records for the legacy
- * client resource. The "Show Closed" checkbox and the client-side filter are display filters: they
+ * **Why the find does not travel on the list request.** `searchText` is not a parameter of
+ * `GET /clients`: the fork's `ClientsApiResource.retrieveAll` does not accept it, and this
+ * application's `web-ng/tools/parity/endpoint-allowlist.json` declares `offset`, `limit`, `orderBy`
+ * and `sortOrder` for that row and nothing else. Sent there, the parameter was ignored and the find
+ * answered with the unfiltered first page — a search that silently did not search, and a request the
+ * parity harness flags (Rule 1 clause 2). The search endpoint's own `query` and `resource` are the
+ * pair both the allowlist and AAP 0.10.1's W3 row declare, and `exactMatch` is deliberately absent
+ * because the find field offers no such choice (Rule 1 clause 3).
+ *
+ * **The row view is projected at receipt.** A page row and a search row carry the same display
+ * values under different names, so each response is projected once, as it arrives, into the one
+ * {@link ClientListRow} the table binds: the payload's field names and its status code are read in
+ * exactly one place per source and neither reaches the template, which also keeps the status mapping
+ * to one pass per response rather than one per change detection pass. A row the projection does not
+ * describe — the loan row the search union admits but the `clients` scope never asks for — is
+ * dropped rather than rendered as a blank line.
+ *
+ * **The two display filters are client-side.** The "Show Closed" checkbox and the filter field
  * narrow the rows already in hand and never become a query parameter, because the legacy screen
  * sends neither and inventing one would change the request the parity harness compares
- * (Rule 1 clauses 2 and 3).
+ * (Rule 1 clauses 2 and 3). The server's order is kept exactly: nothing is sorted, ranked or
+ * regrouped here.
  *
  * **What it deliberately does not do, per Rule 1 clause 3 (match legacy, do not improve it).**
  * No pager, no rows-per-page selector and no infinite scroll (AAP 0.5.4 leaves client-list
@@ -107,12 +163,22 @@ interface ClientListToolbarValues {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ClientListComponent {
-  /** The clients family's typed Fineract caller: the list read, and nothing else (Rule 1 clause 5). */
+  /**
+   * The clients family's typed Fineract caller: the page read, and nothing else (Rule 1 clause 5).
+   */
   private readonly clientService = inject(ClientService);
 
   /**
-   * The component's own lifetime, handed to `takeUntilDestroyed` for every list read, so a response
-   * that arrives after the user has navigated away cannot write to a destroyed view.
+   * The search endpoint's only application caller: the find field's server search (AAP 0.7.1
+   * supporting-services row `SearchService`). Injected rather than reached through `ClientService`,
+   * because `GET /search` belongs to the search family and this screen composes no URL of its own
+   * (Rule 1 clauses 2 and 5; AAP 0.14.1).
+   */
+  private readonly searchService = inject(SearchService);
+
+  /**
+   * The component's own lifetime, handed to `takeUntilDestroyed` for every read, so a response that
+   * arrives after the user has navigated away cannot write to a destroyed view.
    */
   private readonly destroyRef = inject(DestroyRef);
 
@@ -135,15 +201,17 @@ export class ClientListComponent {
   });
 
   /**
-   * The page `GET /clients` last returned, in the server's order. Until the first response arrives
+   * The rows the last successful read returned, projected at receipt into the table's own view and
+   * kept in the server's order. It holds the list page after a page read and the search answer after
+   * a find, because the screen shows one or the other, never both. Until the first response arrives
    * (and after a failed read) it is empty, which is what makes the table area blank rather than
    * showing invented rows (AAP 0.7.4).
    */
-  readonly rows = signal<readonly Client[]>([]);
+  readonly rows = signal<readonly ClientListRow[]>([]);
 
   /**
-   * Whether a list read is in flight. The template uses it to avoid painting an empty-state message
-   * during the frame before the first response, and to disable the find control while its own
+   * Whether a read is in flight. The template uses it to avoid painting an empty-state message
+   * during the frame before the first response, and to disable the find submit button while its own
    * request is out. It paints nothing itself: the design has no spinner (AAP 0.2.4).
    */
   readonly loading = signal(false);
@@ -178,40 +246,51 @@ export class ClientListComponent {
   });
 
   /**
-   * The rows the table renders: the loaded page with two display filters applied and each surviving
-   * client mapped to exactly one status key.
+   * The rows the table renders: the rows in hand with the two display filters applied, in the
+   * server's order.
    *
-   * 1. a client whose status key is `closed` is left out unless "Show Closed" is ticked — `closed` is
+   * 1. a row whose status key is `closed` is left out unless "Show Closed" is ticked — `closed` is
    *    the key the three terminal states (closed, rejected, withdrawn) share, which is the design's
    *    own vocabulary;
-   * 2. a client whose `displayName` does not contain the filter text is left out when that text is
-   *    non-empty, compared case-insensitively and against the name column the filter belongs to;
-   * 3. every survivor becomes a {@link ClientListRow}, so the status is mapped once per row.
+   * 2. a row whose name does not contain the filter text is left out when that text is non-empty,
+   *    compared case-insensitively and against the name column the filter belongs to;
+   * 3. the survivors are rendered as they are, because each row was already projected into a
+   *    {@link ClientListRow} and its status mapped when its response arrived.
    *
-   * Both filters are client-side and issue no request (Rule 1 clause 3). The server's order is kept
-   * exactly — nothing is sorted, ranked or regrouped here.
+   * Both filters are client-side and issue no request (Rule 1 clause 3). Nothing is sorted, ranked
+   * or regrouped here: the order is the one the server answered with.
    */
   readonly visibleRows = computed<readonly ClientListRow[]>(() => {
     const needle = this.filterText().trim().toLowerCase();
     const includeClosed = this.showClosed();
     const visible: ClientListRow[] = [];
 
-    for (const client of this.rows()) {
-      const statusKey = toClientStatusKey(client.status.code);
-
-      if (!includeClosed && statusKey === 'closed') {
+    for (const row of this.rows()) {
+      if (!includeClosed && row.statusKey === 'closed') {
         continue;
       }
 
-      if (needle !== '' && !client.displayName.toLowerCase().includes(needle)) {
+      if (needle !== '' && !row.name.toLowerCase().includes(needle)) {
         continue;
       }
 
-      visible.push({ client, statusKey });
+      visible.push(row);
     }
 
     return visible;
   });
+
+  /**
+   * Whether a completed read matched nothing — the state that renders the explicit empty state and
+   * no error. All three conditions matter: nothing may be in flight (so the empty state cannot flash
+   * before the first response), the last read must not have failed (so a failed read is never
+   * rendered as "no clients", which would claim something the screen does not know), and no row may
+   * survive the two display filters (AAP 0.7.4 "States every list and record screen must
+   * implement").
+   */
+  readonly isEmpty = computed<boolean>(
+    () => !this.loading() && !this.failed() && this.visibleRows().length === 0,
+  );
 
   /**
    * Rows to skip — the first page, because the screen renders none of the pager's controls.
@@ -240,36 +319,41 @@ export class ClientListComponent {
   }
 
   /**
-   * Runs the toolbar's find: the one place a search reaches the server.
+   * Runs the toolbar's find: the one place the find field reaches the server.
    *
-   * The find field's text is trimmed and sent as `searchText` when it carries something; when it has
-   * been cleared the list is re-read with no search at all, so clearing the field restores the full
-   * page. Either way exactly one `GET /clients` goes out per submit — submitting an empty field never
-   * sends an empty `searchText` parameter, which the legacy resource does not send either
-   * (Rule 1 clauses 2 and 3).
+   * The field's text is trimmed. When it carries something the find runs as a search — `GET /search`,
+   * the call legacy makes for the same field. When it has been cleared the list is re-read with no
+   * filter at all, so clearing the field restores the full page, which is exactly what the legacy
+   * controller does with an empty `searchText` (`ClientController.search()`). Exactly one request
+   * goes out per submit, and an empty field never sends an empty `query` (Rule 1 clauses 2 and 3).
    */
   onFind(): void {
-    const searchText = this.toolbar.controls.find.value.trim();
+    const query = this.toolbar.controls.find.value.trim();
 
-    this.load(searchText === '' ? undefined : searchText);
+    if (query === '') {
+      this.load();
+      return;
+    }
+
+    this.search(query);
   }
 
   /**
    * Reads one page of `GET /clients` and replaces the rows it holds (AAP 0.7.3 row "Client list and
    * edit").
    *
-   * The request carries `offset` and `limit` and, only when a search was submitted, `searchText`:
-   * `orderBy` and `sortOrder` stay unset because the in-scope screen offers no sort affordance and
-   * the legacy list sends neither. `dateFormat` and `locale` are absent because a list read carries
-   * no date payload — the service applies that pair to the bodies that do (Rule 1 clause 2).
+   * The request carries `offset` and `limit` and nothing else. `orderBy` and `sortOrder` stay unset
+   * because the in-scope screen offers no sort affordance and the legacy list sends neither;
+   * `searchText` is deliberately not sent, because this endpoint does not accept it and the
+   * allowlist does not declare it — the find is the separate search read below. `dateFormat` and
+   * `locale` are absent because a list read carries no date payload — the service applies that pair
+   * to the bodies that do (Rule 1 clause 2).
    *
    * The subscription is tied to the component's lifetime with `takeUntilDestroyed`, and `finalize`
    * clears {@link loading} whether the response arrived or the request failed. A failure becomes
    * state, never an exception escaping the component (AAP 0.14.1).
-   *
-   * @param searchText the trimmed find text to send, or `undefined` for the unfiltered page.
    */
-  private load(searchText?: string): void {
+  private load(): void {
     this.loading.set(true);
     this.failed.set(false);
     this.errorMessage.set(null);
@@ -277,7 +361,6 @@ export class ClientListComponent {
     const params: ClientListParams = {
       offset: this.pageOffset,
       limit: this.pageLimit,
-      ...(searchText === undefined ? {} : { searchText }),
     };
 
     this.clientService
@@ -290,7 +373,40 @@ export class ClientListComponent {
         // The endpoint answers with the paged envelope `{totalFilteredRecords, pageItems}` rather
         // than a bare array, so the page's own rows are what the table holds. `totalFilteredRecords`
         // is deliberately not kept: this screen renders no pager, so nothing would read it.
-        next: (page) => this.rows.set(page.pageItems),
+        next: (page) => this.rows.set(page.pageItems.map(toPageRow)),
+        error: (error: unknown) => this.onFailure(error),
+      });
+  }
+
+  /**
+   * Runs the find as a server search and replaces the rows with its answer (AAP 0.7.3 row "Shell:
+   * global search"; AAP 0.10.1 W3's search half; AAP 0.10.5 item 9).
+   *
+   * The requested scope is `clients`, carried in the `resource` member `GlobalSearchParams`
+   * declares, which the service serialises as `resource=clients,clientIdentifiers` — the value the
+   * legacy client list's find sends, and the reason a client is still found by one of its
+   * identifiers. `exactMatch` is left unset because the find field offers no such choice and the
+   * allowlist declares `query` and `resource` only for this endpoint (Rule 1 clauses 2 and 3).
+   *
+   * The subscription follows {@link load}'s shape for the same reasons: bound to the component's
+   * lifetime, `loading` cleared by `finalize` on either outcome, and a failure turned into state
+   * through the same {@link onFailure} the page read uses.
+   *
+   * @param query the trimmed find text; never empty, because an empty field re-reads the page.
+   */
+  private search(query: string): void {
+    this.loading.set(true);
+    this.failed.set(false);
+    this.errorMessage.set(null);
+
+    this.searchService
+      .search({ query, resource: 'clients' })
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        finalize(() => this.loading.set(false)),
+      )
+      .subscribe({
+        next: (results) => this.rows.set(toSearchRows(results)),
         error: (error: unknown) => this.onFailure(error),
       });
   }
@@ -304,7 +420,7 @@ export class ClientListComponent {
    * same problem twice. Nothing is logged, rethrown or notified from this file — the screen simply
    * stays mounted with its toolbar usable (AAP 0.7.4; Rule 1 clause 9).
    *
-   * @param error the rejection the list read produced; narrowed here because an observable's error
+   * @param error the rejection the read produced; narrowed here because an observable's error
    *   channel is untyped.
    */
   private onFailure(error: unknown): void {
@@ -317,5 +433,100 @@ export class ClientListComponent {
     }
 
     this.errorMessage.set(null);
+  }
+}
+
+/**
+ * Projects one `GET /clients` row onto the table's row view.
+ *
+ * The page payload's own names are read here and nowhere else: `displayName` is the name column,
+ * `accountNo` and `officeName` are carried as they arrived, and the two members the endpoint omits
+ * when a client has none — `externalId` and `staffName` — become the empty string rather than a
+ * stand-in the design never shows (Rule 1 clause 3). The key is the client's id because a client
+ * appears at most once in one page.
+ *
+ * @param client One element of the page envelope's `pageItems`, as the endpoint sent it.
+ * @returns The row the table renders for it.
+ */
+function toPageRow(client: Client): ClientListRow {
+  return {
+    key: `client:${client.id}`,
+    clientId: client.id,
+    name: client.displayName,
+    accountNo: client.accountNo,
+    externalId: client.externalId ?? '',
+    officeName: client.officeName,
+    staffName: client.staffName ?? '',
+    statusKey: toClientStatusKey(client.status.code),
+  };
+}
+
+/**
+ * Projects the search answer onto the table's row view, dropping the rows this screen does not
+ * render.
+ *
+ * @param results The rows `GET /search` answered with, in the server's order.
+ * @returns The rows the table renders, in the same order.
+ */
+function toSearchRows(results: readonly SearchResult[]): readonly ClientListRow[] {
+  const rows: ClientListRow[] = [];
+
+  for (const result of results) {
+    const row = toSearchRow(result);
+
+    if (row !== null) {
+      rows.push(row);
+    }
+  }
+
+  return rows;
+}
+
+/**
+ * Projects one search result onto the table's row view, by the discriminator the result carries.
+ *
+ * What each of the two in-scope result kinds carries is the payload the search endpoint answers with:
+ *
+ *   - a `CLIENT` row names the client in `entityName`, its account in `entityAccountNo`, its external
+ *     id in `entityExternalId` and its office in `parentName`, and its own `entityId` opens the
+ *     record — the five values the legacy controller copies from the same result;
+ *   - a `CLIENTIDENTIFIER` row is a client found by one of its identifiers: `parentName` is the
+ *     client's name and `parentId` its id, so the row opens that client exactly as legacy's
+ *     `#/viewclient/{parentId}` did. The row carries no account number, office or staff the client
+ *     list shows, so those cells are empty rather than borrowed from another member.
+ *
+ * @param result One element of the search answer, discriminated by its `entityType`.
+ * @returns The row to render, or `null` for a result this screen does not render — a `LOAN` row the
+ *   union admits but the `clients` scope never asks for, or a discriminator the server adds beyond
+ *   the union, which is dropped rather than guessed at.
+ */
+function toSearchRow(result: SearchResult): ClientListRow | null {
+  switch (result.entityType) {
+    case 'CLIENT':
+      return {
+        key: `client:${result.entityId}`,
+        clientId: result.entityId,
+        name: result.entityName,
+        accountNo: result.entityAccountNo ?? '',
+        externalId: result.entityExternalId ?? '',
+        officeName: result.parentName ?? '',
+        staffName: '',
+        statusKey: toClientStatusKey(result.entityStatus?.code),
+      };
+
+    case 'CLIENTIDENTIFIER':
+      return {
+        key: `clientIdentifier:${result.entityId}`,
+        clientId: result.parentId ?? result.entityId,
+        name: result.parentName ?? '',
+        accountNo: '',
+        externalId: '',
+        officeName: '',
+        staffName: '',
+        statusKey: toClientStatusKey(result.entityStatus?.code),
+      };
+
+    default:
+      return null;
   }
 }

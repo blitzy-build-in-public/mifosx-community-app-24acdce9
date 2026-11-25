@@ -1,4 +1,4 @@
-import type { HttpErrorResponse } from '@angular/common/http';
+import { HttpErrorResponse } from '@angular/common/http';
 
 /**
  * The single typed error shape for Fineract failures, and the mapper that builds it from an
@@ -31,16 +31,28 @@ export interface FineractValidationError {
 }
 
 /**
- * Fineract's error envelope as modelled for the in-scope screens (AAP 0.7.2 row `FineractError`).
- * Every field is optional: a validation failure returns this body, while a platform-level failure
- * (an unmapped path, an authentication refusal, a transport fault) returns a body of another shape
- * or none, and then the later fallbacks in `toApiError` carry the message.
+ * Fineract's error envelope as modelled for the in-scope screens, under the name AAP 0.7.2's model
+ * table gives it (row `FineractError`). Every field is optional: a validation failure returns this
+ * body, while a platform-level failure (an unmapped path, an authentication refusal, a transport
+ * fault) returns a body of another shape or none, and the later fallbacks in `toApiError` carry the
+ * message.
+ *
+ * `defaultUserMessage` is optional rather than the required member that same row shows, and for the
+ * same reason: requiring it would make the reader discard a body carrying only `errors`, and with
+ * it the field-level message workflow W7 depends on.
  */
-export interface FineractErrorBody {
+export interface FineractError {
   /** The failure's own text, as the server sent it; the message preferred above every other. */
   readonly defaultUserMessage?: string;
 
-  /** Translation key the server offers for the whole failure, kept as received. */
+  /**
+   * Translation key the envelope's declared shape carries for the whole failure (AAP 0.7.2 row
+   * `FineractError`), deliberately not carried by `readFineractErrorBody`: every in-scope screen
+   * renders Fineract's own already-localised `defaultUserMessage` verbatim (AAP 0.7.2 "Rendered
+   * verbatim"; Rule 1 clause 3), so no code path in this application resolves a translation key,
+   * and reading it would only create data that nothing here, and nothing outside this module,
+   * could observe.
+   */
   readonly userMessageGlobalisationCode?: string;
 
   /** Field-level failures in the server's order; the first carrying text becomes the message. */
@@ -92,8 +104,13 @@ function isFineractValidationError(value: unknown): value is FineractValidationE
  * entries that conform — in the server's order — with a member of another shape counted as
  * absent. It answers `undefined` for `null`, a primitive, an array, and a body yielding neither,
  * so the later fallbacks in `toApiError` carry the message (AAP 0.7.2 row `FineractError`).
+ *
+ * Of the envelope's members it carries exactly two, `defaultUserMessage` and `errors`, and it
+ * deliberately leaves `userMessageGlobalisationCode` unread: every in-scope screen renders
+ * Fineract's own already-localised `defaultUserMessage` verbatim (AAP 0.7.2 "Rendered verbatim";
+ * Rule 1 clause 3), so no code path in this application resolves a translation key.
  */
-function readFineractErrorBody(value: unknown): FineractErrorBody | undefined {
+function readFineractErrorBody(value: unknown): FineractError | undefined {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return undefined;
   }
@@ -131,4 +148,63 @@ export function toApiError(response: HttpErrorResponse): ApiError {
   const message = candidates.find((candidate) => candidate !== '') ?? `HTTP ${response.status}`;
 
   return new ApiError(message, response.status, validationErrors);
+}
+
+/**
+ * The text a rejection becomes when it carries no message of its own.
+ *
+ * Every Fineract answer arrives as an `ApiError` whose `message` is the server's own
+ * `defaultUserMessage`, rendered verbatim (AAP 0.7.2). A rejection of another shape is a fault in
+ * this application rather than an answer from Fineract, so it has no server text to show; this
+ * fixed sentence keeps a screen from rendering nothing at all, and it is deliberately not
+ * translated, because no language bundle carries wording for a fault the server never reported.
+ */
+const UNMAPPED_FAILURE = 'The request could not be completed.';
+
+/**
+ * Reads whatever a rejected request produced into the one error type a screen renders.
+ *
+ * An `ApiError` is returned untouched, so its message, status and field-level failures stay exactly
+ * what `toApiError` built from the Fineract body (Rule 1 clause 3: the server's text verbatim). An
+ * `HttpErrorResponse` that reached a screen without the interceptor is mapped through `toApiError`
+ * for the same reason, and an `Error` carrying a non-empty message keeps that message. Anything
+ * else becomes {@link UNMAPPED_FAILURE}. Every failure that is not already an `ApiError` carries
+ * status `0`, the class's marker for "no HTTP answer". Nothing is logged, no header, request or
+ * body is read, and no credential-shaped string can reach a screen through it (Rule 1 clause 9).
+ *
+ * @param cause Whatever the rejected request delivered.
+ * @returns The failure to render.
+ */
+export function toDisplayableFailure(cause: unknown): ApiError {
+  if (cause instanceof ApiError) {
+    return cause;
+  }
+
+  if (cause instanceof HttpErrorResponse) {
+    return toApiError(cause);
+  }
+
+  const message = cause instanceof Error && cause.message !== '' ? cause.message : UNMAPPED_FAILURE;
+
+  return new ApiError(message, 0);
+}
+
+/**
+ * The failure a screen paints inline, or `null` when the interceptor has already reported it.
+ *
+ * A 4xx is Fineract's answer to the values a form submitted, and every screen renders that message
+ * verbatim above the form (AAP 0.7.4). A status of `0` or one at or above `500` has already had
+ * exactly one notification raised for it in `fineract.interceptor.ts` (AAP 0.7.4; AAP 0.14.2 "every
+ * HTTP call path ends in either a rendered message or a notification"), so a screen that painted it
+ * again would report one failure twice. A `404` is a client failure and is answered here like any
+ * other 4xx, so a screen that owns a not-found state checks the failure's status for `404` before
+ * calling this, and paints its own not-found message instead.
+ *
+ * @param cause Whatever the rejected request delivered.
+ * @returns The failure to render inline, or `null` when it must not be painted again.
+ */
+export function screenFailure(cause: unknown): ApiError | null {
+  const failure = toDisplayableFailure(cause);
+
+  return failure.status >= 400 && failure.status < 500 ? failure : null;
 }

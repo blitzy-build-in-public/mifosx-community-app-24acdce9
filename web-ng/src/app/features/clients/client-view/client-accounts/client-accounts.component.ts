@@ -11,12 +11,13 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslatePipe } from '@ngx-translate/core';
 import { Subject, catchError, map, of, switchMap } from 'rxjs';
 
+import { ApiError } from '../../../../core/http/api-error';
 import { EmptyStateComponent } from '../../../../shared/empty-state/empty-state.component';
 import {
   StatusSwatchComponent,
   type StatusKey,
 } from '../../../../shared/status-swatch/status-swatch.component';
-import { toClientStatusKey, type ClientAccountSummary } from '../../client.models';
+import { toAccountStatusKey, type ClientAccountSummary } from '../../client.models';
 import { ClientService } from '../../client.service';
 
 /**
@@ -39,7 +40,7 @@ export interface AccountRow {
   /** Product name the account was opened under, printed verbatim in the Product column. */
   readonly productName: string;
 
-  /** Status reduced to the indicator's key by `toClientStatusKey`; painted as a colour swatch. */
+  /** Status reduced to the indicator's key by `toAccountStatusKey`; painted as a colour swatch. */
   readonly status: StatusKey;
 
   /** The family's own balance figure — `loanBalance` for a loan, `accountBalance` for savings. */
@@ -75,13 +76,16 @@ export interface AccountRow {
  * record"), paints the section's `ACCOUNTS` heading and the top edge of its panel but no table
  * beneath them, so the flow's inherited global values are the whole specification for the rows.
  *
- * **States.** While the first response is in flight nothing but the section renders
+ * **States.** Four mutually exclusive states, in the order a viewer meets them, and a failed read
+ * never reaches the empty state. While the first response is in flight nothing renders
  * (`loading`); an empty result — a client holding no accounts at all, which the endpoint answers
- * without either collection — renders the explicit empty state and no error (`isEmpty`); a
- * failure leaves the same explicit empty state on screen with the entered route intact, because
- * the interceptor has already raised the notification for the 5xx or network error (AAP 0.7.4:
- * "an explicit empty state and no error"). Nothing is logged: no client id, no account number and
- * no payload reaches the console (Rule 1 clause 9).
+ * without either collection — renders the explicit empty state and no error (`isEmpty`); a 4xx
+ * renders Fineract's own message in an alert region (`errorMessage`), because
+ * `core/http/fineract.interceptor.ts` raises its single notification for status `0` and `>= 500`
+ * alone and would otherwise leave the failure invisible; a 5xx or a transport fault renders
+ * nothing here, because that interceptor has already notified with the same text (AAP 0.7.4: "any
+ * other 4xx keeps the screen usable and shows Fineract's own message"). Nothing is logged: no
+ * client id, no account number and no payload reaches the console (Rule 1 clause 9).
  */
 @Component({
   selector: 'app-client-accounts',
@@ -121,16 +125,26 @@ export class ClientAccountsComponent {
   readonly loading = signal(true);
 
   /**
-   * Whether the last load failed. The section then renders its explicit empty state rather than
-   * an error of its own: the interceptor has already mapped the failure and raised the
-   * notification, and re-reporting it here would show the same problem twice (AAP 0.7.4).
+   * Whether the last load failed. With {@link errorMessage} empty this is what tells the template
+   * a failure arrived without text the section may render — a 5xx or a transport fault the
+   * interceptor has already notified — so the section shows neither rows nor a "no accounts"
+   * claim (AAP 0.7.4).
    */
   readonly failed = signal(false);
 
   /**
-   * Whether there is nothing to list — either because the client holds no accounts or because
-   * the load failed. The template decides between the table and the empty state from this, with
-   * `loading` guarding the frame before the first response.
+   * Fineract's own failure text, verbatim, or `null` when there is nothing to show. Populated for a
+   * 4xx only: `core/http/fineract.interceptor.ts` maps every failure into an {@link ApiError} but
+   * raises its single notification for status `0` and `>= 500` alone, so rendering those here as
+   * well would report the same problem twice (AAP 0.7.4, AAP 0.14.2; Rule 1 clause 9 — nothing
+   * about the failure is logged).
+   */
+  readonly errorMessage = signal<string | null>(null);
+
+  /**
+   * Whether a completed, successful read found no account at all. The template decides between the
+   * table and the empty state from this, with `loading` guarding the frame before the first
+   * response and `failed` withholding a "no accounts" claim after a failed one.
    */
   protected readonly isEmpty = computed<boolean>(() => this.rows().length === 0);
 
@@ -163,14 +177,23 @@ export class ClientAccountsComponent {
         switchMap((id) => {
           this.loading.set(true);
           this.failed.set(false);
+          this.errorMessage.set(null);
 
           return this.client.accounts(id).pipe(
             map((summary) => this.toRows(summary)),
-            // A failed load becomes an empty result plus the `failed` flag: the section then
-            // shows its empty state while the interceptor's notification carries Fineract's own
-            // message, so the screen stays usable and no error is reported twice.
-            catchError(() => {
+            // A failed load becomes an empty result plus the `failed` flag, and is handled here
+            // inside the inner observable so the outer subscription survives it and a later client
+            // still loads. A 4xx publishes Fineract's own text for the section to render; a 5xx or
+            // a transport fault leaves it `null`, because the interceptor has already notified with
+            // that same message and no error is reported twice.
+            catchError((error: unknown) => {
               this.failed.set(true);
+              this.errorMessage.set(
+                error instanceof ApiError && error.status >= 400 && error.status < 500
+                  ? error.message
+                  : null,
+              );
+
               return of<readonly AccountRow[]>([]);
             }),
           );
@@ -196,15 +219,14 @@ export class ClientAccountsComponent {
    * savings) and becomes `null` when it is absent, so the cell renders empty instead of a zero
    * the server never reported.
    *
-   * The status code is reduced by this family's single mapping, `toClientStatusKey`, and never by
-   * stripping a prefix here: one table decides every status colour in the clients feature. An
-   * account status carries its own family's code (`loanStatusType.active`,
-   * `savingsAccountStatusType.active`), which that table does not claim, so such a row paints the
-   * indicator's neutral colour (`other`) rather than guessing a state — a colour this build cannot
-   * vouch for is worse than a neutral one, and the unrecognised result is `other`, never `active`.
-   * Colouring account-level states would mean either importing another family's mapping, which the
-   * module's dependency boundary excludes, or a second table inside the clients feature, which is
-   * exactly the duplicate verdict this arrangement avoids.
+   * The status code is reduced by the clients feature's single account mapping,
+   * `toAccountStatusKey`, and never by stripping a prefix here: one table decides the colour of
+   * every account row in the record. Each family sends its own codes — `loanStatusType.*` from the
+   * fork's `LoanStatus.java`, `savingsAccountStatusType.*` from its `SavingsAccountStatusType.java`
+   * — and that one table claims both, so a row paints the state the account is really in, which is
+   * the colour the legacy record paints for the same row through `StatusLookup` (AAP 0.2.3 row
+   * `StatusSwatch`; Rule 1 clause 3). A code the table does not recognise is `other`, never
+   * `active`: a colour this build cannot vouch for is worse than a neutral one.
    *
    * @param summary the `GET /clients/{id}/accounts` response for the client now on screen.
    * @returns one row per loan account followed by one per savings account.
@@ -214,7 +236,7 @@ export class ClientAccountsComponent {
       id: account.id,
       accountNo: account.accountNo,
       productName: account.productName,
-      status: toClientStatusKey(account.status?.code),
+      status: toAccountStatusKey(account.status?.code),
       balance: account.loanBalance ?? null,
     }));
 
@@ -222,7 +244,7 @@ export class ClientAccountsComponent {
       id: account.id,
       accountNo: account.accountNo,
       productName: account.productName,
-      status: toClientStatusKey(account.status?.code),
+      status: toAccountStatusKey(account.status?.code),
       balance: account.accountBalance ?? null,
     }));
 

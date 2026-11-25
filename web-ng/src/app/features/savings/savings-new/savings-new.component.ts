@@ -1,18 +1,18 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   computed,
   inject,
   signal,
-  type Signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
-import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { ActivatedRoute, Router, type ParamMap } from '@angular/router';
+import { TranslatePipe } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
 
-import { ApiError } from '../../../core/http/api-error';
+import { screenFailure, toDisplayableFailure } from '../../../core/http/api-error';
 import { DateFieldComponent } from '../../../shared/date-field/date-field.component';
 import {
   SelectFieldComponent,
@@ -20,28 +20,31 @@ import {
   type SelectValue,
 } from '../../../shared/select-field/select-field.component';
 import { createSubmitGuard } from '../../../shared/submit-guard.util';
+import { createTranslatedLabels } from '../../../shared/translated-label.util';
 import type { SavingsTemplate } from '../savings.models';
 import { SavingsService } from '../savings.service';
 
 /**
- * The text a screen shows for a failure: Fineract's own message, unchanged.
+ * The value of a route's `:clientId` segment as a client identifier, or `null` when it names none.
  *
- * The single interceptor maps every failed response to an `ApiError`, whose `message` is the
- * server's `defaultUserMessage` verbatim (AAP 0.4.2, AAP 0.7.2), so the first branch is the one a
- * failed request always takes and no prefix, suffix or translation is added to it (Rule 1 clause 3).
- * The other two branches exist only because a rejected promise is typed `unknown`: an `Error` keeps
- * its own message and anything else is rendered as it stringifies rather than being swallowed, so no
- * failure path ends without text on screen (AAP 0.14.2 "no `catch` swallows an error silently").
+ * A segment that is absent, blank, non-numeric, fractional or zero names no client, and the screen
+ * must send none of them: `Number(segment)` answers `0` for the absent segment and `NaN` for the
+ * non-numeric one, so a template read or an application body built from that value would name no
+ * client at all — `?clientId=NaN` in the query string and `null` in the body, neither of which is a
+ * call the legacy screen ever makes (Rule 1 clause 2). A segment that does name a client answers the
+ * positive whole number it carries, so the routed behaviour is unchanged (AAP 0.7.4 states).
  *
- * @param failure The rejection reason of an awaited request.
- * @returns the displayable text of that failure.
+ * @param segment The raw `:clientId` route parameter, or `null` when the URL carries none.
+ * @returns the client identifier `segment` names, or `null` when it names none.
  */
-function describeFailure(failure: unknown): string {
-  if (failure instanceof ApiError) {
-    return failure.message;
+function parseClientId(segment: string | null): number | null {
+  if (segment === null) {
+    return null;
   }
 
-  return failure instanceof Error ? failure.message : String(failure);
+  const parsed = Number(segment);
+
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 /**
@@ -52,22 +55,35 @@ function describeFailure(failure: unknown): string {
  * **Two requests, both through the family's own service.** `SavingsService.template(clientId)` is
  * `GET /savingsaccounts/template?clientId=` and `SavingsService.create()` is `POST /savingsaccounts`
  * (AAP 0.7.3 W8 row); this file names no host, path, query parameter or header, and never injects
- * Angular's HTTP client (Rule 1 clauses 2 and 5, Rule 2). The template is requested exactly once, on
- * construction: W8 counts requests, and the application body carries no product-scoped field, so a
- * product selection re-reads nothing.
+ * Angular's HTTP client (Rule 1 clauses 2 and 5, Rule 2). The template is requested exactly once per
+ * route emission, and only once the emission's `:clientId` has been read as a client identifier: W8
+ * counts requests, and the application body carries no product-scoped field, so a product selection
+ * re-reads nothing. A route whose segment names no client issues no request at all and renders the
+ * not-found message in place of the card (AAP 0.7.4 states).
+ *
+ * **One route emission, one application.** `:clientId` is read from `route.paramMap`, never from the
+ * snapshot: the router reuses this component when the URL moves from one client's application to
+ * another — the record links each of its clients' accounts to a form of its own — so a single read
+ * would leave the first client's form, product list and message on screen under the second client's URL
+ * and would issue no request at all. Every emission therefore clears the form, the product list and the
+ * message, and re-reads the template for the client the URL now names, exactly as `loan-edit` handles
+ * the same reuse; an answer that arrives after the URL moved on is discarded rather than painted, and
+ * leaving the screen cancels the read it left outstanding.
  *
  * **The body is the plan's fixed five fields.** `SavingsService.create()` takes
  * `SavingsApplicationInput` — `clientId`, `productId`, `submittedOnDate` — and adds `dateFormat` and
  * `locale` itself, so the posted body is exactly AAP 0.7.2's `SavingsApplicationRequest` and no date
  * is ever formatted here (AAP 0.14.1, "Dates never travel as strings built in a template").
  *
- * **It reproduces the legacy form rather than improving it.** Product and field-officer options are
- * the template payload's own lists, in the order the server returned them, with no sort, filter,
- * rename or fallback list (AAP 0.4.4 decision 6, Rule 1 clause 3); the only validators are
- * `required`, which is what the legacy `Details` step marks, and no min, max or pattern the legacy
- * screen lacks. Fineract's message is rendered above the form verbatim, the entered values survive
- * it, and the submit control is disabled while its one request is in flight, so a second click sends
- * no second `POST` (AAP 0.7.4; `createSubmitGuard`).
+ * **It reproduces the legacy form rather than improving it.** Product options are the template
+ * payload's own list, in the order the server returned it, with no sort, filter, rename or fallback
+ * list (AAP 0.4.4 decision 6, Rule 1 clause 3); the only validators are `required`, which is what the
+ * legacy `Details` step marks, and no min, max or pattern the legacy screen lacks. The officer picker
+ * that step also shows is deliberately not rendered, because the creation body AAP 0.7.2 fixes
+ * carries no officer member — the form's own comment states the reason. Fineract's message is
+ * rendered above the form verbatim, the entered values survive it, and the submit control is disabled
+ * while its one request is in flight, so a second click sends no second `POST` (AAP 0.7.4;
+ * `createSubmitGuard`).
  *
  * **It carries no styling and no copy of its own.** Every class in the template is a global
  * Bootstrap 3 class from `web-ng/src/styles.scss` (Rule 1 clause 6); the visible labels are the
@@ -84,25 +100,54 @@ export class SavingsNewComponent {
   /** The saving-accounts family's one typed service, the component's only Fineract collaborator. */
   private readonly savings = inject(SavingsService);
 
-  /** The active route, read once for the `:clientId` this application is opened for. */
+  /**
+   * The active route, subscribed to for the `:clientId` this application is opened for: the router
+   * reuses this component across clients, so the segment is followed rather than sampled once.
+   */
   private readonly route = inject(ActivatedRoute);
 
   /** Navigates to the record of the account the POST created, and back to the client on cancel. */
   private readonly router = inject(Router);
 
-  /** Supplies the labels the two shared field components take as plain display text. */
-  private readonly translate = inject(TranslateService);
+  /** Completes the route subscription and the template read should the screen be destroyed first. */
+  private readonly destroyRef = inject(DestroyRef);
 
   /**
-   * The client the account is opened for: the `:clientId` segment, read from the route snapshot
-   * once and never re-read, because this screen is a single-purpose form for that one client.
+   * The client the account is opened for — the `:clientId` segment of the emission being served — or
+   * `null` when the segment names no client.
+   *
+   * `null` rather than a coercion, because a template read and an application body are addressed by
+   * this value: `0` and `NaN` would issue `GET /savingsaccounts/template?clientId=NaN` and post
+   * `clientId: null`, which no legacy screen sends (Rule 1 clause 2). The screen shows its not-found
+   * message instead (AAP 0.7.4). A signal, not a snapshot value: the router reuses this component when
+   * the URL moves from one client's application to another, so the client has to follow every emission
+   * of `route.paramMap` and every reader of it — the template read, the posted body and Cancel.
    */
-  readonly clientId: number = Number(this.route.snapshot.paramMap.get('clientId'));
+  readonly clientId = signal<number | null>(null);
 
   /**
-   * The template payload the option lists come from, or `null` until the one read answers. Kept
-   * rather than reduced to two option arrays, because the field-officer control's presence is a
-   * property of the payload itself (see `hasFieldOfficerOptions`).
+   * Which template read is the current one, incremented by every run of {@link loadTemplate}.
+   *
+   * The router reuses this component across clients, so moving in place starts a second read while the
+   * first is still in flight and the earlier one can answer last. A superseded run compares its own
+   * number with this one after the await and writes nothing — not the product list, not the failure —
+   * the guard `loan-edit` and `client-actions` keep over their own load sequence.
+   */
+  private loadSequence = 0;
+
+  /**
+   * Whether the route names no client, so there is nothing to open an account for.
+   *
+   * A signal rather than a plain field, because the template branches on it and {@link submit}
+   * refuses on it: the not-found outcome must be unable to issue a request (AAP 0.7.4 states). It is
+   * set on every emission, so the verdict of the route the URL has left cannot survive the move.
+   */
+  readonly notFound = signal<boolean>(false);
+
+  /**
+   * The template payload the product list comes from, or `null` until the one read answers. Kept as
+   * the response the server sent rather than reduced to an option array, so `productOptions` stays a
+   * projection of the payload and this screen invents no default list of its own.
    */
   readonly savingsTemplate = signal<SavingsTemplate | null>(null);
 
@@ -119,21 +164,6 @@ export class SavingsNewComponent {
   );
 
   /**
-   * The field officers the application may be assigned to. A staff row carries `displayName` and no
-   * `name`, so it is labelled from the member the server actually sends (Rule 1 clause 2), and the
-   * list is empty whenever the payload omits `fieldOfficerOptions`, which the client-only read does.
-   */
-  readonly fieldOfficerOptions = computed<SelectOption[]>(() =>
-    (this.savingsTemplate()?.fieldOfficerOptions ?? []).map((officer) => ({
-      id: officer.id,
-      name: officer.displayName,
-    })),
-  );
-
-  /** Whether the payload supplied field officers at all; the control renders only when it did. */
-  readonly hasFieldOfficerOptions = computed<boolean>(() => this.fieldOfficerOptions().length > 0);
-
-  /**
    * The failure to show above the form, already verbatim from Fineract, or `null` while there is
    * none. A template-read failure leaves the form usable; a submit failure also leaves every entered
    * value in place, because the form is never reset or unmounted (AAP 0.7.4).
@@ -144,17 +174,27 @@ export class SavingsNewComponent {
   readonly guard = createSubmitGuard();
 
   /**
-   * Counts the moments at which a label must be resolved again: a language switch and a bundle
-   * arriving. Both are read inside every label signal below, so a label resolved before its bundle
-   * had loaded is replaced by the real wording instead of staying at the fallback for the life of the
-   * screen.
+   * Resolves the labels the two shared field components take as plain display text: one signal per
+   * legacy key, re-resolved on a language switch and on a bundle arriving, not frozen at the first
+   * paint. It is the one copy of that mechanism this screen shares with `savings-action`
+   * (`shared/translated-label.util.ts`), and it is declared before the label fields below so each of
+   * them is one `translated('…')` call.
+   *
+   * A field initializer is an injection context, which the factory requires: it injects
+   * `TranslateService` and ends its own subscriptions with this component.
    */
-  private readonly labelsRevision = signal(0);
+  private readonly translated = createTranslatedLabels();
 
   /**
-   * The application form: the three fields the legacy `Details` step collects, and nothing else — no
-   * amount, interest rate, deposit, note, tenant or API-server field, none of which the creation body
-   * carries (AAP 0.7.2, AAP 0.8.2).
+   * The application form: the two fields whose values the creation body carries, and nothing else.
+   *
+   * The legacy `Details` step also shows a field-officer picker, and this form has no such control.
+   * AAP 0.7.2 fixes the body at `clientId`, `productId`, `submittedOnDate`, `dateFormat` and
+   * `locale`; `SavingsApplicationInput` declares no officer member, and AAP 0.10.5 item 5 keeps staff
+   * assignment out of scope. A picker here would collect a choice no request can send and discard it
+   * without telling the operator, which is the broken affordance AAP 0.10.5 item 8's reasoning
+   * rejects (Rule 1 clause 3). No amount, interest rate, deposit, note, tenant or API-server field is
+   * rendered either, for the same reason: the body does not carry them (AAP 0.7.2, AAP 0.8.2).
    */
   readonly form = new FormGroup({
     /**
@@ -176,15 +216,6 @@ export class SavingsNewComponent {
     submittedOnDate: new FormControl<Date | null>(new Date(), {
       validators: [Validators.required],
     }),
-
-    /**
-     * The optional field officer. It is collected because the template supplies the list and the
-     * legacy `Details` step shows the control, but it is **not** posted: W8's fixed body is exactly
-     * `clientId`, `productId` and `submittedOnDate` (AAP 0.7.2), and `SavingsApplicationInput`
-     * declares no field-officer member, so the selection mirrors a template-supplied legacy field and
-     * stays in the form. No validator, because legacy marks the field optional.
-     */
-    fieldOfficerId: new FormControl<SelectValue | null>(null),
   });
 
   /** Already-translated label of the product select, for its plain-text `label` input. */
@@ -196,31 +227,80 @@ export class SavingsNewComponent {
   /** Already-translated label of the submitted-on field. */
   readonly submittedOnDateLabel = this.translated('label.input.submittedon');
 
-  /** Already-translated label of the field-officer select. */
-  readonly fieldOfficerLabel = this.translated('label.input.fieldofficer');
-
-  /** Already-translated text of the field-officer select's empty option. */
-  readonly fieldOfficerPlaceholder = this.translated('label.selectfieldofficer');
-
+  /**
+   * Subscribes to the route's parameters, which is the screen's whole entry point.
+   *
+   * One subscription, never a `snapshot` read beside it: the router reuses this component when the URL
+   * moves from one client's application to another, and a single read would leave the first client's
+   * form, product list and message on screen for the client the URL now names. Each emission therefore
+   * resets the screen and re-runs the template read, the way `loan-edit` handles the same reuse.
+   */
   constructor() {
-    const refreshLabels = (): void => this.labelsRevision.update((revision) => revision + 1);
-    this.translate.onLangChange.pipe(takeUntilDestroyed()).subscribe(refreshLabels);
-    this.translate.onTranslationChange.pipe(takeUntilDestroyed()).subscribe(refreshLabels);
+    this.route.paramMap
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((params: ParamMap) => {
+        this.applyRoute(params.get('clientId'));
+      });
+  }
 
-    void this.loadTemplate();
+  /**
+   * Applies one route emission: stores the client it names, clears everything the previous emission put
+   * on the screen, and reads the template for the new client.
+   *
+   * Nothing is read for a route that names no client: the screen renders its not-found message, and
+   * there is no client to ask a template for (AAP 0.7.4 states). That path takes the next
+   * {@link loadSequence} number itself, which is what discards a read the previous emission left
+   * outstanding.
+   *
+   * @param segment the emission's `:clientId` segment, or `null` when it carries none.
+   */
+  private applyRoute(segment: string | null): void {
+    const clientId = parseClientId(segment);
+
+    this.clientId.set(clientId);
+    this.reset();
+
+    if (clientId === null) {
+      this.loadSequence += 1;
+      this.notFound.set(true);
+
+      return;
+    }
+
+    void this.loadTemplate(clientId);
+  }
+
+  /**
+   * Clears everything the previous emission put on the screen — the form's picked product and date, the
+   * template the product list comes from, and the failure — so a route that names another client never
+   * shows the earlier client's application.
+   */
+  private reset(): void {
+    this.form.reset({ productId: null, submittedOnDate: new Date() });
+    this.savingsTemplate.set(null);
+    this.error.set(null);
+    this.notFound.set(false);
   }
 
   /**
    * Opens the account, then lands on its record.
    *
-   * Touches every control first, so a missing required field is reported in place, and returns
-   * without issuing any request while the form is invalid. The POST runs inside `guard.runOnce`, so
-   * one click sends exactly one `POST /savingsaccounts` even if the button is clicked again while
-   * the first request is outstanding. A rejection becomes the form's error text, verbatim, with
-   * every entered value intact and no second notification raised — the interceptor already raised
-   * one for the failure it mapped.
+   * A route that names no client sends nothing: the screen is showing its not-found message, so there
+   * is no form to touch and no application to post. Otherwise every control is touched first, so a
+   * missing required field is reported in place, and the method returns without issuing any request
+   * while the form is invalid. The POST runs inside `guard.runOnce`, so one click sends exactly one
+   * `POST /savingsaccounts` even if the button is clicked again while the first request is
+   * outstanding. A 4xx becomes the form's error text, verbatim, with every entered value intact; a
+   * 5xx or a transport failure raises no inline text, because the interceptor's notification is
+   * already that failure's one message (AAP 0.7.4).
    */
   async submit(): Promise<void> {
+    const clientId = this.clientId();
+
+    if (this.notFound() || clientId === null) {
+      return;
+    }
+
     this.form.markAllAsTouched();
 
     const productId = this.form.controls.productId.value;
@@ -236,7 +316,7 @@ export class SavingsNewComponent {
       await this.guard.runOnce(async () => {
         const created = await firstValueFrom(
           this.savings.create({
-            clientId: this.clientId,
+            clientId,
             productId: typeof productId === 'number' ? productId : Number(productId),
             submittedOnDate,
           }),
@@ -245,52 +325,71 @@ export class SavingsNewComponent {
         await this.router.navigate(['/viewsavingaccount', created.resourceId]);
       });
     } catch (failure: unknown) {
-      this.error.set(describeFailure(failure));
+      this.error.set(screenFailure(failure)?.message ?? null);
     }
   }
 
   /**
    * Leaves the application without opening anything: back to the client record the workflow started
-   * from, and no request at all. The path is a route segment string, so nothing is imported from the
-   * clients feature to name it.
+   * from, or to the client list when the route named no client to return to, and no request at all.
+   * The paths are route segment strings, so nothing is imported from the clients feature to name
+   * them.
    */
   cancel(): void {
-    void this.router.navigate(['/viewclient', this.clientId]);
+    const clientId = this.clientId();
+
+    // The navigation's promise is settled rather than dropped, so a navigation the router refuses
+    // cannot surface as an unhandled rejection (AAP 0.14.2). It reports through this screen's own
+    // failure text rather than `screenFailure`: a refused navigation is no HTTP answer, so the
+    // interceptor has raised no notification for it and nothing else would tell the user that the
+    // return to the client record did not happen.
+    void this.router
+      .navigate(clientId === null ? ['/clients'] : ['/viewclient', clientId])
+      .catch((cause: unknown) => {
+        this.error.set(toDisplayableFailure(cause).message);
+      });
   }
 
   /**
-   * Reads the new-application template once, for this client and no product, and publishes it.
+   * Reads the new-application template once, for one client and no product, and publishes it.
    *
-   * A failure becomes the form's error text when it is an `ApiError` and leaves the form usable; the
-   * notification is not repeated here, because the interceptor has already raised one for it.
+   * A 4xx becomes the form's error text through the shared `screenFailure` and leaves the form
+   * usable; a 5xx or a transport failure answers `null` there, because the interceptor has already
+   * raised that failure's one notification (AAP 0.7.4).
+   *
+   * Every run takes the next {@link loadSequence} number, and the read is tied to this component's
+   * lifetime, so a run the route has since superseded — or that the screen outlived — writes nothing at
+   * all: not the product list, not the failure.
+   *
+   * @param clientId The `:clientId` segment's own value, which the caller has already established
+   *   names a client, so this read can never be addressed by a `0` or a `NaN`.
    */
-  private async loadTemplate(): Promise<void> {
+  private async loadTemplate(clientId: number): Promise<void> {
+    const load = ++this.loadSequence;
+
     try {
-      const template = await firstValueFrom(this.savings.template(this.clientId));
-      this.savingsTemplate.set(template);
+      const template = await firstValueFrom(
+        this.savings.template(clientId).pipe(takeUntilDestroyed(this.destroyRef)),
+      );
+
+      if (this.isCurrent(load)) {
+        this.savingsTemplate.set(template);
+      }
     } catch (failure: unknown) {
-      this.error.set(describeFailure(failure));
+      if (this.isCurrent(load)) {
+        this.error.set(screenFailure(failure)?.message ?? null);
+      }
     }
   }
 
   /**
-   * Builds one label signal from a legacy translation key.
+   * Whether a read still speaks for the screen: it is the newest read, and the screen it belongs to has
+   * not been destroyed, so a read the route or the teardown cancelled can neither publish a product list
+   * nor report a failure under another client's URL.
    *
-   * The key is resolved with `instant()`, because the two shared field components take a `label` as
-   * plain display text rather than a key the `TranslatePipe` could re-resolve. `instant()` answers
-   * from whatever bundle is loaded at that moment, so the computed also reads `labelsRevision`,
-   * which the constructor bumps on a language switch and on a bundle arriving: the first paint shows
-   * the missing-translation handler's humanised wording, and the real legacy text replaces it as soon
-   * as the bundle lands.
-   *
-   * @param key Legacy key from `app/global-translations/`, served in place (Rule 1 clause 6).
-   * @returns the signal the template binds to the field's `label` input.
+   * @param load the read's {@link loadSequence} number.
    */
-  private translated(key: string): Signal<string> {
-    return computed(() => {
-      this.labelsRevision();
-      this.translate.currentLang();
-      return this.translate.instant(key);
-    });
+  private isCurrent(load: number): boolean {
+    return !this.destroyRef.destroyed && load === this.loadSequence;
   }
 }

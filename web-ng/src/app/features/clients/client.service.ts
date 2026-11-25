@@ -1,9 +1,10 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import type { Observable } from 'rxjs';
+import { defer, type Observable } from 'rxjs';
 
 import type { AppDateFormat } from '../../core/config/app-config.model';
 import { AppConfigService } from '../../core/config/app-config.service';
+import { resourceId } from '../../core/http/path-segment.util';
 import { toFineractDate } from '../../shared/date-format.util';
 import type {
   Client,
@@ -35,8 +36,15 @@ import type {
  * **What this file owns.** The resource path of each call, the query parameters of each call, and
  * the conversion of a model's `Date | null` members into the `dd MMMM yyyy` strings the server
  * parses. `dateFormat` and `locale` are set here from the resolved configuration and the active
- * language, never by a caller, which is why those two members are required on every request model
- * and why no screen has to remember them (Rule 1 clause 2; AAP 0.1.1 date discipline).
+ * language, never by a caller: the request models carry both, and the `*Input` types a screen hands
+ * this service leave them out, so no screen has to remember them and none can supply a value that
+ * disagrees with the configuration (Rule 1 clause 2; AAP 0.7.2 "Date handling").
+ *
+ * **Every identifier is checked before its URL is composed.** `resourceId` from
+ * `core/http/path-segment.util.ts` accepts one or more ASCII digits and refuses anything else, so a
+ * crafted `:id` cannot move a request to another path on the same host; the check runs inside
+ * `defer`, which reaches the caller as an observable error with no request issued, while a valid id
+ * still composes the byte-identical URL legacy sent (Rule 1 clause 2).
  *
  * **What this file deliberately does not own.**
  *
@@ -112,16 +120,33 @@ interface ClientEditWire extends ClientDateWire {
 /** `POST /clients/{id}?command=activate` — the activation date and the date-format pair. */
 type ClientActivateWire = ClientDateWire & { readonly activationDate: string | null };
 
-/** `POST /clients/{id}?command=close` — the closure date, its reason and the date-format pair. */
-type ClientCloseWire = ClientDateWire & { readonly closureDate: string | null; readonly closureReasonId: number };
+/**
+ * `POST /clients/{id}?command=close` — the closure date, the reason when one was chosen and the
+ * date-format pair. The reason is present only when the tenant's narration list offered one; the
+ * server's own `notNull` rule is what refuses a body without it, with the message the screen shows
+ * verbatim (Rule 1 clause 3; AAP 0.7.4).
+ */
+type ClientCloseWire = ClientDateWire & {
+  readonly closureDate: string | null;
+  readonly closureReasonId?: number;
+};
 
-/** `POST /clients/{id}?command=reject` — the rejection date, its reason and the date-format pair. */
-type ClientRejectWire = ClientDateWire & { readonly rejectionDate: string | null; readonly rejectionReasonId: number };
+/**
+ * `POST /clients/{id}?command=reject` — the rejection date, the reason when one was chosen and the
+ * date-format pair, on the same terms as {@link ClientCloseWire}.
+ */
+type ClientRejectWire = ClientDateWire & {
+  readonly rejectionDate: string | null;
+  readonly rejectionReasonId?: number;
+};
 
-/** `POST /clients/{id}?command=withdraw` — the withdrawal date, its reason and the date-format pair. */
+/**
+ * `POST /clients/{id}?command=withdraw` — the withdrawal date, the reason when one was chosen and the
+ * date-format pair, on the same terms as {@link ClientCloseWire}.
+ */
 type ClientWithdrawalWire = ClientDateWire & {
   readonly withdrawalDate: string | null;
-  readonly withdrawalReasonId: number;
+  readonly withdrawalReasonId?: number;
 };
 
 /**
@@ -150,6 +175,36 @@ type ClientActionWire =
   | ClientRejectWire
   | ClientWithdrawalWire
   | ClientReactivateWire;
+
+/**
+ * `Omit` for a union.
+ *
+ * Applied to a union, a bare `Omit` collapses it to the members every variant shares — for
+ * `ClientActionRequest` that is `command` alone — which would let a `close` body be built without its
+ * own date and reason. Distributing over each variant keeps `command` beside the fields that command
+ * posts, which is what makes {@link ClientActionInput} a union a screen can narrow by `command`.
+ */
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+
+/**
+ * What the edit screen hands {@link ClientService.update}: `ClientEditRequest` without its
+ * `dateFormat` and `locale` members, because this service fills both from the resolved configuration
+ * and the active language at the boundary where the body is built (AAP 0.7.2 "Date handling";
+ * Rule 1 clause 2). The screen therefore holds only the values the operator edited, plus the
+ * `Date | null` its activation-date field carries, and can never pair a date with a format or a
+ * locale that disagrees with it.
+ */
+export type ClientEditInput = Omit<ClientEditRequest, 'dateFormat' | 'locale'>;
+
+/**
+ * What an action screen hands {@link ClientService.action}: one of the five lifecycle bodies without
+ * its format members, for the same reason as {@link ClientEditInput}.
+ *
+ * The union stays discriminated by `command`, so a screen holding a `close` body cannot read a
+ * rejection reason from it, and the service spreads its own pair under the command's members, so no
+ * screen names a date format or a language at all.
+ */
+export type ClientActionInput = DistributiveOmit<ClientActionRequest, 'dateFormat' | 'locale'>;
 
 /**
  * `template=true`, the one query parameter the edit screen's seed read sends. Declared once because
@@ -208,7 +263,9 @@ export class ClientService {
    * @returns the record the header, the summary and the actions render.
    */
   get(id: number | string): Observable<Client> {
-    return this.http.get<Client>(this.config.apiUrl(`clients/${id}`));
+    return defer(() =>
+      this.http.get<Client>(this.config.apiUrl(`clients/${resourceId(id, 'ClientService.get')}`)),
+    );
   }
 
   /**
@@ -224,9 +281,12 @@ export class ClientService {
    * @returns the record merged with its template.
    */
   getWithTemplate(id: number | string): Observable<ClientTemplate> {
-    return this.http.get<ClientTemplate>(this.config.apiUrl(`clients/${id}`), {
-      params: TEMPLATE_ONLY_PARAMS,
-    });
+    return defer(() =>
+      this.http.get<ClientTemplate>(
+        this.config.apiUrl(`clients/${resourceId(id, 'ClientService.getWithTemplate')}`),
+        { params: TEMPLATE_ONLY_PARAMS },
+      ),
+    );
   }
 
   /**
@@ -240,7 +300,11 @@ export class ClientService {
    * @returns the account summaries grouped by family.
    */
   accounts(id: number | string): Observable<ClientAccountSummary> {
-    return this.http.get<ClientAccountSummary>(this.config.apiUrl('clients/' + id + '/accounts'));
+    return defer(() =>
+      this.http.get<ClientAccountSummary>(
+        this.config.apiUrl(`clients/${resourceId(id, 'ClientService.accounts')}/accounts`),
+      ),
+    );
   }
 
   /**
@@ -253,7 +317,11 @@ export class ClientService {
    * @returns the identifiers in the server's order.
    */
   identifiers(id: number | string): Observable<ClientIdentifier[]> {
-    return this.http.get<ClientIdentifier[]>(this.config.apiUrl('clients/' + id + '/identifiers'));
+    return defer(() =>
+      this.http.get<ClientIdentifier[]>(
+        this.config.apiUrl(`clients/${resourceId(id, 'ClientService.identifiers')}/identifiers`),
+      ),
+    );
   }
 
   /**
@@ -266,8 +334,12 @@ export class ClientService {
    * @returns the allowed document types in the server's order.
    */
   identifiersTemplate(id: number | string): Observable<ClientIdentifierTemplate> {
-    return this.http.get<ClientIdentifierTemplate>(
-      this.config.apiUrl('clients/' + id + '/identifiers/template'),
+    return defer(() =>
+      this.http.get<ClientIdentifierTemplate>(
+        this.config.apiUrl(
+          `clients/${resourceId(id, 'ClientService.identifiersTemplate')}/identifiers/template`,
+        ),
+      ),
     );
   }
 
@@ -299,8 +371,15 @@ export class ClientService {
    * @param body the edited fields, with `activationDate` only when the edit means to set it.
    * @returns the command result carrying the client's ids.
    */
-  update(id: number | string, body: ClientEditRequest): Observable<ClientMutationResponse> {
-    return this.http.put<ClientMutationResponse>(this.config.apiUrl(`clients/${id}`), this.editWire(body));
+  update(id: number | string, body: ClientEditInput): Observable<ClientMutationResponse> {
+    const payload = this.editWire(body);
+
+    return defer(() =>
+      this.http.put<ClientMutationResponse>(
+        this.config.apiUrl(`clients/${resourceId(id, 'ClientService.update')}`),
+        payload,
+      ),
+    );
   }
 
   /**
@@ -330,9 +409,9 @@ export class ClientService {
    * Runs one lifecycle command: `POST /clients/{id}?command=<command>`.
    *
    * The five in-scope commands are `activate`, `close`, `reject`, `withdraw` and `reactivate`; each
-   * posts its own body shape, which `ClientActionRequest` discriminates on the command, and this
-   * method formats the action's date and fills `dateFormat` and `locale` the same way every other
-   * body is built. The reason ids and dates come from the action screen — from the reason list of
+   * posts its own body shape, which `ClientActionInput` discriminates on the command, and this method
+   * formats the action's date and fills `dateFormat` and `locale` the same way every other body is
+   * built. The reason ids and dates come from the action screen — from the reason list of
    * {@link commandParam} and from the form's date field — and the server is what refuses a body that
    * lacks what its command requires, with the message the screen shows verbatim (Rule 1 clause 3).
    *
@@ -351,7 +430,7 @@ export class ClientService {
   action(
     id: number | string,
     command: ClientActionCommand,
-    body: ClientActionRequest,
+    body: ClientActionInput,
   ): Observable<ClientMutationResponse> {
     if (body.command !== command) {
       throw new Error(
@@ -361,9 +440,16 @@ export class ClientService {
       );
     }
 
-    return this.http.post<ClientMutationResponse>(this.config.apiUrl(`clients/${id}`), this.actionWire(body), {
-      params: new HttpParams().set('command', command),
-    });
+    const payload = this.actionWire(body);
+    const params = new HttpParams().set('command', command);
+
+    return defer(() =>
+      this.http.post<ClientMutationResponse>(
+        this.config.apiUrl(`clients/${resourceId(id, 'ClientService.action')}`),
+        payload,
+        { params },
+      ),
+    );
   }
 
   /**
@@ -454,8 +540,11 @@ export class ClientService {
     };
   }
 
-  /** `ClientEditRequest` as the wire body, built by the same rule as {@link createWire}. */
-  private editWire(body: ClientEditRequest): ClientEditWire {
+  /**
+   * The caller's {@link ClientEditInput} as the wire body: the same rule as {@link createWire}, so a
+   * member the caller left `undefined` stays out of the payload and a `null` date stays `null`.
+   */
+  private editWire(body: ClientEditInput): ClientEditWire {
     const dates = this.dateWire();
 
     return {
@@ -474,10 +563,15 @@ export class ClientService {
   /**
    * One action's body as it goes on the wire: the members its own command accepts, with the date
    * formatted and the date-format pair attached. The switch is exhaustive over
-   * `ClientActionRequest`, so a command this service does not post is a compile error rather than a
+   * `ClientActionInput`, so a command this service does not post is a compile error rather than a
    * payload the server has to refuse.
+   *
+   * A reason member is spread only when the caller chose one, so a body never carries the key as
+   * `undefined` and the payload is unchanged whenever a reason is chosen: when the tenant's narration
+   * list offers none, the command still posts and Fineract's own message is what reaches the screen
+   * (Rule 1 clause 3; AAP 0.7.4).
    */
-  private actionWire(request: ClientActionRequest): ClientActionWire {
+  private actionWire(request: ClientActionInput): ClientActionWire {
     const dates = this.dateWire();
 
     switch (request.command) {
@@ -488,21 +582,27 @@ export class ClientService {
         return {
           ...dates,
           closureDate: toFineractDate(request.closureDate, dates.locale),
-          closureReasonId: request.closureReasonId,
+          ...(request.closureReasonId === undefined
+            ? {}
+            : { closureReasonId: request.closureReasonId }),
         };
 
       case 'reject':
         return {
           ...dates,
           rejectionDate: toFineractDate(request.rejectionDate, dates.locale),
-          rejectionReasonId: request.rejectionReasonId,
+          ...(request.rejectionReasonId === undefined
+            ? {}
+            : { rejectionReasonId: request.rejectionReasonId }),
         };
 
       case 'withdraw':
         return {
           ...dates,
           withdrawalDate: toFineractDate(request.withdrawalDate, dates.locale),
-          withdrawalReasonId: request.withdrawalReasonId,
+          ...(request.withdrawalReasonId === undefined
+            ? {}
+            : { withdrawalReasonId: request.withdrawalReasonId }),
         };
 
       case 'reactivate':

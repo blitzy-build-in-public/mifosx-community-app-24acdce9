@@ -5,9 +5,8 @@ import { ActivatedRoute, Router, RouterLink, type ParamMap } from '@angular/rout
 import { TranslatePipe } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
 
-import { ApiError } from '../../../core/http/api-error';
+import { ApiError, screenFailure, toDisplayableFailure } from '../../../core/http/api-error';
 import { DateFieldComponent } from '../../../shared/date-field/date-field.component';
-import { EmptyStateComponent } from '../../../shared/empty-state/empty-state.component';
 import { createSubmitGuard } from '../../../shared/submit-guard.util';
 import type {
   LoanActionRequest,
@@ -16,7 +15,7 @@ import type {
   LoanTransactionTemplate,
 } from '../loan.models';
 import { LoanRepaymentComponent } from '../loan-repayment/loan-repayment.component';
-import { LoanService } from '../loan.service';
+import { LoanService, type LoanActionInput } from '../loan.service';
 
 /**
  * What the route's `:action` segment selects: one of the five lifecycle commands, the repayment
@@ -97,7 +96,10 @@ const COMMAND_BY_MODE = {
  * lacks, so no raw dotted key can reach the user.
  */
 interface LoanActionCopy {
-  /** Heading of the screen: the command's own legacy heading key. */
+  /**
+   * Heading of the screen: the title the legacy loan action screen renders for this command, whose
+   * key `LoanAccountActionsController.js` assigns to `scope.title` for the same route segment.
+   */
   readonly headingKey: string;
 
   /** Label of the primary button, which submits the command. */
@@ -113,16 +115,24 @@ interface LoanActionCopy {
  * branch can quietly render another action's wording. Every key here is corrected in this one place
  * if the parity run finds the legacy bundles spell one differently.
  *
- * The keys are the legacy `label.heading.*` / `label.button.*` families in the command's own
- * vocabulary — the route segment and the command are the same word, so a heading cannot disagree
- * with the action it heads.
+ * The headings are the titles `LoanAccountActionsController.js` sets for these same screens: the key
+ * it assigns to `scope.title` for the `approve`, `reject`, `undoapproval`, `undodisbursal` and
+ * `disburse` segments, so a caption reads as the legacy screen's own title rather than as the
+ * command's bare name. The button labels keep the command's own `label.button.*` vocabulary, where
+ * the route segment and the command are the same word.
  */
 const ACTION_COPY = {
-  approve: { headingKey: 'label.heading.approve', submitKey: 'label.button.approve' },
-  undoapproval: { headingKey: 'label.heading.undoapproval', submitKey: 'label.button.undoapproval' },
-  reject: { headingKey: 'label.heading.reject', submitKey: 'label.button.reject' },
-  disburse: { headingKey: 'label.heading.disburse', submitKey: 'label.button.disburse' },
-  undodisbursal: { headingKey: 'label.heading.undodisbursal', submitKey: 'label.button.undodisbursal' },
+  approve: { headingKey: 'label.heading.approveloanaccount', submitKey: 'label.button.approve' },
+  undoapproval: {
+    headingKey: 'label.heading.undoapproveloanaccount',
+    submitKey: 'label.button.undoapproval',
+  },
+  reject: { headingKey: 'label.heading.rejectloanaccount', submitKey: 'label.button.reject' },
+  disburse: { headingKey: 'label.heading.disburseloanaccount', submitKey: 'label.button.disburse' },
+  undodisbursal: {
+    headingKey: 'label.heading.undodisburseloanaccount',
+    submitKey: 'label.button.undodisbursal',
+  },
 } satisfies Record<LoanCommand, LoanActionCopy>;
 
 /**
@@ -132,7 +142,7 @@ const ACTION_COPY = {
  * leaving out the two members `LoanService.action` writes itself from the resolved configuration as
  * it serialises the request. A screen that held those two would keep a second copy of the payload's
  * date contract (Rule 1 clause 2; AAP 0.14.1), so the body assembled here carries the command's own
- * fields and {@link LoanActionComponent.send} is the one place it meets the model.
+ * fields and {@link LoanActionComponent.send} hands it to the service's own input type with no cast.
  */
 type ApproveFields = Pick<
   Extract<LoanActionRequest, { command: 'approve' }>,
@@ -165,8 +175,9 @@ type UndoDisbursalFields = Extract<LoanActionRequest, { command: 'undodisbursal'
  * Every body this screen can assemble, as a union of the five commands' shapes.
  *
  * {@link LoanActionComponent.assembleFields} answers one arm of it per command, so the union is what
- * makes a missing arm a compile error, and {@link LoanActionComponent.buildRequest} reconciles the
- * whole union with the model in one place.
+ * makes a missing arm a compile error, and the union is assignable to `LoanService`'s own
+ * `LoanActionInput` — the model without the format pair — so the body reaches the service without an
+ * assertion anywhere on the path.
  */
 type LoanActionFields =
   | ApproveFields
@@ -176,38 +187,21 @@ type LoanActionFields =
   | UndoDisbursalFields;
 
 /**
- * The text shown when a call rejects with something the interceptor did not map to an `ApiError`.
+ * The day a dated action defaults to: the browser clock's own calendar day, at local midnight.
  *
- * Every Fineract answer reaches a screen as `ApiError`, whose `message` is the server's own
- * `defaultUserMessage` rendered verbatim (AAP 0.4.2, AAP 0.4.4 decision 6). A rejection of another
- * shape is a fault in this application rather than an answer from Fineract, so it has no server text
- * to show; this fixed sentence keeps the form from displaying nothing at all, and it is deliberately
- * not translated, because no language bundle carries wording for a fault the server never reported.
+ * Every action date in legacy starts from the clock rather than from the loan —
+ * `app/scripts/controllers/loanAccount/LoanAccountActionsController.js` assigns `new Date()` to
+ * `approvedOnDate` (approve), `rejectedOnDate` (reject) and `actualDisbursementDate` (disburse) — and
+ * AAP 0.10.5 item 15 registers browser-clock form defaults as the intended behaviour. Local midnight
+ * rather than the current instant, so the day the user sees is the day
+ * `shared/date-format.util.toFineractDate` writes into the payload (Rule 1 clause 3).
+ *
+ * @returns Today's date, at 00:00 local time.
  */
-const UNMAPPED_FAILURE = 'The request could not be completed.';
+function today(): Date {
+  const now = new Date();
 
-/**
- * Reads whatever a service rejected with into the one error type a screen renders.
- *
- * An `ApiError` is passed through untouched, so the message, the status and the field-level failures
- * are exactly what `toApiError` produced from the Fineract body and nothing re-shapes them
- * (Rule 1 clause 3: the message is surfaced verbatim). Any other rejection — a transport fault that
- * bypassed the interceptor, a thrown programming error — becomes an `ApiError` carrying its own
- * `message` when it has one, and status `0`, which is the class's own marker for "no HTTP answer"
- * (`core/http/api-error.ts`). It never logs, never inspects the request and never reads a header or a
- * body, so no session material can reach a screen through it (Rule 1 clause 9).
- *
- * @param cause The value a `firstValueFrom(...)` awaited here rejected with.
- * @returns The error the screen renders.
- */
-function toDisplayableFailure(cause: unknown): ApiError {
-  if (cause instanceof ApiError) {
-    return cause;
-  }
-
-  const message = cause instanceof Error && cause.message !== '' ? cause.message : UNMAPPED_FAILURE;
-
-  return new ApiError(message, 0);
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
 /**
@@ -238,23 +232,27 @@ function toDisplayableFailure(cause: unknown): ApiError {
  * the whole request and `core/http/fineract.interceptor.ts` attaches `Authorization` and
  * `Fineract-Platform-TenantId` (Rule 1 clause 5, Rule 2; AAP 0.4.2, AAP 0.14.1).
  *
- * **Dates.** Every date control holds a `Date | null`; this component formats none of them and adds
- * neither member of the payload's date contract, because `LoanService.action` serialises each date
- * and writes those members from the resolved configuration as the body leaves (AAP 0.7.2 "Date
- * handling"; Rule 1 clause 2). A date field therefore starts **empty and required** and Fineract
- * decides. That is a registered deviation from AAP 0.10.5 item 15, which permits a form's own
- * browser-clock default: seeding a field from the template's date would mean reading Fineract's wire
- * date shape, whose single reader is `web-ng/src/app/shared/date-format.util.ts` and which is not a
- * dependency of this file, so the field takes no default rather than an invented one. The figures are
- * seeded where the template sends them — `approvalAmount` for the approved principal, `amount` for
- * the disbursed amount — and are never hard-coded, rounded or bounded.
+ * **Dates.** Each of the three dated commands starts its date at {@link today} — the browser clock's
+ * own day, at local midnight — because that is the default legacy's action screens give it: the legacy
+ * controller assigns `new Date()` to `approvedOnDate`, `rejectedOnDate` and `actualDisbursementDate`,
+ * and AAP 0.10.5 item 15 registers browser-clock form defaults as the intended behaviour. The field
+ * stays editable and required, so a user can correct it and Fineract alone decides whether the date it
+ * receives is acceptable. The clock is the default rather than the approval template's own wire date,
+ * whose only reader is `web-ng/src/app/shared/date-format.util.ts` and which this file does not depend
+ * on. Every date control holds a `Date | null`; this component formats none of them and adds neither
+ * member of the payload's date contract, because `LoanService.action` serialises each date and writes
+ * those members from the resolved configuration as the body leaves (AAP 0.7.2 "Date handling"; Rule 1
+ * clause 2). The figures are seeded where the template sends them — `approvalAmount` for the approved
+ * principal, `amount` for the disbursed amount — and are never hard-coded, rounded or bounded.
  *
- * **What it does not improve.** Defaults and option lists come from the template endpoints;
+ * **What it does not improve.** Defaults and option lists come from the template endpoints, the action
+ * date alone excepted, which follows the browser clock as legacy's does (see **Dates**);
  * `Validators.required` is the only validator and only on the fields the three dated commands need,
- * so nothing is blocked by a rule Fineract does not state (AAP 0.4.4 decision 6, Rule 1 clause 3);
- * `ApiError.message` is rendered verbatim above the form, which keeps every entered value, and no
- * notification is raised here because the interceptor already shows one for a 5xx or network failure
- * (AAP 0.7.4). There is no confirmation step, no success toast and no amount check.
+ * so nothing is blocked by a rule Fineract does not state (AAP 0.4.4 decision 6, Rule 1 clause 3).
+ * A 4xx is Fineract's answer to the values the form submitted, so its text is rendered verbatim above
+ * the form while every entered value survives; a 5xx or a transport failure has already produced the
+ * interceptor's one notification and is not painted on screen a second time (`screenFailure`,
+ * AAP 0.7.4). There is no confirmation step, no success toast and no amount check.
  *
  * **One request per click.** The POST goes through `guard.runOnce`, so a second click while the first
  * is in flight sends nothing: Fineract's action endpoints are not idempotent (AAP 0.1.1, AAP 0.14.1;
@@ -286,7 +284,6 @@ function toDisplayableFailure(cause: unknown): ApiError {
     RouterLink,
     TranslatePipe,
     DateFieldComponent,
-    EmptyStateComponent,
     LoanRepaymentComponent,
   ],
   templateUrl: './loan-action.component.html',
@@ -382,7 +379,7 @@ export class LoanActionComponent {
    * control is named after the member it posts and the body keys cannot drift from the model.
    */
   readonly approveForm = new FormGroup({
-    approvedOnDate: new FormControl<Date | null>(null, { validators: [Validators.required] }),
+    approvedOnDate: new FormControl<Date | null>(today(), { validators: [Validators.required] }),
     approvedLoanAmount: new FormControl<number | null>(null, { validators: [Validators.required] }),
     note: new FormControl<string>('', { nonNullable: true }),
   });
@@ -390,12 +387,13 @@ export class LoanActionComponent {
   /**
    * The reject form: `POST /loans/{id}?command=reject`.
    *
-   * `rejectedOnDate` is the command's mandatory member and starts empty — the approval template
-   * carries no rejection date, and inventing one would be a default the legacy screen does not show
-   * (Rule 1 clause 3). The note is optional.
+   * `rejectedOnDate` is the command's mandatory member and starts at the browser clock's own day,
+   * the default legacy's rejection screen assigns with `new Date()` (AAP 0.10.5 item 15). It stays
+   * editable and required, so the server decides whether the date it receives is acceptable; the
+   * approval template carries no rejection date and none is invented from it. The note is optional.
    */
   readonly rejectForm = new FormGroup({
-    rejectedOnDate: new FormControl<Date | null>(null, { validators: [Validators.required] }),
+    rejectedOnDate: new FormControl<Date | null>(today(), { validators: [Validators.required] }),
     note: new FormControl<string>('', { nonNullable: true }),
   });
 
@@ -408,7 +406,7 @@ export class LoanActionComponent {
    * no payment-type control: the body has no member for one (see the departure recorded on the class).
    */
   readonly disburseForm = new FormGroup({
-    actualDisbursementDate: new FormControl<Date | null>(null, { validators: [Validators.required] }),
+    actualDisbursementDate: new FormControl<Date | null>(today(), { validators: [Validators.required] }),
     transactionAmount: new FormControl<number | null>(null, { validators: [Validators.required] }),
     note: new FormControl<string>('', { nonNullable: true }),
   });
@@ -455,19 +453,15 @@ export class LoanActionComponent {
    * cast over a value that might be `null`.
    *
    * Dating and the two payload members Fineract needs to parse a date are the service's: this method
-   * hands over the `Date` each field holds and adds nothing else. A note is attached only when its
-   * trimmed value carries text, so an untouched note field adds no member the legacy body lacked
-   * (Rule 1 clause 2).
+   * hands over the `Date` each field holds and adds nothing else, so the body's type is the service's
+   * own `LoanActionInput` and no assertion stands between the form and the request. A note is attached
+   * only when its trimmed value carries text, so an untouched note field adds no member the legacy
+   * body lacked (Rule 1 clause 2).
    *
    * @returns The body to post, or `null` when this mode has nothing valid to post.
    */
-  buildRequest(): LoanActionRequest | null {
-    const fields = this.assembleFields();
-
-    // `LoanActionRequest` types the payload as it leaves the process; the object assembled above holds
-    // the command's own fields, and the two members the model declares for the wire are written by
-    // `LoanService.action` as it serialises. This is the one place the two meet.
-    return fields === null ? null : (fields as LoanActionRequest);
+  buildRequest(): LoanActionFields | null {
+    return this.assembleFields();
   }
 
   /**
@@ -479,11 +473,11 @@ export class LoanActionComponent {
    * the repayment form and the not-found outcome — posts nothing at all.
    *
    * On success the screen navigates to `#/viewloanaccount/:id`, where the loan's status, schedule and
-   * transactions reflect the action. On failure the mapped `ApiError` is stored in `error()` for the
-   * template to render verbatim; every entered value survives, the form is not reset and the screen
-   * does not navigate, which is what lets a user correct what the server refused (AAP 0.7.4). No
-   * notification is raised here: the interceptor already shows one for a 5xx or a network failure, so
-   * a failure produces one message, not two.
+   * transactions reflect the action. On failure the 4xx `screenFailure` answers is stored in `error()`
+   * for the template to render verbatim; every entered value survives, the form is not reset and the
+   * screen does not navigate, which is what lets a user correct what the server refused (AAP 0.7.4).
+   * No notification is raised here: the interceptor already shows one for a 5xx or a network failure,
+   * and `screenFailure` answers `null` for those, so a failure produces one message, not two.
    *
    * @returns A promise that settles once the request has been attempted and the screen has navigated
    *   or recorded the failure.
@@ -540,10 +534,11 @@ export class LoanActionComponent {
    * nothing at all for the two confirm views and the repayment form, which have no defaults to seed.
    *
    * A 404 sets `notFound`, which the template renders in place of the form: the id is not a loan, or
-   * not a loan in a state this action applies to. Any other failure sets `error`, whose message is
-   * rendered verbatim. Neither unmounts the screen nor resets a form, and no notification is raised
-   * here — the interceptor owns that for a 5xx or a network failure (AAP 0.7.4). `loading` is cleared
-   * whichever way the read settles, so the form is never withheld for ever.
+   * not a loan in a state this action applies to. Any other 4xx sets `error` through `screenFailure`,
+   * whose message is rendered verbatim; a 5xx or a transport failure leaves `error` `null`, because
+   * the interceptor has already raised its one notification (AAP 0.7.4). Neither unmounts the screen
+   * nor resets a form. `loading` is cleared whichever way the read settles, so the form is never
+   * withheld for ever.
    *
    * @param mode The served mode whose seed is read.
    * @param loanId Loan the action applies to, as the route delivered it.
@@ -573,7 +568,7 @@ export class LoanActionComponent {
       if (failure.status === 404) {
         this.notFound.set(true);
       } else {
-        this.error.set(failure);
+        this.error.set(screenFailure(failure));
       }
     } finally {
       this.loading.set(false);
@@ -743,15 +738,17 @@ export class LoanActionComponent {
    *
    * The guarded callback clears the previous failure so a retry does not show a stale message while it
    * is in flight, posts the body once, and navigates to `#/viewloanaccount/:id` with the route's own
-   * loan id — the page where the new status and the appended transaction are read back. A failure is
-   * recorded as the mapped `ApiError`, which the template renders verbatim while every entered value
-   * stays in place; the guard releases the trigger in either outcome.
+   * loan id — the page where the new status and the appended transaction are read back. A 4xx is
+   * recorded as the failure `screenFailure` answers, which the template renders verbatim while every
+   * entered value stays in place; a 5xx or a transport failure records `null`, because the
+   * interceptor's notification is its one message (AAP 0.7.4). The guard releases the trigger in
+   * either outcome.
    *
    * @param command The command being posted, which is the one the body describes.
    * @param body The body {@link buildRequest} assembled for it.
    * @returns A promise that settles once the request has been attempted.
    */
-  private send(command: LoanCommand, body: LoanActionRequest): Promise<void> {
+  private send(command: LoanCommand, body: LoanActionInput): Promise<void> {
     return this.guard.runOnce(async (): Promise<void> => {
       this.error.set(null);
 
@@ -759,7 +756,7 @@ export class LoanActionComponent {
         await firstValueFrom(this.loans.action(this.id(), command, body));
         await this.router.navigate(['/viewloanaccount', this.id()]);
       } catch (cause: unknown) {
-        this.error.set(toDisplayableFailure(cause));
+        this.error.set(screenFailure(cause));
       }
     });
   }

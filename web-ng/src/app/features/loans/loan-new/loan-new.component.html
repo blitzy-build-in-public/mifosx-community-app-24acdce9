@@ -41,9 +41,11 @@
   </div>
 } @else {
   <div class="panel panel-default">
-    <div class="panel-heading">{{ 'label.heading.loanapplication' | translate }}</div>
+    <div class="panel-heading">
+      <h3 class="panel-title">{{ 'label.heading.loanapplication' | translate }}</h3>
+    </div>
 
-    <div class="panel-body">
+    <div class="panel-body" [attr.aria-busy]="loading() ? 'true' : null">
       <!--
         Fineract's own failure text, verbatim and unmoved by any prefix, capitalisation or translation:
         W7 compares it character for character with `errors[].defaultUserMessage`. `role="alert"` announces
@@ -457,7 +459,7 @@
         -->
         <div class="form-group">
           <div class="col-md-offset-3 col-md-9">
-            <a class="btn btn-default" [routerLink]="['/viewclient', clientId]">
+            <a class="btn btn-default" [routerLink]="['/viewclient', clientId()]">
               {{ 'label.button.cancel' | translate }}
             </a>
             <button type="button" class="btn btn-primary" [disabled]="guard.busy()" (click)="preview()">

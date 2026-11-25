@@ -30,7 +30,8 @@ import zhHans from '@angular/common/locales/zh-Hans';
 import zhHant from '@angular/common/locales/zh-Hant';
 
 /**
- * Angular's CLDR locale data for every language the application offers, registered once per code.
+ * Angular's CLDR locale data for every language the application can be configured in, registered
+ * once per code.
  *
  * **Why the data has to be registered.** Every date the application renders or sends is formatted
  * through Angular's `formatDate`, and `formatDate` takes the calendar names a pattern needs —
@@ -43,14 +44,16 @@ import zhHant from '@angular/common/locales/zh-Hant';
  * possible outside English, and it is the fix for the review's F03 finding: the date-format spec
  * could pass while only English worked.
  *
- * **Which codes.** Exactly the 31 of `AVAILABLE_LANGS` (`./translate.config`) — the languages both
- * switchers offer, each one backed by a legacy bundle served in place from
- * `app/global-translations/`. A served bundle is a language a user can select, and a selected
- * language is what `AppConfigService.activeLocale` hands to a payload, so those 31 codes are the
- * whole set `formatDate` must be able to answer. Codes are keyed in the normalised form Angular
- * itself resolves a locale to — lowercase, `_` for `-` — and the five the CLDR tree does not name
- * identically use their base language's module: `my_MM` → `my`, `pt_BR` → `pt`, `skr_arab` → `skr`,
- * `zh_CN` → `zh-Hans`, `zh_TW` → `zh-Hant`.
+ * **Which codes.** Every code the legacy bundle set ships: the 31 user-facing codes of the 32
+ * `locale-*.json` files in `app/global-translations/`, served in place and never copied, with
+ * TranslateWiki's `qqq` message-documentation pseudo-locale excluded. That is a superset of the 13
+ * codes `AVAILABLE_LANGS` (`./translate.config`) offers, and deliberately so: a deployment may
+ * configure its own starting `locale` from any served bundle, and `AppConfigService.activeLocale`
+ * hands that locale to a date-bearing payload, so those 31 codes remain the whole set `formatDate`
+ * must be able to answer. Codes are keyed in the normalised form Angular itself resolves a locale
+ * to — lowercase, `_` for `-` — and the five the CLDR tree does not name identically use their base
+ * language's module: `my_MM` → `my`, `pt_BR` → `pt`, `skr_arab` → `skr`, `zh_CN` → `zh-Hans`,
+ * `zh_TW` → `zh-Hant`.
  *
  * **Cost and dependency.** No package is added (Rule 1 clause 7): the data ships inside the pinned
  * `@angular/common` 22.3.0 as its own `locales/*` entry points, and the 29 modules imported above
@@ -77,9 +80,9 @@ import zhHant from '@angular/common/locales/zh-Hant';
 type LocaleDataModule = Parameters<typeof registerLocaleData>[0];
 
 /**
- * The module carrying each offered language's CLDR data, keyed by the normalised code
- * `ensureLocaleData` looks a locale up by. Enumerated in the order of `AVAILABLE_LANGS` — `en`
- * first, because it is the fallback language and the language of the first paint, the rest by code.
+ * The module carrying each served language's CLDR data, keyed by the normalised code
+ * `ensureLocaleData` looks a locale up by. Enumerated with `en` first — it is the fallback language
+ * and the language of the first paint — and the rest ascending by code.
  *
  * `ReadonlyMap` rather than an object literal so a lookup cannot walk the prototype chain: a code
  * such as `constructor` or `toString` must miss here and be reported, not resolve to something that

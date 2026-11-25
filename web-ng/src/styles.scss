@@ -52,8 +52,9 @@
 //     deliberately left at Bootstrap's own declaration, because legacy carries it on 1,839 form
 //     labels and styles none of them.
 //   * product-only classes the components name themselves where no Bootstrap class expresses
-//     them: .form-label, .record-title, .value-key, .panel-bordered, .text-small and the
-//     notification widget's .notification-container/.notification(-info|-success|-error).
+//     them: .form-label, .record-title, .value-key, .panel-bordered, .text-small, .language-switcher,
+//     .login-hero and the notification widget's
+//     .notification-container/.notification(-info|-success|-error).
 //   * the token declarations below, each annotated with the legacy variable it reproduces.
 //
 // Each rule carries its token in a comment.
@@ -149,6 +150,7 @@ $mx-font-size-base: 14px; // $font-size-base
 $mx-line-height-base: 1.42857143; // $line-height-base (20/14)
 $mx-font-size-small: 12px; // $font-size-small
 $mx-font-size-body-sm: 13px; // .card > .content of _content.scss
+$mx-font-size-switcher: 13px; // AAP 0.2.3 LanguageSwitcher label size — the text-small 13px step
 $mx-font-size-label: 12px; // text-label-caps
 $mx-font-size-card-title: 18px; // $font-size-h4
 $mx-font-size-record-title: 24px; // $font-size-h3
@@ -301,6 +303,13 @@ hr {
   border-top: 1px solid $mx-hairline; // color-hairline
 }
 
+// The section rule the record header closes with, which AAP 0.2.3 draws at #E5E5E5:
+// color-section-rule, opt-in by class so no other <hr> in the build changes, and declared here
+// because a component carries no colour of its own (Rule 1 clause 6).
+hr.section-rule {
+  border-top-color: $mx-section-rule; // color-section-rule
+}
+
 // -----------------------------------------------------------------------------
 // Tables (_content.scss .table rule, Bootstrap's cell metrics)
 // -----------------------------------------------------------------------------
@@ -314,6 +323,20 @@ hr {
   > tbody > tr > td {
     padding: $mx-cell-padding; // space-cell
     border-top: 1px solid $mx-rule;
+  }
+}
+
+// Column proportions of the clients list: the design's own sizing, Name widest at ~28% and Staff
+// narrowest at ~8.5% (AAP 0.7.4 "Clients list"), with the four middle columns dividing what is
+// left. A width is a visual value, so it lives here rather than in the screen's markup (Rule 1
+// clause 6); the table declares only the class.
+.table.client-list {
+  > thead > tr > th:first-child {
+    width: 28%;
+  }
+
+  > thead > tr > th:last-child {
+    width: 8.5%;
   }
 }
 
@@ -401,6 +424,53 @@ input[type="date"].form-control {
 // Invalid fields use Bootstrap's own .has-error / .help-block treatment; there is no second
 // validation mechanism.
 
+// The required-field marker a form template renders as `<span class="required">*</span>`. Legacy
+// declares the marker once, in the product partial — `span.required { color: $brand-danger; }`
+// [app/styles-dev/main/components/_content.scss:148] — and $brand-danger is Bootstrap's own
+// #d9534f, which the legacy variables leave at its default [_variables.scss:23]. Until this rule
+// existed the global layer declared nothing for the class, so every asterisk painted in the
+// colour of the label it sits in instead of the red the legacy screens show.
+span.required {
+  color: $brand-danger; // the legacy marker colour — Bootstrap's $brand-danger, #d9534f
+}
+
+// -----------------------------------------------------------------------------
+// Login language switcher (AAP 0.2.3 `LanguageSwitcher`: "label 13px #666F74 + native select 24px
+// tall")
+//
+// The row the login screen renders is a label plus a native <select>. Its label is the legacy
+// "Change language:" text, one step above the `.text-small` body token and in the stronger body
+// colour, and the select keeps Bootstrap's `.btn.btn-default.btn-xs` for the legacy bordered look
+// while the design's own 24px height is set over it. The class lives here rather than in the
+// component, because a component-level rule would be a second styling layer (Rule 1 clause 6).
+// -----------------------------------------------------------------------------
+
+.language-switcher {
+  font-size: $mx-font-size-switcher; // AAP 0.2.3 LanguageSwitcher label size
+  color: $mx-text-strong; // color-text-strong — the design's #666F74 label
+
+  select {
+    height: 24px; // AAP 0.2.3 LanguageSwitcher: the design's 24px-tall native select
+    padding-block: 0; // keeps the selected label centred in the shorter box
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Login hero lockup (AAP 0.2.1 Step 1 and AAP 0.2.4: the brand lockup is "hero size 283.5x75.5 on
+// the login screen")
+//
+// Legacy governed the hero's rendered width rather than leaving it at the image file's own size: it
+// pinned the lockup to the form column with an inline `width:80%; margin:auto` [app/index.html:80].
+// The inline style becomes this class, and `.center-block` on the image supplies the centring it
+// carried. 80% of the design's 360px form column is 288px, which is the AAP's measured 283.5px
+// within the 110% capture-scale tolerance AAP 0.2.1 documents. The image keeps `img-responsive`, so
+// its height follows the file's own aspect ratio and the lockup is never stretched.
+// -----------------------------------------------------------------------------
+
+.login-hero {
+  width: 80%; // legacy app/index.html:80 — 288px inside the design's 360px column
+}
+
 // -----------------------------------------------------------------------------
 // Navbar (_navbar.scss, _layout.scss)
 // -----------------------------------------------------------------------------
@@ -437,6 +507,21 @@ input[type="date"].form-control {
 // The global search field sits in the navbar and is shorter than a form control in a form.
 .navbar .form-control {
   height: $mx-nav-control-height; // space-nav-control
+}
+
+// The same search control's attached scope selector (AAP 0.2.3 `GlobalSearch`: "attached native
+// select width 49.5–54px"). From Bootstrap's 768px breakpoint up, the `form-inline` block that
+// `.navbar-form` includes gives the selector `width: auto`, so it sizes to its own option label.
+// Below 768px that block does not apply — `.input-group .form-control` asks for `width: 100%`
+// while `.input-group-btn` is the shrink-to-fit 1% cell — so the selector collapses to the
+// browser's caret strip and its translated label cannot be read. The width is stated here at the
+// top of the design's range, so the longest translated scope label still has room beside the
+// browser's own caret, and the inline padding keeps that label off the 1px border. The box's
+// other properties — the #E0E0E0 border, the input radius, the navbar's 30px height and the
+// select colour — come from the rules above and are not restated.
+.navbar-form .input-group-btn > .form-control {
+  width: 54px; // AAP 0.2.3 GlobalSearch: the top of the attached select's 49.5–54px range
+  padding-inline: 4px; // keeps the option label clear of the border inside the narrower box
 }
 
 // -----------------------------------------------------------------------------

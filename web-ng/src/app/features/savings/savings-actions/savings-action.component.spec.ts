@@ -1,8 +1,8 @@
 import { computed, signal, type Signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, Router, type ParamMap } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
-import { EMPTY, Observable, of, throwError } from 'rxjs';
+import { BehaviorSubject, EMPTY, Observable, of, throwError } from 'rxjs';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { PermissionsService } from '../../../core/auth/permissions.service';
@@ -32,11 +32,22 @@ import { SavingsActionComponent } from './savings-action.component';
 /** The account the screen was opened on: the `:id` segment of the route. */
 const ACCOUNT_ID = '41';
 
+/** The account a second emission moves the same component to. */
+const SECOND_ACCOUNT_ID = '47';
+
 /** The payment types the transactions template offers, deliberately in a non-alphabetical order. */
 const PAYMENT_TYPES: SavingsTransactionTemplate = {
   paymentTypeOptions: [
     { id: 2, name: 'Cash' },
     { id: 1, name: 'Cheque' },
+  ],
+};
+
+/** The second account's transactions template: another list, so a stale answer is caught by its rows. */
+const SECOND_PAYMENT_TYPES: SavingsTransactionTemplate = {
+  paymentTypeOptions: [
+    { id: 4, name: 'Transfer' },
+    { id: 3, name: 'Cheque' },
   ],
 };
 
@@ -53,6 +64,9 @@ const TRANSACTION_AMOUNT = 1000;
 
 /** A distinctive Fineract rejection, quoted from the server's own wording. */
 const REJECTED_MESSAGE = 'The account is not in an active state.';
+
+/** The text a 5xx answers with; the interceptor turns it into that failure's one notification. */
+const SERVER_FAILURE_MESSAGE = 'The request could not be processed because an internal error occurred.';
 
 /** `SavingsService` as this screen uses it: the two writes and the one template read, all stubbed. */
 interface SavingsServiceStub {
@@ -83,13 +97,13 @@ interface PermissionsStub {
   has(key: string): boolean;
 }
 
-/** The active route snapshot the component reads its `:id` and `:action` segments from. */
+/**
+ * The active route as the component reads it: the parameter map the router delivers `:id` and
+ * `:action` on, held as a subject so a case can move the URL the way the router does on the same
+ * mounted component.
+ */
 interface ActivatedRouteStub {
-  readonly snapshot: {
-    readonly paramMap: {
-      get(name: string): string | null;
-    };
-  };
+  readonly paramMap: BehaviorSubject<ParamMap>;
 }
 
 /**
@@ -106,21 +120,24 @@ interface TranslateStub {
   readonly onTranslationChange: Observable<unknown>;
 }
 
-/** The route the screen is opened on, answering the two parameters it reads. */
-function routeWith(id: string | null, action: string | null): ActivatedRouteStub {
-  return {
-    snapshot: {
-      paramMap: {
-        get: (name: string): string | null => {
-          if (name === 'id') {
-            return id;
-          }
+/** The parameter map of one action route, absent segments omitted. */
+function paramsFor(id: string | null, action: string | null): ParamMap {
+  const params: Record<string, string> = {};
 
-          return name === 'action' ? action : null;
-        },
-      },
-    },
-  };
+  if (id !== null) {
+    params['id'] = id;
+  }
+
+  if (action !== null) {
+    params['action'] = action;
+  }
+
+  return convertToParamMap(params);
+}
+
+/** The route the screen is opened on, carrying the two segments it reads. */
+function routeWith(id: string | null, action: string | null): ActivatedRouteStub {
+  return { paramMap: new BehaviorSubject<ParamMap>(paramsFor(id, action)) };
 }
 
 /** Builds the translation stub the TestBed provides. */
@@ -135,8 +152,33 @@ function translateStub(): TranslateStub {
 }
 
 /**
+ * An observable a case settles by hand, so one route's answer can be held open while the URL moves on —
+ * the order in which a superseded read answers last.
+ */
+function deferredResponse<T>(): { readonly response: Observable<T>; resolve(value: T): void } {
+  let settle: ((value: T) => void) | null = null;
+
+  const response = new Observable<T>((subscriber) => {
+    settle = (value: T): void => {
+      subscriber.next(value);
+      subscriber.complete();
+    };
+  });
+
+  return {
+    response,
+    resolve(value: T): void {
+      if (settle === null) {
+        throw new Error('the screen never subscribed to the deferred response');
+      }
+      settle(value);
+    },
+  };
+}
+
+/**
  * An observable the spec settles by hand, for the in-flight assertion: subscribing it stores the
- * completion, so a case can hold the request open, click again, then answer it.
+ * completion, so a case can hold a write open, click again, then answer it.
  */
 function deferredCompletion(): { readonly response: Observable<void>; complete(): void } {
   let settle: (() => void) | null = null;
@@ -164,6 +206,7 @@ describe('SavingsActionComponent', () => {
   let component: SavingsActionComponent;
   let savings: SavingsServiceStub;
   let router: RouterStub;
+  let route: ActivatedRouteStub;
 
   /** The rendered host, narrowed once so every query below is type-checked. */
   const host = (): HTMLElement => {
@@ -210,9 +253,19 @@ describe('SavingsActionComponent', () => {
 
   /** Creates the screen on the given route segments. */
   async function render(id: string | null, action: string | null): Promise<void> {
-    TestBed.overrideProvider(ActivatedRoute, { useValue: routeWith(id, action) });
+    route = routeWith(id, action);
+    TestBed.overrideProvider(ActivatedRoute, { useValue: route });
     fixture = TestBed.createComponent(SavingsActionComponent);
     component = fixture.componentInstance;
+    await settle();
+  }
+
+  /**
+   * Moves the mounted screen to another action route the way the router does when only the segments
+   * change: the same component instance stays on screen and the parameter map emits again.
+   */
+  async function navigateTo(id: string, action: string): Promise<void> {
+    route.paramMap.next(paramsFor(id, action));
     await settle();
   }
 
@@ -379,5 +432,105 @@ describe('SavingsActionComponent', () => {
     expect(component.transactionForm.controls.transactionAmount.value).toBe(TRANSACTION_AMOUNT);
     expect(component.transactionForm.controls.paymentTypeId.value).toBe(CHOSEN_PAYMENT_TYPE_ID);
     expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  it('reports a server error once, through the interceptor’s notification and not on screen', async () => {
+    savings.action.mockReturnValue(throwError(() => new ApiError(SERVER_FAILURE_MESSAGE, 500)));
+
+    await render(ACCOUNT_ID, 'approve');
+
+    const approvedOnDate = component.approveForm.controls.approvedOnDate.value;
+
+    await component.submit();
+    fixture.detectChanges();
+
+    // A 5xx has already produced the interceptor's single notification, so the screen paints no
+    // second copy of it (AAP 0.7.4): it keeps no failure of its own and renders no alert.
+    expect(component.error()).toBeNull();
+    expect(host().querySelector('.alert.alert-danger')).toBeNull();
+    expect(renderedText()).not.toContain(SERVER_FAILURE_MESSAGE);
+    // The one request was made, the form kept the date it held, and nothing navigated.
+    expect(savings.action).toHaveBeenCalledTimes(1);
+    expect(savings.action).toHaveBeenCalledWith(ACCOUNT_ID, 'approve', { approvedOnDate });
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  it('re-reads the payment types for a second account, clearing the first form’s values', async () => {
+    savings.transactionTemplate.mockImplementation((id) =>
+      of(String(id) === SECOND_ACCOUNT_ID ? SECOND_PAYMENT_TYPES : PAYMENT_TYPES),
+    );
+
+    await render(ACCOUNT_ID, 'deposit');
+    fillTransactionForm();
+    fixture.detectChanges();
+
+    await navigateTo(SECOND_ACCOUNT_ID, 'deposit');
+
+    // One read per emission, addressed by the account the URL now names…
+    expect(savings.transactionTemplate.mock.calls).toEqual([[ACCOUNT_ID], [SECOND_ACCOUNT_ID]]);
+    // …and nothing of the first account's screen survives it: no amount, no chosen payment type.
+    expect(component.transactionForm.controls.transactionAmount.value).toBeNull();
+    expect(component.transactionForm.controls.paymentTypeId.value).toBeNull();
+    expect(component.error()).toBeNull();
+
+    // The picker offers only the payload the new route's read answered.
+    const options = Array.from(paymentTypeSelect().options).map((option) =>
+      (option.textContent ?? '').trim(),
+    );
+    expect(options.slice(1)).toEqual(SECOND_PAYMENT_TYPES.paymentTypeOptions.map((option) => option.name));
+    expect(options).not.toContain(PAYMENT_TYPE_NAMES[0]);
+  });
+
+  it('switches to the operation a second emission names, with no read for a lifecycle command', async () => {
+    savings.transactionTemplate.mockReturnValue(of(PAYMENT_TYPES));
+
+    await render(ACCOUNT_ID, 'deposit');
+    fillTransactionForm();
+    fixture.detectChanges();
+
+    await navigateTo(ACCOUNT_ID, 'approve');
+
+    // Approve reads nothing at all, so the template read stays the deposit route's one.
+    expect(savings.transactionTemplate).toHaveBeenCalledTimes(1);
+    expect(component.notFound()).toBe(false);
+    expect(renderedText()).toContain('label.heading.approvesavingaccount');
+    // The cash-transaction form's values went with the operation that collected them, and the approval
+    // form holds its own browser-clock default.
+    expect(component.transactionForm.controls.transactionAmount.value).toBeNull();
+    expect(component.transactionForm.controls.paymentTypeId.value).toBeNull();
+    expect(component.approveForm.controls.approvedOnDate.value).toBeInstanceOf(Date);
+    expect(host().querySelector('app-select-field select')).toBeNull();
+  });
+
+  it('discards a superseded payment-type answer that lands after the URL moved on', async () => {
+    const first = deferredResponse<SavingsTransactionTemplate>();
+    const second = deferredResponse<SavingsTransactionTemplate>();
+
+    savings.transactionTemplate.mockImplementation((id) =>
+      String(id) === SECOND_ACCOUNT_ID ? second.response : first.response,
+    );
+
+    await render(ACCOUNT_ID, 'deposit');
+
+    // The first account's read is still unanswered when the URL moves to the second account, which is
+    // what a move between two action routes produces when the earlier response is the slower one.
+    await navigateTo(SECOND_ACCOUNT_ID, 'deposit');
+
+    second.resolve(SECOND_PAYMENT_TYPES);
+    await settle();
+
+    expect(component.paymentTypes().map((option) => option.name)).toEqual(
+      SECOND_PAYMENT_TYPES.paymentTypeOptions.map((option) => option.name),
+    );
+
+    // The earlier answer lands last. It is dropped rather than published, so the first account's
+    // payment types can never be offered under the second account's URL.
+    first.resolve(PAYMENT_TYPES);
+    await settle();
+
+    expect(component.paymentTypes().map((option) => option.name)).toEqual(
+      SECOND_PAYMENT_TYPES.paymentTypeOptions.map((option) => option.name),
+    );
+    expect(component.error()).toBeNull();
   });
 });

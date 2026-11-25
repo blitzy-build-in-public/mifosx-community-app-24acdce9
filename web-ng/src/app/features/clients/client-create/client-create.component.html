@@ -21,6 +21,12 @@
   and no option is written into this file. The required marker is rendered where this template owns
   the `<label>`; on the fields `app-select-field` and `app-date-field` render, `[required]` carries
   the state to assistive technology because those components own their own label markup.
+
+  The two validation messages are bundle keys as well — the name rule's
+  `validation.msg.client.name.cannot.start.specialchar.ornumber` and the mobile rule's
+  `label.mustbenumeric` — each in the `.help-block` the field's `.has-error` state opens, and only one
+  of a field's messages is on screen at a time, so each input's `aria-describedby` names the one
+  showing and nothing else.
 -->
 <section class="container-fluid">
   <div class="row">
@@ -74,7 +80,7 @@
 
               <div class="row">
                 <div class="col-md-6">
-                  <div class="form-group" [class.has-error]="showsRequiredError(form.controls.firstname)">
+                  <div class="form-group" [class.has-error]="showsError(form.controls.firstname)">
                     <label class="control-label" for="firstname">
                       {{ 'label.input.firstname' | translate }}<span class="required">*</span>
                     </label>
@@ -86,18 +92,25 @@
                       formControlName="firstname"
                       autocomplete="given-name"
                       [attr.aria-required]="true"
-                      [attr.aria-invalid]="showsRequiredError(form.controls.firstname) ? 'true' : null"
-                      [attr.aria-describedby]="showsRequiredError(form.controls.firstname) ? 'firstname-error' : null"
+                      [attr.aria-invalid]="showsError(form.controls.firstname) ? 'true' : null"
+                      [attr.aria-describedby]="errorMessageId(form.controls.firstname, 'firstname-error', 'firstname-pattern-error')"
                     />
                     @if (showsRequiredError(form.controls.firstname)) {
                       <span id="firstname-error" class="help-block">
                         {{ 'label.requiredfield' | translate }}
                       </span>
                     }
+                    <!-- The legacy form's own name rule and its message: a name may not start with a
+                         digit or a special character (`app/views/clients/createclient.html`). -->
+                    @if (showsPatternError(form.controls.firstname)) {
+                      <span id="firstname-pattern-error" class="help-block">
+                        {{ 'validation.msg.client.name.cannot.start.specialchar.ornumber' | translate }}
+                      </span>
+                    }
                   </div>
                 </div>
                 <div class="col-md-6">
-                  <div class="form-group" [class.has-error]="showsRequiredError(form.controls.lastname)">
+                  <div class="form-group" [class.has-error]="showsError(form.controls.lastname)">
                     <label class="control-label" for="lastname">
                       {{ 'label.input.lastname' | translate }}<span class="required">*</span>
                     </label>
@@ -109,12 +122,18 @@
                       formControlName="lastname"
                       autocomplete="family-name"
                       [attr.aria-required]="true"
-                      [attr.aria-invalid]="showsRequiredError(form.controls.lastname) ? 'true' : null"
-                      [attr.aria-describedby]="showsRequiredError(form.controls.lastname) ? 'lastname-error' : null"
+                      [attr.aria-invalid]="showsError(form.controls.lastname) ? 'true' : null"
+                      [attr.aria-describedby]="errorMessageId(form.controls.lastname, 'lastname-error', 'lastname-pattern-error')"
                     />
                     @if (showsRequiredError(form.controls.lastname)) {
                       <span id="lastname-error" class="help-block">
                         {{ 'label.requiredfield' | translate }}
+                      </span>
+                    }
+                    <!-- The same legacy name rule on the second name field. -->
+                    @if (showsPatternError(form.controls.lastname)) {
+                      <span id="lastname-pattern-error" class="help-block">
+                        {{ 'validation.msg.client.name.cannot.start.specialchar.ornumber' | translate }}
                       </span>
                     }
                   </div>
@@ -123,12 +142,11 @@
 
               <div class="row">
                 <div class="col-md-6">
-                  <div class="form-group">
+                  <div class="form-group" [class.has-error]="showsError(form.controls.mobileNo)">
                     <label class="control-label" for="mobileNo">{{ 'label.input.mobilenumber' | translate }}</label>
-                    <!-- No pattern and no `type="tel"`: the legacy form's own numeric rule is
-                         deliberately not carried over, because Fineract alone decides what a number
-                         may look like and its message is what the user reads (Rule 1 clause 3), and
-                         the legacy control is a plain text input (Rule 1 clause 6). -->
+                    <!-- The legacy form's own numeric rule with its `label.mustbenumeric` message,
+                         carried as it stands (Rule 1 clause 3). The control stays a plain text input,
+                         as the legacy one is (Rule 1 clause 6). -->
                     <input
                       id="mobileNo"
                       name="mobileNo"
@@ -136,7 +154,14 @@
                       class="form-control"
                       formControlName="mobileNo"
                       autocomplete="tel"
+                      [attr.aria-invalid]="showsError(form.controls.mobileNo) ? 'true' : null"
+                      [attr.aria-describedby]="showsPatternError(form.controls.mobileNo) ? 'mobileNo-pattern-error' : null"
                     />
+                    @if (showsPatternError(form.controls.mobileNo)) {
+                      <span id="mobileNo-pattern-error" class="help-block">
+                        {{ 'label.mustbenumeric' | translate }}
+                      </span>
+                    }
                   </div>
                 </div>
                 <div class="col-md-6">

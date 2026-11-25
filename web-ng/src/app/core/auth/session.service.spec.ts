@@ -15,7 +15,8 @@
  * - `read()` reads what an AngularJS screen wrote there, under either key spelling, and publishes
  *   nothing of its own;
  * - `read()` answers `null` for an absent, non-JSON or wrongly-typed entry, because a malformed entry
- *   is not a session, and removes such an entry instead of leaving it to shadow a valid one;
+ *   is not a session, and leaves such an entry exactly where it is — a read reports and never repairs,
+ *   which is what the legacy wrapper does;
  * - `restore()` publishes a stored session and its permissions, reads the user once, publishes the
  *   label the user menu shows, and keeps the stored permission list even when the projection reports
  *   others (the legacy override);
@@ -329,6 +330,21 @@ describe('SessionService', () => {
     expect(service.user()).toBeNull();
   });
 
+  it('stores and publishes nothing when the permission list is not an array', () => {
+    const { service } = harnessFor();
+    // The shape a `POST /authentication` response carries when its `permissions` member is missing or
+    // mistyped. Rebuilding the permission list only after the entry had been written is how a partial
+    // or mistyped entry reached `localStorage` (cr3-F07), so the entry and the session are now built
+    // from one checked copy and the write is refused whole instead.
+    const malformed = { ...legacyFixture(), userPermissions: 'READ_CLIENT' } as unknown as SessionData;
+
+    expect(() => service.write(malformed)).toThrow(TypeError);
+
+    expect(window.localStorage.length).toBe(0);
+    expect(service.session()).toBeNull();
+    expect(service.user()).toBeNull();
+  });
+
   it('reads a session an AngularJS screen stored under the composed legacy key', () => {
     const { service } = harnessFor();
     const fixture = legacyFixture();
@@ -375,7 +391,7 @@ describe('SessionService', () => {
     expect(service.read()).toBeNull();
   });
 
-  it('removes a corrupt composed entry so a valid bare entry answers the next read', () => {
+  it('leaves a corrupt composed entry in place, so it keeps shadowing a valid bare entry', () => {
     const { service } = harnessFor();
     const fixture = legacyFixture();
 
@@ -384,19 +400,24 @@ describe('SessionService', () => {
 
     // The composed key is read first, and a corrupted session beside a valid one is not a session.
     expect(service.read()).toBeNull();
-    expect(window.localStorage.getItem(COMPOSED_KEY)).toBeNull();
-    // With the corrupt value gone the valid entry under the other spelling is what is stored.
-    expect(service.read()).toEqual(fixture);
+    // A read is not a repair: the legacy wrapper parses the entry and throws without writing, so the
+    // corrupt value stays under the composed key and no difference registered in AAP 0.10.5 lets this
+    // service delete it (Rule 1 clause 3).
+    expect(window.localStorage.getItem(COMPOSED_KEY)).toBe('not a session');
+    expect(window.localStorage.getItem(BARE_KEY)).toBe(JSON.stringify(fixture));
+    // The valid entry under the other spelling is therefore unreachable for the life of the page, which
+    // is exactly what a legacy screen reading the same store would see.
+    expect(service.read()).toBeNull();
   });
 
-  it.each(MALFORMED_ENTRIES)('returns null for %s and removes it', (_label: string, raw: string) => {
+  it.each(MALFORMED_ENTRIES)('returns null for %s and leaves it where it is', (_label: string, raw: string) => {
     const { service } = harnessFor();
     seedEntry(raw);
 
     expect(service.read()).toBeNull();
-    // Nothing can read the value as a session, and leaving it in place would let it shadow a valid
-    // entry under the other spelling for the rest of the page's life.
-    expect(window.localStorage.getItem(COMPOSED_KEY)).toBeNull();
+    // Nothing can read the value as a session, and nothing removes it either: a read of an entry that is
+    // not a session writes nothing, as legacy's does.
+    expect(window.localStorage.getItem(COMPOSED_KEY)).toBe(raw);
   });
 
   it('resolves false and reads no user when no session is stored', async () => {
@@ -471,6 +492,42 @@ describe('SessionService', () => {
 
     await expect(restore).resolves.toBe(false);
     expect(service.session()).toEqual(replacement);
+    expect(permissions.can('READ_LOAN')).toBe(true);
+    expect(permissions.can('READ_CLIENT')).toBe(false);
+  });
+
+  it('keeps the later session when two overlapping restores settle in reverse order', async () => {
+    const { service, permissions } = harnessFor();
+    const earlier = legacyFixture();
+    const later: SessionData = {
+      userId: USER_ID + 1,
+      authenticationKey: KEY_PARTS.join(''),
+      userPermissions: ['READ_LOAN'],
+    };
+
+    service.write(earlier);
+    const earlierAnswer = new Subject<SessionUserResponse>();
+    const earlierRestore = service.restore(() => earlierAnswer.asObservable());
+
+    // A second login completes while the first restore's `GET /users/{id}` is still in flight.
+    service.write(later);
+    const laterAnswer = new Subject<SessionUserResponse>();
+    const laterRestore = service.restore(() => laterAnswer.asObservable());
+
+    // The later session's answer arrives first, so its label and permission list are what is in effect.
+    laterAnswer.next({ id: later.userId, username: 'later-user' });
+    laterAnswer.complete();
+    await expect(laterRestore).resolves.toBe(true);
+
+    // The earlier session's answer arrives last and publishes nothing: its restore did not establish a
+    // session, so the earlier username and permission list cannot sit behind the later authorization.
+    earlierAnswer.next({ id: earlier.userId, username: USERNAME });
+    earlierAnswer.complete();
+    await expect(earlierRestore).resolves.toBe(false);
+
+    expect(service.session()).toEqual(later);
+    expect(service.user()).toEqual({ id: later.userId, username: 'later-user' });
+    expect(service.username()).toBe('later-user');
     expect(permissions.can('READ_LOAN')).toBe(true);
     expect(permissions.can('READ_CLIENT')).toBe(false);
   });

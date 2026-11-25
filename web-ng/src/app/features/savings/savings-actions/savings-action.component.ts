@@ -1,18 +1,11 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  inject,
-  signal,
-  type Signal,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { ActivatedRoute, Router, RouterLink, type ParamMap } from '@angular/router';
+import { TranslatePipe } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
 
-import { ApiError } from '../../../core/http/api-error';
+import { screenFailure } from '../../../core/http/api-error';
 import { DateFieldComponent } from '../../../shared/date-field/date-field.component';
 import { HasPermissionDirective } from '../../../shared/has-permission.directive';
 import {
@@ -21,6 +14,7 @@ import {
   type SelectValue,
 } from '../../../shared/select-field/select-field.component';
 import { createSubmitGuard } from '../../../shared/submit-guard.util';
+import { createTranslatedLabels } from '../../../shared/translated-label.util';
 import type { SavingsCommand, SavingsTransactionCommand } from '../savings.models';
 import { SavingsService } from '../savings.service';
 
@@ -68,30 +62,31 @@ interface SavingsOperation {
  * narrow the operation by `mode` in `submit()` without a type assertion and without a `default`
  * branch that could silently send another operation's command.
  *
- * Heading and button labels are the shipped legacy bundle's keys (Rule 1 clause 6). Three of the
- * headings have no entry in `locale-en.json`; `FineractMissingTranslationHandler` renders their
- * last key segment as readable words, so no raw dotted key can reach the user (AAP 0.10.2).
+ * Heading and button labels are the shipped legacy bundle's keys (Rule 1 clause 6). Each heading is
+ * the title `SavingAccountActionsController.js` assigns to `scope.title` for the same segment, so the
+ * caption is the legacy savings action screen's own wording rather than a key no bundle carries
+ * (AAP 0.10.2).
  */
 const OPERATIONS = {
   approve: {
     segment: 'approve',
     mode: 'action',
     command: 'approve',
-    headingKey: 'label.heading.approve',
+    headingKey: 'label.heading.approvesavingaccount',
     submitKey: 'label.button.approve',
   },
   activate: {
     segment: 'activate',
     mode: 'action',
     command: 'activate',
-    headingKey: 'label.heading.activate',
+    headingKey: 'label.heading.activatesavingaccount',
     submitKey: 'label.button.activate',
   },
   deposit: {
     segment: 'deposit',
     mode: 'transaction',
     command: 'deposit',
-    headingKey: 'label.heading.deposit',
+    headingKey: 'label.heading.depositmoneytosavingaccount',
     submitKey: 'label.button.deposit',
   },
   withdraw: {
@@ -101,7 +96,7 @@ const OPERATIONS = {
     // `/savingaccount/{id}/withdraw` while the endpoint takes the other spelling (AAP 0.7.3). The
     // segment is therefore never normalised, and this entry is the only place the two meet.
     command: 'withdrawal',
-    headingKey: 'label.heading.withdraw',
+    headingKey: 'label.heading.withdrawmoneyfromsavingaccount',
     submitKey: 'label.button.withdraw',
   },
 } satisfies Readonly<Record<SavingsActionSegment, SavingsOperation>>;
@@ -129,36 +124,6 @@ function resolveOperation(segment: string | null): SavingsOperationEntry | null 
 }
 
 /**
- * The text shown for a rejection the interceptor did not map to an `ApiError`.
- *
- * Every Fineract answer reaches a screen as an `ApiError` whose `message` is the server's own
- * `defaultUserMessage`, rendered verbatim (AAP 0.4.2, AAP 0.7.2). A rejection of another shape is a
- * fault in this application rather than an answer from Fineract, so it has no server text to show;
- * this fixed sentence keeps the form from displaying nothing at all, and it is deliberately not
- * translated, because no language bundle carries wording for a fault the server never reported.
- */
-const UNMAPPED_FAILURE = 'The request could not be completed.';
-
-/**
- * Reads whatever an awaited request rejected with into the text the form shows.
- *
- * An `ApiError` keeps its own message, so Fineract's word for the failure is surfaced verbatim
- * (Rule 1 clause 3, AAP 0.4.4 decision 6). Any other rejection keeps the message of an `Error` that
- * carries one, and otherwise becomes {@link UNMAPPED_FAILURE}. Nothing is logged, no request body or
- * header is read, and no session material can reach the screen through it (Rule 1 clause 9).
- *
- * @param failure the rejection reason of an awaited request.
- * @returns the text to render above the form.
- */
-function describeFailure(failure: unknown): string {
-  if (failure instanceof ApiError) {
-    return failure.message;
-  }
-
-  return failure instanceof Error && failure.message !== '' ? failure.message : UNMAPPED_FAILURE;
-}
-
-/**
  * The single-purpose savings action screen — the last three steps of workflow W8, at the hash route
  * `#/savingaccount/:id/:action` (AAP 0.7.1 Features row `savings`; AAP 0.7.4 "the action screens …
  * are single-purpose forms rendered in the same card, each with a primary submit and a cancel that
@@ -177,6 +142,15 @@ function describeFailure(failure: unknown): string {
  * which renders the not-found message in place of the form and issues no request at all — that is
  * what makes an unknown action unable to post (AAP 0.7.4 state rules).
  *
+ * **One route emission, one screen.** `:id` and `:action` are read from `route.paramMap`, never from
+ * the snapshot: the router reuses this component when the URL moves from one action route to another —
+ * the record's four action links carry the account's own id — so a single read would leave the first
+ * account's — or the first operation's — form, payment types and message in place and would issue no
+ * request at all. Every emission therefore resolves the operation again, clears the forms, the payment
+ * types and the failure, and re-reads the payment types when the new operation needs them, exactly as
+ * `loan-edit` handles the same reuse; an answer that arrives after the URL moved on is discarded rather
+ * than painted, and leaving the screen cancels the read it left outstanding.
+ *
  * **What it does not do.** This file composes no URL, names no host, no query parameter and no
  * header, and never injects the HTTP layer: {@link SavingsService} owns every path and
  * `core/http/fineract.interceptor.ts` attaches the auth and tenant headers (Rule 1 clause 5,
@@ -188,7 +162,8 @@ function describeFailure(failure: unknown): string {
  * are the transactions template's own list in the server's order, with no sort, filter, rename or
  * hard-coded fallback; the amount carries `Validators.required` and nothing else — no range, no
  * positivity rule, no balance check — because the server owns both rules and the legacy screen adds
- * neither; Fineract's message is rendered above the form verbatim while every entered value survives.
+ * neither; a 4xx's Fineract message is rendered above the form verbatim while every entered value
+ * survives, and a 5xx or a network failure stays the interceptor's single notification.
  */
 @Component({
   selector: 'app-savings-action',
@@ -207,14 +182,17 @@ export class SavingsActionComponent {
   /** The saving-accounts family's one typed service, the component's only Fineract collaborator. */
   private readonly savings = inject(SavingsService);
 
-  /** The active route, read once for the `:id` and `:action` segments this screen was opened on. */
+  /**
+   * The active route, subscribed to for the `:id` and `:action` segments: the router reuses this
+   * component across action routes, so the segments are followed rather than sampled once.
+   */
   private readonly route = inject(ActivatedRoute);
+
+  /** Completes the route subscription and the template read should the screen be destroyed first. */
+  private readonly destroyRef = inject(DestroyRef);
 
   /** Navigates back to the record once the action has been accepted. */
   private readonly router = inject(Router);
-
-  /** Supplies the labels the two shared field components take as plain display text. */
-  private readonly translate = inject(TranslateService);
 
   /**
    * The permission the submit control is gated on.
@@ -229,32 +207,51 @@ export class SavingsActionComponent {
   readonly submitPermission = 'READ_SAVINGSACCOUNT';
 
   /**
-   * The account the action applies to: the `:id` segment as the route carries it.
+   * The account the action applies to: the `:id` segment as the route carries it, empty when the route
+   * carries none.
    *
    * Kept as the raw string, because it is both the service's `number | string` parameter and the
-   * route parameter of the record navigated to afterwards, so neither use needs a conversion.
+   * route parameter of the record navigated to afterwards, so neither use needs a conversion — and a
+   * signal, because the router reuses this component across action routes, so the id has to follow
+   * every emission of `route.paramMap` and every reader of it: the template read, the post, the record
+   * the screen returns to and the Cancel links.
    */
-  readonly id: string = this.route.snapshot.paramMap.get('id') ?? '';
+  readonly id = signal('');
 
-  /** The operation the `:action` segment names, or `null` for a segment this application lacks. */
-  readonly operation: SavingsOperationEntry | null = resolveOperation(
-    this.route.snapshot.paramMap.get('action'),
-  );
+  /**
+   * The operation the current `:action` segment names, or `null` for a segment this application lacks.
+   *
+   * Re-resolved on every emission, so a reused component serves the operation the URL now names rather
+   * than the one it was created for.
+   */
+  readonly operation = signal<SavingsOperationEntry | null>(null);
 
   /**
    * Whether the route names a screen this application serves; true for a missing id as well as an
    * unknown action.
    *
    * A signal rather than a plain field, because a template branch reads it and {@link submit} refuses
-   * on it: the not-found outcome must be unable to send a request.
+   * on it: the not-found outcome must be unable to send a request. It is set on every emission, so the
+   * verdict of the route the URL has left cannot survive the move.
    */
-  readonly notFound = signal<boolean>(this.id === '' || this.operation === null);
+  readonly notFound = signal<boolean>(false);
+
+  /**
+   * Which template read is the current one, incremented by every run of {@link loadPaymentTypes}.
+   *
+   * The router reuses this component across action routes, so moving in place starts a second read
+   * while the first is still in flight and the earlier one can answer last. A superseded run compares
+   * its own number with this one after the await and writes nothing — not the payment types, not the
+   * failure — the guard `loan-edit` and `client-actions` keep over their own load sequence.
+   */
+  private loadSequence = 0;
 
   /**
    * The failure to show above the form, already verbatim from Fineract, or `null` while there is
    * none. A failed submit leaves every entered value in place, because the form is never reset or
-   * unmounted (AAP 0.7.4), and no second notification is raised here: the interceptor owns the
-   * notification for a 5xx or a network failure.
+   * unmounted (AAP 0.7.4). The shared `screenFailure` in `core/http/api-error.ts` fills it for a 4xx
+   * only, and answers `null` for a 5xx or a transport failure, whose one message is the interceptor's
+   * notification.
    */
   readonly error = signal<string | null>(null);
 
@@ -320,12 +317,16 @@ export class SavingsActionComponent {
   });
 
   /**
-   * Counts the moments at which a label must be resolved again: a language switch and a bundle
-   * arriving. Both are read inside every label signal below, so a label resolved before its bundle
-   * had loaded is replaced by the real wording instead of staying at the fallback for the life of
-   * the screen.
+   * Resolves the labels the two shared field components take as plain display text: one signal per
+   * legacy key, re-resolved on a language switch and on a bundle arriving, not frozen at the first
+   * paint. It is the one copy of that mechanism this screen shares with `savings-new`
+   * (`shared/translated-label.util.ts`), and it is declared before the label fields below so each of
+   * them is one `translated('…')` call.
+   *
+   * A field initializer is an injection context, which the factory requires: it injects
+   * `TranslateService` and ends its own subscriptions with this component.
    */
-  private readonly labelsRevision = signal(0);
+  private readonly translated = createTranslatedLabels();
 
   /** Already-translated label of the approve and activate date fields. */
   readonly dateLabel = this.translated('label.heading.date');
@@ -348,14 +349,45 @@ export class SavingsActionComponent {
   /** Legacy key of the not-found sentence, worded as the platform words a missing resource. */
   readonly notFoundMessageKey = 'error.msg.resource.not.found';
 
+  /**
+   * Subscribes to the route's parameters, which is the screen's whole entry point.
+   *
+   * One subscription, never a `snapshot` read beside it: the router reuses this component when the URL
+   * moves from one action route to another, and a single read would leave the first operation's form,
+   * payment types and message on screen for the route the URL now names. Each emission therefore
+   * resolves the operation again, resets the screen and re-runs the one read a cash transaction needs,
+   * the way `loan-edit` handles the same reuse.
+   */
   constructor() {
-    const refreshLabels = (): void => this.labelsRevision.update((revision) => revision + 1);
-    this.translate.onLangChange.pipe(takeUntilDestroyed()).subscribe(refreshLabels);
-    this.translate.onTranslationChange.pipe(takeUntilDestroyed()).subscribe(refreshLabels);
+    this.route.paramMap
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((params: ParamMap) => {
+        this.id.set(params.get('id') ?? '');
+        this.operation.set(resolveOperation(params.get('action')));
+        this.reset();
+        void this.loadPaymentTypes();
+      });
+  }
 
-    if (!this.notFound() && this.operation?.mode === 'transaction') {
-      void this.loadPaymentTypes();
-    }
+  /**
+   * Clears everything the previous route put on the screen, so an emission for another account or
+   * another operation never shows the earlier operation's entered values, payment types or message.
+   *
+   * The three forms go back to their own defaults — the browser clock for each date, which is legacy's
+   * default for a form's date (AAP 0.10.5 item 15), and nothing for the amount and the payment type —
+   * and the not-found verdict is re-taken for the route the URL now names.
+   */
+  private reset(): void {
+    this.notFound.set(this.id() === '' || this.operation() === null);
+    this.error.set(null);
+    this.paymentTypes.set([]);
+    this.approveForm.reset({ approvedOnDate: new Date() });
+    this.activateForm.reset({ activatedOnDate: new Date() });
+    this.transactionForm.reset({
+      transactionDate: new Date(),
+      transactionAmount: null,
+      paymentTypeId: null,
+    });
   }
 
   /**
@@ -368,13 +400,14 @@ export class SavingsActionComponent {
    * guarantee workflow W5 states for the loan actions and W8 needs for the same reason: Fineract's
    * action endpoints are not idempotent (AAP 0.4.2).
    *
-   * A rejection becomes the form's own error text, verbatim, with every entered value intact and no
-   * second notification raised; a success navigates to `#/viewsavingaccount/{id}`, whose own read
-   * shows the account's new status, balance and transaction row.
+   * A 4xx becomes the form's own error text, verbatim, with every entered value intact; a 5xx or a
+   * transport failure raises no inline text, because the interceptor's notification is already that
+   * failure's one message. A success navigates to `#/viewsavingaccount/{id}`, whose own read shows the
+   * account's new status, balance and transaction row.
    */
   async submit(): Promise<void> {
-    const operation = this.operation;
-    const accountId = this.id;
+    const operation = this.operation();
+    const accountId = this.id();
 
     if (this.notFound() || operation === null) {
       return;
@@ -428,7 +461,7 @@ export class SavingsActionComponent {
         await this.router.navigate(['/viewsavingaccount', accountId]);
       });
     } catch (failure: unknown) {
-      this.error.set(describeFailure(failure));
+      this.error.set(screenFailure(failure)?.message ?? null);
     }
   }
 
@@ -481,7 +514,7 @@ export class SavingsActionComponent {
         await this.router.navigate(['/viewsavingaccount', accountId]);
       });
     } catch (failure: unknown) {
-      this.error.set(describeFailure(failure));
+      this.error.set(screenFailure(failure)?.message ?? null);
     }
   }
 
@@ -489,40 +522,51 @@ export class SavingsActionComponent {
    * Reads the cash-transaction form's template once — the payment types it offers — and
    * publishes them.
    *
-   * A failure becomes the form's own error text and leaves the form rendered and usable; the
-   * notification is not repeated here, because the interceptor has already raised one for it.
+   * A 4xx becomes the form's own error text and leaves the form rendered and usable; a 5xx or a
+   * transport failure answers `null` there, because the interceptor has already raised that failure's
+   * one notification. The approve and activate operations read nothing at all, and neither does a route
+   * this application does not serve.
+   *
+   * Every run takes the next {@link loadSequence} number, and the read is tied to this component's
+   * lifetime, so a run the route has since superseded — or that the screen outlived — writes nothing at
+   * all.
    */
   private async loadPaymentTypes(): Promise<void> {
+    const load = ++this.loadSequence;
+    const accountId = this.id();
+
+    if (this.notFound() || accountId === '' || this.operation()?.mode !== 'transaction') {
+      return;
+    }
+
     try {
-      const template = await firstValueFrom(this.savings.transactionTemplate(this.id));
+      const template = await firstValueFrom(
+        this.savings.transactionTemplate(accountId).pipe(takeUntilDestroyed(this.destroyRef)),
+      );
+
+      if (!this.isCurrent(load)) {
+        return;
+      }
 
       this.paymentTypes.set(
         template.paymentTypeOptions.map((option) => ({ id: option.id, name: option.name })),
       );
     } catch (failure: unknown) {
-      this.error.set(describeFailure(failure));
+      if (this.isCurrent(load)) {
+        this.error.set(screenFailure(failure)?.message ?? null);
+      }
     }
   }
 
   /**
-   * Builds one label signal from a legacy translation key.
+   * Whether a read still speaks for the screen: it is the newest read, and the screen it belongs to has
+   * not been destroyed, so a read the route or the teardown cancelled can neither publish payment types
+   * nor report a failure under another operation's URL.
    *
-   * The key is resolved with `instant()`, because the two shared field components take a `label` as
-   * plain display text rather than a key the `TranslatePipe` could re-resolve. `instant()` answers
-   * from whatever bundle is loaded at that moment, so the computed also reads `labelsRevision`,
-   * which the constructor bumps on a language switch and on a bundle arriving: the first paint shows
-   * the missing-translation handler's humanised wording, and the real legacy text replaces it as soon
-   * as the bundle lands.
-   *
-   * @param key legacy key from `app/global-translations/`, served in place (Rule 1 clause 6).
-   * @returns the signal the template binds to the field's `label` input.
+   * @param load the read's {@link loadSequence} number.
    */
-  private translated(key: string): Signal<string> {
-    return computed(() => {
-      this.labelsRevision();
-      this.translate.currentLang();
-      return this.translate.instant(key);
-    });
+  private isCurrent(load: number): boolean {
+    return !this.destroyRef.destroyed && load === this.loadSequence;
   }
 }
 

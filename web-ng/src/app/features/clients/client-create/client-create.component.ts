@@ -43,6 +43,30 @@ function startOfToday(): Date {
 }
 
 /**
+ * The legacy create form's own name rule, reproduced character for character from the `ng-pattern`
+ * the first and last name fields carry (`app/views/clients/createclient.html`): the expression
+ * `(^[A-z])[A-z.'-]*` between the slashes of a literal, so a name starts with a letter and continues
+ * with letters, full stops, apostrophes and hyphens. The character class is kept exactly as legacy
+ * wrote it rather than narrowed to `A-Za-z`, because this rule is copied and not improved (Rule 1
+ * clause 3).
+ *
+ * It is handed to `Validators.pattern` as a `RegExp` and never as a string. AngularJS's `ng-pattern`
+ * tested this expression unanchored, so only the start of the value is constrained and a multi-word
+ * name such as "Ada Okafor" is valid; `Validators.pattern` given a string wraps it in `^…$`, which
+ * would reject every name holding a space, and the same expression passed as a string would
+ * additionally demand a literal leading slash.
+ */
+const LEGACY_NAME_PATTERN = /(^[A-z])[A-z.'-]*/;
+
+/**
+ * The legacy create form's own mobile-number rule, reproduced verbatim from the
+ * `ng-pattern="/^[0-9]+$/"` the mobile field carries (`app/views/clients/createclient.html`): digits
+ * only, so no space, no `+`, no punctuation and no letters. Unlike {@link LEGACY_NAME_PATTERN} this
+ * expression anchors both ends because the legacy one does.
+ */
+const LEGACY_MOBILE_PATTERN = /^[0-9]+$/;
+
+/**
  * The create-client screen (`#/createclient`) — the first half of workflow W2, whose second half is
  * the activation an operator runs from the new record's action group (AAP 0.7.1 Features row
  * `clients`; AAP 0.7.3 row "W2 create and activate client"; AAP 0.7.4 screens; AAP 0.8.2 route
@@ -61,21 +85,25 @@ function startOfToday(): Date {
  *
  * **Behavioural inheritance (Rule 1 clause 3; AAP 0.4.4 decision 6).** The office, first name, last
  * name and submission date are the only required controls, matching the required set of the legacy
- * form; nothing here adds a pattern, a length, a range, a trim, a cross-field rule or a
- * confirmation step. The legacy form's own `ng-pattern` rules on the two name fields and the mobile
- * number are not carried over either: the server applies the same constraints and refuses the entry
- * with its own message, which is the wording this screen shows, so the rejection still happens while
- * there is one copy of the rule rather than two that can disagree. Every option the two pickers
- * render comes from the template response, in the
- * order it arrived, and a failure shows Fineract's own `defaultUserMessage` verbatim above the form
- * with every entered value left in place (AAP 0.7.4 "server validation messages appear verbatim").
- * The submitted body carries the control values as they are — numeric office and staff ids stay
- * numbers, no string is trimmed and no empty optional field is turned into a placeholder.
+ * form, and the two `ng-pattern` rules that form also carries are carried with them: the name rule on
+ * the two name fields ({@link LEGACY_NAME_PATTERN}, reporting
+ * `validation.msg.client.name.cannot.start.specialchar.ornumber`) and the numeric rule on the mobile
+ * number ({@link LEGACY_MOBILE_PATTERN}, reporting `label.mustbenumeric`), each with its legacy
+ * message and each shown under the visited-or-edited condition the legacy `$dirty` guard uses. No
+ * rule legacy lacks is added: no second pattern, no length, no range, no trim, no cross-field rule and
+ * no confirmation step. The server's own message stays the fallback for anything these rules accept,
+ * shown verbatim above the form with every entered value left in place (`defaultUserMessage`; AAP
+ * 0.7.4 "server validation messages appear verbatim"). Every option the two pickers render comes from
+ * the template response, in the order it arrived. The submitted body carries the control values as
+ * they are — numeric office and staff ids stay numbers, no string is trimmed and no empty optional
+ * field is turned into a placeholder.
  *
  * **Defaults.** The submission date starts at the browser's local midnight today and is never
- * overwritten by a template read; the active flag and the activation date start from the template,
- * the activation date falling back to today when the template carries no default, as the legacy
- * form's own field does.
+ * overwritten by a template read. The active flag and the activation date are seeded from the
+ * template on the screen's first parameter-less read alone, the date falling back to today when that
+ * template carries no default, as the legacy form's own field does: an office change re-reads the
+ * template for the staff list and the option lists alone, the way legacy's `changeOffice` does, so it
+ * keeps both the operator's active choice and the date they chose.
  * A form's own date coming from the browser clock is legacy's behaviour and is the registered
  * settlement of the business-date requirement: the tenant business date is authoritative for the
  * harness's seed, inputs and comparisons, not for a form field (AAP 0.10.5 item 15).
@@ -111,9 +139,10 @@ function startOfToday(): Date {
  * shipped English bundle of that folder: `label.heading.createclient`, `label.input.office`, `label.input.staff`,
  * `label.input.firstname`, `label.input.lastname`, `label.input.externalid`,
  * `label.input.mobilenumber`, `label.input.submittedon`, `label.input.activationdate`,
- * `label.input.active`, `label.menu.selectloanofficer`, `label.requiredfield`, `label.button.save`
- * and `label.button.cancel`. A key missing from a bundle still cannot reach the user as a raw dotted
- * key: `core/i18n/missing-translation.handler.ts` humanises it.
+ * `label.input.active`, `label.menu.selectloanofficer`, `label.requiredfield`,
+ * `validation.msg.client.name.cannot.start.specialchar.ornumber`, `label.mustbenumeric`,
+ * `label.button.save` and `label.button.cancel`. A key missing from a bundle still cannot reach the
+ * user as a raw dotted key: `core/i18n/missing-translation.handler.ts` humanises it.
  */
 @Component({
   selector: 'app-client-create',
@@ -174,18 +203,28 @@ export class ClientCreateComponent {
    * non-nullable strings, and the two dates are `Date | null` (Rule 1 clause 4; AAP 0.7.2
    * "Date handling").
    *
-   * Only `officeId`, `firstname`, `lastname` and `submittedOnDate` carry `Validators.required`, the
-   * legacy form's required set. No other rule is attached: no pattern, length, range, trim or
-   * cross-field validator, because Fineract alone decides what a client needs and its message is
-   * what the user reads (Rule 1 clause 3; AAP 0.4.4 decision 6).
+   * The rules are the legacy form's own and nothing else: `officeId`, `firstname`, `lastname` and
+   * `submittedOnDate` carry `Validators.required`, the two name fields add
+   * {@link LEGACY_NAME_PATTERN} and the mobile number adds {@link LEGACY_MOBILE_PATTERN} (Rule 1
+   * clause 3; AAP 0.4.4 decision 6). No length, range, trim or cross-field validator is attached, and
+   * the server's own message stays the answer for anything these rules accept.
    */
   readonly form = new FormGroup({
     officeId: new FormControl<SelectValue | null>(null, Validators.required),
     staffId: new FormControl<SelectValue | null>(null),
-    firstname: new FormControl<string>('', { nonNullable: true, validators: Validators.required }),
-    lastname: new FormControl<string>('', { nonNullable: true, validators: Validators.required }),
+    firstname: new FormControl<string>('', {
+      nonNullable: true,
+      validators: [Validators.required, Validators.pattern(LEGACY_NAME_PATTERN)],
+    }),
+    lastname: new FormControl<string>('', {
+      nonNullable: true,
+      validators: [Validators.required, Validators.pattern(LEGACY_NAME_PATTERN)],
+    }),
     externalId: new FormControl<string>('', { nonNullable: true }),
-    mobileNo: new FormControl<string>('', { nonNullable: true }),
+    mobileNo: new FormControl<string>('', {
+      nonNullable: true,
+      validators: Validators.pattern(LEGACY_MOBILE_PATTERN),
+    }),
     submittedOnDate: new FormControl<Date | null>(startOfToday(), Validators.required),
     activationDate: new FormControl<Date | null>(null),
     active: new FormControl<boolean>(false, { nonNullable: true }),
@@ -282,15 +321,54 @@ export class ClientCreateComponent {
   }
 
   /**
-   * Whether a control shows its required message: invalid, and either visited or already edited —
+   * Whether a control shows its error state at all: invalid, and either visited or already edited —
    * the predicate the two shared fields apply to their own `.has-error` state, so every field of the
-   * form reports a missing value under the same rule.
+   * form reports under the same rule and nothing is shown before the control is visited or edited.
    *
    * Read from the template rather than held in a signal, because `invalid`, `touched` and `dirty` are
    * plain properties of a control: a computed signal would keep the first verdict for ever.
    */
-  protected showsRequiredError(control: AbstractControl): boolean {
+  protected showsError(control: AbstractControl): boolean {
     return control.invalid && (control.touched || control.dirty);
+  }
+
+  /**
+   * Whether a control shows the legacy required message (`label.requiredfield`): it holds no value and
+   * has been visited or edited. Told apart from the pattern message below so a field carrying both
+   * rules reports the one that applies rather than both at once.
+   */
+  protected showsRequiredError(control: AbstractControl): boolean {
+    return control.hasError('required') && (control.touched || control.dirty);
+  }
+
+  /**
+   * Whether a control shows the legacy pattern message it carries — the name rule's
+   * `validation.msg.client.name.cannot.start.specialchar.ornumber` or the mobile rule's
+   * `label.mustbenumeric` — under the same visited-or-edited condition the legacy `$dirty` guard uses
+   * (Rule 1 clause 3).
+   */
+  protected showsPatternError(control: AbstractControl): boolean {
+    return control.hasError('pattern') && (control.touched || control.dirty);
+  }
+
+  /**
+   * The id of the message a control is currently showing, or `null` when it shows none, so
+   * `aria-describedby` names exactly the one element on screen instead of both of a field's messages.
+   *
+   * @param control the control whose messages are read.
+   * @param requiredId the id of its required message element.
+   * @param patternId the id of its legacy pattern message element.
+   */
+  protected errorMessageId(
+    control: AbstractControl,
+    requiredId: string,
+    patternId: string,
+  ): string | null {
+    if (this.showsRequiredError(control)) {
+      return requiredId;
+    }
+
+    return this.showsPatternError(control) ? patternId : null;
   }
 
   /**
@@ -299,16 +377,19 @@ export class ClientCreateComponent {
    * Called with no office for the screen's first read, which sends no parameter at all and lets the
    * template's own default office be the form's starting office; called with an office and the staff
    * narrowing when the office control changes, which is the call the legacy form makes on the same
-   * event. Nothing else is cleared or set, and the submission date is left alone so the browser-clock
-   * default survives a template read.
+   * event. Beyond the option lists, an office change clears the staff choice alone; the submission
+   * date is left alone on every read, so the browser-clock default survives a template read.
    *
    * The office and staff controls are written with `emitEvent: false` so applying a template cannot
    * re-enter the office subscription and issue a second read. The staff choice is cleared because the
-   * list that carried it has been replaced by the new office's list. The active flag is written
-   * normally, because the template's own default has to reach the view that renders the activation
-   * date field, and the activation date falls back to the browser's today when the template carries
-   * no default — the date the legacy form's own activation field starts on, and the one the server
-   * requires once the client is created active.
+   * list that carried it has been replaced by the new office's list. The active flag and the
+   * activation date are seeded from the first parameter-less read alone — the flag from the template's
+   * own default, the date likewise, falling back to the browser's today when the template carries
+   * none, which is the date the legacy form's own activation field starts on and the one the server
+   * requires once the client is created active. The flag is written with its events so the view that
+   * renders the activation date field follows it. An office change re-reads the template for the staff
+   * list and the option lists alone, the way the legacy controller's `changeOffice` does, so it
+   * neither re-applies that office's active default nor overwrites a date the operator has chosen.
    *
    * @param officeId the office the form selected; omitted on the first read.
    * @param staffInSelectedOfficeOnly whether the staff list is limited to that office, which the
@@ -325,10 +406,17 @@ export class ClientCreateComponent {
       this.clientTemplate.set(template);
       this.form.controls.officeId.setValue(this.loadedOfficeId, { emitEvent: false });
       this.form.controls.staffId.setValue(null, { emitEvent: false });
-      this.form.controls.active.setValue(template.active ?? false);
-      this.form.controls.activationDate.setValue(
-        fromFineractDate(template.activationDate) ?? startOfToday(),
-      );
+
+      // Seeded from the first template read alone: an office change re-reads the template for the
+      // staff list and the option lists, so it keeps the operator's own active choice and the
+      // activation date they have already chosen — the way legacy's `changeOffice`, which refreshes
+      // only the staff list and the saving-product options, touches neither.
+      if (officeId === undefined) {
+        this.form.controls.active.setValue(template.active ?? false);
+        this.form.controls.activationDate.setValue(
+          fromFineractDate(template.activationDate) ?? startOfToday(),
+        );
+      }
     } catch (error: unknown) {
       this.reportFailure(error);
     }

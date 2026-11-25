@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   FormArray,
   FormBuilder,
@@ -7,12 +8,12 @@ import {
   ReactiveFormsModule,
   Validators,
 } from '@angular/forms';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink, type ParamMap } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
 
 import { AppConfigService } from '../../../core/config/app-config.service';
-import { ApiError } from '../../../core/http/api-error';
+import { screenFailure } from '../../../core/http/api-error';
 import { DateFieldComponent } from '../../../shared/date-field/date-field.component';
 import { fromFineractDate } from '../../../shared/date-format.util';
 import {
@@ -216,6 +217,15 @@ function today(): Date {
  * composed here: `loan.service.ts` owns all of them and the single interceptor owns the auth and
  * tenant headers, so this file holds no endpoint and no host (Rule 1 clause 2 and 5, Rule 2).
  *
+ * **One route emission, one application.** `:clientId` is read from `route.paramMap`, never from the
+ * snapshot: the router reuses this component when the URL moves from one client's application route to
+ * another — the client record links each of its accounts to a form of its own — so a single read would
+ * leave the first client's form, options and message on screen under the second client's URL and would
+ * issue no request at all. Every emission therefore clears the form, its option lists, the preview and
+ * the message, and re-reads the template for the client the URL now names, exactly as `loan-edit`
+ * handles the same reuse; an answer that arrives after the URL moved on is discarded rather than
+ * painted, and leaving the screen cancels the read it left outstanding.
+ *
  * **One builder, two triggers.** `buildRequest()` is the only place the application is assembled and
  * both `preview()` and `submit()` post its result, which is what makes the previewed schedule the
  * schedule of the application actually submitted (AAP 0.7.2, W4). Nothing else reads the form into a
@@ -274,12 +284,19 @@ function today(): Date {
   ],
   templateUrl: './loan-new.component.html',
 })
-export class LoanNewComponent implements OnInit {
+export class LoanNewComponent {
   private readonly loanService = inject(LoanService);
 
+  /**
+   * The activated route, subscribed to for the `:clientId` of `#/newclientloanaccount/:clientId`: the
+   * router reuses this component across clients, so the segment is followed rather than sampled once.
+   */
   private readonly route = inject(ActivatedRoute);
 
   private readonly router = inject(Router);
+
+  /** Completes the route subscription and the template reads should the screen be destroyed first. */
+  private readonly destroyRef = inject(DestroyRef);
 
   private readonly formBuilder = inject(FormBuilder);
 
@@ -287,8 +304,15 @@ export class LoanNewComponent implements OnInit {
    *  comment. It never composes a URL here — that is `LoanService`'s single job. */
   private readonly appConfig = inject(AppConfigService);
 
-  /** The client the application is opened for, exactly as the route carries it. */
-  readonly clientId = this.route.snapshot.paramMap.get('clientId');
+  /**
+   * The client the application is opened for, exactly as the route carries it: `null` when the URL
+   * names no client.
+   *
+   * A signal, not a snapshot value: the router reuses this component when the URL moves from one
+   * client's application to another, so the segment has to follow every emission of `route.paramMap`
+   * and every reader of it — the template read, the posted body and the Cancel link.
+   */
+  readonly clientId = signal<string | null>(null);
 
   /** The repayment schedule of the last preview, or `null` before one is asked for and after the
    *  product changes. Bound straight to `app-repayment-preview`. */
@@ -301,7 +325,10 @@ export class LoanNewComponent implements OnInit {
    *  request is made. The template renders its message in place of the form. */
   readonly notFound = signal(false);
 
-  /** True while a template read is in flight — on entry and after a product change. */
+  /** True while a template read is in flight — on entry and after a product change. Consumed by the
+   *  card body's `aria-busy` in `loan-new.component.html`, which marks the form busy for assistive
+   *  technology while leaving it rendered: legacy shows the form at once and renders no loader
+   *  (AAP 0.2.4, Rule 1 clause 3). */
   readonly loading = signal(true);
 
   /** Keeps one click on either trigger to one request against a non-idempotent endpoint. */
@@ -382,27 +409,87 @@ export class LoanNewComponent implements OnInit {
   readonly chargeRows: FormArray<FormGroup<ChargeRowControls>> = this.form.controls.charges;
 
   /**
-   * Monotonic token of the template reads, so the answer to an earlier product change cannot
-   * overwrite the fields seeded by a later one.
+   * Monotonic token of the template reads, so the answer to an earlier read cannot overwrite the
+   * fields seeded by a later one.
    *
-   * Two quick product selections issue two `GET /loans/template` calls and the server may answer
-   * them out of order; only the newest answer is applied. The counter costs nothing and prevents a
-   * product's terms from being shown beside another product's schedule.
+   * Two quick product selections issue two `GET /loans/template` calls, and so does an in-place move
+   * from one client's application route to another; the server may answer them out of order, and only
+   * the newest answer is applied. The counter costs nothing and prevents one client's — or one
+   * product's — terms from being shown beside another's schedule.
    */
   private templateSequence = 0;
 
-  /** Reads the template as the screen opens; see {@link loadTemplate}. */
-  ngOnInit(): void {
-    const clientId = this.clientIdNumber();
+  /**
+   * Subscribes to the route's parameters, which is the screen's whole entry point.
+   *
+   * One subscription, never a `snapshot` read beside it: Angular reuses this component when the URL
+   * moves from one `#/newclientloanaccount/{clientId}` to another, and a single read would leave the
+   * first client's form, option lists, preview and message on screen for the second client. Each
+   * emission therefore resets the screen and re-runs the template read, the way `loan-edit` handles the
+   * same reuse.
+   */
+  constructor() {
+    this.route.paramMap
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((params: ParamMap) => {
+        this.applyRoute(params.get('clientId'));
+      });
+  }
 
-    if (clientId === null) {
+  /**
+   * Applies one route emission: stores the segment, clears everything the previous emission put on the
+   * screen, and starts the read the new URL needs.
+   *
+   * A route that names no client issues no request — the screen shows its not-found message instead —
+   * so that path takes the next {@link templateSequence} number itself, which is what discards a read
+   * the previous emission left outstanding, and clears `loading`, which no read will clear for it.
+   *
+   * @param clientId the emission's `:clientId` segment, or `null` when it carries none.
+   */
+  private applyRoute(clientId: string | null): void {
+    this.clientId.set(clientId);
+    this.reset();
+
+    const parsed = this.clientIdNumber();
+
+    if (parsed === null) {
+      this.templateSequence += 1;
       this.notFound.set(true);
       this.loading.set(false);
 
       return;
     }
 
-    void this.loadTemplate(clientId);
+    this.notFound.set(false);
+    void this.loadTemplate(parsed);
+  }
+
+  /**
+   * Clears everything the previous emission put on the screen — the form and its charge rows, every
+   * option list the template filled, the preview and the failure — so a route that names another client
+   * never shows the earlier client's application.
+   *
+   * `loading` goes back to `true` until the new read settles, and the not-found outcome of the previous
+   * route is dropped: it described the client the URL has left.
+   */
+  private reset(): void {
+    this.form.reset();
+    this.chargeRows.clear();
+    this.productOptions.set([]);
+    this.loanOfficerOptions.set([]);
+    this.fundOptions.set([]);
+    this.chargeOptions.set([]);
+    this.termFrequencyTypeOptions.set([]);
+    this.repaymentFrequencyTypeOptions.set([]);
+    this.interestRateFrequencyTypeOptions.set([]);
+    this.amortizationTypeOptions.set([]);
+    this.interestTypeOptions.set([]);
+    this.interestCalculationPeriodTypeOptions.set([]);
+    this.transactionProcessingStrategyOptions.set([]);
+    this.schedule.set(null);
+    this.error.set(null);
+    this.notFound.set(false);
+    this.loading.set(true);
   }
 
   /**
@@ -609,7 +696,8 @@ export class LoanNewComponent implements OnInit {
   }
 
   /**
-   * Reads the template and applies it, discarding an answer that a later read has superseded.
+   * Reads the template and applies it, discarding an answer that a later read has superseded, and
+   * cancelling the read if the screen is left before it answers.
    *
    * @param clientId Client the application is opened for.
    * @param productId Product whose defaults are wanted, absent for the first read.
@@ -619,21 +707,36 @@ export class LoanNewComponent implements OnInit {
     this.loading.set(true);
 
     try {
-      const template = await firstValueFrom(this.loanService.template(clientId, productId ?? undefined));
+      const template = await firstValueFrom(
+        this.loanService
+          .template(clientId, productId ?? undefined)
+          .pipe(takeUntilDestroyed(this.destroyRef)),
+      );
 
-      if (sequence !== this.templateSequence) {
+      if (!this.isCurrent(sequence)) {
         return;
       }
 
       this.applyTemplate(template);
     } catch (error) {
-      if (sequence !== this.templateSequence) {
+      if (!this.isCurrent(sequence)) {
         return;
       }
 
       this.reportError(error);
       this.loading.set(false);
     }
+  }
+
+  /**
+   * Whether a read still speaks for the screen: it is the newest read, and the screen it belongs to has
+   * not been destroyed, so a read the route or the teardown cancelled can neither seed the form nor
+   * clear the loading state of whatever replaced it.
+   *
+   * @param sequence the read's {@link templateSequence} number.
+   */
+  private isCurrent(sequence: number): boolean {
+    return !this.destroyRef.destroyed && sequence === this.templateSequence;
   }
 
   /**
@@ -781,25 +884,31 @@ export class LoanNewComponent implements OnInit {
    * no translation and no reformatting, and the entered values stay untouched. A 5xx or a status of
    * 0 has already been turned into a notification by `core/http/fineract.interceptor.ts`; raising a
    * second message here would report one failure twice (AAP 0.7.4, Rule 1 clause 3). A rejection that
-   * is not an `ApiError` — the body guard described on {@link buildRequest} refusing to assemble a
-   * payload — sets nothing either: there is no server text to show, the form keeps every entered
-   * value, and nothing is posted.
+   * is not a Fineract answer — the body guard described on {@link buildRequest} refusing to assemble
+   * a payload — shows no text either: there is no server message to show, the form keeps every
+   * entered value, and nothing is posted.
+   *
+   * The discriminator is `screenFailure` in `core/http/api-error.ts`, the shared rule every screen in
+   * this application applies: it answers the failure for a 4xx and `null` for a 5xx, a transport
+   * failure or a fault of this application's own. `error` is set to that answer's message, `null`
+   * included, so a message no longer describes the latest failure is cleared rather than left on
+   * screen.
    *
    * @param error Whatever the failed call rejected with.
    */
   private reportError(error: unknown): void {
-    if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
-      this.error.set(error.message);
-    }
+    this.error.set(screenFailure(error)?.message ?? null);
   }
 
   /** The route's client id as a number, or `null` when the route carries none or a non-numeric one. */
   private clientIdNumber(): number | null {
-    if (this.clientId === null) {
+    const clientId = this.clientId();
+
+    if (clientId === null) {
       return null;
     }
 
-    const parsed = Number(this.clientId);
+    const parsed = Number(clientId);
 
     return Number.isInteger(parsed) ? parsed : null;
   }

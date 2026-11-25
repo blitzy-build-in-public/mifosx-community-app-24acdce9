@@ -40,8 +40,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { request, type APIRequestContext } from '@playwright/test';
 import { detectBackendEnvironment, type BackendEnvironment } from '../check-backend';
 import {
+  type ClientActionReasonSeed,
   FINERACT_URL,
   LOCALE,
+  SEED_CLIENT_ACTION_GATE,
+  SEED_CLIENT_ACTION_REASONS,
   SEED_LOAN_CHARGE,
   SEED_LOAN_PRODUCT,
   SEED_SAVINGS_PRODUCT,
@@ -79,6 +82,36 @@ export interface SeedEntities {
 }
 
 /**
+ * The narration values the seed created for the client lifecycle actions, one per action that takes a
+ * reason. Their ids are what a `close`, `reject` or `withdraw` body submits, so a later tool reads them
+ * from here instead of listing every code again.
+ */
+export interface SeedClientActionReasons {
+  /** Value created under `ClientClosureReason`, which the close action offers. */
+  readonly closure: SeedEntityResult;
+  /** Value created under `ClientRejectReason`, which the reject action offers. */
+  readonly rejection: SeedEntityResult;
+  /** Value created under `ClientWithdrawReason`, which the withdraw action offers. */
+  readonly withdrawal: SeedEntityResult;
+}
+
+/**
+ * The client-action datatable gate the seed registered: the table the gate's second call reads, and the
+ * check that makes it read it. The table's identity is its name — `POST /datatables` answers a name, not
+ * an id — while the check is identified by the id Fineract assigned it.
+ */
+export interface SeedClientActionGate {
+  /** Registered datatable name, e.g. `client_action_check`. */
+  readonly datatableName: string;
+  /** Entity the table hangs off — `m_client`. */
+  readonly apptableName: string;
+  /** Status the check is registered for: `600`, CLOSE. */
+  readonly checkStatus: number;
+  /** Id Fineract assigned the entity-datatable check. */
+  readonly checkId: number;
+}
+
+/**
  * What one seed run produced, written to `web-ng/e2e/.captures/seed.json` so a later tool reads the
  * ids without querying Fineract again. It carries no credential, no authentication key and no raw
  * response body (Rule 1 clause 9).
@@ -96,6 +129,10 @@ export interface SeedResult {
   readonly runDate: string;
   /** The four entities, in creation order. */
   readonly entities: SeedEntities;
+  /** The client-action narration values, in code order: closure, rejection, withdrawal. */
+  readonly clientActionReasons: SeedClientActionReasons;
+  /** The client-action datatable and the check registered for it. */
+  readonly clientActionGate: SeedClientActionGate;
 }
 
 /** Response statuses `POST` accepts: Fineract answers 200 or 201 for every resource this seed creates. */
@@ -205,6 +242,47 @@ interface SavingsProductCreateBody {
   readonly locale: string;
 }
 
+/** Body of `POST /codes/name/{codeName}/codevalues`: one narration value under an existing code. */
+interface CodeValueCreateBody {
+  /** Value name, from {@link ClientActionReasonSeed.valueName}. */
+  readonly name: string;
+  /** `true`, because an inactive value is not offered by the action templates this fixture serves. */
+  readonly isActive: boolean;
+  /** Place in the code's value list: `1`, the seed creating one value per code. */
+  readonly position: number;
+}
+
+/** One column of `POST /datatables`, in the shape that endpoint declares one. */
+interface DatatableColumnBody {
+  readonly name: string;
+  readonly type: string;
+  readonly length: number;
+  readonly mandatory: boolean;
+}
+
+/** Body of `POST /datatables`: the client datatable the datatable gate reads under its check. */
+interface DatatableCreateBody {
+  readonly datatableName: string;
+  readonly apptableName: string;
+  /** API-required addition: mandatory on this fork's create body, which refuses a body without it. */
+  readonly entitySubType: string;
+  readonly multiRow: boolean;
+  readonly columns: readonly DatatableColumnBody[];
+}
+
+/**
+ * Body of `POST /entityDatatableChecks`: the check that makes the gate read the table before a client
+ * action whose status it names.
+ */
+interface EntityDatatableCheckCreateBody {
+  /** Entity the check applies to — `m_client`, the client entity. */
+  readonly entity: string;
+  /** Client status the check is registered for: `600`, CLOSE. */
+  readonly status: number;
+  /** Datatable the gate then reads for that client. */
+  readonly datatableName: string;
+}
+
 /**
  * A `POST` Fineract refused. Carries the failing resource path, the status and Fineract's own
  * `errors[].defaultUserMessage` texts, which are what the operator needs to correct the payload; it
@@ -282,20 +360,61 @@ function collectValidationMessages(body: unknown): string[] {
 }
 
 /**
- * Reads the `resourceId` of a created entity — the shape every `POST` this seed makes answers with.
- *
- * @param body Parsed response body, read as `unknown` because it crosses the HTTP boundary.
- * @param path Resource path that produced it, named in the error message.
- * @param status Status that produced it, named in the error message.
- * @throws When the body carries no usable `resourceId`, which means the entity's id cannot be
- * recorded and every later workflow would run against an unknown record.
+ * One accepted `POST`: the status Fineract answered with and its parsed body, unread. The pair is what
+ * the readers below need, because the resources this seed writes do not all answer their identifier the
+ * same way — `POST /datatables` answers the table's name and no id at all.
  */
-function readResourceId(body: unknown, path: string, status: number): number {
-  const id = isRecord(body) ? body['resourceId'] : undefined;
+interface SeedPostResult {
+  /** Status Fineract answered with; one of {@link SUCCESS_STATUSES}. */
+  readonly status: number;
+  /** Parsed JSON body, `unknown` because it crosses the HTTP boundary. */
+  readonly body: unknown;
+}
+
+/**
+ * Reads one positive integer id field of an accepted response.
+ *
+ * @param result Status and body of the accepted `POST`.
+ * @param field Id member to read: `resourceId` or `subResourceId`.
+ * @param path Resource path that produced it, named in the error message.
+ * @throws When the body carries no usable value under `field`, which means the id cannot be recorded
+ * and every later workflow would run against an unknown record.
+ */
+function readIdentifier(
+  result: SeedPostResult,
+  field: 'resourceId' | 'subResourceId',
+  path: string,
+): number {
+  const id = isRecord(result.body) ? result.body[field] : undefined;
   if (typeof id === 'number' && Number.isInteger(id) && id > 0) {
     return id;
   }
-  throw new Error(`POST ${path} (HTTP ${status}) answered without a usable resourceId.`);
+  throw new Error(`POST ${path} (HTTP ${result.status}) answered without a usable ${field}.`);
+}
+
+/**
+ * Reads the `resourceId` of a created entity — the id of the resource the path names.
+ *
+ * @param result Status and body of the accepted `POST`.
+ * @param path Resource path that produced it, named in the error message.
+ * @throws When the body carries no usable `resourceId` (see {@link readIdentifier}).
+ */
+function readResourceId(result: SeedPostResult, path: string): number {
+  return readIdentifier(result, 'resourceId', path);
+}
+
+/**
+ * Reads the `subResourceId` of a value created under another resource — the id of a new code value,
+ * where `POST /codes/name/{codeName}/codevalues` answers `{resourceId: <code id>, subResourceId:
+ * <value id>}`. Reading `resourceId` here would record the parent code's id as the reason a `close`
+ * submits, which Fineract would then refuse as a value the code does not hold.
+ *
+ * @param result Status and body of the accepted `POST`.
+ * @param path Resource path that produced it, named in the error message.
+ * @throws When the body carries no usable `subResourceId` (see {@link readIdentifier}).
+ */
+function readSubResourceId(result: SeedPostResult, path: string): number {
+  return readIdentifier(result, 'subResourceId', path);
 }
 
 /**
@@ -427,6 +546,16 @@ function loanProductCreateBody(): LoanProductCreateBody {
  *
  * It creates the charge definition only. The due date the row names is supplied when the charge is
  * applied to a loan, so nothing date-bearing is sent here (Rule 1 clause 3).
+ *
+ * The payment mode stays REGULAR and this fixture deliberately carries no second charge with
+ * ACCOUNT_TRANSFER. The fork pays a loan charge only when it is an account-transfer charge on a loan
+ * that carries a linked savings account: `payLoanCharge` refuses every other payment mode, and applying
+ * an account-transfer charge at all answers 403 `error.msg.loanCharge.add.requires.linked.account` until
+ * that link exists. The link comes from a loan application's `linkAccountId` member or from
+ * `PUT /loans/{id}` before approval, so it needs a savings account the client already owns; a second
+ * charge would appear in the add-charge template while every attempt to apply it was refused. Leaving it
+ * out keeps the fixture's charges usable, and the charge-pay refusal stays the fork's own answer on both
+ * front ends, which is what the parity comparison measures.
  */
 function loanChargeCreateBody(): LoanChargeCreateBody {
   return {
@@ -465,6 +594,51 @@ function savingsProductCreateBody(): SavingsProductCreateBody {
 }
 
 /**
+ * Body of `POST /codes/name/{codeName}/codevalues` for one client-action narration value. The AAP
+ * 0.10.1 table fixes no reason and a freshly migrated database carries no value under any code, so the
+ * seed creates one per narration code and the action templates then offer it. Only the value's name
+ * comes from the fixture; `isActive` and `position` are what the endpoint requires of a value a screen
+ * can offer, and the seed creates one value per code, which therefore leads the code's list.
+ */
+function codeValueCreateBody(reason: ClientActionReasonSeed): CodeValueCreateBody {
+  return { name: reason.valueName, isActive: true, position: 1 };
+}
+
+/**
+ * Body of `POST /datatables` for the client-action gate: the client datatable the gate's second call
+ * reads under the check. Every value is the fixture's, and `entitySubType` is sent because this fork's
+ * create body refuses a payload without it.
+ */
+function clientActionDatatableCreateBody(): DatatableCreateBody {
+  return {
+    datatableName: SEED_CLIENT_ACTION_GATE.datatableName,
+    apptableName: SEED_CLIENT_ACTION_GATE.apptableName,
+    entitySubType: SEED_CLIENT_ACTION_GATE.entitySubType,
+    multiRow: SEED_CLIENT_ACTION_GATE.multiRow,
+    columns: [
+      {
+        name: SEED_CLIENT_ACTION_GATE.column.name,
+        type: SEED_CLIENT_ACTION_GATE.column.type,
+        length: SEED_CLIENT_ACTION_GATE.column.length,
+        mandatory: SEED_CLIENT_ACTION_GATE.column.mandatory,
+      },
+    ],
+  };
+}
+
+/**
+ * Body of `POST /entityDatatableChecks` for the client-action gate: the check that makes the gate read
+ * the datatable before a client action whose status it names.
+ */
+function clientActionCheckCreateBody(): EntityDatatableCheckCreateBody {
+  return {
+    entity: SEED_CLIENT_ACTION_GATE.apptableName,
+    status: SEED_CLIENT_ACTION_GATE.checkStatus,
+    datatableName: SEED_CLIENT_ACTION_GATE.datatableName,
+  };
+}
+
+/**
  * Parses a body when it is JSON and answers `undefined` when it is not, so a failed `POST` can report
  * the status it saw instead of throwing on the way to the message that matters.
  */
@@ -477,18 +651,21 @@ function parseFailureBody(text: string): unknown {
 }
 
 /**
- * Creates one entity — the single `POST` helper every step of {@link runSeed} goes through.
+ * Sends one `POST` — the single request helper every step of {@link runSeed} goes through — and answers
+ * the status Fineract accepted it with and its parsed body. Reading the id is the caller's job, through
+ * {@link readResourceId} or {@link readSubResourceId}, because the resources this seed writes identify
+ * what they created differently.
  *
  * @param context Request context carrying the tenant header and the basic-auth credential.
  * @param path Resource path below the API path, e.g. `/loanproducts`.
  * @param body Typed request body of that resource.
- * @returns The id Fineract assigned.
+ * @returns The accepted status and the parsed body.
  * @throws {@link SeedRequestError} on any status other than 200 or 201, carrying Fineract's own
- * validation messages; or an `Error` when a successful response carries no usable `resourceId`.
- * Nothing is swallowed and no caller continues after a failure: `npm run seed` must exit non-zero if
- * any one of the four calls fails (AAP 0.10.4, criteria 3 and 12).
+ * validation messages; or an `Error` when a successful response does not carry JSON. Nothing is
+ * swallowed and no caller continues after a failure: `npm run seed` must exit non-zero if any one call
+ * of the run fails (AAP 0.10.4, criteria 3 and 12).
  */
-async function post(context: APIRequestContext, path: string, body: unknown): Promise<number> {
+async function post(context: APIRequestContext, path: string, body: unknown): Promise<SeedPostResult> {
   const url = apiUrl(path);
   const response = await context.post(url, { data: body });
   const status = response.status();
@@ -501,7 +678,105 @@ async function post(context: APIRequestContext, path: string, body: unknown): Pr
       messages.length > 0 ? messages : [`Fineract answered: ${text.slice(0, 300) || '(empty body)'}`],
     );
   }
-  return readResourceId(parseJsonBody(text, `POST ${url} (HTTP ${status})`), path, status);
+  return { status, body: parseJsonBody(text, `POST ${url} (HTTP ${status})`) };
+}
+
+/**
+ * Creates one active narration value under its code and answers the value's own id: `POST
+ * /codes/name/{codeName}/codevalues`, keyed by the code's name so the step needs no `GET /codes` lookup
+ * and no numeric code id the tenant's migration assigned. The value's id is the answer's
+ * `subResourceId`; its `resourceId` is the parent code.
+ *
+ * @param context Request context carrying the tenant header and the basic-auth credential.
+ * @param reason Code name and value name to create.
+ * @returns The created value's name and the id a client action submits as its reason.
+ * @throws {@link SeedRequestError} when Fineract refuses the write, or an `Error` when the answer
+ * carries no usable `subResourceId`.
+ */
+async function createClientActionReason(
+  context: APIRequestContext,
+  reason: ClientActionReasonSeed,
+): Promise<SeedEntityResult> {
+  const path = '/codes/name/' + reason.codeName + '/codevalues';
+  const created = await post(context, path, codeValueCreateBody(reason));
+  return { name: reason.valueName, id: readSubResourceId(created, path) };
+}
+
+/**
+ * Creates one entity and answers the id Fineract assigned: {@link post} followed by
+ * {@link readResourceId}, for the resources that answer their own `resourceId` — the staff member, both
+ * products and the charge.
+ *
+ * @param context Request context carrying the tenant header and the basic-auth credential.
+ * @param path Resource path below the API path, e.g. `/loanproducts`.
+ * @param body Typed request body of that resource.
+ * @returns The id Fineract assigned.
+ * @throws {@link SeedRequestError} when Fineract refuses the write, or an `Error` when the answer
+ * carries no usable `resourceId`.
+ */
+async function createEntity(context: APIRequestContext, path: string, body: unknown): Promise<number> {
+  return readResourceId(await post(context, path, body), path);
+}
+
+/**
+ * Registers the client datatable and its entity-datatable check — the fixture the datatable gate needs
+ * before it can read anything: with no check registered, `GET /entityDatatableChecks?limit=-1` answers
+ * no rows and the gate is an unverifiable pass-through.
+ *
+ * Both writes are named by their contract: `POST /datatables` is the fork's
+ * `DatatablesApiResource.createDatatable`, and `POST /entityDatatableChecks` is its
+ * `createEntityDatatableCheck`. Only the datatable write is declared in `harness-allowlist.json`,
+ * because only it is a URL the application never calls. The check's URL is already declared in
+ * `endpoint-allowlist.json` for the gate's own `GET /entityDatatableChecks`, and AAP 0.10.4 keeps the
+ * harness list to what the app never does — `npm run check:endpoints` fails a harness row whose path
+ * the app list also declares, and the seed's write resolves against that existing declaration.
+ *
+ * The check's status is CLOSE (600) rather than ACTIVATE (300) on purpose. The legacy client-action
+ * controller gates `m_client` on ACTIVATE and on CLOSE, and when a check's table holds no row for the
+ * client it renders the datatable's fields and posts a row before performing the action
+ * (`submitDatatable`). A W2 client has no row, so an ACTIVATE check would add a
+ * `POST /datatables/{table}/{id}` to legacy's W2 and none to the new app's, which would break the parity
+ * request comparison for a Must workflow. CLOSE leaves W2 identical on both front ends — each lists the
+ * checks and filters this one out — while making the check row, the datatable and the gate's two-call
+ * read observable on the in-scope close screen.
+ *
+ * @param context Request context carrying the tenant header and the basic-auth credential.
+ * @returns The registered table's name, the entity it hangs off, the check's status and its id.
+ * @throws {@link SeedRequestError} when Fineract refuses either write, or an `Error` when the check's
+ * answer carries no usable `resourceId`.
+ */
+async function createClientActionGate(context: APIRequestContext): Promise<SeedClientActionGate> {
+  await post(context, '/datatables', clientActionDatatableCreateBody());
+  const checkPath = '/entityDatatableChecks';
+  const check = await post(context, checkPath, clientActionCheckCreateBody());
+  return {
+    datatableName: SEED_CLIENT_ACTION_GATE.datatableName,
+    apptableName: SEED_CLIENT_ACTION_GATE.apptableName,
+    checkStatus: SEED_CLIENT_ACTION_GATE.checkStatus,
+    checkId: readResourceId(check, checkPath),
+  };
+}
+
+/**
+ * Removes the artefact an earlier run wrote, so no consumer can read a previous run's ids once this run
+ * has started. {@link runSeed} calls it before anything else — before the backend is vetted and before
+ * the first request — because every failure path after that point (a refused host, missing credentials,
+ * an unreachable backend, a rejected `POST`, a crash) must leave no readable artefact behind. The
+ * artefact's contract is "what one seed run produced", and ids from a run that did not finish are worse
+ * than none: on a recreated database they name records that no longer exist, so a seed failure would
+ * surface downstream as an unrelated missing-record error.
+ *
+ * An absent artefact is not a failure — a first run has nothing to remove — and the temporary file of an
+ * interrupted atomic write is not this artefact, so {@link writeResultArtefact} stays the only writer and
+ * cleaner of `seed.json.tmp`. Any other removal failure (a permission, a directory sitting at the path)
+ * propagates as the run's failure: a run must not report success, or carry on seeding, past a stale
+ * artefact it could not remove (AAP 0.14.2, "no `catch` swallows an error silently"). A `--help`
+ * invocation never reaches it, because the CLI answers usage before {@link runSeed} is called.
+ *
+ * @throws When the artefact exists and cannot be removed.
+ */
+export async function discardResultArtefact(): Promise<void> {
+  await rm(fileURLToPath(RESULT_ARTEFACT_URL), { force: true });
 }
 
 /**
@@ -537,13 +812,23 @@ async function writeResultArtefact(result: SeedResult): Promise<void> {
   }
 }
 
-/** One line per created entity, in creation order — what a successful run prints and nothing more. */
-function entityLines(entities: SeedEntities): string[] {
+/**
+ * One line per created record, in creation order — what a successful run prints and nothing more. The
+ * narration values follow the four entities because their ids are what a client action submits, and the
+ * datatable gate closes the list because its check is what a client action is measured against: an
+ * operator diagnosing a refused `close`, `reject` or `withdraw` reads both here instead of opening the
+ * artefact.
+ */
+function entityLines(result: SeedResult): string[] {
   return [
-    `staff: ${entities.staff.name} id=${entities.staff.id}`,
-    `loan product: ${entities.loanProduct.name} id=${entities.loanProduct.id}`,
-    `loan charge: ${entities.loanCharge.name} id=${entities.loanCharge.id}`,
-    `savings product: ${entities.savingsProduct.name} id=${entities.savingsProduct.id}`,
+    `staff: ${result.entities.staff.name} id=${result.entities.staff.id}`,
+    `loan product: ${result.entities.loanProduct.name} id=${result.entities.loanProduct.id}`,
+    `loan charge: ${result.entities.loanCharge.name} id=${result.entities.loanCharge.id}`,
+    `savings product: ${result.entities.savingsProduct.name} id=${result.entities.savingsProduct.id}`,
+    `closure reason: ${result.clientActionReasons.closure.name} id=${result.clientActionReasons.closure.id}`,
+    `rejection reason: ${result.clientActionReasons.rejection.name} id=${result.clientActionReasons.rejection.id}`,
+    `withdrawal reason: ${result.clientActionReasons.withdrawal.name} id=${result.clientActionReasons.withdrawal.id}`,
+    `client action gate: ${result.clientActionGate.datatableName} on ${result.clientActionGate.apptableName} status=${result.clientActionGate.checkStatus} check id=${result.clientActionGate.checkId}`,
   ];
 }
 
@@ -562,24 +847,41 @@ function describeFailure(error: unknown): string[] {
  * Seeds the fixed parity data and reports what it created — the module's one entry point, called by
  * the CLI below and by nothing else.
  *
- * Order is fixed: staff, then loan product, then loan charge, then savings product, one call each,
- * sequentially. The loan product and the charge must both exist before any loan workflow runs, and a
- * failure on one step aborts the run rather than leaving a half-seeded database to be discovered by a
- * spec.
+ * Order is fixed, one call at a time: staff, loan product, loan charge, savings product, then the three
+ * client-action narration values, then the client datatable with its entity-datatable check. The loan
+ * product and the charge must both exist before any loan workflow runs, and a failure on one step
+ * aborts the run rather than leaving a half-seeded database to be discovered by a spec.
+ *
+ * Everything after the four AAP 0.10.1 entities exists because the client lifecycle actions of AAP
+ * 0.9.1 row 2 cannot be produced without it: an action offers a reason only once a value exists under
+ * its code, and it passes the datatable gate only once a check and its table are registered. Without
+ * both, `close`, `reject`, `withdraw` and the `reactivate` that follows a close are unreachable on a
+ * freshly migrated database.
  *
  * The run date is read once from Fineract (`readBusinessDate`) and recorded in the result, so every
  * workflow that consumes this artefact derives its dates from the tenant's business date rather than
  * the browser clock (Rule 1 clause 2). The read is handed the key this run already authenticated
  * with, so a run authenticates exactly once and the only key that crosses the boundary is the one
- * registered above for masking (Rule 1 clause 9). These four payloads carry no date of their own.
+ * registered above for masking (Rule 1 clause 9). None of these payloads carries a date of its own.
  *
- * @returns The ids of the four entities and the provenance of the run.
- * @throws When the backend is a refused public demo host (Rule 2), when credentials are missing,
- * when the backend is unreachable, when any `POST` is refused, or when the result cannot be written.
+ * The artefact is invalidated first: the run removes whatever `web-ng/e2e/.captures/seed.json` an
+ * earlier run left before it vets the backend or makes any request ({@link discardResultArtefact}), so
+ * no failure below — a refused host, absent credentials, an unreachable backend, a refused `POST`, a
+ * crash — can leave a previous run's ids readable by a spec or a tool.
+ *
+ * @returns The ids of the four entities, the three narration values, the gate it registered and the
+ * provenance of the run.
+ * @throws When the artefact of an earlier run cannot be removed, when the backend is a refused public
+ * demo host (Rule 2), when credentials are missing, when the backend is unreachable, when any `POST` is
+ * refused, or when the result cannot be written.
  * Nothing it throws carries the password or the authentication key: both are masked before the
  * message leaves this function (Rule 1 clause 9).
  */
 export async function runSeed(): Promise<SeedResult> {
+  // The run's first statement, before the backend is vetted and before any request: every later
+  // failure path has already passed this point, so none of them can leave an earlier run's artefact
+  // readable (finding qa3-F02).
+  await discardResultArtefact();
   assertPermittedBackend(FINERACT_URL);
   // Read before any call so a missing variable fails immediately, naming itself, instead of
   // surfacing as an authentication error against the backend.
@@ -594,10 +896,14 @@ export async function runSeed(): Promise<SeedResult> {
       extraHTTPHeaders: apiHeaders(authenticationKey),
     });
     const runDate = await readBusinessDate(authenticationKey);
-    const staffId = await post(context, '/staff', staffCreateBody());
-    const loanProductId = await post(context, '/loanproducts', loanProductCreateBody());
-    const loanChargeId = await post(context, '/charges', loanChargeCreateBody());
-    const savingsProductId = await post(context, '/savingsproducts', savingsProductCreateBody());
+    const staffId = await createEntity(context, '/staff', staffCreateBody());
+    const loanProductId = await createEntity(context, '/loanproducts', loanProductCreateBody());
+    const loanChargeId = await createEntity(context, '/charges', loanChargeCreateBody());
+    const savingsProductId = await createEntity(context, '/savingsproducts', savingsProductCreateBody());
+    const closureReason = await createClientActionReason(context, SEED_CLIENT_ACTION_REASONS.closure);
+    const rejectionReason = await createClientActionReason(context, SEED_CLIENT_ACTION_REASONS.rejection);
+    const withdrawalReason = await createClientActionReason(context, SEED_CLIENT_ACTION_REASONS.withdrawal);
+    const clientActionGate = await createClientActionGate(context);
     const result: SeedResult = {
       fineractUrl: FINERACT_URL,
       tenantId: TENANT_ID,
@@ -610,6 +916,12 @@ export async function runSeed(): Promise<SeedResult> {
         loanCharge: { name: SEED_LOAN_CHARGE.name, id: loanChargeId },
         savingsProduct: { name: SEED_SAVINGS_PRODUCT.name, id: savingsProductId },
       },
+      clientActionReasons: {
+        closure: closureReason,
+        rejection: rejectionReason,
+        withdrawal: withdrawalReason,
+      },
+      clientActionGate,
     };
     await writeResultArtefact(result);
     return result;
@@ -623,15 +935,17 @@ export async function runSeed(): Promise<SeedResult> {
 }
 
 /**
- * What `--help` prints (finding 406f-F02): the four writes this command performs, the variables it
- * reads — named, never valued (Rule 1 clause 9) — and the two ways it is invoked.
+ * What `--help` prints (finding 406f-F02): the writes this command performs, the variables it reads —
+ * named, never valued (Rule 1 clause 9) — and the two ways it is invoked.
  */
 const SEED_USAGE: CliUsage = {
   name: 'seed',
   summary: 'Creates the AAP 0.10.1 parity fixtures in a freshly recreated Blitzy Fineract and records their ids in e2e/.captures/seed.json.',
   effects: [
     'writes four records, in this order: staff (POST /staff), loan product (POST /loanproducts), loan charge (POST /charges), savings product (POST /savingsproducts)',
-    'writes e2e/.captures/seed.json with the four ids, the tenant, the run date and the backend it wrote to',
+    'writes one active narration value per client-action code (POST /codes/name/{codeName}/codevalues), so the close, reject and withdraw actions have a reason to offer: ClientClosureReason, ClientRejectReason and ClientWithdrawReason',
+    'writes the client datatable client_action_check on m_client and the entity-datatable check registered for its CLOSE status (POST /datatables, then POST /entityDatatableChecks), so the client-action datatable gate has a check and a table to read',
+    'writes e2e/.captures/seed.json with the ids, the tenant, the run date and the backend it wrote to',
     'is not idempotent: a second run against the same database fails on the names the first run created',
     'runs after `npm run reset:db`, against the database that reset has just recreated',
   ],
@@ -664,7 +978,7 @@ async function main(): Promise<void> {
   }
   try {
     const result = await runSeed();
-    for (const line of entityLines(result.entities)) {
+    for (const line of entityLines(result)) {
       process.stdout.write(`${line}\n`);
     }
   } catch (error) {

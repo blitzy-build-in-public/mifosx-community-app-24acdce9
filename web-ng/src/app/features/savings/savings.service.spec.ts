@@ -671,4 +671,38 @@ describe('SavingsService', () => {
       request.flush(SAVINGS_ACCOUNT);
     }
   });
+
+  it('refuses a crafted route id with the guard message and issues no request at all', () => {
+    // The router hands an `:id` over URL-decoded, so this value would leave `/api/v1` and read another
+    // resource on the same host (CWE-20, CWE-22). The refusal arrives as an observable error — the form
+    // every caller of this service already handles (`firstValueFrom` inside a `try`, or a `catchError`
+    // beside it) — because `defer` keeps the invalid segment from being an exception thrown out of a
+    // `switchMap` projection.
+    const crafted = '../../../users';
+    const messages: string[] = [];
+    let emissions = 0;
+
+    const record = (failure: unknown): void => {
+      messages.push(failure instanceof Error ? failure.message : String(failure));
+    };
+
+    service.get(crafted).subscribe({ next: () => (emissions += 1), error: record });
+    service.transaction(crafted, 'deposit', TRANSACTION).subscribe({
+      next: () => (emissions += 1),
+      error: record,
+    });
+
+    expect(emissions).toBe(0);
+    expect(messages).toHaveLength(2);
+    for (const message of messages) {
+      expect(message).toContain(`'${crafted}'`);
+    }
+    expect(messages[0]).toContain('SavingsService.get');
+    expect(messages[1]).toContain('SavingsService.transaction');
+    // Nothing was sent, on either path or in any other shape; the teardown's `verify()` says the same
+    // for the whole case.
+    httpMock.expectNone(isRequest('GET', savingsUrl('savingsaccounts', crafted)));
+    httpMock.expectNone(isRequest('POST', savingsUrl('savingsaccounts', crafted, 'transactions')));
+    httpMock.expectNone(() => true);
+  });
 });

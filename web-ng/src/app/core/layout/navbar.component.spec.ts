@@ -7,6 +7,7 @@ import { of } from 'rxjs';
 
 import { AuthService } from '../auth/auth.service';
 import { PermissionsService } from '../auth/permissions.service';
+import { NotificationService } from '../notifications/notification.service';
 import { NavbarComponent } from './navbar.component';
 
 /**
@@ -24,12 +25,16 @@ import { NavbarComponent } from './navbar.component';
  *   Accounting / Reports / Admin items and the left icon rail), which AAP 0.10.5 items 4 and 8 fix;
  * - the "Clients" destination follows the permission the clients route declares, appearing only
  *   once that permission is held;
+ * - the user menu's label is the account name the signed-in shell hands in through its `userName`
+ *   input, and the session's own `GET /users/{id}` projection when it hands none;
  * - a search reported by the search control becomes a navigation to `/search/:query` carrying the
  *   scope, and searches nothing itself;
  * - the language switcher changes the active translation without navigating, and the selector shows
  *   the language the service actually has active, including a switch made by another switcher;
  * - sign-out clears the session **before** it navigates, which is the order AAP 0.7.1 and the W1
  *   sequence require, and the user menu closes with it;
+ * - a navigation the router refuses is settled rather than dropped: the user is told once in the
+ *   rejection's own words and no unhandled rejection is left behind (AAP 0.14.2);
  * - the menu opens and closes on the trigger and on `Escape`, driven by Angular state rather than
  *   the Bootstrap dropdown plugin, which needs the jQuery this build does not have.
  *
@@ -46,6 +51,12 @@ const READ_CLIENT = 'READ_CLIENT';
 
 /** The account name a restore resolves, which is what the user menu must show. */
 const ACCOUNT_NAME = 'mifos';
+
+/** The account name the signed-in shell hands in through the `userName` input, distinct from the above. */
+const SUPPLIED_NAME = 'supplied-by-shell';
+
+/** The text a refusing router rejects the sign-out navigation with; it is what the user must be shown. */
+const SIGN_OUT_NAVIGATION_FAILURE = 'Navigation cancelled because a guard returned false';
 
 /**
  * Stand-in for the shipped bundles: one distinct value per key, so an assertion can tell which key
@@ -178,6 +189,24 @@ describe('NavbarComponent', () => {
     expect(userMenuTrigger().textContent).toContain(ACCOUNT_NAME);
   });
 
+  it('labels the user menu with the name the shell hands in, and with the session projection when it hands none', () => {
+    // AAP 0.7.1's `ShellComponent` input chain: the signed-in shell passes its own `userName` down,
+    // and the navbar falls back to `AuthService.username` — the `GET /users/{id}` projection — when
+    // nothing above it supplies a name. The menu shows one value, never both.
+    expect(userMenuTrigger().textContent).toContain(ACCOUNT_NAME);
+
+    fixture.componentRef.setInput('userName', SUPPLIED_NAME);
+    fixture.detectChanges();
+
+    expect(userMenuTrigger().textContent).toContain(SUPPLIED_NAME);
+    expect(userMenuTrigger().textContent).not.toContain(ACCOUNT_NAME);
+
+    fixture.componentRef.setInput('userName', null);
+    fixture.detectChanges();
+
+    expect(userMenuTrigger().textContent).toContain(ACCOUNT_NAME);
+  });
+
   it('renders none of the out-of-scope chrome the legacy navbar carried', () => {
     const text = host().textContent ?? '';
 
@@ -254,6 +283,27 @@ describe('NavbarComponent', () => {
       navigate.mock.invocationCallOrder[0],
     );
     expect(fixture.componentInstance.userMenuOpen()).toBe(false);
+  });
+
+  it('reports a refused sign-out navigation once, after the session is cleared', async () => {
+    const notifications = TestBed.inject(NotificationService);
+    navigate.mockImplementation(() => Promise.reject(new Error(SIGN_OUT_NAVIGATION_FAILURE)));
+
+    find<HTMLElement>('#logout').click();
+    // Crosses a macrotask, so the handler the component attached has run and the notification it
+    // raises is queued: that handler is what keeps the rejection from surfacing unhandled.
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    fixture.detectChanges();
+
+    expect(auth.logout).toHaveBeenCalledTimes(1);
+    expect(auth.logout.mock.invocationCallOrder[0]).toBeLessThan(
+      navigate.mock.invocationCallOrder[0],
+    );
+    expect(notifications.messages()).toHaveLength(1);
+    expect(notifications.messages()[0]?.kind).toBe('error');
+    expect(notifications.messages()[0]?.message).toBe(SIGN_OUT_NAVIGATION_FAILURE);
   });
 
   it('opens the user menu on its trigger and closes it on Escape, returning focus to the trigger', () => {

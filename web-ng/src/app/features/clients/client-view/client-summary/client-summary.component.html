@@ -1,10 +1,12 @@
 <!-- The record card is the card: these rows are its content, so no nested .panel — its fill, border and shadow would paint a second card the design does not show. -->
-<!-- BLITZY [DESIGN_SYSTEM_GAP]: .control-label declares no font-weight of its own outside a
-     .form-horizontal form — Bootstrap's 700 comes from the `label` element — so this key column
-     renders at body weight until the global stylesheet gives the class a weight of its own. -->
-@for (row of rows(); track row.label) {
+<!-- `.value-key` supplies the record's bold 14px key column (`web-ng/src/styles.scss`), so both key
+     cells name it and this file carries no styling of its own (AAP 0.2.2; AAP 0.2.3 `ProfileCard`). -->
+<!-- Every label is a legacy translation key resolved through `TranslatePipe`, so the block carries
+     no English copy of its own and follows the language switcher with the rest of the screen
+     (AAP 0.1.1; Rule 1 clause 6). -->
+@for (row of rows(); track row.labelKey) {
   <div class="row">
-    <div class="col-md-4"><span class="control-label">{{ row.label }}</span></div>
+    <div class="col-md-4"><span class="value-key">{{ row.labelKey | translate }}</span></div>
     <!-- A field the payload omits renders an empty value column, the way the record shows it, so the
          cell carries no fallback: no dash, "N/A", em dash or muted stand-in text. -->
     <div class="col-md-8">{{ row.value }}</div>
@@ -13,6 +15,6 @@
 <!-- The fifth and last row is the activation date, the block's only date: it renders at the one
      display pattern the record uses, taken from the component rather than written as a literal. -->
 <div class="row">
-  <div class="col-md-4"><span class="control-label">Activation Date</span></div>
+  <div class="col-md-4"><span class="value-key">{{ 'label.heading.activationdate' | translate }}</span></div>
   <div class="col-md-8">{{ activationDate() | date: displayDateFormat }}</div>
 </div>

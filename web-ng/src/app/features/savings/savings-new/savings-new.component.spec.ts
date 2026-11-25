@@ -1,8 +1,8 @@
 import { computed, signal, type Signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, Router, type ParamMap } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
-import { EMPTY, Observable, of, throwError } from 'rxjs';
+import { BehaviorSubject, EMPTY, Observable, of, throwError } from 'rxjs';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { ApiError } from '../../../core/http/api-error';
@@ -21,8 +21,9 @@ import { SavingsNewComponent } from './savings-new.component';
 /**
  * Behaviour of the new-application screen, the first step of workflow W8 (AAP 0.10.1 W8 row; AAP 0.7.1
  * `savings` row): the one template read it makes, the options it renders in the server's order, the
- * validators it applies, the single `POST` one click sends, and the Fineract text it shows when the
- * server refuses.
+ * validators it applies, the single `POST` one click sends, the Fineract text it shows when the server
+ * refuses, and the not-found state a route that names no client produces — no request at all, and the
+ * message in place of the card (AAP 0.7.4 states).
  *
  * The endpoint-level contract — method, path, query parameters and the `dateFormat`/`locale` members of
  * the body — belongs to `savings.service.spec.ts`, so `SavingsService` is stubbed at its own token and
@@ -57,6 +58,18 @@ const OFFICERS_TEMPLATE: SavingsTemplate = {
 /** The same payload without a field-officer list, as the client-only read sends it. */
 const CLIENT_ONLY_TEMPLATE: SavingsTemplate = { clientId: CLIENT_ID, productOptions: PRODUCTS };
 
+/** The client a second emission moves the same component to. */
+const SECOND_CLIENT_ID = 12;
+
+/** The second client's products: no id or name in common with {@link PRODUCTS}. */
+const SECOND_PRODUCTS: readonly SavingsTemplateOption[] = [{ id: 21, name: 'Second Savings' }];
+
+/** The second client's template: another product list, so a stale answer is caught by its rows. */
+const SECOND_TEMPLATE: SavingsTemplate = {
+  clientId: SECOND_CLIENT_ID,
+  productOptions: SECOND_PRODUCTS,
+};
+
 /** The payload's product labels, in payload order. */
 const PRODUCT_NAMES: readonly string[] = PRODUCTS.map((product) => product.name);
 
@@ -68,6 +81,9 @@ const CREATED_RESOURCE_ID = 41;
 
 /** A distinctive Fineract rejection, quoted from the server's own wording. */
 const REJECTED_MESSAGE = 'The savings product is not active for the submitted date.';
+
+/** The text a 5xx answers with; the interceptor turns it into that failure's one notification. */
+const SERVER_FAILURE_MESSAGE = 'The request could not be processed because an internal error occurred.';
 
 /** The day the application is submitted on in the cases that fill the form. */
 const SUBMITTED_ON = new Date(2026, 10, 24);
@@ -90,13 +106,23 @@ interface NotificationStub {
   readonly show: Mock<(kind: NotificationKind, message: string) => void>;
 }
 
-/** The active route snapshot the component reads its `:clientId` from. */
+/**
+ * The active route as the component reads it: the parameter map the router delivers `:clientId` on,
+ * held as a subject so a case can move the URL the way the router does on the same mounted component.
+ */
 interface ActivatedRouteStub {
-  readonly snapshot: {
-    readonly paramMap: {
-      get(name: string): string | null;
-    };
-  };
+  readonly paramMap: BehaviorSubject<ParamMap>;
+}
+
+/** The parameter map of one application route, the segment absent when it is `null`. */
+function paramsFor(segment: string | null): ParamMap {
+  const params: Record<string, string> = {};
+
+  if (segment !== null) {
+    params['clientId'] = segment;
+  }
+
+  return convertToParamMap(params);
 }
 
 /**
@@ -113,14 +139,30 @@ interface TranslateStub {
   readonly onTranslationChange: Observable<unknown>;
 }
 
-/** The route the screen is opened on, answering the one parameter it reads. */
+/** The route the screen is opened on, carrying the one segment it reads. */
 const ROUTE: ActivatedRouteStub = {
-  snapshot: {
-    paramMap: {
-      get: (name: string): string | null => (name === 'clientId' ? String(CLIENT_ID) : null),
-    },
-  },
+  paramMap: new BehaviorSubject<ParamMap>(paramsFor(String(CLIENT_ID))),
 };
+
+/**
+ * The `:clientId` segments that name no client, each described for the case's title: a non-numeric,
+ * zero, negative, fractional and blank segment, plus the absent parameter a URL that carries none
+ * reads as. None of them may reach a request, and each must put the screen in the state `loan-new`
+ * enters for the same segment (AAP 0.7.4 states, Rule 1 clause 2).
+ */
+const INVALID_CLIENT_ID_SEGMENTS: [string, string | null][] = [
+  ['a non-numeric segment', 'abc'],
+  ['a zero segment', '0'],
+  ['a negative segment', '-1'],
+  ['a fractional segment', '2.5'],
+  ['a blank segment', ''],
+  ['an absent parameter', null],
+];
+
+/** Builds a route whose `:clientId` segment is `segment`, absent when it is `null`. */
+function clientIdRoute(segment: string | null): ActivatedRouteStub {
+  return { paramMap: new BehaviorSubject<ParamMap>(paramsFor(segment)) };
+}
 
 /** Builds the translation stub the TestBed provides. */
 function translateStub(): TranslateStub {
@@ -164,6 +206,7 @@ describe('SavingsNewComponent', () => {
   let savings: SavingsServiceStub;
   let router: RouterStub;
   let notifications: NotificationStub;
+  let routeParams: BehaviorSubject<ParamMap>;
 
   /** The rendered host, narrowed once so every query below is type-checked. */
   const host = (): HTMLElement => {
@@ -174,7 +217,7 @@ describe('SavingsNewComponent', () => {
     return element;
   };
 
-  /** The select controls on the screen, in render order: product first, the optional officer second. */
+  /** The select controls on the screen. This screen renders exactly one: the product picker. */
   function selects(): HTMLSelectElement[] {
     return Array.from(host().querySelectorAll('app-select-field select')).filter(
       (element): element is HTMLSelectElement => element instanceof HTMLSelectElement,
@@ -215,12 +258,31 @@ describe('SavingsNewComponent', () => {
     fixture.detectChanges();
   }
 
-  /** Creates the screen on the routed client and answers its template read with `template`. */
-  async function render(template: SavingsTemplate): Promise<void> {
+  /** Creates the screen on `route` and answers its template read with `template`. */
+  async function renderOn(
+    route: ActivatedRouteStub,
+    template: SavingsTemplate,
+  ): Promise<void> {
+    routeParams = route.paramMap;
+    TestBed.overrideProvider(ActivatedRoute, { useValue: route });
     savings.template.mockReturnValue(of(template));
     fixture = TestBed.createComponent(SavingsNewComponent);
     component = fixture.componentInstance;
     await settle();
+  }
+
+  /**
+   * Moves the mounted screen to another application URL the way the router does when only the segment
+   * changes: the same component instance stays on screen and the parameter map emits again.
+   */
+  async function navigateTo(segment: string): Promise<void> {
+    routeParams.next(paramsFor(segment));
+    await settle();
+  }
+
+  /** Creates the screen on the routed client and answers its template read with `template`. */
+  async function render(template: SavingsTemplate): Promise<void> {
+    await renderOn(ROUTE, template);
   }
 
   /** Fills the two fields a create the server would accept needs: the product and the date. */
@@ -251,8 +313,42 @@ describe('SavingsNewComponent', () => {
 
     expect(savings.template.mock.calls).toEqual([[CLIENT_ID]]);
     expect(savings.create).not.toHaveBeenCalled();
-    expect(component.clientId).toBe(CLIENT_ID);
+    expect(component.clientId()).toBe(CLIENT_ID);
+    expect(component.notFound()).toBe(false);
   });
+
+  it.each(INVALID_CLIENT_ID_SEGMENTS)(
+    'shows the not-found message and sends nothing for %s',
+    async (_description: string, segment: string | null) => {
+      // The template payload below is a valid one, so the absence of a request is the screen's own
+      // decision about the route rather than a stub that happened to answer nothing.
+      await renderOn(clientIdRoute(segment), OFFICERS_TEMPLATE);
+
+      expect(component.notFound()).toBe(true);
+      expect(component.clientId()).toBeNull();
+      expect(savings.template).not.toHaveBeenCalled();
+
+      // No form: neither picker nor trigger is rendered in place of the card.
+      expect(selects()).toHaveLength(0);
+      expect(host().querySelector('button[type="submit"]')).toBeNull();
+
+      // The translation stub answers each key with the key itself, so this pins the key the message
+      // renders — the bundle's own `error.msg.resource.not.found`, the one `loan-new` shows for the
+      // same condition (Rule 1 clause 3).
+      expect(host().querySelector('.text-center.text-muted')?.textContent?.trim()).toBe(
+        'error.msg.resource.not.found',
+      );
+
+      // A submit on this state touches nothing and posts nothing, and cancel has no record to
+      // return to, so it leaves for the client list.
+      await component.submit();
+      expect(savings.create).not.toHaveBeenCalled();
+      expect(component.form.controls.productId.touched).toBe(false);
+
+      component.cancel();
+      expect(router.navigate).toHaveBeenCalledWith(['/clients']);
+    },
+  );
 
   it('renders the product options in the payload order, never sorted', async () => {
     await render(OFFICERS_TEMPLATE);
@@ -263,17 +359,26 @@ describe('SavingsNewComponent', () => {
     );
   });
 
-  it('renders the field-officer control only while the payload supplies field officers', async () => {
+  it('renders one select only — the product — even when the payload lists field officers', async () => {
+    // The legacy `Details` step also shows a field-officer picker, and this screen renders none: the
+    // creation body AAP 0.7.2 fixes carries `clientId`, `productId` and `submittedOnDate` and no
+    // officer member, so a picker would collect a choice no request can post (Rule 1 clause 3;
+    // AAP 0.10.5 item 5). The payload below still lists an officer, so the absence is the screen's
+    // decision rather than a payload that happened to omit the list.
     await render(OFFICERS_TEMPLATE);
 
-    expect(component.hasFieldOfficerOptions()).toBe(true);
-    expect(component.fieldOfficerOptions()).toEqual([{ id: 7, name: 'Officer, Parity' }]);
-    expect(selects()).toHaveLength(2);
+    expect(selects()).toHaveLength(1);
+    expect(optionTexts(productSelect()).filter((text) => PRODUCT_NAMES.includes(text))).toEqual(
+      PRODUCT_NAMES,
+    );
+    expect(host().querySelector('#savings-field-officer')).toBeNull();
+    expect('fieldOfficerOptions' in component).toBe(false);
+    expect('hasFieldOfficerOptions' in component).toBe(false);
+    expect('fieldOfficerId' in component.form.controls).toBe(false);
 
     component.savingsTemplate.set(CLIENT_ONLY_TEMPLATE);
     fixture.detectChanges();
 
-    expect(component.hasFieldOfficerOptions()).toBe(false);
     expect(selects()).toHaveLength(1);
   });
 
@@ -365,6 +470,25 @@ describe('SavingsNewComponent', () => {
     expect(notifications.show).not.toHaveBeenCalled();
   });
 
+  it('reports a server error once, through the interceptor’s notification and not on screen', async () => {
+    await render(OFFICERS_TEMPLATE);
+    savings.create.mockReturnValue(throwError(() => new ApiError(SERVER_FAILURE_MESSAGE, 500)));
+
+    fillValidForm();
+    await component.submit();
+    fixture.detectChanges();
+
+    // Above 499 the interceptor's notification is that failure's only message (AAP 0.7.4), so the
+    // screen keeps no failure of its own and paints no alert.
+    expect(component.error()).toBeNull();
+    expect(host().querySelector('.alert.alert-danger')).toBeNull();
+    // Every value the operator entered survives, so the application can be retried as it stands.
+    expect(component.form.controls.productId.value).toBe(CHOSEN_PRODUCT_ID);
+    expect(component.form.controls.submittedOnDate.value).toBe(SUBMITTED_ON);
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(notifications.show).not.toHaveBeenCalled();
+  });
+
   it('returns to the client record on cancel without issuing any request', async () => {
     await render(OFFICERS_TEMPLATE);
 
@@ -373,5 +497,101 @@ describe('SavingsNewComponent', () => {
     expect(router.navigate).toHaveBeenCalledWith(['/viewclient', CLIENT_ID]);
     expect(savings.create).not.toHaveBeenCalled();
     expect(savings.template.mock.calls).toHaveLength(1);
+  });
+
+  it('tells the user when the router refuses the cancel navigation, leaving no rejection unhandled', async () => {
+    const refused = 'Navigation cancelled because a guard returned false';
+    router.navigate.mockImplementation(() => Promise.reject(new Error(refused)));
+
+    await render(OFFICERS_TEMPLATE);
+
+    component.cancel();
+    // Crosses a macrotask, so the handler the component attached has run before the assertion: that
+    // handler is what keeps the rejection from surfacing unhandled, and it is the only thing that
+    // tells the user the return to the client record did not happen (AAP 0.14.2).
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    fixture.detectChanges();
+
+    expect(component.error()).toBe(refused);
+    expect(host().querySelector('.alert.alert-danger')?.textContent?.trim()).toBe(refused);
+  });
+
+  it('re-reads the template for a second client, clearing the first client’s application', async () => {
+    await render(OFFICERS_TEMPLATE);
+    savings.template.mockImplementation((clientId) =>
+      of(clientId === SECOND_CLIENT_ID ? SECOND_TEMPLATE : OFFICERS_TEMPLATE),
+    );
+
+    component.form.controls.productId.setValue(CHOSEN_PRODUCT_ID);
+    fixture.detectChanges();
+
+    await navigateTo(String(SECOND_CLIENT_ID));
+
+    // One read per emission, addressed by the client the URL now names…
+    expect(savings.template.mock.calls).toEqual([[CLIENT_ID], [SECOND_CLIENT_ID]]);
+    expect(component.clientId()).toBe(SECOND_CLIENT_ID);
+    // …and nothing of the first client's application survives it: the picked product is gone and the
+    // picker offers only the new payload's products.
+    expect(component.form.controls.productId.value).toBeNull();
+    expect(component.productOptions().map((option) => option.name)).toEqual(
+      SECOND_PRODUCTS.map((product) => product.name),
+    );
+    expect(component.error()).toBeNull();
+    expect(component.notFound()).toBe(false);
+  });
+
+  it('shows the not-found state for a second emission that names no client, with no request', async () => {
+    await render(OFFICERS_TEMPLATE);
+
+    await navigateTo('abc');
+
+    expect(component.notFound()).toBe(true);
+    expect(component.clientId()).toBeNull();
+    // The unserved route issues nothing, so the one read stays the first emission's.
+    expect(savings.template).toHaveBeenCalledTimes(1);
+    expect(host().querySelector('app-select-field select')).toBeNull();
+    expect(host().querySelector('button[type="submit"]')).toBeNull();
+  });
+
+  it('discards a superseded template answer that lands after the URL moved on', async () => {
+    const first = deferredResponse<SavingsTemplate>();
+    const second = deferredResponse<SavingsTemplate>();
+
+    savings.template.mockImplementation((clientId) =>
+      clientId === SECOND_CLIENT_ID ? second.response : first.response,
+    );
+
+    const route = clientIdRoute(String(CLIENT_ID));
+
+    routeParams = route.paramMap;
+    TestBed.overrideProvider(ActivatedRoute, { useValue: route });
+    fixture = TestBed.createComponent(SavingsNewComponent);
+    component = fixture.componentInstance;
+    await settle();
+
+    // The first client's read is still unanswered when the URL moves to the second client, which is
+    // what a move between two application URLs produces when the earlier response is the slower one.
+    await navigateTo(String(SECOND_CLIENT_ID));
+
+    second.resolve(SECOND_TEMPLATE);
+    await settle();
+
+    expect(component.productOptions().map((option) => option.name)).toEqual(
+      SECOND_PRODUCTS.map((product) => product.name),
+    );
+
+    // The earlier answer lands last. It is dropped rather than painted, so the first client's products
+    // can never be offered under the second client's URL.
+    first.resolve(OFFICERS_TEMPLATE);
+    await settle();
+
+    expect(component.clientId()).toBe(SECOND_CLIENT_ID);
+    expect(component.productOptions().map((option) => option.name)).toEqual(
+      SECOND_PRODUCTS.map((product) => product.name),
+    );
+    expect(component.notFound()).toBe(false);
+    expect(component.error()).toBeNull();
   });
 });

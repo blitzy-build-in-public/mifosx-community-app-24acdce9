@@ -1,0 +1,223 @@
+<!--
+  The individual-loan record — `#/viewloanaccount/:id` — the screen the loan route tree mounts for
+  its one record path (AAP 0.8.2; AAP 0.7.4's `#/viewloanaccount/:id` row; AAP 0.7.1 Features row
+  `loans`, which names `LoanViewComponent` and places `LoanScheduleComponent` and
+  `LoanTransactionsComponent` inside it).
+
+  Everything on the page comes from the two reads the component makes — `GET /loans/{id}?associations=all`
+  through `LoanService.get(id)` (AAP 0.7.3 row "W6 repayment"), which the summary, the schedule and the
+  transactions render, and `GET /loans/{id}/charges` through `LoanService.charges(id)` (AAP 0.7.3 row
+  "Loan charges"), which the charge tab renders because this fork's loan record carries no `charges`
+  member — so no section here requests anything of its own and no Fineract path, host, tenant or
+  credential is named in this file (Rule 1 clauses 2 and 9).
+
+  Every visual value is a global Bootstrap 3 class of `web-ng/src/styles.scss`, so this file carries
+  no style element, no inline style, no colour and no pixel (Rule 1 clause 6; AAP 0.4.4 decision 4):
+  `.container-fluid` is the page container, `.row`/`.col-md-*` the grid, `.panel` the white square
+  card with its shadow and no border stroke, `.panel-body` its 13px body, `.record-title` the
+  record's 24px/700 heading, `.value-key` the bold key column of the record's label/value rows,
+  `.text-small` the product's 12px secondary text, `.table` (inside the two section components) the
+  header band and row rules, `.nav-tabs` the strip, `.btn.btn-primary` the brand fill with its white
+  label inside `.btn-group`'s joined group, `.alert.alert-danger` the failure banner and `hr` the
+  hairline rule the stylesheet owns.
+
+  Four states, and only one of them paints at a time (AAP 0.7.4):
+  1. `loading()` — nothing at all. The design carries no spinner, skeleton or placeholder, so an
+     empty block is the faithful state rather than a missing one.
+  2. `notFound()` — a route with no id, or Fineract answering 404. The message replaces the record
+     entirely: no head, no tabs, no action. Its key is the one `loan-repayment.component.html`
+     already renders for the same case, so the two record-family screens cannot word it differently.
+  3. A 4xx other than 404 — `clientError()`, Fineract's own text verbatim and un-piped, with the
+     record still rendered beneath it when the response also carried one (AAP 0.4.4 decision 6).
+  4. The loaded record — head, summary, tabs and the active section.
+
+  A 5xx or a transport failure paints neither the alert nor a not-found message: the single
+  interceptor has already raised exactly one notification for it, and a second copy here would
+  report the same failure twice (AAP 0.4.2, AAP 0.14.1 "errors are values").
+
+  The status indicator is `app-status-swatch` in its record geometry and is a colour and nothing
+  else — no status word, label, title or tooltip — because the design paints only a colour and
+  adding the server's status text would be an improvement the migration may not make (AAP 0.10.5
+  deliberate difference 11; Rule 1 clause 3). The name beside it is the loan product's, as the
+  legacy record heads itself (`viewloanaccountdetails.html` renders
+  `{{loandetails.loanProductName}}(#{{loandetails.accountNo}})`).
+
+  The three metadata runs are the record's own identity, in the order the record reads them: the
+  account number, the client the loan belongs to and the principal applied for. A member the payload
+  omits renders its label and nothing after it — `?? ''`, never the text "undefined" and never a
+  dash or "N/A" the server did not send (Rule 1 clause 3). Spaces are written as `{{ ' ' }}` rather
+  than left as indentation between the elements, because the compiler's default whitespace handling
+  deletes a whitespace-only text node outright and the runs would otherwise render glued together —
+  the same technique `record-header.component.html` documents for the same strip.
+
+  The summary block prints the five figures AAP 0.7.2's `LoanSummary` row names — the loan's total,
+  its outstanding balance and the principal, interest and fee balances — each caption and value on
+  its own row. This fork answers the record with no `summary` member at all, so the two loan-wide
+  figures are the repayment schedule's own `totalRepaymentExpected` and `totalOutstanding` and the
+  three balances are the sums of its periods' outstanding members; the component's `summaryRows`
+  documents each mapping beside the member it reads. A figure the payload does not report renders an
+  EMPTY cell: no zero, no currency symbol, no "Not Available" and no dash, because the figure was
+  never reported and inventing one would state a balance Fineract never sent (Rule 1 clause 3). The
+  captions are the bundles' own legacy wording: `label.heading.total` and `label.heading.outstanding`
+  are the total and outstanding column captions of the legacy record's summary,
+  `label.heading.principal.outstanding` and `label.heading.interest.outstanding` are the bundles'
+  precise balance captions, and `label.heading.fees` is the fee row's — no bundle declares a
+  `label.heading.fees.outstanding`, and every key written here is present in
+  `app/global-translations/locale-*.json` (Rule 1 clause 6; AAP 0.10.2), so no caption can reach the
+  user as a humanised key.
+
+  The tabs are the application's one tab component, `app-tab-strip` (AAP 0.2.3 row `TabStrip`). There
+  are exactly three — the repayment schedule, the transactions and the charges, the three sections
+  AAP 0.7.4's `#/viewloanaccount/:id` row names after the summary — each rendered by the committed
+  read-only component that owns its table: `app-loan-schedule`, `app-loan-transactions` and
+  `app-loan-charges`. No table is re-implemented here, and no column, sort control or pager is added
+  beyond what those three components already declare (Rule 1 clause 3). The charge tab renders the rows
+  `GET /loans/{id}/charges` answered; when that read fails it renders Fineract's own message in place
+  of the table, and a 5xx or transport failure has already been notified once by the interceptor
+  (AAP 0.4.2; AAP 0.14.2), so no failure of it disappears.
+
+  The action entry points are the seven `routerLink`s to the screens this application serves: the
+  five lifecycle commands and the repayment form on `#/loanaccount/:id/:action` (the segments
+  `loan-action.component.ts` serves) and the charge form on `#/addloancharge/:id`. Each one is gated
+  by `HasPermissionDirective` on the single named code the component's `actionPermission` member
+  states — `UPDATE_LOAN`, the code `loans.routes.ts` declares for the `loanaccount/:id/:action`
+  route — so no entry point is left ungated and the gate has one home. Which step is legal is the
+  server's decision, so no link is enabled, disabled or reordered by the loan's status (Rule 1
+  clause 3). The captions are the legacy record's own button keys; the five lifecycle ones are
+  exactly the codes `loan-action.component.ts`'s copy table submits with, so a link and the screen it
+  reaches cannot disagree about a command's name.
+
+  The block resolves only once both reads have answered, and the sections are handed the payload's own
+  slices: `account.repaymentSchedule ?? null`, `account.transactions ?? []` and the charge rows the
+  charge read returned. None of the three components requests anything, so the record keeps making
+  exactly the two calls its typed service owns.
+-->
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-md-12">
+      <div class="panel">
+        <div class="panel-body">
+          @if (loading()) {
+          } @else if (notFound()) {
+            <p class="text-center text-muted">{{ 'error.msg.resource.not.found' | translate }}</p>
+          } @else {
+            <!--
+              The one failure region this screen renders itself: a 4xx other than 404, in Fineract's
+              own words. It is deliberately un-piped, because workflow W7 compares the message a
+              screen shows character for character with the server's `defaultUserMessage`
+              (AAP 0.4.4 decision 6; Rule 1 clause 3).
+            -->
+            @if (clientError(); as failure) {
+              <div class="alert alert-danger" role="alert">{{ failure.message }}</div>
+            }
+
+            @if (loan(); as record) {
+              <!-- The status colour, then the product the loan was written on. -->
+              <h3 class="record-title">
+                <app-status-swatch [status]="statusKey()" variant="dot" />{{ ' ' }}<strong>{{ record.loanProductName ?? '' }}</strong>
+              </h3>
+
+              <div class="small text-small">
+                <span>{{ 'label.heading.accnum' | translate }}:</span>{{ ' ' }}<span>{{ record.accountNo }}</span>{{ ' ' }}<span aria-hidden="true">|</span>{{ ' ' }}
+                <span>{{ 'label.heading.clientname' | translate }}:</span>{{ ' ' }}<span>{{ record.clientName ?? '' }}</span>{{ ' ' }}<span aria-hidden="true">|</span>{{ ' ' }}
+                <span>{{ 'label.heading.principal' | translate }}:</span>{{ ' ' }}<span>{{ record.principal | number }}</span>
+              </div>
+
+              <hr />
+
+              <!--
+                The joined primary-button group the record carries, as the legacy record shows it:
+                right-aligned, one button per served screen, every one permission-gated.
+              -->
+              <div class="pull-right btn-group">
+                <a
+                  class="btn btn-primary"
+                  [routerLink]="['/loanaccount', record.id, 'approve']"
+                  [hasPermission]="actionPermission"
+                >{{ 'label.button.approve' | translate }}</a>
+                <a
+                  class="btn btn-primary"
+                  [routerLink]="['/loanaccount', record.id, 'undoapproval']"
+                  [hasPermission]="actionPermission"
+                >{{ 'label.button.undoapproval' | translate }}</a>
+                <a
+                  class="btn btn-primary"
+                  [routerLink]="['/loanaccount', record.id, 'reject']"
+                  [hasPermission]="actionPermission"
+                >{{ 'label.button.reject' | translate }}</a>
+                <a
+                  class="btn btn-primary"
+                  [routerLink]="['/loanaccount', record.id, 'disburse']"
+                  [hasPermission]="actionPermission"
+                >{{ 'label.button.disburse' | translate }}</a>
+                <a
+                  class="btn btn-primary"
+                  [routerLink]="['/loanaccount', record.id, 'undodisbursal']"
+                  [hasPermission]="actionPermission"
+                >{{ 'label.button.undodisbursal' | translate }}</a>
+                <a
+                  class="btn btn-primary"
+                  [routerLink]="['/loanaccount', record.id, 'repayment']"
+                  [hasPermission]="actionPermission"
+                >{{ 'label.button.makerepayment' | translate }}</a>
+                <a
+                  class="btn btn-primary"
+                  [routerLink]="['/addloancharge', record.id]"
+                  [hasPermission]="actionPermission"
+                >{{ 'label.button.addloancharge' | translate }}</a>
+              </div>
+
+              <hr />
+
+              <!--
+                The summary figures, in a half-width column so a label and its value stay a readable
+                distance apart. Each row is label-then-value; an omitted figure leaves its value
+                column empty rather than printing a zero the payload never carried.
+              -->
+              <div class="row">
+                <div class="col-md-6" id="loan-summary">
+                  @for (row of summaryRows(); track row.labelKey) {
+                    <div class="row">
+                      <div class="col-md-6"><span class="value-key">{{ row.labelKey | translate }}</span></div>
+                      <div class="col-md-6">
+                        @if (row.value !== null) {
+                          {{ row.value | number }}
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+
+              <!--
+                The three tabs and the section the active one shows. `app-tab-strip` reports the
+                chosen id and the component decides which section that id selects, so an id this
+                record does not serve cannot leave the record showing nothing.
+              -->
+              <app-tab-strip [tabs]="tabs()" [activeId]="activeTab()" (tabChange)="activateTab($event)" />
+
+              @if (showSchedule()) {
+                <app-loan-schedule [schedule]="record.repaymentSchedule ?? null" />
+              } @else if (showTransactions()) {
+                <app-loan-transactions [transactions]="record.transactions ?? []" />
+              } @else if (chargesError(); as failure) {
+                <!--
+                  A charge read that failed with a 4xx, in Fineract's own words: the record's other
+                  sections stay usable and the message is un-piped, exactly as the record-wide failure
+                  region above renders it (AAP 0.7.4; AAP 0.14.2).
+                -->
+                <div class="alert alert-danger" role="alert">{{ failure.message }}</div>
+              } @else if (charges() !== null) {
+                <app-loan-charges
+                  [charges]="charges() ?? []"
+                  [loanId]="record.id"
+                  [actionPermission]="actionPermission"
+                />
+              }
+            }
+          }
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

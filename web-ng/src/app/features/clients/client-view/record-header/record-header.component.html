@@ -25,11 +25,17 @@
                 is the product's small-text token, which web-ng/src/styles.scss declares for this
                 purpose (12px, second-level grey — AAP 0.2.2) and which wins over .small's
                 85%-of-parent by cascade order, so the runs stay 12px whatever the surrounding
-                card's font-size. A run's value is the record's own: an unset External Id or Staff
-                renders its label and nothing else — no dash, no N/A, no placeholder (Rule 1
-                clause 3).
+                card's font-size. A run's label is the legacy bundle's own key —
+                label.heading.clientno, label.input.externalid, label.input.staff — resolved
+                through the translate pipe exactly as the legacy record template renders it, so
+                the strip follows the language switcher and no English copy is held in this file
+                (Rule 1 clause 6, AAP 0.10.2). A run's value is the record's own: an unset
+                External Id or Staff renders its label and nothing else — no dash, no N/A, no
+                placeholder (Rule 1 clause 3).
 
-    closing     hr, whose rule colour the global stylesheet owns.
+    closing     hr with the stylesheet's `section-rule` class: its 1px #E5E5E5 rule is the
+                section-rule token AAP 0.2.3 gives this header, and the class is named here
+                because a component may not carry the colour (Rule 1 clause 6).
 
   The separator glyphs are decorative punctuation, so they stay out of the accessibility tree and a
   screen reader reads the three `label: value` runs rather than "vertical bar" between them.
@@ -45,11 +51,11 @@
 </h3>
 
 <div class="small text-small">
-  @for (run of metadataRuns(); track run.label) {
-    <span>{{ run.label }}:</span>{{ ' ' }}<span>{{ run.value }}</span>@if (!$last) {
+  @for (run of metadataRuns(); track run.labelKey) {
+    <span>{{ run.labelKey | translate }}:</span>{{ ' ' }}<span>{{ run.value }}</span>@if (!$last) {
       {{ ' ' }}<span aria-hidden="true">|</span>{{ ' ' }}
     }
   }
 </div>
 
-<hr />
+<hr class="section-rule" />

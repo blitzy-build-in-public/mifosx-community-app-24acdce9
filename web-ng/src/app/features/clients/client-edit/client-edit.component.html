@@ -1,0 +1,231 @@
+<!--
+  The edit-client screen (`#/editclient/:id`): the client's own name and contact fields and, for an
+  active client, its activation date, above the cancel and save controls (AAP 0.7.3 row "Client list
+  and edit"; AAP 0.7.4 screens; AAP 0.8.2 feature route `editclient/:id`).
+
+  Every visual value comes from the global Bootstrap 3 layer `web-ng/src/styles.scss` compiles, so
+  this file carries no style, no colour and no pixel: `.container-fluid` and `.row`/`.col-md-*` are
+  the page and its grid, `.panel`/`.panel-heading`/`.panel-title`/`.panel-body` the white square card
+  with its shadow, `.form-group`/`.control-label` the field layout, `.form-control` the legacy
+  fixed-height input, `.checkbox` the boxed choice, `.btn.btn-primary` the brand fill, `.btn.btn-default`
+  the cancel control and `.alert.alert-danger` the failure banner (Rule 1 clause 6; AAP 0.5.2).
+  `span.required` is the legacy marker rule the global stylesheet carries.
+
+  Field ids and `name` attributes are the legacy form's own where the two screens share a field —
+  `firstname`, `lastname`, `fullname`, `externalId`, `mobileNo`, `activationDate`, `cancel`, `save`
+  (`app/views/clients/editclient.html`) — so the parity harness addresses the same controls on both
+  applications and a label's `for` points at the control it names.
+
+  One name set renders at a time: an entity is named by `fullname` alone and a person by `firstname`
+  and `lastname`, and the server rejects a body carrying both, so the branch is what keeps the posted
+  set and the rendered set one decision. The required markers are exactly the legacy form's — the
+  person's two names, the entity's name, and an active client's activation date — and no other
+  control is marked or validated, because Fineract alone decides what an entry may be (Rule 1
+  clause 3; AAP 0.4.4 decision 6).
+
+  Captions are the legacy bundle's own keys, translated here; the one untranslated string is
+  Fineract's own failure message, rendered verbatim above the form (Rule 1 clause 9). The controls
+  the legacy template also draws but this build does not render — office, account number, staff,
+  legal form, gender, client type, classification, date of birth, incorporation details, submission
+  date — are absent because the update endpoint accepts none of them or the record's model declares
+  none; rendering a control that cannot post would misrepresent what saving does.
+
+  The Cancel href binds `clientId()`, the id the URL names now, because the router reuses this
+  component when the URL moves from one `#/editclient/{id}` to another: the component resets and
+  re-reads on each route emission, so the link can never point at the record the screen has moved
+  away from.
+-->
+<section class="container-fluid">
+  <div class="row">
+    <div class="col-md-12">
+      @if (loading()) {
+        <!-- Nothing yet: the form is not painted before the record's own values arrive. -->
+      } @else if (notFound()) {
+        <!--
+          No such client: the message replaces the form entirely, so no control is offered against a
+          record that was never read. Both strings are keys the shipped legacy bundles carry.
+        -->
+        <div class="alert alert-danger" role="alert">
+          <strong>{{ notFoundHeadingKey | translate }}</strong>{{ ' ' }}<span>{{ notFoundMessageKey | translate }}</span>
+        </div>
+      } @else {
+        <div class="panel">
+          <div class="panel-heading">
+            <h3 class="panel-title">{{ headingKey | translate }}</h3>
+          </div>
+          <div class="panel-body">
+            <!--
+              Fineract's own failure text, verbatim and unmoved by any prefix: a failed save leaves
+              every entered value in the form below (AAP 0.7.4; AAP 0.14.1 "errors are values").
+            -->
+            @if (error(); as message) {
+              <div class="alert alert-danger" role="alert">{{ message }}</div>
+            }
+
+            <!-- The form exists only once the seed resolved: an empty form would post values the
+                 user never chose. -->
+            @if (ready()) {
+              <form [formGroup]="form" (ngSubmit)="submit()">
+                <fieldset>
+                  @if (isEntity()) {
+                    <!-- `PUT /clients/{id}` for an entity: the business name, and no individual
+                         name parts, which the server rejects beside it. -->
+                    <div class="row">
+                      <div class="col-md-6">
+                        <div class="form-group" [class.has-error]="showsRequiredError(form.controls.fullname)">
+                          <label class="control-label" for="fullname">
+                            {{ 'label.input.fullname' | translate }}<span class="required">*</span>
+                          </label>
+                          <input
+                            id="fullname"
+                            name="fullname"
+                            type="text"
+                            class="form-control"
+                            formControlName="fullname"
+                            [attr.aria-required]="true"
+                            [attr.aria-invalid]="showsRequiredError(form.controls.fullname) ? 'true' : null"
+                            [attr.aria-describedby]="showsRequiredError(form.controls.fullname) ? 'fullname-error' : null"
+                          />
+                          @if (showsRequiredError(form.controls.fullname)) {
+                            <span id="fullname-error" class="help-block">
+                              {{ 'label.requiredfield' | translate }}
+                            </span>
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  } @else {
+                    <div class="row">
+                      <div class="col-md-6">
+                        <div class="form-group" [class.has-error]="showsRequiredError(form.controls.firstname)">
+                          <label class="control-label" for="firstname">
+                            {{ 'label.input.firstname' | translate }}<span class="required">*</span>
+                          </label>
+                          <input
+                            id="firstname"
+                            name="firstname"
+                            type="text"
+                            class="form-control"
+                            formControlName="firstname"
+                            autocomplete="given-name"
+                            [attr.aria-required]="true"
+                            [attr.aria-invalid]="showsRequiredError(form.controls.firstname) ? 'true' : null"
+                            [attr.aria-describedby]="showsRequiredError(form.controls.firstname) ? 'firstname-error' : null"
+                          />
+                          @if (showsRequiredError(form.controls.firstname)) {
+                            <span id="firstname-error" class="help-block">
+                              {{ 'label.requiredfield' | translate }}
+                            </span>
+                          }
+                        </div>
+                      </div>
+                      <div class="col-md-6">
+                        <div class="form-group" [class.has-error]="showsRequiredError(form.controls.lastname)">
+                          <label class="control-label" for="lastname">
+                            {{ 'label.input.lastname' | translate }}<span class="required">*</span>
+                          </label>
+                          <input
+                            id="lastname"
+                            name="lastname"
+                            type="text"
+                            class="form-control"
+                            formControlName="lastname"
+                            autocomplete="family-name"
+                            [attr.aria-required]="true"
+                            [attr.aria-invalid]="showsRequiredError(form.controls.lastname) ? 'true' : null"
+                            [attr.aria-describedby]="showsRequiredError(form.controls.lastname) ? 'lastname-error' : null"
+                          />
+                          @if (showsRequiredError(form.controls.lastname)) {
+                            <span id="lastname-error" class="help-block">
+                              {{ 'label.requiredfield' | translate }}
+                            </span>
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  }
+
+                  <div class="row">
+                    <div class="col-md-6">
+                      <div class="form-group">
+                        <label class="control-label" for="mobileNo">{{ 'label.input.mobilenumber' | translate }}</label>
+                        <!-- Optional, and a plain text input: the legacy form's own numeric pattern is
+                             not carried over, because Fineract alone decides what a number may look
+                             like and its message is what the user reads (Rule 1 clause 3). -->
+                        <input
+                          id="mobileNo"
+                          name="mobileNo"
+                          type="text"
+                          class="form-control"
+                          formControlName="mobileNo"
+                          autocomplete="tel"
+                        />
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="form-group">
+                        <label class="control-label" for="externalId">{{ 'label.input.externalid' | translate }}</label>
+                        <input
+                          id="externalId"
+                          name="externalId"
+                          type="text"
+                          class="form-control"
+                          formControlName="externalId"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  @if (isActive()) {
+                    <!--
+                      An active client carries an activation date, which the legacy form renders and
+                      marks required for that state; a pending client has none, and Fineract rejects
+                      an activation date sent with one. The native date input is the registered
+                      replacement for the legacy jQuery datepicker (AAP 0.10.5 item 1).
+                    -->
+                    <div class="row">
+                      <div class="col-md-6">
+                        <label class="control-label" for="activationDate">
+                          {{ 'label.input.activationdate' | translate }}<span class="required">*</span>
+                        </label>
+                        <app-date-field
+                          inputId="activationDate"
+                          [control]="form.controls.activationDate"
+                          [required]="true"
+                        />
+                      </div>
+                    </div>
+                  }
+
+                  <div class="row">
+                    <div class="col-md-offset-5 col-md-7">
+                      <!-- The way back to the record without posting anything: a router link, never
+                           a location change (AAP 0.14.1), bound to the id the URL names now, so an
+                           in-place move between two edit URLs cannot leave the previous client's
+                           record behind the link. -->
+                      <a id="cancel" class="btn btn-default" [routerLink]="['/viewclient', clientId()]">
+                        {{ 'label.button.cancel' | translate }}
+                      </a>
+                      <!-- Disabled while the save is in flight: `PUT /clients/{id}` is not
+                           idempotent, so the guard's busy signal is what keeps a second click from
+                           sending a second update (AAP 0.1.1; AAP 0.14.1). -->
+                      <button
+                        id="save"
+                        type="submit"
+                        class="btn btn-primary"
+                        [disabled]="guard.busy()"
+                        [hasPermission]="submitPermission"
+                      >
+                        {{ 'label.button.save' | translate }}
+                      </button>
+                    </div>
+                  </div>
+                </fieldset>
+              </form>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+</section>

@@ -1,8 +1,10 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import type { Observable } from 'rxjs';
+import { defer, type Observable } from 'rxjs';
 
+import type { AppDateFormat } from '../../core/config/app-config.model';
 import { AppConfigService } from '../../core/config/app-config.service';
+import { resourceId } from '../../core/http/path-segment.util';
 import { toFineractDate } from '../../shared/date-format.util';
 import type {
   ChargeTemplate,
@@ -11,6 +13,7 @@ import type {
   LoanActionRequest,
   LoanActionTemplate,
   LoanApplicationRequest,
+  LoanCharge,
   LoanChargeActionCommand,
   LoanChargeActionRequest,
   LoanChargeRequest,
@@ -23,23 +26,16 @@ import type {
 } from './loan.models';
 
 /**
- * The one member of a request body that never reaches the wire.
+ * A request model without the two members this service writes itself as it serialises: `dateFormat`
+ * and `locale`.
  *
- * `command` discriminates `LoanActionRequest` and `LoanChargeActionRequest` inside this application,
- * while Fineract takes it from the query string — `POST /loans/{id}?command=approve` — exactly as the
- * legacy resource calls do. Posting it as well would add a body member the legacy body never carried
- * (Rule 1 clause 2).
+ * The conditional is what makes the strip work over a discriminated union. A plain
+ * `Omit<A | B, 'dateFormat' | 'locale'>` collapses a union to the members every arm declares — for
+ * `LoanActionRequest` that would be `command` alone, and the arms' own fields would be lost — while
+ * distributing over the union keeps each arm intact and removes only the pair (AAP 0.7.2 "Date
+ * handling"; Rule 1 clause 2).
  */
-const COMMAND_MEMBER = 'command';
-
-/**
- * The two members a `?command=waive` body must not carry.
- *
- * Waiving a charge books no money movement, so the server takes the amount alone and rejects a booked
- * date or payment type beside it (AAP 0.7.3, "Loan charges"). They are dropped here rather than trusted
- * to be absent, because a caller can hold an object wider than the waive arm of the union.
- */
-const WAIVE_OMITTED_MEMBERS: readonly string[] = ['transactionDate', 'paymentTypeId'];
+type WithoutDateGrammar<T> = T extends unknown ? Omit<T, 'dateFormat' | 'locale'> : never;
 
 /**
  * What a repayment form hands {@link LoanService.repay}: the models' `LoanRepaymentRequest` without its
@@ -52,14 +48,180 @@ const WAIVE_OMITTED_MEMBERS: readonly string[] = ['transactionDate', 'paymentTyp
 export type LoanRepaymentInput = Omit<LoanRepaymentRequest, 'dateFormat' | 'locale'>;
 
 /**
+ * What an action screen hands {@link LoanService.action}: `LoanActionRequest` without the format pair,
+ * for the reason {@link LoanRepaymentInput} states. Every arm keeps the `command` member that
+ * discriminates it — Fineract takes the command from the query string, so the member is dropped as the
+ * body is serialised — and the arm's own date as a `Date | null`.
+ */
+export type LoanActionInput = WithoutDateGrammar<LoanActionRequest>;
+
+/** What the add-charge form hands {@link LoanService.addCharge}: `LoanChargeRequest` without the format pair. */
+export type LoanChargeInput = WithoutDateGrammar<LoanChargeRequest>;
+
+/**
+ * What the pay and waive screens hand {@link LoanService.chargeAction}: `LoanChargeActionRequest`
+ * without the format pair, so a caller supplies the command and, for `pay`, the date it is recorded on,
+ * and nothing the endpoint refuses (see `LoanChargeActionRequest`).
+ */
+export type LoanChargeActionInput = WithoutDateGrammar<LoanChargeActionRequest>;
+
+/**
+ * The two members every dated loan body carries, set together so the pattern, the month names and the
+ * `locale` member cannot disagree (AAP 0.7.2 "Date handling"; Rule 1 clause 2).
+ */
+interface LoanDateWire {
+  /** Always `AppConfig.dateFormat`, the literal `'dd MMMM yyyy'`, never a caller's value. */
+  readonly dateFormat: AppDateFormat;
+
+  /** The locale of the selected language, from `AppConfigService.activeLocale`. */
+  readonly locale: string;
+}
+
+/**
+ * `POST /loans` and `POST /loans?command=calculateLoanSchedule` as the body goes on the wire
+ * (AAP 0.7.2 row `LoanApplicationRequest`).
+ *
+ * A date member and an optional member the form left unset are absent rather than empty: that is the
+ * body the legacy application transmitted, whose unset form values `JSON.stringify` dropped, and the
+ * server's own required-field rule is what reports the gap (Rule 1 clause 3). `principal` carries no
+ * bound, because W7 exists to prove Fineract rejects one itself.
+ */
+interface LoanApplicationBody extends LoanDateWire {
+  clientId: number;
+  productId: number;
+  loanType: 'individual';
+  principal: number;
+  loanTermFrequency: number;
+  loanTermFrequencyType: number;
+  numberOfRepayments: number;
+  repaymentEvery: number;
+  repaymentFrequencyType: number;
+  interestRatePerPeriod: number;
+  interestRateFrequencyType: number;
+  amortizationType: number;
+  interestType: number;
+  interestCalculationPeriodType: number;
+  transactionProcessingStrategyCode: string;
+  expectedDisbursementDate?: string | null;
+  submittedOnDate?: string | null;
+  loanOfficerId?: number;
+  fundId?: number;
+  charges?: readonly LoanChargeRowBody[];
+}
+
+/**
+ * One row of an application body's `charges` array, as the wire carries it.
+ *
+ * A new application names the charge definition and the amount (`{chargeId, amount}`, which
+ * `POST /loans` takes). An edit re-posts the charges `GET /loans/{id}/charges` reports, and such a row
+ * also says which loan charge it keeps and when it falls due: `PUT /loans/{id}` treats the array as the
+ * loan's **complete** charge set, so an absent array deletes every charge and a row without `id` is
+ * deleted and re-created rather than kept (AAP 0.7.2 row `LoanApplicationRequest`; AAP 0.3.4: the
+ * running fork's accepted member set wins over the plan's shorthand; Rule 1 clause 2).
+ */
+interface LoanChargeRowBody {
+  /** Loan charge the row keeps, on an edit that re-posts one the loan already carries. */
+  id?: number;
+
+  /** Charge definition the row applies, the record charge's own `chargeId`. */
+  chargeId: number;
+
+  /** Amount charged, taken from the record charge's `amountOrPercentage`. */
+  amount: number;
+
+  /** Due date of a charge that carries one, formatted `dd MMMM yyyy`; absent otherwise. */
+  dueDate?: string;
+}
+
+/** `POST /loans/{id}?command=approve` as the body goes on the wire. */
+interface LoanApproveBody extends LoanDateWire {
+  approvedOnDate?: string | null;
+  approvedLoanAmount?: number;
+  expectedDisbursementDate?: string | null;
+  note?: string;
+}
+
+/** `POST /loans/{id}?command=reject` as the body goes on the wire. */
+interface LoanRejectBody extends LoanDateWire {
+  rejectedOnDate?: string | null;
+  note?: string;
+}
+
+/** `POST /loans/{id}?command=disburse` as the body goes on the wire. */
+interface LoanDisburseBody extends LoanDateWire {
+  actualDisbursementDate?: string | null;
+  transactionAmount?: number;
+  fixedEmiAmount?: number;
+  note?: string;
+}
+
+/**
+ * `POST /loans/{id}?command=undoapproval` as the body goes on the wire: the note and nothing else.
+ *
+ * The command takes no date, so it carries neither a date nor the format pair a dated body sends
+ * (AAP 0.7.2 row `LoanActionRequest`).
+ */
+interface LoanUndoApprovalBody {
+  note?: string;
+}
+
+/**
+ * The empty object `POST /loans/{id}?command=undodisbursal` takes, and the one any undo command posts
+ * when the caller supplies no body: the server reads no member of it.
+ */
+type LoanEmptyBody = Readonly<Record<string, never>>;
+
+/** Every body a lifecycle command can put on the wire, one member shape per command. */
+type LoanActionBody =
+  | LoanApproveBody
+  | LoanRejectBody
+  | LoanDisburseBody
+  | LoanUndoApprovalBody
+  | LoanEmptyBody;
+
+/** `POST /loans/{id}/transactions?command=repayment` as the body goes on the wire. */
+interface LoanRepaymentBody extends LoanDateWire {
+  transactionDate?: string | null;
+  transactionAmount: number;
+  paymentTypeId: number;
+  note?: string;
+}
+
+/** `POST /loans/{id}/charges` as the body goes on the wire. */
+interface LoanAddChargeBody extends LoanDateWire {
+  chargeId: number;
+  amount: number;
+  dueDate?: string | null;
+}
+
+/**
+ * `POST /loans/{id}/charges/{loanChargeId}?command=pay` as the body goes on the wire: the date the
+ * payment is recorded on and the format pair, and no amount — the endpoint pays the charge's whole
+ * outstanding portion and refuses an `amount` member outright.
+ */
+interface LoanChargePayBody extends LoanDateWire {
+  transactionDate?: string | null;
+}
+
+/**
+ * `POST /loans/{id}/charges/{loanChargeId}?command=waive` as the body goes on the wire: the format
+ * pair alone, because a waiver books no money movement, no date and no payment type.
+ */
+type LoanChargeWaiveBody = LoanDateWire;
+
+/** Every body a charge action can put on the wire. */
+type LoanChargeActionBody = LoanChargePayBody | LoanChargeWaiveBody;
+
+/**
  * The loans family's single typed service: every individual-loan endpoint the in-scope screens use,
  * and the only file in `features/loans/` that imports `HttpClient` or holds a Fineract path.
  *
- * **What it owns.** Fourteen methods, one per endpoint row of AAP 0.7.3 — loan application (W4), loan
+ * **What it owns.** Fifteen methods, one per endpoint row of AAP 0.7.3 — loan application (W4), loan
  * edit, approve/disburse (W5), repayment (W6), charges, and the server-side validation W7 depends on
- * — plus two template readers the charge pickers need. Each method composes its whole URL through
- * `AppConfigService.apiUrl()`, so no host, no API-root prefix and no port appears in this file
- * (Rule 2) and the API root cannot drift between features (AAP 0.4.2).
+ * — plus the loan-charge list the record and the edit read, a template reader per charge picker, and
+ * the loan template. Each method composes its whole URL through `AppConfigService.apiUrl()`, so no
+ * host, no API-root prefix and no port appears in this file (Rule 2) and the API root cannot drift
+ * between features (AAP 0.4.2).
  *
  * **What it deliberately does not do.** It sets no header — the single interceptor attaches
  * `Authorization` and `Fineract-Platform-TenantId`; it catches nothing and notifies nothing — the
@@ -71,15 +233,30 @@ export type LoanRepaymentInput = Omit<LoanRepaymentRequest, 'dateFormat' | 'loca
  * (Rule 1 clause 3; AAP 0.7.2). It writes nothing to the console, because a URL carrying a client or
  * loan id, a body or a credential must never reach a log (Rule 1 clause 9).
  *
- * **Dates travel as `Date` until here.** A request model holds `Date | null`; the serialisers below
- * convert every date member with `toFineractDate(date, locale)` and set `dateFormat` and `locale`
- * themselves, so no component formats a date and no body can omit the pair Fineract needs to parse
- * one (AAP 0.7.2, "Date handling"; Rule 1 clause 2). The `locale` is the language the user currently
- * has selected, which is also the language the month names are rendered in — pairing English month
- * names with a non-English `locale` is a payload Fineract cannot parse.
+ * **Dates travel as `Date` until here, and every body is typed where it is built.** A request model
+ * holds `Date | null`; each private builder below returns a named wire interface for its own endpoint,
+ * converts every date member with `toFineractDate(date, locale)` and sets `dateFormat` and `locale`
+ * itself. So no component formats a date, no body can omit the pair Fineract needs to parse one
+ * (AAP 0.7.2 "Date handling" and its typed-model rule; Rule 1 clauses 2 and 4), and a member dropped
+ * or renamed as a body is built is a compile error rather than a payload only the server notices. The
+ * `locale` is the language the user currently has selected, which is also the language the month names
+ * are rendered in — pairing English month names with a non-English `locale` is a payload Fineract
+ * cannot parse.
+ *
+ * **The command and the body agree, or nothing is posted.** {@link action} compares the command in its
+ * query string with the discriminator inside the body it was handed and throws before any request is
+ * issued, because these lifecycle endpoints are not idempotent and one command's payload must never
+ * reach another command's endpoint; {@link chargeAction} holds the same invariant for `pay` and
+ * `waive`.
  *
  * **One request per click.** Every command here is a single POST, which is what lets a caller's
  * `runOnce` guard keep one click to one request against a non-idempotent action endpoint (AAP 0.1.1).
+ *
+ * **Every identifier is checked before its URL is composed.** `resourceId` from
+ * `core/http/path-segment.util.ts` accepts one or more ASCII digits and refuses anything else, so a
+ * crafted `:id` or `:chargeId` cannot move a request to another path on the same host; the check runs
+ * inside `defer`, so the refusal reaches the caller as an observable error with no request issued,
+ * while a valid id still composes the byte-identical URL legacy sent (Rule 1 clause 2).
  */
 @Injectable({ providedIn: 'root' })
 export class LoanService {
@@ -120,7 +297,12 @@ export class LoanService {
   chargeTemplate(chargeId: number | string): Observable<ChargeTemplate> {
     const params = new HttpParams().set('template', 'true');
 
-    return this.http.get<ChargeTemplate>(this.config.apiUrl(`/charges/${chargeId}`), { params });
+    return defer(() =>
+      this.http.get<ChargeTemplate>(
+        this.config.apiUrl(`/charges/${resourceId(chargeId, 'LoanService.chargeTemplate')}`),
+        { params },
+      ),
+    );
   }
 
   /**
@@ -158,6 +340,12 @@ export class LoanService {
    * `GET /loans/{id}?template=true&associations=charges,collateral,meeting,multiDisburseDetails` — the
    * edit form's seed (AAP 0.7.3, "Loan edit").
    *
+   * The association list is the one the legacy edit screen sends, kept verbatim; on this fork the
+   * answer carries the loan's own terms and the form's option lists (`chargeOptions`, `productOptions`,
+   * the frequency, interest, strategy and officer lists) and **no** `charges` member, so the loan's
+   * charges are read separately with {@link charges} rather than taken from here (AAP 0.3.4: the
+   * running fork's payload is the contract; Rule 1 clause 2).
+   *
    * The return type is the union the agent plan specifies because the same path answers either shape
    * depending on `template=true`; `isLoanAccount()` from `./loan.models` narrows it at the call site
    * rather than this service guessing which one arrived.
@@ -170,23 +358,59 @@ export class LoanService {
       .set('template', 'true')
       .set('associations', 'charges,collateral,meeting,multiDisburseDetails');
 
-    return this.http.get<LoanTemplate | LoanAccount>(this.config.apiUrl(`/loans/${id}`), { params });
+    return defer(() =>
+      this.http.get<LoanTemplate | LoanAccount>(
+        this.config.apiUrl(`/loans/${resourceId(id, 'LoanService.getWithTemplate')}`),
+        { params },
+      ),
+    );
   }
 
   /**
    * `GET /loans/{id}?associations=all` — the record page's single read, and W6's read-back (AAP 0.7.3,
    * "W6 repayment").
    *
-   * `associations=all` carries the repayment schedule, the transactions and the charges in one answer,
-   * so the record's three sections come from one request and no second call is added for any of them.
+   * `associations=all` carries the repayment schedule and the transactions, and the schedule carries
+   * every loan-wide money total the record's summary block prints. It carries **no** `charges` member
+   * on this fork — no `associations` value produces one — so a screen that lists the loan's charges
+   * reads them with {@link charges}, the same second request the endpoint's own contract requires
+   * (AAP 0.3.4: the running fork's payload is the contract; Rule 1 clause 2).
    *
    * @param id Loan to read.
-   * @returns The loan record with its schedule, transactions and charges.
+   * @returns The loan record with its schedule and transactions.
    */
   get(id: number | string): Observable<LoanAccount> {
     const params = new HttpParams().set('associations', 'all');
 
-    return this.http.get<LoanAccount>(this.config.apiUrl(`/loans/${id}`), { params });
+    return defer(() =>
+      this.http.get<LoanAccount>(this.config.apiUrl(`/loans/${resourceId(id, 'LoanService.get')}`), {
+        params,
+      }),
+    );
+  }
+
+  /**
+   * `GET /loans/{id}/charges` — the charges the loan carries (AAP 0.7.3, "Loan charges").
+   *
+   * The record page's charge list and the loan edit's `charges` rows both come from here, because the
+   * loan itself never reports them: `GET /loans/{id}?associations=all` and
+   * `GET /loans/{id}?template=true&associations=charges,…` both answer without a `charges` member on
+   * this fork. Each row is one loan charge — its own `id`, the definition's `chargeId`, its
+   * `amountOrPercentage`, its paid, waived and outstanding amounts and its due date — which is exactly
+   * the set the record lists and the set `PUT /loans/{id}` takes back (AAP 0.3.4; Rule 1 clause 2).
+   *
+   * The endpoint takes no query parameter: legacy asked it for the loan's charge list and nothing
+   * else, and an empty array is the answer for a loan that carries none (AAP 0.7.3).
+   *
+   * @param id Loan whose charges are read.
+   * @returns The loan's charges, in the order the server reports them.
+   */
+  charges(id: number | string): Observable<readonly LoanCharge[]> {
+    return defer(() =>
+      this.http.get<readonly LoanCharge[]>(
+        this.config.apiUrl(`/loans/${resourceId(id, 'LoanService.charges')}/charges`),
+      ),
+    );
   }
 
   /**
@@ -196,12 +420,26 @@ export class LoanService {
    * server accepts the same field set, and the run confirms from `GET /loans/{id}?template=true`
    * whether the fork marks any member submit-only.
    *
+   * Its `charges` member is the loan's **complete** charge set on this endpoint, so the caller re-posts
+   * every charge the loan keeps — `{id, chargeId, amount, dueDate}` rows built from the answers of
+   * `GET /loans/{id}/charges`, the endpoint that reports them — and an empty array for a loan that
+   * carries none. An absent `charges` member answers `{"changes":{"charges":[]}}` and deletes them
+   * all, which is why the builder formats a row's date instead of letting it reach the wire as an ISO
+   * string (AAP 0.3.4: the running fork's contract wins over the plan's shorthand; Rule 1 clause 2).
+   *
    * @param id Loan being edited.
-   * @param body The application as the form holds it.
+   * @param body The application as the form holds it, its charges included.
    * @returns The loan's id and the changes the server applied.
    */
   update(id: number | string, body: LoanEditRequest): Observable<LoanActionResult> {
-    return this.http.put<LoanActionResult>(this.config.apiUrl(`/loans/${id}`), this.toApplicationBody(body));
+    const payload = this.toApplicationBody(body);
+
+    return defer(() =>
+      this.http.put<LoanActionResult>(
+        this.config.apiUrl(`/loans/${resourceId(id, 'LoanService.update')}`),
+        payload,
+      ),
+    );
   }
 
   /**
@@ -217,7 +455,12 @@ export class LoanService {
   approvalTemplate(id: number | string): Observable<LoanActionTemplate> {
     const params = new HttpParams().set('templateType', 'approval');
 
-    return this.http.get<LoanActionTemplate>(this.config.apiUrl(`/loans/${id}/template`), { params });
+    return defer(() =>
+      this.http.get<LoanActionTemplate>(
+        this.config.apiUrl(`/loans/${resourceId(id, 'LoanService.approvalTemplate')}/template`),
+        { params },
+      ),
+    );
   }
 
   /**
@@ -238,9 +481,12 @@ export class LoanService {
   ): Observable<LoanTransactionTemplate> {
     const params = new HttpParams().set('command', command);
 
-    return this.http.get<LoanTransactionTemplate>(this.config.apiUrl(`/loans/${id}/transactions/template`), {
-      params,
-    });
+    return defer(() =>
+      this.http.get<LoanTransactionTemplate>(
+        this.config.apiUrl(`/loans/${resourceId(id, 'LoanService.actionTemplate')}/transactions/template`),
+        { params },
+      ),
+    );
   }
 
   /**
@@ -252,6 +498,13 @@ export class LoanService {
    * server takes — no date, and therefore no `dateFormat`/`locale` pair either.
    * The command is never posted in the body; it travels in the query string.
    *
+   * The command in the query string and the command the body describes are checked to be the same one,
+   * because the two travel separately and a mismatch would post one action's payload to another
+   * action's endpoint — a wrong request against a financial record, refused only after it reached the
+   * server. The guard runs before the request is issued and throws, because a caller that passes
+   * mismatched arguments has a bug this service cannot resolve. A dated command with no body at all is
+   * refused the same way rather than posted as an empty object the server could only answer generically.
+   *
    * Exactly one POST per call, which is what the caller's `runOnce` guard relies on to keep one click
    * to one request against an endpoint that is not idempotent.
    *
@@ -259,20 +512,30 @@ export class LoanService {
    * @param command Command to run.
    * @param body The command's body, mandatory for the three dated commands.
    * @returns The affected loan's id and the changes the server applied.
+   * @throws Error when the body describes a different command, or when a dated command has no body.
    */
-  action(id: number | string, command: LoanCommand, body?: LoanActionRequest): Observable<LoanActionResult> {
+  action(id: number | string, command: LoanCommand, body?: LoanActionInput): Observable<LoanActionResult> {
+    const payload = this.toActionBody(command, body);
     const params = new HttpParams().set('command', command);
 
-    return this.http.post<LoanActionResult>(this.config.apiUrl(`/loans/${id}`), this.toActionBody(body), { params });
+    return defer(() =>
+      this.http.post<LoanActionResult>(
+        this.config.apiUrl(`/loans/${resourceId(id, 'LoanService.action')}`),
+        payload,
+        { params },
+      ),
+    );
   }
 
   /**
    * `POST /loans/{id}/transactions?command=repayment` — books a repayment (AAP 0.7.3, "W6 repayment").
    *
-   * The amount and the date are the form's own values: the form seeds them from the schedule's first
-   * period and the run date, and the service changes neither. `dateFormat` and `locale` are not the
-   * form's to supply — this method writes both from the configuration, which is why it takes
-   * {@link LoanRepaymentInput} rather than the full `LoanRepaymentRequest` model.
+   * The amount and the date are the form's own values: the form seeds both from the repayment
+   * transaction template — the same `GET /loans/{id}/transactions/template?command=repayment` read that
+   * supplies its payment types, whose `amount` and `date` are legacy's own defaults — and the service
+   * changes neither. `dateFormat` and `locale` are not the form's to supply: this method writes both
+   * from the configuration, which is why it takes {@link LoanRepaymentInput} rather than the full
+   * `LoanRepaymentRequest` model.
    *
    * @param id Loan being repaid.
    * @param body The repayment as the form holds it.
@@ -280,10 +543,15 @@ export class LoanService {
    */
   repay(id: number | string, body: LoanRepaymentInput): Observable<LoanActionResult> {
     const params = new HttpParams().set('command', 'repayment');
+    const payload = this.toRepaymentBody(body);
 
-    return this.http.post<LoanActionResult>(this.config.apiUrl(`/loans/${id}/transactions`), this.toDatedBody(body), {
-      params,
-    });
+    return defer(() =>
+      this.http.post<LoanActionResult>(
+        this.config.apiUrl(`/loans/${resourceId(id, 'LoanService.repay')}/transactions`),
+        payload,
+        { params },
+      ),
+    );
   }
 
   /**
@@ -296,129 +564,343 @@ export class LoanService {
    * @returns The loan's charge template.
    */
   chargeTemplateFor(id: number | string): Observable<ChargeTemplate> {
-    return this.http.get<ChargeTemplate>(this.config.apiUrl(`/loans/${id}/charges/template`));
+    return defer(() =>
+      this.http.get<ChargeTemplate>(
+        this.config.apiUrl(`/loans/${resourceId(id, 'LoanService.chargeTemplateFor')}/charges/template`),
+      ),
+    );
   }
 
   /**
    * `POST /loans/{id}/charges` — attaches a charge to a loan (AAP 0.7.3, "Loan charges").
    *
-   * `dueDate` is serialised only for a charge that carries a specified due date: the serialiser omits a
+   * `dueDate` is serialised only for a charge that carries a specified due date: the body builder omits a
    * member the form left unset, so a disbursement-timed fee posts no date rather than an empty one.
    *
    * @param id Loan the charge is added to.
    * @param body The charge as the form holds it.
    * @returns The loan's id and the changes the server applied.
    */
-  addCharge(id: number | string, body: LoanChargeRequest): Observable<LoanActionResult> {
-    return this.http.post<LoanActionResult>(this.config.apiUrl(`/loans/${id}/charges`), this.toDatedBody(body));
+  addCharge(id: number | string, body: LoanChargeInput): Observable<LoanActionResult> {
+    const payload = this.toAddChargeBody(body);
+
+    return defer(() =>
+      this.http.post<LoanActionResult>(
+        this.config.apiUrl(`/loans/${resourceId(id, 'LoanService.addCharge')}/charges`),
+        payload,
+      ),
+    );
   }
 
   /**
-   * `POST /loans/{id}/charges/{chargeId}?command=pay|waive` — pays or waives a charge's outstanding
-   * portion (AAP 0.7.3, "Loan charges").
+   * `POST /loans/{id}/charges/{loanChargeId}?command=pay|waive` — pays or waives a charge's whole
+   * outstanding portion (AAP 0.7.3, "Loan charges").
    *
-   * `pay` books a money movement and sends its amount, date and payment type; `waive` books none, so the
-   * date and payment type are dropped from the body even when the caller left them set, because the
-   * server rejects them beside `command=waive`.
+   * `loanChargeId` is the **loan-charge id**: the `id` of the charge row the loan itself carries, which
+   * is the `resourceId` `POST /loans/{id}/charges` answers when that charge is added. It is not the
+   * charge definition id the picker offered: with the accepted body, `POST /loans/8/charges/1?command=pay`
+   * answers 404 "Loan charge with identifier 1 does not exist for loan 8" for a definition that is
+   * attached as loan-charge 5, while the same command against `/charges/5` resolves the charge. A
+   * caller holding the definition id therefore cannot act on the loan's charge, which is why the
+   * parameter is named for the id it takes.
+   *
+   * The body is the command's own: `pay` books a money movement and carries the date it is recorded on
+   * beside the format pair, and `waive` books none and carries the pair alone. Neither sends an amount
+   * or a payment type, because the endpoint pays or waives the whole outstanding portion and refuses
+   * those members (see `LoanChargeActionRequest`).
    *
    * @param id Loan the charge belongs to.
-   * @param chargeId Charge being acted on.
+   * @param loanChargeId The loan's own charge row, as the record reports it and `POST /loans/{id}/charges`
+   *   answers it.
    * @param command Action to take.
    * @param body The action as the form holds it.
    * @returns The loan's id and the changes the server applied.
+   * @throws Error when the body describes a different command than `command`.
    */
   chargeAction(
     id: number | string,
-    chargeId: number | string,
+    loanChargeId: number | string,
     command: LoanChargeActionCommand,
-    body: LoanChargeActionRequest,
+    body: LoanChargeActionInput,
   ): Observable<LoanActionResult> {
+    const payload = this.toChargeActionBody(command, body);
     const params = new HttpParams().set('command', command);
-    const payload = this.toDatedBody(body, command === 'waive' ? WAIVE_OMITTED_MEMBERS : []);
 
-    return this.http.post<LoanActionResult>(this.config.apiUrl(`/loans/${id}/charges/${chargeId}`), payload, {
-      params,
+    return defer(() => {
+      const loan = resourceId(id, 'LoanService.chargeAction');
+      const charge = resourceId(loanChargeId, 'LoanService.chargeAction');
+
+      return this.http.post<LoanActionResult>(this.config.apiUrl(`/loans/${loan}/charges/${charge}`), payload, {
+        params,
+      });
     });
   }
 
   /**
    * The body `POST /loans` submits and `POST /loans?command=calculateLoanSchedule` previews.
    *
-   * Both methods call this one helper, so the preview and the submission are the same object by
-   * construction rather than by two field lists that could drift (AAP 0.7.2; W4).
+   * Both methods call this one builder, so the preview and the submission are the same object by
+   * construction rather than by two field lists that could drift (AAP 0.7.2 row
+   * `LoanApplicationRequest`; W4). The caller's own `dateFormat` and `locale` never reach the wire —
+   * the pair beside the dates is the one the configuration and the active language fix — so a form
+   * cannot describe its dates in a format the server does not read.
    *
    * @param body The application as the form holds it.
    * @returns The wire body: dates formatted, `dateFormat` and `locale` set.
    */
-  private toApplicationBody(body: LoanApplicationRequest): Record<string, unknown> {
-    return this.toDatedBody(body);
+  private toApplicationBody(body: LoanApplicationRequest): LoanApplicationBody {
+    const dates = this.dateWire();
+
+    return {
+      ...dates,
+      clientId: body.clientId,
+      productId: body.productId,
+      loanType: body.loanType,
+      principal: body.principal,
+      loanTermFrequency: body.loanTermFrequency,
+      loanTermFrequencyType: body.loanTermFrequencyType,
+      numberOfRepayments: body.numberOfRepayments,
+      repaymentEvery: body.repaymentEvery,
+      repaymentFrequencyType: body.repaymentFrequencyType,
+      interestRatePerPeriod: body.interestRatePerPeriod,
+      interestRateFrequencyType: body.interestRateFrequencyType,
+      amortizationType: body.amortizationType,
+      interestType: body.interestType,
+      interestCalculationPeriodType: body.interestCalculationPeriodType,
+      transactionProcessingStrategyCode: body.transactionProcessingStrategyCode,
+      ...(body.expectedDisbursementDate === null
+        ? {}
+        : { expectedDisbursementDate: toFineractDate(body.expectedDisbursementDate, dates.locale) }),
+      ...(body.submittedOnDate === null
+        ? {}
+        : { submittedOnDate: toFineractDate(body.submittedOnDate, dates.locale) }),
+      ...(body.loanOfficerId === undefined ? {} : { loanOfficerId: body.loanOfficerId }),
+      ...(body.fundId === undefined ? {} : { fundId: body.fundId }),
+      ...(body.charges === undefined ? {} : { charges: this.toChargeRows(body.charges, dates.locale) }),
+    };
+  }
+
+  /**
+   * The `charges` rows of an application body as the wire carries them: the loan charge's own `id`
+   * when the row keeps one, the definition it applies, the amount, and the due date formatted like
+   * every other date in the body — a nested `Date` must never reach the wire as the ISO string
+   * `JSON.stringify` would make of it while the body declares `dd MMMM yyyy` (AAP 0.14.1 "dates never
+   * travel as strings built in a template"; Rule 1 clause 2).
+   *
+   * A row's unset member is omitted rather than sent as `null`, and an empty array stays an empty
+   * array: `PUT /loans/{id}` reads the member as the loan's complete charge set, so the edit form has
+   * to be able to say "this loan keeps none" without dropping the member (Rule 1 clause 3).
+   *
+   * @param rows The rows the form carries, as `LoanApplicationRequest` declares them.
+   * @param locale The locale the body carries, so the formatted dates and its month names agree.
+   * @returns The rows the payload carries.
+   */
+  private toChargeRows(
+    rows: NonNullable<LoanApplicationRequest['charges']>,
+    locale: string,
+  ): readonly LoanChargeRowBody[] {
+    return rows.map((row) => {
+      const dueDate =
+        row.dueDate === undefined || row.dueDate === null
+          ? null
+          : toFineractDate(row.dueDate, locale);
+
+      return {
+        ...(row.id === undefined ? {} : { id: row.id }),
+        chargeId: row.chargeId,
+        amount: row.amount,
+        // A date the parser cannot read is left out rather than posted as `null`, the same rule every
+        // other member of a body follows; Fineract's own required-field rule then reports it.
+        ...(dueDate === null ? {} : { dueDate }),
+      };
+    });
+  }
+
+  /**
+   * The two members every dated body carries, read once per body so the pattern, the month names and
+   * the `locale` member cannot disagree (AAP 0.7.2 "Date handling"; Rule 1 clause 2).
+   *
+   * This and the builders below are the only places a date is converted and the only places
+   * `dateFormat` and `locale` are written, so a dated body that leaves this service always carries
+   * both even though no component supplied them.
+   *
+   * @returns The format pattern and the active language.
+   */
+  private dateWire(): LoanDateWire {
+    return { dateFormat: this.config.config.dateFormat, locale: this.config.activeLocale() };
   }
 
   /**
    * The body of one lifecycle command, shaped by the command the union discriminates on.
    *
-   * `undoapproval` sends its note and nothing else, and `undodisbursal` takes no body at all, so neither
-   * goes through the dated serialiser: the server takes no date for them and a `dateFormat`/`locale`
-   * pair it never reads would be two members legacy did not send (Rule 1 clause 2).
+   * The switch is exhaustive over `LoanActionRequest`, so a command the model gains and this builder
+   * does not is a compile error rather than a payload the server has to refuse. `undoapproval` sends
+   * its note and nothing else and `undodisbursal` takes no body at all, so neither carries the
+   * `dateFormat`/`locale` pair: the server reads no date for them, and the pair would be two members
+   * legacy did not send (Rule 1 clause 2).
    *
+   * A member the form left unset — an absent optional, or a `null` date — is omitted rather than sent
+   * empty, which is the body the legacy application transmitted, whose unset form values
+   * `JSON.stringify` dropped; the server's own required-field rule is what reports the gap (Rule 1
+   * clause 3).
+   *
+   * @param command The command the request will name in its query string.
    * @param body The command's body, absent for a caller that supplies none.
    * @returns The wire body for that command.
+   * @throws Error when the body describes another command, or when a dated command has no body.
    */
-  private toActionBody(body: LoanActionRequest | undefined): Record<string, unknown> {
+  private toActionBody(command: LoanCommand, body: LoanActionInput | undefined): LoanActionBody {
     if (body === undefined) {
-      return {};
+      if (command === 'undoapproval' || command === 'undodisbursal') {
+        return {};
+      }
+
+      throw new Error(
+        `LoanService.action: the '${command}' command sends a dated body and none was supplied. ` +
+          'Approve, reject and disburse each post their own date, so no empty payload is sent to an ' +
+          'endpoint that cannot act on one.',
+      );
     }
 
-    if (body.command === 'undoapproval') {
-      return body.note === undefined ? {} : { note: body.note };
+    if (body.command !== command) {
+      throw new Error(
+        `LoanService.action: the body describes the '${body.command}' command but the request issues ` +
+          `'${command}'. Post the body that belongs to the command, so one action cannot carry ` +
+          "another action's payload.",
+      );
     }
 
-    if (body.command === 'undodisbursal') {
-      return {};
-    }
+    const dates = this.dateWire();
 
-    return this.toDatedBody(body);
+    switch (body.command) {
+      case 'approve':
+        return {
+          ...dates,
+          ...(body.approvedOnDate === null
+            ? {}
+            : { approvedOnDate: toFineractDate(body.approvedOnDate, dates.locale) }),
+          ...(body.approvedLoanAmount === undefined
+            ? {}
+            : { approvedLoanAmount: body.approvedLoanAmount }),
+          ...(body.expectedDisbursementDate === null || body.expectedDisbursementDate === undefined
+            ? {}
+            : { expectedDisbursementDate: toFineractDate(body.expectedDisbursementDate, dates.locale) }),
+          ...(body.note === undefined ? {} : { note: body.note }),
+        };
+
+      case 'reject':
+        return {
+          ...dates,
+          ...(body.rejectedOnDate === null
+            ? {}
+            : { rejectedOnDate: toFineractDate(body.rejectedOnDate, dates.locale) }),
+          ...(body.note === undefined ? {} : { note: body.note }),
+        };
+
+      case 'disburse':
+        return {
+          ...dates,
+          ...(body.actualDisbursementDate === null
+            ? {}
+            : { actualDisbursementDate: toFineractDate(body.actualDisbursementDate, dates.locale) }),
+          ...(body.transactionAmount === undefined ? {} : { transactionAmount: body.transactionAmount }),
+          ...(body.fixedEmiAmount === undefined ? {} : { fixedEmiAmount: body.fixedEmiAmount }),
+          ...(body.note === undefined ? {} : { note: body.note }),
+        };
+
+      case 'undoapproval':
+        return body.note === undefined ? {} : { note: body.note };
+
+      case 'undodisbursal':
+        return {};
+    }
   }
 
   /**
-   * Serialises a dated request body: every `Date` member formatted for Fineract, `dateFormat` and
-   * `locale` set unconditionally, and nothing else touched.
+   * The body `POST /loans/{id}/transactions?command=repayment` posts.
    *
-   * This is the only place a date is converted and the only place the two locale members are written,
-   * so a date-bearing body that reached this service always carries both even though the component
-   * never supplied them (AAP 0.7.2, "Date handling"; Rule 1 clause 2). The `locale` is read once and
-   * used for both the month names and the payload member, so the two cannot disagree.
+   * The amount, the payment type and the date are the form's own values, sent exactly as it holds
+   * them: nothing is rounded, bounded or recomputed here (Rule 1 clause 3). A `null` date is omitted,
+   * which leaves the server's own required-field rule to report it.
    *
-   * A member the caller left unset — absent, `undefined`, or a `null` date — is omitted rather than
-   * sent empty: that is the body the legacy application transmitted, whose unset form values
-   * `JSON.stringify` dropped, and the server's own required-field rule is what reports the absence
-   * (Rule 1 clause 3). The union's `command` member is omitted too, because it travels in the query
-   * string. No amount is bound, rounded or defaulted.
-   *
-   * @param body The request body as the component assembled it.
-   * @param omitted Members this endpoint must not receive, on top of `command`.
-   * @returns The wire body.
+   * @param body The repayment as the form holds it.
+   * @returns The wire body: the date formatted, `dateFormat` and `locale` set.
    */
-  private toDatedBody<T extends object>(body: T, omitted: readonly string[] = []): Record<string, unknown> {
-    const locale = this.config.activeLocale();
-    const dropped = new Set<string>([COMMAND_MEMBER, ...omitted]);
-    const serialised: Record<string, unknown> = {};
-    // `Object.entries` types a plain `object`'s values as `any`; widening the pairs here keeps every
-    // read below a checked `unknown` the loop narrows, rather than a value the compiler cannot follow.
-    const entries: readonly (readonly [string, unknown])[] = Object.entries(body);
+  private toRepaymentBody(body: LoanRepaymentInput): LoanRepaymentBody {
+    const dates = this.dateWire();
 
-    for (const [key, value] of entries) {
-      if (dropped.has(key) || value === undefined || value === null) {
-        continue;
-      }
+    return {
+      ...dates,
+      ...(body.transactionDate === null
+        ? {}
+        : { transactionDate: toFineractDate(body.transactionDate, dates.locale) }),
+      transactionAmount: body.transactionAmount,
+      paymentTypeId: body.paymentTypeId,
+      ...(body.note === undefined ? {} : { note: body.note }),
+    };
+  }
 
-      serialised[key] = value instanceof Date ? toFineractDate(value, locale) : value;
+  /**
+   * The body `POST /loans/{id}/charges` posts when a charge is added.
+   *
+   * `dueDate` is present only for a charge that falls due on a date the user picked, so a
+   * disbursement-timed fee posts no date member rather than an empty one.
+   *
+   * @param body The charge as the form holds it.
+   * @returns The wire body: the due date formatted when it is set, `dateFormat` and `locale` set.
+   */
+  private toAddChargeBody(body: LoanChargeInput): LoanAddChargeBody {
+    const dates = this.dateWire();
+
+    return {
+      ...dates,
+      chargeId: body.chargeId,
+      amount: body.amount,
+      ...(body.dueDate === undefined || body.dueDate === null
+        ? {}
+        : { dueDate: toFineractDate(body.dueDate, dates.locale) }),
+    };
+  }
+
+  /**
+   * The body of one charge action, shaped by the command the union discriminates on.
+   *
+   * `pay` carries the date the payment is recorded on beside the format pair; `waive` carries the pair
+   * alone. Neither carries an amount or a payment type, because the endpoint pays or waives the
+   * charge's whole outstanding portion and refuses those members on the parameter binding — so there
+   * is nothing here to drop and no member left for a caller to set (see `LoanChargeActionRequest`).
+   *
+   * @param command The command the request will name in its query string.
+   * @param body The action as the form holds it.
+   * @returns The wire body for that command.
+   * @throws Error when the body describes the other command.
+   */
+  private toChargeActionBody(
+    command: LoanChargeActionCommand,
+    body: LoanChargeActionInput,
+  ): LoanChargeActionBody {
+    if (body.command !== command) {
+      throw new Error(
+        `LoanService.chargeAction: the body describes the '${body.command}' command but the request ` +
+          `issues '${command}'. Post the body that belongs to the command, so one charge action cannot ` +
+          "carry another's payload.",
+      );
     }
 
-    serialised['dateFormat'] = this.config.config.dateFormat;
-    serialised['locale'] = locale;
+    const dates = this.dateWire();
 
-    return serialised;
+    switch (body.command) {
+      case 'pay':
+        return {
+          ...dates,
+          ...(body.transactionDate === null
+            ? {}
+            : { transactionDate: toFineractDate(body.transactionDate, dates.locale) }),
+        };
+
+      case 'waive':
+        return { ...dates };
+    }
   }
 }
 

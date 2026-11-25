@@ -12,6 +12,8 @@
  * - a 401 on a normal request ends the session and returns to the login screen carrying the attempted
  *   route, while a 401 on the authentication request and a 401 while the login screen is showing leave
  *   both alone;
+ * - that return to the login screen is settled rather than dropped: when the router refuses it, the user
+ *   is told once in the rejection's own words and no unhandled rejection is left behind (AAP 0.14.2);
  * - exactly one notification is raised for a transport failure or a 5xx, and none for a 4xx, which
  *   reaches the caller alone;
  * - every `HttpErrorResponse` becomes the `ApiError` the caller renders, and an error of another kind is
@@ -163,6 +165,41 @@ async function rejectionOf(observable: Observable<unknown>): Promise<unknown> {
   throw new Error('the request was expected to fail, but the interceptor let it through');
 }
 
+/** The text a refusing router rejects its navigation with; it is what the user must be shown. */
+const NAVIGATION_FAILURE = 'Navigation cancelled because a guard returned false';
+
+/**
+ * The promise a refusing router rejects its navigation with, counting the rejection handlers the
+ * code under test attaches to it.
+ *
+ * A rejection nobody handles is exactly what an unhandled rejection is, so a count of one is the
+ * direct evidence that the interceptor settled the navigation instead of dropping it, and this spec
+ * asserts on it rather than depending on how the runner reports a rejection left floating. Only
+ * handlers attached by the code under test are counted: this spec adds none of its own, so a
+ * navigation the interceptor dropped stays unhandled here.
+ */
+class RefusedNavigation extends Promise<boolean> {
+  /** How many rejection handlers have been attached to this navigation so far. */
+  rejectionHandlers = 0;
+
+  override catch<TResult = never>(
+    onrejected?: ((reason: unknown) => TResult | PromiseLike<TResult>) | null,
+  ): Promise<boolean | TResult> {
+    if (typeof onrejected === 'function') {
+      this.rejectionHandlers += 1;
+    }
+
+    return super.catch(onrejected);
+  }
+}
+
+/** A navigation that refuses with `failure`, and the record of whether it was settled. */
+function refusedNavigation(failure: Error): RefusedNavigation {
+  return new RefusedNavigation((_settle: (value: boolean) => void, refuse): void => {
+    refuse(failure);
+  });
+}
+
 describe('fineractInterceptor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -279,6 +316,35 @@ describe('fineractInterceptor', () => {
       queryParams: { returnUrl: ATTEMPTED_URL },
     });
     expect(notifications.messages()).toHaveLength(0);
+  });
+
+  it('reports a refused return to the login screen once, and leaves no rejection unhandled', async () => {
+    const { run, session, clear, router, notifications } = harnessFor();
+    const fixture = sessionFixture();
+    session.set(fixture);
+    router.url = ATTEMPTED_URL;
+    const navigation = refusedNavigation(new Error(NAVIGATION_FAILURE));
+    router.navigate.mockImplementation(() => navigation);
+
+    const propagated = await rejectionOf(run(new HttpRequest('GET', CLIENTS_URL), failing(401)));
+    // Crosses a macrotask, so the handler the interceptor attached has run and the notification it
+    // raises is queued before the assertions below read it.
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    // The navigation's promise is settled — one rejection handler, attached by the interceptor...
+    expect(navigation.rejectionHandlers).toBe(1);
+    // ...the user is told once, in the rejection's own words...
+    expect(notifications.messages()).toHaveLength(1);
+    expect(notifications.messages()[0]?.kind).toBe('error');
+    expect(notifications.messages()[0]?.message).toBe(NAVIGATION_FAILURE);
+    // ...and nothing from the request or the session reaches that text (Rule 1 clause 9).
+    expect(notifications.messages()[0]?.message).not.toContain(fixture.authenticationKey);
+    // The 401 still reaches the caller as the mapped ApiError the case above asserts.
+    expect(propagated).toBeInstanceOf(ApiError);
+    expect((propagated as ApiError).status).toBe(401);
+    expect(clear).toHaveBeenCalledTimes(1);
   });
 
   it('leaves the session and the route alone when the authentication request itself is refused', async () => {

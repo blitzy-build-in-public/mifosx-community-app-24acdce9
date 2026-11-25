@@ -10,6 +10,7 @@ import {
   type TestRequest,
 } from '@angular/common/http/testing';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
+import { Validators } from '@angular/forms';
 import { ActivatedRoute, Router, convertToParamMap, type ParamMap } from '@angular/router';
 import { provideTranslateService, TranslateService } from '@ngx-translate/core';
 import { catchError, of, throwError } from 'rxjs';
@@ -72,11 +73,11 @@ const RECORD_ROUTE = ['/viewloanaccount', LOAN_ID];
  * serving the real wording is what proves the labels below resolve rather than fall back.
  */
 const TRANSLATIONS: Readonly<Record<string, string>> = {
-  'label.heading.approve': 'Approve',
-  'label.heading.reject': 'Reject',
-  'label.heading.disburse': 'Disburse',
-  'label.heading.undoapproval': 'Undo Approval',
-  'label.heading.undodisbursal': 'Undo Disbursal',
+  'label.heading.approveloanaccount': 'Approve Loan Account',
+  'label.heading.rejectloanaccount': 'Reject Loan Account',
+  'label.heading.disburseloanaccount': 'Disburse Loan Account',
+  'label.heading.undoapproveloanaccount': 'Undo Approve Loan Account',
+  'label.heading.undodisburseloanaccount': 'Undo Disburse Loan Account',
   'label.button.approve': 'Approve',
   'label.button.reject': 'Reject',
   'label.button.disburse': 'Disburse',
@@ -85,7 +86,7 @@ const TRANSLATIONS: Readonly<Record<string, string>> = {
   'label.heading.date': 'Date',
   'label.heading.principal': 'Principal',
   'label.heading.amount': 'Amount',
-  'label.heading.note': 'Note',
+  'label.input.note': 'Note',
   'label.requiredfield': 'Required field',
   'label.button.cancel': 'Cancel',
   'label.heading.notavailable': 'Not Available',
@@ -117,6 +118,9 @@ const DISBURSE_TEMPLATE: LoanTransactionTemplate = {
 /** The message a refused approval answers with, quoted from a real Fineract validation failure. */
 const REJECTED_MESSAGE = 'The loan cannot be approved because the approval date is before the submission date.';
 
+/** The text a 5xx answers with; the interceptor turns it into that failure's one notification. */
+const SERVER_FAILURE_MESSAGE = 'The request could not be processed because an internal error occurred.';
+
 /**
  * Installs the production mapping of a Fineract failure onto the test transport, so a rejection
  * arrives as the `ApiError` the component catches in the application (AAP 0.4.2; workflow W7).
@@ -125,6 +129,48 @@ const MAP_FINERACT_FAILURES: HttpInterceptorFn = (request, next) =>
   next(request).pipe(
     catchError((failure: HttpErrorResponse) => throwError(() => toApiError(failure))),
   );
+
+/**
+ * Whether a date is the browser clock's own day at local midnight — the default the three dated loan
+ * actions start at, as legacy's `new Date()` does and AAP 0.10.5 item 15 registers.
+ *
+ * The calendar fields are compared, never object identity: no two `Date` instances are equal, and the
+ * component builds its own at construction, so an identity check could never hold.
+ *
+ * @param value the value a date control holds.
+ * @returns true when it is today, at 00:00 local time.
+ */
+function isLocalMidnightToday(value: Date | null): boolean {
+  if (value === null) {
+    return false;
+  }
+
+  const now = new Date();
+
+  return (
+    value.getFullYear() === now.getFullYear() &&
+    value.getMonth() === now.getMonth() &&
+    value.getDate() === now.getDate() &&
+    value.getHours() === 0 &&
+    value.getMinutes() === 0 &&
+    value.getSeconds() === 0 &&
+    value.getMilliseconds() === 0
+  );
+}
+
+/**
+ * The browser clock's own day as the native date control renders it — `yyyy-mm-dd` — so the rendered
+ * field can be asserted against the same day the control holds.
+ *
+ * @returns today's date in the format `input[type=date]` displays.
+ */
+function todayInputValue(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+
+  return `${now.getFullYear()}-${month}-${day}`;
+}
 
 /** Matches the approval-template read, whatever query the screen sent with it. */
 function isApprovalTemplateRead(request: { readonly url: string }): boolean {
@@ -264,11 +310,16 @@ describe('LoanActionComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    // The principal is the template's own figure, not a hard-coded one; the date stays empty and
-    // required, because seeding it would mean reading Fineract's wire date shape in this screen.
+    // The principal is the template's own figure, not a hard-coded one; the date is the browser
+    // clock's own day, the default legacy's approval screen assigns, and stays required so the
+    // server decides whether the date it receives is acceptable.
     expect(component.approveForm.controls.approvedLoanAmount.value).toBe(5000);
-    expect(component.approveForm.controls.approvedOnDate.value).toBeNull();
-    expect(component.approveForm.controls.approvedOnDate.hasError('required')).toBe(true);
+    expect(isLocalMidnightToday(component.approveForm.controls.approvedOnDate.value)).toBe(true);
+    expect(component.approveForm.controls.approvedOnDate.hasError('required')).toBe(false);
+    expect(component.approveForm.controls.approvedOnDate.hasValidator(Validators.required)).toBe(true);
+    // The rendered native date input carries that day, so the form does not open with an empty date.
+    const approvedOnInput = host().querySelector<HTMLInputElement>('#approvedOnDate');
+    expect(approvedOnInput?.value).toBe(todayInputValue());
     // One read is the whole load: no disbursement seed, no record read.
     httpMock.expectNone(isTransactionsTemplateRead('disburse'));
     httpMock.expectNone(isRecordRead);
@@ -280,11 +331,13 @@ describe('LoanActionComponent', () => {
 
     expect(component.mode()).toBe('reject');
     expect(component.command()).toBe('reject');
-    // The rejection date is not in the approval payload, so it starts empty rather than invented.
-    expect(component.rejectForm.controls.rejectedOnDate.value).toBeNull();
-    expect(component.rejectForm.controls.rejectedOnDate.hasError('required')).toBe(true);
+    // The rejection date is not in the approval payload either, so the form takes the default
+    // legacy's rejection screen assigns — the browser clock's day — and stays required.
+    expect(isLocalMidnightToday(component.rejectForm.controls.rejectedOnDate.value)).toBe(true);
+    expect(component.rejectForm.controls.rejectedOnDate.hasError('required')).toBe(false);
+    expect(component.rejectForm.controls.rejectedOnDate.hasValidator(Validators.required)).toBe(true);
     // The heading follows the command, not the endpoint that was read.
-    expect(host().querySelector('h4.panel-title')?.textContent?.trim()).toBe('Reject');
+    expect(host().querySelector('h3.panel-title')?.textContent?.trim()).toBe('Reject Loan Account');
   });
 
   it('seeds the disbursement form from the transactions template of the disburse command', async () => {
@@ -298,11 +351,20 @@ describe('LoanActionComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
+    // The date is the browser clock's own day, the default legacy's disburse screen assigns, and
+    // stays required rather than being read from the template's wire date.
+    const disbursedOn = component.disburseForm.controls.actualDisbursementDate;
+
     expect(component.disburseForm.controls.transactionAmount.value).toBe(5000);
-    expect(component.disburseForm.controls.actualDisbursementDate.value).toBeNull();
+    expect(isLocalMidnightToday(disbursedOn.value)).toBe(true);
+    expect(disbursedOn.hasError('required')).toBe(false);
+    expect(disbursedOn.hasValidator(Validators.required)).toBe(true);
     // The template's payment types are deliberately not rendered: the disburse body has no member for
     // one, so a picker would collect a choice nothing posts (the departure recorded on the class).
     expect(host().querySelector('select')).toBeNull();
+    // The disbursed amount is required, so its caption carries the same legacy marker.
+    const amountLabel = host().querySelector('label[for="transactionAmount"]');
+    expect(amountLabel?.querySelector('span.required')?.textContent).toBe('*');
     httpMock.expectNone(isApprovalTemplateRead);
   });
 
@@ -312,7 +374,7 @@ describe('LoanActionComponent', () => {
 
     const rendered = host().textContent ?? '';
 
-    expect(host().querySelector('h4.panel-title')?.textContent?.trim()).toBe('Approve');
+    expect(host().querySelector('h3.panel-title')?.textContent?.trim()).toBe('Approve Loan Account');
     expect(host().querySelector('button[type="submit"]')?.textContent?.trim()).toBe('Approve');
     expect(rendered).toContain('Principal');
     expect(rendered).toContain('Note');
@@ -322,6 +384,10 @@ describe('LoanActionComponent', () => {
     expect(host().querySelector('#approvedOnDate')).not.toBeNull();
     expect(host().querySelector('#approvedLoanAmount')).not.toBeNull();
     expect(host().querySelector('#approveNote')).not.toBeNull();
+    // A required amount shows the legacy marker beside its caption, as every other required field
+    // in the loan and savings forms does.
+    const principalLabel = host().querySelector('label[for="approvedLoanAmount"]');
+    expect(principalLabel?.querySelector('span.required')?.textContent).toBe('*');
   });
 
   it('posts exactly one approve, dated and localised by the service, then returns to the record', async () => {
@@ -423,6 +489,40 @@ describe('LoanActionComponent', () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
+  it('reports a server error once, through the interceptor’s notification and not on screen', async () => {
+    await show('approve');
+    await settle(APPROVAL_TEMPLATE);
+
+    component.approveForm.patchValue({
+      approvedOnDate: new Date(2026, 10, 24),
+      approvedLoanAmount: 4800,
+      note: 'Awaiting the branch manager',
+    });
+
+    const submission = component.submit();
+    httpMock.expectOne(isActionPost('approve')).flush(
+      { defaultUserMessage: SERVER_FAILURE_MESSAGE },
+      { status: 500, statusText: 'Internal Server Error' },
+    );
+
+    await submission;
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // A 5xx has already produced the interceptor's single notification, so the screen paints no
+    // second copy of it (AAP 0.7.4): the failure it keeps is `null`, and no alert is in the DOM.
+    expect(component.error()).toBeNull();
+    expect(host().querySelector('[role="alert"]')).toBeNull();
+    expect(host().querySelector('.alert.alert-danger')).toBeNull();
+    // The form stays mounted with what the user entered, so the action can be retried as it stands.
+    expect(host().querySelector('form')).not.toBeNull();
+    expect(component.approveForm.getRawValue()).toMatchObject({
+      approvedLoanAmount: 4800,
+      note: 'Awaiting the branch manager',
+    });
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
   it('reads nothing for an undo approval, states the action, and posts the note alone', async () => {
     await show('undoapproval');
 
@@ -430,7 +530,7 @@ describe('LoanActionComponent', () => {
     httpMock.expectNone(() => true);
     fixture.detectChanges();
 
-    expect(host().textContent).toContain('Undo Approval');
+    expect(host().querySelector('h3.panel-title')?.textContent?.trim()).toBe('Undo Approve Loan Account');
     component.undoapprovalForm.controls.note.setValue('  approval entered twice  ');
 
     const submission = component.submit();
@@ -452,7 +552,7 @@ describe('LoanActionComponent', () => {
     httpMock.expectNone(() => true);
     fixture.detectChanges();
 
-    expect(host().textContent).toContain('Undo Disbursal');
+    expect(host().querySelector('h3.panel-title')?.textContent?.trim()).toBe('Undo Disburse Loan Account');
 
     const submission = component.submit();
     const post = httpMock.expectOne(isActionPost('undodisbursal'));
@@ -515,17 +615,16 @@ describe('LoanActionComponent', () => {
     httpMock.expectNone(isApprovalTemplateRead);
     httpMock.expectNone(isTransactionsTemplateRead('disburse'));
 
-    // The child's own two reads are answered here so the suite verifies a clean transport.
+    // The child's own read is answered here so the suite verifies a clean transport: one transaction
+    // template seeds its payment types, amount and date, and no record read follows it — the extra
+    // `GET /loans/{id}?associations=all` legacy's repayment screen never makes is not issued at all
+    // (Rule 1 clauses 2 and 3; AAP 0.10.5 holds no entry for it).
     const repaymentSeed = httpMock.expectOne(isTransactionsTemplateRead('repayment'));
-    repaymentSeed.flush({ paymentTypeOptions: [], date: [2026, 11, 24] });
-    await fixture.whenStable();
-
-    httpMock
-      .expectOne(isRecordRead)
-      .flush({ id: 9, status: { id: 300, code: 'loanStatusType.active', value: 'Active' } });
+    repaymentSeed.flush({ paymentTypeOptions: [], date: [2026, 11, 24], amount: 467 });
     await fixture.whenStable();
     fixture.detectChanges();
 
+    httpMock.expectNone(isRecordRead);
     expect(httpMock.match(isAnyPostToLoan)).toHaveLength(0);
   });
 });

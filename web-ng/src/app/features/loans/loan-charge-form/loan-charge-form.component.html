@@ -6,9 +6,16 @@
   to the record"; AAP 0.8.2 feature routes).
 
   The card holds exactly three things: the heading, the form and the footer. Each is chosen by the
-  mode the class resolved before the first request — `isAddMode()`, `isPayMode()`, `isWaiveMode()` and
-  `formVisible()`, which in add mode is the legacy `isCollapsed` toggle (the amount and due date stay
-  hidden until a charge is picked) and on the action routes is "the loan's charge has been read".
+  mode the class resolved from the route's current parameters, before that emission's request —
+  `isAddMode()`, `isPayMode()`, `isWaiveMode()` and `formVisible()`, which in add mode is the legacy
+  `isCollapsed` toggle (the amount and due date stay hidden until a charge is picked) and is always
+  true on the action routes, whose single field is the command's own.
+
+  Two fields, one per operation that has any: the add form carries the amount the charge is added for
+  (and the due date of a charge that falls due on a specified date), and the pay form carries the date
+  the payment is recorded on. Waiving carries neither — the endpoint waives the charge's whole
+  outstanding portion and refuses an amount, a date and a payment type beside `?command=waive` — and
+  the add form's picker is the amount's only companion. Nothing renders a control that posts nothing.
 
   Every visual value comes from the global Bootstrap 3 layer `web-ng/src/styles.scss` compiles:
   `.container-fluid` / `.row` / `.col-md-*` for the page and its grid, `.panel` / `.panel-heading` /
@@ -28,15 +35,16 @@
   white, so that class would only re-introduce a colour the design does not show.
 
   The ids are the ones the parity harness and the legacy forms already address — `chargeId`, `amount`,
-  `dueDate`, `transactionDate`, `paymentTypeId`, and `cancel` / `save` in the footer
+  `dueDate`, `transactionDate`, and `cancel` / `save` in the footer
   (`app/views/loans/addloancharge.html`; `app/views/loans/loanaccountactions.html`) — so both
-  applications offer the same controls and every label's `for` names the control it belongs to.
+  applications offer the same controls and every label's `for` names the control it belongs to. Each
+  id renders only in the mode whose body carries its value.
 
   Every caption is a key the shipped legacy bundles already carry, read in
   `app/global-translations/locale-en.json`: `label.heading.addloancharge`, `label.heading.payloancharge`
   and `label.heading.waiveloancharge` for the heading, `label.heading.notavailable` for the state this
   screen does not serve; `label.input.charge`, `label.input.amount`, `label.input.dueon`,
-  `label.input.paymentdate`, `label.input.paymenttype` and `label.requiredfield` for the fields;
+  `label.input.paymentdate` and `label.requiredfield` for the fields;
   `label.selectcharge` for the charge picker's prompt; `label.button.cancel` and `label.button.submit`
   for the footer; and `error.msg.resource.not.found` for the not-found message, which is the key the
   sibling not-found screen renders. No user-facing copy is written into this file, and the registered
@@ -130,13 +138,17 @@
                   </div>
                 }
 
-                @if (formVisible()) {
+                @if (isAddMode() && formVisible()) {
                   <!--
-                    The amount the charge is added for, paid or waived: one control in all three modes,
-                    carrying the `required` validator the legacy form carries and no other. There is
-                    deliberately no `min`, `max`, `step`, `pattern` or native `required` attribute, so
-                    nothing in the browser can block or reshape a value Fineract alone validates, and
-                    the server's message stays the one the user reads (Rule 1 clause 3).
+                    The amount the charge is added for: the add form's own control, carrying the
+                    `required` validator the legacy form carries and no other. There is deliberately no
+                    `min`, `max`, `pattern` or native `required` attribute, so nothing in the browser
+                    can block or reshape a value Fineract alone validates, and the server's message
+                    stays the one the user reads (Rule 1 clause 3).
+                    `type="number"` is what makes the control hold a number rather than the text the
+                    user typed, so the body posts the JSON number legacy posted; `step="any"` keeps a
+                    fractional amount enterable, and the form's `novalidate` means the element still
+                    cannot block a submission the server should answer.
                   -->
                   <div class="form-group" [class.has-error]="amountInvalid">
                     <label class="control-label col-md-3" for="amount">
@@ -146,7 +158,8 @@
                       <input
                         id="amount"
                         name="amount"
-                        type="text"
+                        type="number"
+                        step="any"
                         inputmode="decimal"
                         class="form-control"
                         formControlName="amount"
@@ -169,7 +182,7 @@
                     date field — the registered replacement for the legacy datepicker plugin
                     (AAP 0.10.5 item 1) — whose value is a `Date` the service formats on the way out.
                   -->
-                  @if (isAddMode() && dueDateRequired()) {
+                  @if (dueDateRequired()) {
                     <div class="form-group">
                       <label class="control-label col-md-3" for="dueDate">
                         {{ 'label.input.dueon' | translate }}<span class="required">*</span>
@@ -183,42 +196,29 @@
                       </div>
                     </div>
                   }
+                }
 
-                  <!--
-                    The two payment fields belong to pay mode alone. A waiver books no money movement,
-                    so it renders neither: the server rejects a `transactionDate` or a `paymentTypeId`
-                    beside `?command=waive` (AAP 0.7.2 row `LoanChargeActionRequest`). The payment date
-                    is the legacy pay form's own control, seeded from the charge's due date and
-                    editable; the payment types are the transaction template's list in its order, with
-                    its first entry already selected by the class.
-                  -->
-                  @if (isPayMode()) {
-                    <div class="form-group">
-                      <label class="control-label col-md-3" for="transactionDate">
-                        {{ 'label.input.paymentdate' | translate }}<span class="required">*</span>
-                      </label>
-                      <div class="col-md-6">
-                        <app-date-field
-                          inputId="transactionDate"
-                          [control]="form.controls.transactionDate"
-                          [required]="true"
-                        />
-                      </div>
+                <!--
+                  The payment date belongs to pay mode alone, and it is the command's whole form. A
+                  waiver books no money movement and no date, so it renders no field at all: the server
+                  pays or waives the charge's whole outstanding portion, refuses an `amount` or a
+                  `paymentTypeId` on either command and refuses a `transactionDate` on `waive`, so none
+                  of the three is collected here. The date is the legacy pay form's own control,
+                  defaulted from the browser clock (AAP 0.10.5 item 15) and editable.
+                -->
+                @if (isPayMode()) {
+                  <div class="form-group">
+                    <label class="control-label col-md-3" for="transactionDate">
+                      {{ 'label.input.paymentdate' | translate }}<span class="required">*</span>
+                    </label>
+                    <div class="col-md-6">
+                      <app-date-field
+                        inputId="transactionDate"
+                        [control]="form.controls.transactionDate"
+                        [required]="true"
+                      />
                     </div>
-                    <div class="form-group">
-                      <label class="control-label col-md-3" for="paymentTypeId">
-                        {{ 'label.input.paymenttype' | translate }}
-                      </label>
-                      <div class="col-md-6">
-                        <app-select-field
-                          inputId="paymentTypeId"
-                          [control]="form.controls.paymentTypeId"
-                          [options]="paymentTypes()"
-                          [required]="true"
-                        />
-                      </div>
-                    </div>
-                  }
+                  </div>
                 }
               </fieldset>
             </form>
@@ -236,7 +236,7 @@
         -->
         @if (!notFound()) {
           <div class="panel-footer">
-            <a id="cancel" class="btn btn-default" [routerLink]="['/viewloanaccount', loanId]">
+            <a id="cancel" class="btn btn-default" [routerLink]="['/viewloanaccount', loanId()]">
               {{ 'label.button.cancel' | translate }}
             </a>
             <button

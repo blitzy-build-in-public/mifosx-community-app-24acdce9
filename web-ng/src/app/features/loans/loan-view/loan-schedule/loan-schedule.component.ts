@@ -6,6 +6,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 // two levels above this table's folder.
 import type { RepaymentPeriod, RepaymentSchedule } from '../../loan.models';
 import { DISPLAY_DATE_FORMAT, fromFineractDate } from '../../../../shared/date-format.util';
+import { EmptyStateComponent } from '../../../../shared/empty-state/empty-state.component';
 
 /**
  * A payment period as the table renders it: every member the payload's period carries, with the
@@ -33,7 +34,7 @@ type LoanScheduleRow = Omit<RepaymentPeriod, 'fromDate' | 'dueDate'> & {
  */
 @Component({
   selector: 'app-loan-schedule',
-  imports: [DatePipe, DecimalPipe, TranslatePipe],
+  imports: [DatePipe, DecimalPipe, TranslatePipe, EmptyStateComponent],
   templateUrl: './loan-schedule.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })

@@ -1,6 +1,12 @@
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
+import {
+  MissingTranslationHandler,
+  TranslateService,
+  provideTranslateService,
+} from '@ngx-translate/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { FineractMissingTranslationHandler } from '../../../../core/i18n/missing-translation.handler';
 import type { StatusKey } from '../../../../shared/status-swatch/status-swatch.component';
 import type { Client, ClientStatus } from '../../client.models';
 import { RecordHeaderComponent } from './record-header.component';
@@ -10,7 +16,7 @@ import { RecordHeaderComponent } from './record-header.component';
  * inventory (AAP 0.2.3), the top block of the client view screen (AAP 0.7.4, Figma flow "Sign in
  * and open a client record", step 3 of 3, screen node `1:4`).
  *
- * It pins the four things the design draws and the migration must not add to:
+ * It pins the five things the design draws and the migration must not add to:
  * - the status is the indicator's colour and nothing else — the dot holds no word, label, `title`
  *   or `aria-label`, and the server's own status `value` never reaches the screen
  *   (AAP 0.10.5 deliberate difference 11, Rule 1 clause 3);
@@ -18,12 +24,20 @@ import { RecordHeaderComponent } from './record-header.component';
  * - the metadata strip is exactly three `Key: value` runs in the design's order — client number,
  *   external id, staff — separated by two pipe glyphs, and a run the record leaves unset paints its
  *   key with an empty value rather than a placeholder (AAP 0.2.3 row `RecordHeader`, AAP 0.7.4);
- * - the header closes with one rule and offers the user nothing to submit, so it can neither raise
- *   nor display an error.
+ * - each label is the legacy bundle's own key resolved through `TranslatePipe`, so a language
+ *   switch rewrites the strip and nothing here pins the English wording (Rule 1 clause 6,
+ *   AAP 0.10.2);
+ * - the header closes with one rule, carrying the stylesheet's `section-rule` class, and offers the
+ *   user nothing to submit, so it can neither raise nor display an error.
  *
- * The component is presentational: it injects nothing, requests nothing and formats nothing, so the
- * TestBed below imports it and registers no provider, service, router or HTTP testing controller
- * (AAP 0.14.1). Every assertion is made on the rendered DOM, never on the `protected` signals the
+ * The component is presentational: it requests nothing, holds no state and formats nothing, so the
+ * TestBed below registers no service, router or HTTP testing controller (AAP 0.14.1). The one thing
+ * it does register is the translate stack, because every label resolves through `TranslatePipe` and
+ * ngx-translate 18 declares `TranslateService` without `providedIn`, so the pipe's non-optional
+ * injection fails without it: `provideTranslateService()` is the library's own registration, its
+ * omitted loader slot defaults to the no-op loader so no bundle is ever requested, and the two
+ * in-memory bundles below stand in for the shipped `locale-en.json` and a second locale. Every
+ * assertion is made on the rendered DOM, never on the `protected` signals the
  * template reads, because the DOM is the contract the client view and the parity run observe
  * (Rule 1 clause 8).
  *
@@ -82,6 +96,48 @@ const STATUS_VALUE_SENTINEL = 'STATUS-VALUE-SENTINEL';
  * (AAP 0.7.4, Rule 1 clause 3).
  */
 const STAND_IN_TEXT: readonly string[] = ['N/A', 'n/a', 'undefined', 'null', '-', '—'];
+
+/**
+ * The three labels the strip paints in English, in the design's order, each with the colon the
+ * template appends. The wording is the shipped bundle's own: `app/global-translations/locale-en.json`
+ * holds 'Client Number', ' External ID' (leading space and all) and 'Staff' for the three keys
+ * below, and the assertions compare whitespace-collapsed text, which is why 'External ID:' appears
+ * here without its leading space (Rule 1 clause 6).
+ */
+const ENGLISH_LABELS: readonly string[] = ['Client Number:', 'External ID:', 'Staff:'];
+
+/**
+ * The wording the in-memory English bundle below serves for the strip's three keys, keyed by the
+ * legacy key itself: the bundle's values, not keys this spec invents, so an assertion can tell
+ * which key produced which text and can never pass on a raw dotted key (Rule 1 clause 6).
+ */
+const ENGLISH_BUNDLE: Readonly<Record<string, string>> = {
+  'label.heading.clientno': 'Client Number',
+  'label.input.externalid': ' External ID',
+  'label.input.staff': 'Staff',
+};
+
+/**
+ * A second locale's wording for the same three keys, served to `TranslateService` in memory so the
+ * language-switch case proves the strip reads whatever the active bundle says: a header that went
+ * back to hardcoded English fails it. The wording is the shipped `locale-fr.json`'s own value for
+ * each key, used as test input — no locale file is added, copied or edited (Rule 1 clause 6).
+ */
+const SWITCHED_LANGUAGE = 'fr';
+
+/** The second locale's bundle, one distinct value per key, in the design's order. */
+const SWITCHED_BUNDLE: Readonly<Record<string, string>> = {
+  'label.heading.clientno': 'Numéro de client',
+  'label.input.externalid': 'Identifiant externe',
+  'label.input.staff': 'Équipe',
+};
+
+/** The three labels the strip must paint once {@link SWITCHED_LANGUAGE} is in force. */
+const SWITCHED_LABELS: readonly string[] = [
+  'Numéro de client:',
+  'Identifiant externe:',
+  'Équipe:',
+];
 
 /** The status object a client response sends, of which only `code` is ever read. */
 function makeStatus(code: string, value: string = STATUS_VALUE_SENTINEL): ClientStatus {
@@ -197,7 +253,28 @@ function titleOf(host: HTMLElement): HTMLElement {
 
 describe('RecordHeaderComponent', () => {
   beforeEach(async () => {
-    await TestBed.configureTestingModule({ imports: [RecordHeaderComponent] }).compileComponents();
+    await TestBed.configureTestingModule({
+      imports: [RecordHeaderComponent],
+      providers: [
+        provideTranslateService({
+          lang: 'en',
+          fallbackLang: 'en',
+          missingTranslationHandler: {
+            provide: MissingTranslationHandler,
+            useClass: FineractMissingTranslationHandler,
+          },
+        }),
+      ],
+    }).compileComponents();
+
+    // Both bundles are loaded before the first render, so the first paint is English and the
+    // switch case below needs no request: `setTranslation` is the in-memory store, the provider's
+    // no-op loader is never reached (Rule 1 clause 8).
+    const translate = TestBed.inject(TranslateService);
+
+    translate.setTranslation('en', ENGLISH_BUNDLE, true);
+    translate.setTranslation(SWITCHED_LANGUAGE, SWITCHED_BUNDLE, true);
+    translate.use('en');
   });
 
   it.each(STATUS_CASES)(
@@ -249,6 +326,28 @@ describe('RecordHeaderComponent', () => {
     );
   });
 
+  it('rewrites the three labels when the language switches, instead of pinning English', () => {
+    const fixture = render();
+    const host = hostOf(fixture);
+
+    expect(labelsOf(runSpans(host))).toEqual(ENGLISH_LABELS);
+
+    // The switch either switcher makes: one active language on the one `TranslateService`, which
+    // every translate pipe re-reads on the next check. The strip's values are the record's, so they
+    // must not move with the language, and no English label may survive the switch — a header that
+    // went back to hardcoded copy fails both assertions (Rule 1 clause 6, AAP 0.10.2).
+    TestBed.inject(TranslateService).use(SWITCHED_LANGUAGE);
+    fixture.detectChanges();
+
+    const labels = labelsOf(runSpans(host));
+
+    expect(labels).toEqual(SWITCHED_LABELS);
+    for (const english of ENGLISH_LABELS) {
+      expect(labels).not.toContain(english);
+    }
+    expect(valuesOf(runSpans(host))).toEqual([ACCOUNT_NO, EXTERNAL_ID, STAFF_NAME]);
+  });
+
   it('paints an absent external id and staff as their label with an empty value', () => {
     const host = hostOf(
       render(makeClient({ externalId: undefined, staffId: undefined, staffName: undefined })),
@@ -296,8 +395,8 @@ describe('RecordHeaderComponent', () => {
   });
 
   it('renders nothing that could raise or display an error', () => {
-    // The suite's TestBed imports the component and registers no other provider, so the header
-    // rendering at all is the statement that it needs no service: it has no request to fail.
+    // The suite's TestBed registers the translate stack and nothing else, so the header rendering
+    // at all is the statement that it needs no other service: it has no request to fail.
     const host = hostOf(render());
 
     expect(host.querySelector('app-notification')).toBeNull();
@@ -311,6 +410,11 @@ describe('RecordHeaderComponent', () => {
     const rules = Array.from(host.querySelectorAll<HTMLElement>('hr'));
 
     expect(rules).toHaveLength(1);
+
+    // The rule is the header's own 1px #E5E5E5 section rule, not the global hairline: the class is
+    // what makes web-ng/src/styles.scss paint color-section-rule, and the component carries no rule
+    // of its own (AAP 0.2.3 row `RecordHeader`, Rule 1 clause 6).
+    expect(rules[0]?.classList.contains('section-rule')).toBe(true);
     expect(rules[0]?.previousElementSibling).toBe(stripOf(host));
     expect(Array.from(host.children).map((child) => child.tagName)).toEqual(['H3', 'DIV', 'HR']);
   });

@@ -8,11 +8,11 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink, type ParamMap } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
-import { finalize } from 'rxjs';
+import { firstValueFrom } from 'rxjs';
 
-import { ApiError } from '../../../core/http/api-error';
+import { ApiError, screenFailure, toDisplayableFailure } from '../../../core/http/api-error';
 import { DISPLAY_DATE_FORMAT, fromFineractDate } from '../../../shared/date-format.util';
 import { EmptyStateComponent } from '../../../shared/empty-state/empty-state.component';
 import { HasPermissionDirective } from '../../../shared/has-permission.directive';
@@ -93,9 +93,15 @@ export interface SavingsTransactionRow {
  * The look comes entirely from the global Bootstrap 3 classes of `web-ng/src/styles.scss` — this
  * component declares no stylesheet, no inline style and no colour (Rule 1 clause 6) — and the
  * status indicator is the existing `StatusSwatchComponent`, which paints a colour and never a word
- * (AAP 0.10.5 deliberate difference 11). The route id is read once from the route snapshot because
- * no in-scope screen navigates from one savings record to another: the client record's account rows
- * are inert.
+ * (AAP 0.10.5 deliberate difference 11).
+ *
+ * **One id, one load per navigation.** `:id` is read from `route.paramMap`, never from the snapshot:
+ * the router reuses this component when the URL moves from one `#/viewsavingaccount/{id}` to another,
+ * so a single read would leave the first account's figures and action links on screen under the second
+ * account's URL and would issue no request at all. Every emission therefore clears the previous record
+ * and re-reads the account the URL now names, exactly as `loan-edit`, `client-actions` and `loan-view`
+ * handle the same reuse; an answer that arrives after the URL moved on is discarded rather than
+ * painted, and leaving the screen cancels the read it left outstanding.
  */
 @Component({
   selector: 'app-savings-view',
@@ -115,17 +121,35 @@ export class SavingsViewComponent {
   /** The savings family's one typed Fineract service; this component's only HTTP path (Rule 1 clause 5). */
   private readonly savings = inject(SavingsService);
 
-  /** The activated route, read once for the `:id` of `#/viewsavingaccount/:id`. */
+  /**
+   * The activated route, subscribed to for the `:id` of `#/viewsavingaccount/:id`: the router reuses
+   * this component across records, so the id is followed rather than sampled once.
+   */
   private readonly route = inject(ActivatedRoute);
 
-  /** Ties the single outstanding read to this component's lifetime, so leaving cancels it. */
+  /** Ties the outstanding read to this component's lifetime, so leaving cancels it. */
   private readonly destroyRef = inject(DestroyRef);
 
   /**
    * The account id from the route, as text: the `:id` of `#/viewsavingaccount/:id`. Empty when the
    * route carried none, which is the only case in which the read is not issued.
+   *
+   * A signal, not a snapshot value: the router reuses this component when the URL moves from one
+   * record to another, so the id has to follow every emission of `route.paramMap` and the read of each
+   * emission has to address the account the URL now names.
    */
-  readonly accountId: string = this.route.snapshot.paramMap.get('id') ?? '';
+  readonly accountId = signal('');
+
+  /**
+   * Which read is the current one, incremented by every run of {@link SavingsViewComponent.load}.
+   *
+   * The router reuses this component across records, so moving in place starts a second read while the
+   * first is still in flight and the earlier one can answer last. A superseded run compares its own
+   * number with this one after the await and returns instead of writing, so a late response can neither
+   * paint the earlier account under the later account's URL nor clear the loading state of the run that
+   * replaced it — the guard `loan-edit` and `loan-view` keep over their own load sequence.
+   */
+  private loadSequence = 0;
 
   /**
    * Whether the last read is still outstanding. Starts `true` so the record's empty states cannot
@@ -139,7 +163,7 @@ export class SavingsViewComponent {
   /** The failure the read ended in, or `null`; the template derives its error branches from this. */
   readonly error = signal<ApiError | null>(null);
 
-  /** Whether the route carried no account id at all; set once, in the constructor. */
+  /** Whether the route carried no account id at all; set by the load of the emission that named none. */
   private readonly missingId = signal(false);
 
   /**
@@ -152,18 +176,15 @@ export class SavingsViewComponent {
    * The failure this screen must render itself: a 4xx other than 404, whose Fineract message is
    * shown verbatim with the screen still usable (AAP 0.7.4, workflow W7's rule).
    *
-   * The discriminator is deliberate. A 5xx or a transport failure (`status` 0) has already produced
-   * exactly one notification in the interceptor, so it answers `null` here and the message is never
-   * shown twice; a 404 answers `null` because `notFound` owns that state.
+   * The discriminator is the shared `screenFailure` in `core/http/api-error.ts`: it answers the
+   * failure for a 4xx and `null` for a 5xx or a transport failure (`status` 0), which has already
+   * produced exactly one notification in the interceptor, so its message is never shown twice. A 404
+   * answers `null` here because `notFound` owns that state.
    */
   readonly clientError = computed<ApiError | null>(() => {
     const failure = this.error();
 
-    if (failure === null || failure.status < 400 || failure.status >= 500) {
-      return null;
-    }
-
-    return failure.status === 404 ? null : failure;
+    return failure === null || failure.status === 404 ? null : screenFailure(failure);
   });
 
   /**
@@ -222,53 +243,93 @@ export class SavingsViewComponent {
    */
   readonly actionPermission = 'READ_SAVINGSACCOUNT';
 
+  /**
+   * Subscribes to the route's parameters, which is the screen's whole entry point.
+   *
+   * One subscription, never a `snapshot` read beside it: the router reuses this component when the URL
+   * moves from one record to another, and a single read would leave the first account's figures and
+   * action links on screen under the second account's URL. Each emission therefore resets the screen and
+   * re-runs the one read, the way `loan-edit` and `loan-view` handle the same reuse.
+   */
   constructor() {
-    if (this.accountId.length === 0) {
+    this.route.paramMap
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((params: ParamMap) => {
+        this.accountId.set(params.get('id') ?? '');
+        this.reset();
+        void this.load();
+      });
+  }
+
+  /**
+   * Clears everything the previous account put on the screen, so an emission for another record never
+   * shows the earlier one's figures, failure or action links.
+   *
+   * `loading` goes back to `true` until the new read settles, and the not-found outcome of the previous
+   * route is dropped: both describe the account the URL has left.
+   */
+  private reset(): void {
+    this.account.set(null);
+    this.error.set(null);
+    this.missingId.set(false);
+    this.loading.set(true);
+  }
+
+  /**
+   * Reads the account the current emission names.
+   *
+   * A `404` drives `notFound` and any other failure is kept for `clientError`, which the template
+   * renders in place of the record; neither is rethrown and neither is notified here, because the
+   * interceptor has already raised the single message a 5xx or transport failure gets (AAP 0.4.2,
+   * AAP 0.7.4).
+   *
+   * Every run takes the next {@link SavingsViewComponent.loadSequence} number, and the read is tied to
+   * this component's lifetime, so a run the route has since superseded — or that the screen outlived —
+   * writes nothing at all, and `loading` is only cleared by the run that is still current.
+   */
+  private async load(): Promise<void> {
+    const load = ++this.loadSequence;
+    const accountId = this.accountId();
+
+    if (accountId.length === 0) {
       // No request is issued for a route that names no account, so this is the one path on which
-      // `loading` is cleared without a subscription finalising it: leaving it `true` would keep the
-      // screen on its loading state for ever and the not-found branch could never paint.
+      // `loading` is cleared without a read settling it: leaving it `true` would keep the screen on its
+      // loading state for ever and the not-found branch could never paint.
       this.missingId.set(true);
       this.loading.set(false);
 
       return;
     }
 
-    // One request, one subscription: the HTTP client completes, so `finalize` is the only teardown
-    // this read needs, and `takeUntilDestroyed` cancels it when the record is left mid-flight.
-    this.savings
-      .get(this.accountId)
-      .pipe(
-        finalize(() => this.loading.set(false)),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe({
-        next: (loaded) => this.account.set(loaded),
-        // Never rethrown and never notified here: the interceptor has already raised the single
-        // message a 5xx or transport failure gets, and a 4xx reaches the template through
-        // `clientError` or `notFound`.
-        error: (cause: unknown) => this.error.set(this.asApiError(cause)),
-      });
+    try {
+      const loaded = await firstValueFrom(
+        this.savings.get(accountId).pipe(takeUntilDestroyed(this.destroyRef)),
+      );
+
+      if (this.isCurrent(load)) {
+        this.account.set(loaded);
+      }
+    } catch (cause: unknown) {
+      if (this.isCurrent(load)) {
+        this.error.set(toDisplayableFailure(cause));
+      }
+    } finally {
+      // Only the current run owns the loading state: the superseded one must not clear the flag the
+      // newer read set, or the record would stop reporting that it is still filling.
+      if (this.isCurrent(load)) {
+        this.loading.set(false);
+      }
+    }
   }
 
   /**
-   * The `ApiError` a failed read is reported as.
+   * Whether a run still speaks for the screen: it is the newest run, and the screen it belongs to has
+   * not been destroyed, so a read the route or the teardown cancelled can neither paint nor clear the
+   * loading state of whatever replaced it.
    *
-   * The interceptor maps every `HttpErrorResponse` into an `ApiError` before rethrowing it, so the
-   * defensive branch is unreachable through the application and exists only so that a future
-   * failure shape degrades into the same type instead of escaping as an unhandled value: status `0`
-   * (the transport-failure status the mapper uses) carries no `clientError`, and the interceptor's
-   * transport-failure notification is the message the user sees.
-   *
-   * @param cause whatever the read rejected with.
-   * @returns the failure as the one error type a component renders.
+   * @param load the run's sequence number.
    */
-  private asApiError(cause: unknown): ApiError {
-    if (cause instanceof ApiError) {
-      return cause;
-    }
-
-    const message = cause instanceof Error && cause.message.length > 0 ? cause.message : 'HTTP 0';
-
-    return new ApiError(message, 0);
+  private isCurrent(load: number): boolean {
+    return !this.destroyRef.destroyed && load === this.loadSequence;
   }
 }

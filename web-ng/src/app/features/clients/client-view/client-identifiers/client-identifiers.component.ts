@@ -8,8 +8,10 @@ import {
   type Signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { TranslatePipe } from '@ngx-translate/core';
 import { Subject, catchError, finalize, map, of, switchMap, type Observable } from 'rxjs';
 
+import { ApiError } from '../../../../core/http/api-error';
 import { EmptyStateComponent } from '../../../../shared/empty-state/empty-state.component';
 import type { ClientIdentifier, ClientIdentifierTemplate } from '../../client.models';
 import { ClientService } from '../../client.service';
@@ -177,22 +179,28 @@ function toRow(
  * **What it never does.** It writes nothing: no add, edit or delete of an identity document, no
  * sorting, filtering, search, pagination or column-visibility control, and no client-side validation,
  * because the legacy tab offers none of those and this migration adds no capability legacy lacks
- * (Rule 1 clause 3). It raises no notification of its own and renders no error text: a failure is
- * reported once, by `core/http/fineract.interceptor.ts`, which maps the Fineract error and notifies
- * for a 5xx or a network failure; the tab's own `failed` flag only suppresses a misleading empty state
- * while leaving the rest of the record usable (AAP 0.7.4). Nothing is logged — not the client
- * identifier, not a document key, not a description (Rule 1 clause 9).
+ * (Rule 1 clause 3). It raises no notification of its own: a failure is mapped once, by
+ * `core/http/fineract.interceptor.ts`, which also notifies for a 5xx or a network failure. A 4xx is
+ * the one failure that interceptor does not notify, so the tab renders Fineract's own text verbatim
+ * in an alert region (`errorMessage`); a 5xx or a transport fault renders nothing, because the
+ * notification already carries the same message and repeating it would show one problem twice
+ * (AAP 0.7.4, AAP 0.14.2). Nothing is logged — not the client identifier, not a document key, not a
+ * description (Rule 1 clause 9).
  *
- * **State.** Three signals are the whole public surface, plus the `clientId` input the parent binds:
- * `rows` in the server's order, `loading` while a read is in flight, and `failed` when the last load
- * rejected. A load is keyed to the input so re-opening the tab for another client refreshes, and a
- * `switchMap` cancels the pass it replaces, so a slow response for a previous client can never
- * overwrite a newer one.
+ * **State.** Four signals are the whole public surface, plus the `clientId` input the parent binds:
+ * `rows` in the server's order, `loading` while a read is in flight, `failed` when the last load
+ * rejected, and `errorMessage` carrying Fineract's own text for a 4xx. A load is keyed to the input so
+ * re-opening the tab for another client refreshes, and a `switchMap` cancels the pass it replaces, so a
+ * slow response for a previous client can never overwrite a newer one. While a pass is in flight the
+ * tab paints nothing at all, so one client's documents are never left on screen under another client's
+ * record (AAP 0.7.4).
  *
  * **Presentation.** No stylesheet, no inline style and no colour: the table, the panel and the empty
- * state are styled by the global legacy Bootstrap 3 layer in `web-ng/src/styles.scss`, and the one
- * component this class imports is the shared `EmptyStateComponent` the template renders when the
- * client has no identity document at all (AAP 0.4.4 decision 4, AAP 0.7.4; Rule 1 clause 6).
+ * state are styled by the global legacy Bootstrap 3 layer in `web-ng/src/styles.scss`, and the two
+ * imports the component carries are the shared `EmptyStateComponent` the template renders when the
+ * client has no identity document at all, and `TranslatePipe`, which resolves the four column headers
+ * and that empty state from the legacy bundles in `app/global-translations/` so the tab follows the
+ * language switcher (AAP 0.1.1, AAP 0.4.4 decision 4, AAP 0.7.4; Rule 1 clause 6).
  *
  * Figma: file `DKm5TBFbXypfqyx4xUdhBw`, frame `2:2` ("Legacy"), flow "Sign in and open a client
  * record" — Login `1:5` → Clients list `1:3` → Individual client view `1:4` (end of flow). This
@@ -205,7 +213,7 @@ function toRow(
  */
 @Component({
   selector: 'app-client-identifiers',
-  imports: [EmptyStateComponent],
+  imports: [TranslatePipe, EmptyStateComponent],
   templateUrl: './client-identifiers.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -230,6 +238,9 @@ export class ClientIdentifiersComponent {
 
   /** Whether the last load rejected. */
   private readonly failedState = signal(false);
+
+  /** Fineract's own failure text for the last rejected load, or `null` when none may be rendered. */
+  private readonly errorMessageState = signal<string | null>(null);
 
   /**
    * The input values to load, in order.
@@ -262,10 +273,22 @@ export class ClientIdentifiersComponent {
    * Whether the last load rejected.
    *
    * The template uses it only to withhold the empty state while a failed load's absence of rows means
-   * "could not read", not "has none". The message the user sees for the failure is the one the
-   * interceptor raised, and nothing here repeats or replaces it.
+   * "could not read", not "has none". With {@link errorMessage} empty the failure was one the
+   * interceptor has already notified — a 5xx or a transport fault — and nothing here repeats or
+   * replaces that message.
    */
   readonly failed: Signal<boolean> = this.failedState.asReadonly();
+
+  /**
+   * Fineract's own failure text, verbatim, or `null` when there is nothing to show.
+   *
+   * Populated for a 4xx only: `core/http/fineract.interceptor.ts` maps every failure into an
+   * {@link ApiError} but raises its single notification for status `0` and `>= 500` alone, so
+   * rendering those here as well would report the same problem twice (AAP 0.7.4, AAP 0.14.2). The
+   * text is the server's own and is shown unmoved — no prefix, suffix or translation (Rule 1
+   * clause 3) — and nothing about the failure is logged (Rule 1 clause 9).
+   */
+  readonly errorMessage: Signal<string | null> = this.errorMessageState.asReadonly();
 
   constructor() {
     // The input is a signal, so the load is driven from it: every value it takes is handed to the
@@ -279,15 +302,23 @@ export class ClientIdentifiersComponent {
         switchMap((clientId) => {
           this.loadingState.set(true);
           this.failedState.set(false);
+          this.errorMessageState.set(null);
 
           return this.loadRows(clientId).pipe(
             // The rejection is swallowed here, inside the switchMap's inner observable, rather than in
             // the subscriber's error callback: an error that escaped the inner stream would end the
             // outer subscription, and the tab would then never load again for a later client. Setting
             // the flag and answering with no rows keeps the page usable, which is what a 4xx or a
-            // network failure on a read of a record's own sub-resource must do.
-            catchError(() => {
+            // network failure on a read of a record's own sub-resource must do. A 4xx also publishes
+            // Fineract's own text, the one failure the interceptor does not notify; a 5xx or a
+            // transport fault leaves it `null` because that interceptor has already notified.
+            catchError((error: unknown) => {
               this.failedState.set(true);
+              this.errorMessageState.set(
+                error instanceof ApiError && error.status >= 400 && error.status < 500
+                  ? error.message
+                  : null,
+              );
 
               return of(NO_ROWS);
             }),

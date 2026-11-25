@@ -470,4 +470,51 @@ describe('DataTableGateService', () => {
     // The gate cannot tell what to read, so it read nothing at all rather than passing on an empty list.
     httpMock.expectNone(() => true);
   });
+
+  it('refuses a crafted route id with the guard message and issues no request at all', () => {
+    // The router hands an `:id` over URL-decoded, so this value would leave `/api/v1` and read another
+    // resource on the same host (CWE-20, CWE-22). The refusal arrives as an observable error — the
+    // service documents that it fails through the returned observable and never synchronously — and it
+    // comes before every request, including the id-less checks call.
+    const crafted = '../../../users';
+    const emissions: DataTableGateResult[][] = [];
+    const messages: string[] = [];
+
+    service.checkClientActionGate(crafted, 'activate').subscribe({
+      next: (results) => emissions.push(results),
+      error: (failure: unknown) =>
+        messages.push(failure instanceof Error ? failure.message : String(failure)),
+    });
+
+    expect(emissions).toEqual([]);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toContain(`'${crafted}'`);
+    expect(messages[0]).toContain('DataTableGateService.checkClientActionGate');
+    httpMock.expectNone(isChecksRequest);
+    httpMock.expectNone(() => true);
+  });
+
+  it('refuses a check row whose datatable name is not a table name, without reading that table', () => {
+    // The table name comes from the server's own `entityDatatableChecks` answer, so it is checked
+    // where the read path is composed: a name of any other shape must not be written into a path that
+    // could leave the datatable family, and the gate must fail rather than report a table it never read.
+    const crafted = '../../../users';
+    const emissions: DataTableGateResult[][] = [];
+    const messages: string[] = [];
+
+    service.checkClientActionGate(CLIENT_ID, 'activate').subscribe({
+      next: (results) => emissions.push(results),
+      error: (failure: unknown) =>
+        messages.push(failure instanceof Error ? failure.message : String(failure)),
+    });
+
+    httpMock.expectOne(isChecksRequest).flush(checksPage([checkRow(crafted, 'ACTIVATE')]));
+
+    expect(emissions).toEqual([]);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toContain(`'${crafted}'`);
+    expect(messages[0]).toContain('DataTableGateService.checkClientActionGate');
+    httpMock.expectNone(isDatatableRequest(crafted, CLIENT_ID));
+    httpMock.expectNone(() => true);
+  });
 });

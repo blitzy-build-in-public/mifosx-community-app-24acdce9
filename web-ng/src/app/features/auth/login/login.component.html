@@ -22,10 +22,12 @@
   both applications (`web-ng/e2e/pages/legacy/login.page.ts`) and every `<label for>` points at the
   control it names.
 
-  Two gaps in the global layer are visible here and are reported rather than patched locally: the
-  legacy page's `margin-top: 10vh` page offset and a 24px-tall select have no global class, so the
-  language control uses Bootstrap's own smallest control (`.btn.btn-default.btn-xs`, ~24px) — the
-  closest existing treatment — and no invented class or inline value is introduced.
+  One gap in the global layer is visible here and is reported rather than patched locally: the legacy
+  page's `margin-top: 10vh` page offset has no global class, and no invented class or inline value is
+  introduced for it. The language switcher row is the product's own `.language-switcher` class,
+  declared in `web-ng/src/styles.scss`: it sets the AAP 0.2.3 `LanguageSwitcher` label to the design's
+  13px label size in the `color-text-strong` token, and its native select to the design's 24px height,
+  over the `.btn.btn-default.btn-xs` the control keeps for the legacy bordered look.
 -->
 <div class="container">
   <div class="row">
@@ -39,21 +41,23 @@
           disagree. The options come from that list and each label is the language's own code, which
           is also how the parity harness recognises this control.
 
-          `#langSelect` is the template reference the change handler reads, so the control's value is
-          typed (`HTMLSelectElement.value`) and no `$any(...)` cast is needed (Rule 1 clause 4).
+          `#langSelect` is the template reference the change handler reads twice: the value it reports
+          is typed (`HTMLSelectElement.value`) and no `$any(...)` cast is needed (Rule 1 clause 4), and
+          the element is handed back as well, so a bundle that fails to load leaves the control on the
+          language the application is actually using, as the navbar's switcher already does.
 
           The select's own `[value]` is set before its `@for` options exist on the first render pass,
           so each option also states whether it is the active one: the control therefore shows the
           active language even when the deployment configures one that is not first in the list.
         -->
-        <div class="text-right text-small">
+        <div class="text-right language-switcher">
           <label for="langSelect">{{ 'label.input.changelanguage' | translate }}</label>
           <select
             id="langSelect"
             #langSelect
             class="btn btn-default btn-xs"
             [value]="currentLang()"
-            (change)="onLangChange(langSelect.value)"
+            (change)="onLangChange(langSelect.value, langSelect)"
           >
             @for (lang of langs; track lang) {
               <option [value]="lang" [selected]="lang === currentLang()">{{ lang }}</option>
@@ -66,11 +70,17 @@
           `app/images` tree through the `angular.json` assets mapping and is never copied, re-created
           in CSS or replaced by an icon (Rule 1 clause 6; AAP 0.2.4). `alt` comes from the legacy
           bundle's own product name, so the image is announced in the active language.
+
+          `.login-hero` is what governs the rendered width: legacy pinned the lockup to 80% of the form
+          column with an inline `width:80%; margin:auto` (`app/index.html:80`), and that rule now lives
+          in `web-ng/src/styles.scss` as a class, so the hero renders at the AAP 0.2.1 size instead of
+          the file's intrinsic width. `.center-block` supplies the centring the inline style carried and
+          `.img-responsive` keeps the height proportional, so the lockup is never stretched.
         -->
         <div class="row">
           <div class="col-sm-4 col-sm-offset-4 text-center">
             <img
-              class="img-responsive center-block"
+              class="img-responsive center-block login-hero"
               src="images/MifosX_logo.png"
               [attr.alt]="'label.heading.mifosx' | translate"
             />
@@ -203,7 +213,10 @@
         <!--
           The footer's three link columns, one heading and three links each, as the design shows them.
           Every string is a key the shipped legacy bundles already carry, so no label is written into
-          this file and none reaches the user as a raw key.
+          this file and none reaches the user as a raw key. Each heading takes Bootstrap 3's own
+          `.text-uppercase` utility because legacy renders the same three keys through
+          `| translate | uppercase` (`app/index.html:202,216,233`), and the transform has to follow the
+          active bundle rather than a literal (Rule 1 clause 3).
 
           No destination is invented: the link targets behind these columns and this paragraph belong
           to modules outside this migration's scope (product documentation, community forums,
@@ -214,7 +227,7 @@
         <div class="row">
           <div class="col-xs-4 text-center">
             <ul class="list-unstyled">
-              <li><h5>{{ 'label.heading.resources' | translate }}</h5></li>
+              <li><h5 class="text-uppercase">{{ 'label.heading.resources' | translate }}</h5></li>
               <li>
                 <a href="#" (click)="$event.preventDefault()">
                   {{ 'label.anchor.usermanual' | translate }}
@@ -234,7 +247,7 @@
           </div>
           <div class="col-xs-4 text-center">
             <ul class="list-unstyled">
-              <li><h5>{{ 'label.heading.community' | translate }}</h5></li>
+              <li><h5 class="text-uppercase">{{ 'label.heading.community' | translate }}</h5></li>
               <li>
                 <a href="#" (click)="$event.preventDefault()">
                   {{ 'label.anchor.usersgroup' | translate }}
@@ -254,7 +267,7 @@
           </div>
           <div class="col-xs-4 text-center">
             <ul class="list-unstyled">
-              <li><h5>{{ 'label.heading.contribute' | translate }}</h5></li>
+              <li><h5 class="text-uppercase">{{ 'label.heading.contribute' | translate }}</h5></li>
               <li>
                 <a href="#" (click)="$event.preventDefault()">
                   {{ 'label.anchor.keydesignprinciples' | translate }}

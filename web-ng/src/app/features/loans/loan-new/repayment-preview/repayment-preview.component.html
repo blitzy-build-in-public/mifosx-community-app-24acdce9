@@ -12,7 +12,7 @@
 @if (isEmpty()) {
   <app-empty-state
     id="repayment-preview-empty"
-    [message]="('label.nodata' | translate) + ''"
+    [message]="'label.nodata' | translate"
   />
 } @else {
   <table class="table table-striped" id="repayment-preview">
@@ -29,18 +29,20 @@
       </tr>
     </thead>
     <!-- The server's own periods in the server's order, at the record's one date pattern (the
-         component's `displayFormat`) and the family's two-decimal money format. -->
+         component's `displayFormat`) and through the default `number` pipe, which is what the
+         record page's schedule table (`loan-view/loan-schedule`) and legacy's own `number` filter
+         render: forcing a fraction width here would print 5,000.00 beside that table's 5,000. -->
     <tbody>
       @for (period of periods(); track period.period) {
         <tr>
           <td>{{ period.period }}</td>
           <td>{{ toDate(period.fromDate) | date: displayFormat }}</td>
           <td>{{ toDate(period.dueDate) | date: displayFormat }}</td>
-          <td>{{ period.principalDue | number: '1.2-2' }}</td>
-          <td>{{ period.interestDue | number: '1.2-2' }}</td>
-          <td>{{ period.feeChargesDue | number: '1.2-2' }}</td>
-          <td>{{ period.totalDueForPeriod | number: '1.2-2' }}</td>
-          <td>{{ period.totalOutstandingForPeriod | number: '1.2-2' }}</td>
+          <td>{{ period.principalDue | number }}</td>
+          <td>{{ period.interestDue | number }}</td>
+          <td>{{ period.feeChargesDue | number }}</td>
+          <td>{{ period.totalDueForPeriod | number }}</td>
+          <td>{{ period.totalOutstandingForPeriod | number }}</td>
         </tr>
       }
     </tbody>

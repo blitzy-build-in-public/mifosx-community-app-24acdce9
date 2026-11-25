@@ -66,40 +66,37 @@ export const FALLBACK_LANG = 'en';
  * list may exist anywhere, so a language can never be offered in one switcher and missing from
  * the other.
  *
- * **Source: the legacy bundles, served in place.** A code belongs here only once the corresponding
- * bundle exists at `app/global-translations/locale-<code>.json`. That tree ships exactly 32
- * `locale-*.json` files, served in place through the `assets` mapping in `web-ng/angular.json` and
- * never copied (AAP 0.3.4 claim 5; AAP 0.6.2 row "`app/global-translations/locale-*.json`";
- * AAP 0.4.3 integration row "Legacy translations"; Rule 1 clause 6). The list below holds the 31
- * user-facing codes of those 32: `qqq` is deliberately not offered, because it is TranslateWiki's
- * message-documentation pseudo-locale rather than a language anyone reads — 814 of its 855 values
- * carry a TranslateWiki maintenance marker (`{{Identical|…}}` and the like), which offering it would
- * put on screen where the product shows text.
+ * **Source: the legacy switcher, restricted to the bundles served in place.** The set is the one
+ * legacy's own switcher offered, read from `app/scripts/models/Langs.js`, which named 14 codes: en,
+ * fr, es, pt, cs, zh_CN, hi, ka, lo, vi, my_MM, my, et and te. A code is offered here only once the
+ * matching bundle really exists at `app/global-translations/locale-<code>.json`, because those
+ * bundles are served in place through the `assets` mapping in `web-ng/angular.json` and never
+ * copied (AAP 0.4.3 integration row "Legacy translations"; Rule 1 clause 6). `et` (Amharic) is the
+ * one legacy code that ships no `locale-et.json`, so it could never load and is not offered; the
+ * list below holds the other 13, every one of them backed by a served bundle.
  *
- * **Order.** `en` first, because it is the fallback language every other bundle is completed from
- * (`FALLBACK_LANG` above) and therefore the language of the first paint; the rest ascend by code,
- * which is the order both switchers list them in.
+ * **Order.** Legacy's own order, `app/scripts/models/Langs.js` transcribed without the code no
+ * bundle can serve: `en` first, because it is the fallback language every other bundle is completed
+ * from (`FALLBACK_LANG` above) and therefore the language of the first paint, then each remaining
+ * language in the position legacy listed it.
  *
- * **How this differs from legacy, and why.** The legacy switcher read its own list from
- * `app/scripts/models/Langs.js`, which offered 14 codes: en, fr, es, pt, cs, zh_CN, hi, ka, lo, vi,
- * my_MM, my, et and te. One of them, `et`, ships no bundle at all, so it could never load; it is not
- * offered here. The remaining served bundles are offered, so the switcher actually switches and
- * AAP 0.10.2's i18n comparison "checked in English and one non-English locale" is exercisable. That
- * widening is the deliberate difference from legacy this array registers (Rule 1 clause 3), and it
- * stays inside the same rule the code above applies: every code offered is a bundle the checkout
- * really serves, so a user cannot pick a language and get a failed load.
+ * **This is legacy parity, not a deliberate difference.** Both switchers therefore offer exactly
+ * what legacy's offered, less only the code whose bundle is absent — which is what Rule 1 clause 3
+ * requires of a reimplemented control, and why AAP 0.10.5's register of deliberate differences
+ * carries no language-list entry: there is no difference from legacy left to record. Widening the
+ * list to every served bundle would be such a difference, and Rule 1 clause 3 permits one only once
+ * the Agent Action Plan lists it with a reason; a comment in this file cannot register one.
  *
- * **Adding a language** therefore still means adding its code to this array and nothing else: the
- * bundle is referenced in place through `angular.json`, so no file is created, copied or added to
- * `src/assets` (Rule 1 clause 6), and no translation text is ever inlined here. Enumerating
- * speculative codes would offer a switcher entry whose load fails.
+ * **Adding a language** therefore means adding its code to this array and nothing else: the bundle
+ * is referenced in place through `angular.json`, so no file is created, copied or added to
+ * `src/assets` (Rule 1 clause 6), and no translation text is ever inlined here. Two conditions guard
+ * the array all the same — the bundle has to be one the checkout really serves, and the language has
+ * to be one legacy's switcher already offered, since a code outside that set would be a deliberate
+ * difference from legacy that Rule 1 clause 3 admits only once the Agent Action Plan lists it.
  */
 export const AVAILABLE_LANGS: readonly string[] = [
-  'en',
-  'br', 'cs', 'de', 'es', 'fr', 'hi', 'id',
-  'ka', 'km', 'kn', 'ko', 'lo', 'lt', 'my', 'my_MM',
-  'ne', 'nl', 'oc', 'pl', 'pt', 'pt_BR', 'skr-arab',
-  'sv', 'sw', 'te', 'tr', 'uk', 'vi', 'zh_CN', 'zh_TW',
+  'en', 'fr', 'es', 'pt', 'cs', 'zh_CN', 'hi',
+  'ka', 'lo', 'vi', 'my_MM', 'my', 'te',
 ];
 
 /**
@@ -113,7 +110,8 @@ export const AVAILABLE_LANGS: readonly string[] = [
  * which happens at start-up, not on the first screen that translates something.
  * `src/app/app.config.ts` owns `provideHttpClient(withInterceptors([fineractInterceptor]))` and
  * composes this same stack inline; the two compositions must stay identical in prefix, suffix,
- * `lang`, `fallbackLang` and handler class, which is why those values are exported from here.
+ * `failOnError`, `lang`, `fallbackLang` and handler class, which is why those values are exported
+ * from here.
  *
  * **`lang` is the starting language only.** It is `DEFAULT_APP_CONFIG.locale`, the build-time
  * configuration default, so that the first paint has text before `AppConfigService` resolves the
@@ -121,6 +119,30 @@ export const AVAILABLE_LANGS: readonly string[] = [
  * either switcher, which swaps the active bundle in place — no page reload and no re-bootstrap
  * (AAP 0.7.4) — and that selection is also the `locale` a date-bearing payload carries, because
  * `AppConfigService.activeLocale` reads the same service (AAP 0.1.1).
+ *
+ * **A bundle that fails to load is reported, not swallowed.** The loader is configured with
+ * `failOnError: true`, against its own `false` default. With that default the loader catches a failed
+ * bundle request, reports it and completes with `of({})`
+ * (`@ngx-translate/http-loader` 18.1.0, `TranslateHttpLoader.getTranslation`), so
+ * `TranslateService.use()` goes on to commit the requested language with nothing behind it and no
+ * caller can observe the failure at all — a silently swallowed HTTP error, which AAP 0.14.2
+ * ("Error handling": no `catch` swallows an error silently) does not allow. With `failOnError: true`
+ * the loader rethrows instead, so `use()` delivers the error to its subscriber, and
+ * `@ngx-translate/core` 18.1.0 leaves `currentLang` on the language in force, resetting it to the
+ * previous one because the store holds nothing for the code that failed. The two switchers use that
+ * in the two ways the library allows: the login screen reads the error channel to report the failure
+ * and to put its `<select>` back, and the navbar reconciles its `<select>` against `currentLang()`.
+ * Neither reads the shape of an emission as a signal: a switch that takes effect may deliver no
+ * translations at all — a language whose translations come from a source other than this loader
+ * produces exactly that, while the library still moves `currentLang` — so success and failure are
+ * read from the library's own state and from this error channel alone, and a switch that took effect
+ * is never undone.
+ *
+ * The consequence is stated rather than hidden: a *starting* language whose bundle cannot be
+ * fetched now surfaces the same way. `provideTranslateService`'s own `use(configured lang)` takes the
+ * error instead of a silent empty commit, `currentLang` stays unset so the shell reads
+ * `FALLBACK_LANG`, and the missing-translation handler below still renders every label — no raw key
+ * reaches the user — while the failure is reported rather than swallowed.
  *
  * The handler is registered as an explicit provider object for the `MissingTranslationHandler`
  * token rather than through the config object's `missingTranslationHandler` slot, whose accepted
@@ -135,6 +157,7 @@ export function provideTranslate(): EnvironmentProviders {
       loader: provideTranslateHttpLoader({
         prefix: TRANSLATE_LOADER_PREFIX,
         suffix: TRANSLATE_LOADER_SUFFIX,
+        failOnError: true,
       }),
       lang: DEFAULT_APP_CONFIG.locale,
       fallbackLang: FALLBACK_LANG,

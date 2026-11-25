@@ -12,8 +12,8 @@ import type {
   LoanActionRequest,
   LoanActionTemplate,
   LoanApplicationRequest,
+  LoanCharge,
   LoanChargeActionCommand,
-  LoanChargeActionRequest,
   LoanChargeRequest,
   LoanCommand,
   LoanTemplate,
@@ -21,7 +21,7 @@ import type {
   RepaymentPeriod,
   RepaymentSchedule,
 } from './loan.models';
-import { LoanService, type LoanRepaymentInput } from './loan.service';
+import { LoanService, type LoanChargeActionInput, type LoanRepaymentInput } from './loan.service';
 
 /**
  * Contract spec for `LoanService`: the one place the loans family composes a Fineract URL and turns
@@ -80,6 +80,13 @@ const PRODUCT_ID = 1;
 /** The charge attached to the loan, and the different charge its own terms are read from. */
 const CHARGE_ID = 8;
 const PICKED_CHARGE_ID = 3;
+
+/**
+ * The two charges a loan already carries: the loan-charge ids the edit body re-posts, which are what
+ * keep each charge rather than re-creating it, and the charge definitions those rows apply.
+ */
+const LOAN_CHARGE_ID = 12;
+const SECOND_LOAN_CHARGE_ID = 13;
 
 /**
  * The dates the loan screens hold as `Date` values, built from their local calendar parts so the
@@ -206,9 +213,15 @@ const SCHEDULE: RepaymentSchedule = {
   periods: [PERIOD],
   totalPrincipalDisbursed: 5000,
   totalPrincipalExpected: 5000,
+  totalPrincipalPaid: 416.67,
   totalInterestCharged: 600,
   totalFeeChargesCharged: 25,
+  totalPenaltyChargesCharged: 0,
+  totalWaived: 0,
+  totalWrittenOff: 0,
   totalRepaymentExpected: 5625,
+  totalRepayment: 466.67,
+  totalOutstanding: 5158.33,
   loanTermInDays: 365,
 };
 
@@ -225,11 +238,43 @@ const LOAN_ACCOUNT: LoanAccount = {
   repaymentEvery: 1,
   interestRatePerPeriod: 12,
   status: { id: 300, code: 'loanStatusType.active', value: 'Active' },
-  summary: { totalExpectedRepayment: 5625, totalOutstanding: 5158, principalOutstanding: 4608 },
   repaymentSchedule: SCHEDULE,
   transactions: [],
-  charges: [],
 };
+
+/**
+ * The `GET /loans/{id}/charges` answer: the charges the loan carries, exactly as the fork reports
+ * them — the loan charge's own id, the definition it applies, its amounts and the date it falls due.
+ * The record's charge section and the edit's re-posted rows are both built from this answer, because
+ * the loan record itself carries no `charges` member (AAP 0.7.3 row "Loan charges").
+ */
+const LOAN_CHARGES: readonly LoanCharge[] = [
+  {
+    id: LOAN_CHARGE_ID,
+    chargeId: PICKED_CHARGE_ID,
+    name: 'Parity Fee',
+    amount: 25,
+    amountOrPercentage: 25,
+    amountPaid: 0,
+    amountWaived: 0,
+    amountOutstanding: 25,
+    chargeTimeType: { id: 2, value: 'Specified due date' },
+    chargeCalculationType: { id: 1, value: 'Flat' },
+    dueDate: '2026-11-24',
+  },
+  {
+    id: SECOND_LOAN_CHARGE_ID,
+    chargeId: CHARGE_ID,
+    name: 'Parity Fee W8',
+    amount: 40,
+    amountOrPercentage: 40,
+    amountPaid: 40,
+    amountWaived: 0,
+    amountOutstanding: 0,
+    chargeTimeType: { id: 1, value: 'Disbursement' },
+    chargeCalculationType: { id: 1, value: 'Flat' },
+  },
+];
 
 /** The envelope every loan write answers with, carrying the ids a screen navigates by. */
 const ACTION_RESULT: LoanActionResult = {
@@ -443,29 +488,25 @@ const ACTION_CASES: readonly {
 ];
 
 /**
- * The two loan-charge commands. `pay` books a money movement, so it carries its amount, date and
- * payment type; `waive` books none, so the date and the payment type are dropped from the body even
- * when the caller left them set (AAP 0.7.3, "Loan charges").
+ * The two loan-charge commands. The endpoint pays or waives the charge's **whole outstanding
+ * portion**, so `pay` carries only the date the payment is recorded on and `waive` carries neither a
+ * date, an amount nor a payment type: the running server refuses an `amount` and a `paymentTypeId`
+ * on the parameter binding, which is why neither arm declares one (AAP 0.7.3, "Loan charges";
+ * `LoanChargeActionRequest`).
  */
 const CHARGE_ACTION_CASES: readonly {
   readonly command: LoanChargeActionCommand;
-  readonly request: LoanChargeActionRequest;
+  readonly request: LoanChargeActionInput;
   readonly wire: Readonly<Record<string, unknown>>;
 }[] = [
   {
     command: 'pay',
     request: {
       command: 'pay',
-      amount: 25,
       transactionDate: SUBMITTED_DATE,
-      paymentTypeId: 1,
-      dateFormat: FINERACT_DATE_FORMAT,
-      locale: APP_LOCALE,
     },
     wire: {
-      amount: 25,
       transactionDate: SUBMITTED_TEXT,
-      paymentTypeId: 1,
       dateFormat: FINERACT_DATE_FORMAT,
       locale: APP_LOCALE,
     },
@@ -474,37 +515,13 @@ const CHARGE_ACTION_CASES: readonly {
     command: 'waive',
     request: {
       command: 'waive',
-      amount: 25,
-      dateFormat: FINERACT_DATE_FORMAT,
-      locale: APP_LOCALE,
     },
     wire: {
-      amount: 25,
       dateFormat: FINERACT_DATE_FORMAT,
       locale: APP_LOCALE,
     },
   },
 ];
-
-/**
- * The waive body a caller holding the wider pay shape would hand over. It is the case
- * `WAIVE_OMITTED_MEMBERS` exists for: the two members are not trusted to be absent, they are
- * dropped, because the server rejects them beside `?command=waive` (AAP 0.7.3, "Loan charges").
- */
-type WiderWaive = Extract<LoanChargeActionRequest, { readonly command: 'waive' }> & {
-  readonly transactionDate: Date;
-  readonly paymentTypeId: number;
-};
-
-/** That wider body: a waive that still carries a booked date and a payment type. */
-const WIDER_WAIVE: WiderWaive = {
-  command: 'waive',
-  amount: 25,
-  transactionDate: SUBMITTED_DATE,
-  paymentTypeId: 1,
-  dateFormat: FINERACT_DATE_FORMAT,
-  locale: APP_LOCALE,
-};
 
 /** A repayment as the repayment form holds it: the model without the format members the service fills. */
 const REPAYMENT: LoanRepaymentInput = {
@@ -549,6 +566,23 @@ const CHARGE_WITHOUT_DUE_DATE: LoanChargeRequest = {
   dateFormat: FINERACT_DATE_FORMAT,
   locale: APP_LOCALE,
 };
+
+/**
+ * The charges a loan edit re-posts: the charges the loaded record carries, each with its own
+ * loan-charge id, the definition it applies, the amount the record reports as `amountOrPercentage`,
+ * and the due date as a `Date` — one charge dated, one carrying no date at all (AAP 0.7.3 row
+ * "Loan edit"; legacy `EditLoanAccAppController.submit` posts the same four members).
+ */
+const REPOSTED_CHARGES: NonNullable<LoanApplicationRequest['charges']> = [
+  { id: LOAN_CHARGE_ID, chargeId: PICKED_CHARGE_ID, amount: 25, dueDate: DISBURSEMENT_DATE },
+  { id: SECOND_LOAN_CHARGE_ID, chargeId: CHARGE_ID, amount: 40, dueDate: null },
+];
+
+/** `REPOSTED_CHARGES` as it must reach the server: the dated row's date formatted, the other's absent. */
+const REPOSTED_CHARGES_WIRE: readonly Readonly<Record<string, unknown>>[] = [
+  { id: LOAN_CHARGE_ID, chargeId: PICKED_CHARGE_ID, amount: 25, dueDate: DISBURSEMENT_TEXT },
+  { id: SECOND_LOAN_CHARGE_ID, chargeId: CHARGE_ID, amount: 40 },
+];
 
 /**
  * The two branches of `GET /loans/template`, which differ only in whether the product is known.
@@ -785,8 +819,9 @@ describe('LoanService', () => {
 
       const request = httpMock.expectOne(isRequest('GET', loanUrl('loans', LOAN_ID)));
 
-      // One parameter, because one association set carries the schedule, the transactions and the
-      // charges the record's three sections render (AAP 0.7.3 row "W6 repayment").
+      // One parameter, because `associations=all` is what carries the repayment schedule — and with
+      // it the loan's money totals — beside the transactions (AAP 0.7.3 row "W6 repayment"). The
+      // record's charges are a separate read: this fork answers no `charges` member here at all.
       expect(request.request.params.keys()).toEqual(['associations']);
       expect(request.request.params.get('associations')).toBe('all');
       expect(request.request.body).toBeNull();
@@ -795,6 +830,31 @@ describe('LoanService', () => {
 
       expect(received).toEqual([LOAN_ACCOUNT]);
       expect(received[0]?.repaymentSchedule?.periods).toHaveLength(1);
+    });
+  }
+
+  for (const id of [LOAN_ID, LOAN_ID_TEXT] as const) {
+    it(`reads the loan's charges by its ${typeof id} route parameter, and no other parameter`, () => {
+      const received: (readonly LoanCharge[])[] = [];
+
+      service.charges(id).subscribe((charges) => received.push(charges));
+
+      expect(apiUrl).toHaveBeenCalledWith('/loans/31/charges');
+
+      const request = httpMock.expectOne(isRequest('GET', loanUrl('loans', LOAN_ID, 'charges')));
+
+      // No parameter and no body: the endpoint answers the loan's charge list, and the record needs
+      // nothing else from it (AAP 0.7.3 row "Loan charges"; Rule 1 clause 2).
+      expect(request.request.params.keys()).toEqual([]);
+      expect(request.request.body).toBeNull();
+
+      request.flush(LOAN_CHARGES);
+
+      // The rows arrive with the members the record lists and the edit re-posts, unchanged: the
+      // loan-charge id beside the definition id, the amounts, and the due date as the server sent it.
+      expect(received).toEqual([LOAN_CHARGES]);
+      expect(received[0]?.[0]?.chargeId).toBe(PICKED_CHARGE_ID);
+      expect(received[0]?.[1]?.dueDate).toBeUndefined();
     });
   }
 
@@ -809,6 +869,21 @@ describe('LoanService', () => {
     // The edit posts the application's own field set: the server accepts the same members, so there
     // is no second member list to drift (AAP 0.7.3 row "Loan edit").
     expect(request.request.body).toEqual(APPLICATION_WIRE);
+
+    request.flush(ACTION_RESULT);
+  });
+
+  it('re-posts the loan’s charges on an edit, each due date formatted and each id kept', () => {
+    service.update(LOAN_ID, { ...APPLICATION, charges: REPOSTED_CHARGES }).subscribe();
+
+    const request = httpMock.expectOne(isRequest('PUT', loanUrl('loans', LOAN_ID)));
+
+    // `PUT /loans/{id}` treats `charges` as the loan's complete set, so the body carries a row per
+    // charge with the loan-charge id that keeps it; a row's `dueDate` is formatted exactly as a
+    // top-level date is — the active locale's `dd MMMM yyyy`, never the ISO string `JSON.stringify`
+    // would make of a `Date` — and a charge with no due date posts no member at all
+    // (AAP 0.7.3 row "Loan edit"; AAP 0.7.2 "Date handling"; Rule 1 clause 2).
+    expect(request.request.body).toEqual({ ...APPLICATION_WIRE, charges: REPOSTED_CHARGES_WIRE });
 
     request.flush(ACTION_RESULT);
   });
@@ -1023,29 +1098,68 @@ describe('LoanService', () => {
       expect(sent.request.params.get('command')).toBe(command);
       expect(sent.request.body).toEqual(wire);
       expect(bodyKeys(sent.request)).not.toContain('command');
+      // The members the endpoint refuses on the parameter binding: neither command posts an amount and
+      // neither posts a payment type, while only `pay` posts the date it is recorded on (AAP 0.7.3,
+      // "Loan charges"; `LoanChargeActionRequest`).
+      expect(bodyKeys(sent.request)).not.toContain('amount');
+      expect(bodyKeys(sent.request)).not.toContain('paymentTypeId');
+
+      if (command === 'waive') {
+        expect(bodyKeys(sent.request)).not.toContain('transactionDate');
+      }
 
       sent.flush(ACTION_RESULT);
     });
   }
 
-  it('drops the booked date and the payment type from a waive body that still carries them', () => {
-    service.chargeAction(LOAN_ID, CHARGE_ID, 'waive', WIDER_WAIVE).subscribe();
+  /**
+   * The path segment is the loan's own charge row — the `resourceId` `POST /loans/{id}/charges`
+   * answers — and not the charge definition id the picker offers: with this body,
+   * `POST /loans/8/charges/1?command=pay` answers 404 "Loan charge with identifier 1 does not exist
+   * for loan 8" for a definition attached as loan-charge 5, while the same command against
+   * `/charges/5` resolves the charge (AAP 0.7.3, "Loan charges").
+   */
+  it('posts the charge action against the loan-charge id it is given, never the definition id', () => {
+    const loanChargeId = 5;
+
+    service
+      .chargeAction(LOAN_ID, loanChargeId, 'pay', { command: 'pay', transactionDate: SUBMITTED_DATE })
+      .subscribe();
 
     const sent = httpMock.expectOne(
-      isRequest('POST', loanUrl('loans', LOAN_ID, 'charges', CHARGE_ID)),
+      isRequest('POST', loanUrl('loans', LOAN_ID, 'charges', loanChargeId)),
     );
 
-    // A waiver books no money movement, so the server rejects those two members beside
-    // `?command=waive`; they are dropped here rather than trusted to be absent (AAP 0.7.3).
-    expect(bodyKeys(sent.request)).not.toContain('transactionDate');
-    expect(bodyKeys(sent.request)).not.toContain('paymentTypeId');
-    expect(sent.request.body).toEqual({
-      amount: 25,
-      dateFormat: FINERACT_DATE_FORMAT,
-      locale: APP_LOCALE,
-    });
+    expect(sent.request.url).toBe(`${API_ROOT}${SEPARATOR}loans/${LOAN_ID}/charges/${loanChargeId}`);
+    expect(sent.request.url).not.toContain(`/charges/${PICKED_CHARGE_ID}`);
 
     sent.flush(ACTION_RESULT);
+  });
+
+  it('refuses to post the charge action when the body describes the other command', () => {
+    // The command travels in the query string and the discriminator in the body, so a mismatched pair
+    // would post one command's payload to the other's non-idempotent endpoint.
+    expect(() => service.chargeAction(LOAN_ID, CHARGE_ID, 'pay', { command: 'waive' })).toThrow(
+      /waive/,
+    );
+
+    httpMock.expectNone(isRequest('POST', loanUrl('loans', LOAN_ID, 'charges', CHARGE_ID)));
+  });
+
+  it('refuses a lifecycle action whose body describes another command, and issues no request', () => {
+    // The two travel separately — the command in the query string, the discriminator in the body — and
+    // neither action endpoint is idempotent, so a mismatched pair never reaches the server.
+    expect(() =>
+      service.action(LOAN_ID, 'approve', { command: 'reject', rejectedOnDate: SUBMITTED_DATE }),
+    ).toThrow(/reject/);
+
+    httpMock.expectNone(isRequest('POST', loanUrl('loans', LOAN_ID)));
+  });
+
+  it('refuses a dated command with no body rather than posting an empty one', () => {
+    expect(() => service.action(LOAN_ID, 'approve')).toThrow(/approve/);
+
+    httpMock.expectNone(isRequest('POST', loanUrl('loans', LOAN_ID)));
   });
 
   it('sets no authorization and no tenant header, because both belong to the HTTP interceptor', () => {
@@ -1071,5 +1185,40 @@ describe('LoanService', () => {
     for (const request of requests) {
       request.flush(LOAN_ACCOUNT);
     }
+  });
+
+  it('refuses a crafted route id or charge id with the guard message and issues no request at all', () => {
+    // The router hands an `:id` over URL-decoded, so this value would leave `/api/v1` and read another
+    // resource on the same host (CWE-20, CWE-22). Both identifier segments of the charges path are
+    // guarded, and both refusals arrive as observable errors — the form every caller of this service
+    // already handles (`firstValueFrom` inside a `try`, or a `catchError` beside it) — because `defer`
+    // keeps the invalid segment from being an exception thrown out of a `switchMap` projection.
+    const crafted = '../../../users';
+    const messages: string[] = [];
+    let emissions = 0;
+
+    const record = (failure: unknown): void => {
+      messages.push(failure instanceof Error ? failure.message : String(failure));
+    };
+
+    service.get(crafted).subscribe({ next: () => (emissions += 1), error: record });
+    service.chargeAction(LOAN_ID, crafted, 'waive', { command: 'waive' }).subscribe({
+      next: () => (emissions += 1),
+      error: record,
+    });
+
+    expect(emissions).toBe(0);
+    expect(messages).toHaveLength(2);
+    // Each refusal quotes the value and names the call that composed the segment.
+    for (const message of messages) {
+      expect(message).toContain(`'${crafted}'`);
+    }
+    expect(messages[0]).toContain('LoanService.get');
+    expect(messages[1]).toContain('LoanService.chargeAction');
+    // Nothing was sent, on either path or in any other shape; the teardown's `verify()` says the same
+    // for the whole case.
+    httpMock.expectNone(isRequest('GET', loanUrl('loans', crafted)));
+    httpMock.expectNone(isRequest('POST', loanUrl('loans', LOAN_ID, 'charges', crafted)));
+    httpMock.expectNone(() => true);
   });
 });

@@ -446,7 +446,7 @@
                     the loan record declares. No history-based "back", so the destination does not
                     depend on how the user arrived.
                   -->
-                  <a class="btn btn-default" [routerLink]="['/viewloanaccount', loanId]">
+                  <a class="btn btn-default" [routerLink]="['/viewloanaccount', loanId()]">
                     {{ 'label.button.cancel' | translate }}
                   </a>
                   <!--

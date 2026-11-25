@@ -166,19 +166,24 @@ export interface SavingsTemplateOption {
 }
 
 /**
- * One row of the savings template's `fieldOfficerOptions` list: a staff member the new application
- * may be assigned to.
+ * One row of the savings template's `fieldOfficerOptions` list: a staff member the response offers
+ * as the application's field officer.
  *
  * It differs from `SavingsTemplateOption` because the server's staff row carries `displayName` and
  * no `name` — the shape `GET /savingsaccounts/template?clientId=&productId=` returns, and the shape
  * the legacy form binds (`fieldOfficer.id as fieldOfficer.displayName for fieldOfficer in
- * fieldOfficers`, `app/views/savings/new_saving_account_application.html`), so the picker labels a
- * row from a member the response actually carries (Rule 1 clauses 2 and 3). `ClientStaffOption` in
- * `features/clients/client.models.ts`, the client template's staff-dropdown type, is the same
- * `{id, displayName}` pair for the same reason.
+ * fieldOfficers`, `app/views/savings/new_saving_account_application.html`), so a row is described
+ * from a member the response actually carries (Rule 1 clauses 2 and 3).
+ *
+ * The new-application screen renders no officer picker: the body AAP 0.7.2 fixes is `clientId`,
+ * `productId`, `submittedOnDate`, `dateFormat` and `locale` and carries no officer member, so a
+ * selection could not be posted. This type therefore describes the response, not a control — the
+ * list stays modelled because the read returns it, and the member a screen would need lives where
+ * the wire puts it. `ClientStaffOption` in `features/clients/client.models.ts`, the client
+ * template's staff-dropdown type, is the same `{id, displayName}` pair for the same reason.
  */
 export interface SavingsTemplateStaffOption {
-  /** Staff identifier, posted back verbatim as the application's `fieldOfficerId`. */
+  /** Staff identifier, as the server sends it; the new application posts no officer member. */
   readonly id: number;
 
   /** Label in the server's `'Officer, Parity'` form — its display name, rendered unchanged. */
@@ -186,16 +191,17 @@ export interface SavingsTemplateStaffOption {
 }
 
 /**
- * The new-application screen's template response: the defaults the server would use and the option
- * lists the screen binds.
+ * The new-application screen's template response: the defaults the server would use and the product
+ * list the screen binds.
  *
  * Response projection of the savings template read,
- * `GET /savingsaccounts/template?clientId=&productId=` (AAP 0.7.3 W8 row). Only what the screen
- * renders is modelled: a template response carries many more keys — currency, terms, charge and
- * accounting mappings — and those are left unmodelled rather than guessed at, so this interface
- * stays a statement about the screen rather than a partial copy of the server's payload. The
- * endpoint omits an option list it has no entries for — the client-only read carries no
- * `fieldOfficerOptions` at all — so both lists are optional and a screen renders an empty picker.
+ * `GET /savingsaccounts/template?clientId=&productId=` (AAP 0.7.3 W8 row). Only what a screen uses is
+ * modelled: a template response carries many more keys — currency, terms, charge and accounting
+ * mappings — and those are left unmodelled rather than guessed at, so this interface stays a
+ * statement about the response rather than a partial copy of the server's payload. The endpoint
+ * omits a list it has no entries for — the client-only read carries no `fieldOfficerOptions` at all —
+ * so every list here is optional and a reader renders an empty picker rather than reading an
+ * undefined array.
  */
 export interface SavingsTemplate {
   /** Client the template was requested for, when the server echoes it. */
@@ -218,10 +224,11 @@ export interface SavingsTemplate {
   readonly productOptions?: readonly SavingsTemplateOption[];
 
   /**
-   * Field officers the application may be assigned to, in the server's order, as
+   * Field officers the response offers for the application, in the server's order, as
    * `SavingsTemplateStaffOption` rows: a staff row carries `displayName` and no `name`, unlike the
-   * product and payment-type lists above. Absent from the client-only read, so the form renders an
-   * empty picker instead of reading an undefined list.
+   * product and payment-type lists above. Absent from the client-only read, so the member is
+   * optional and a reader must not assume an array. The new-application screen renders no officer
+   * picker, because the creation body AAP 0.7.2 fixes has no member to post it to.
    */
   readonly fieldOfficerOptions?: readonly SavingsTemplateStaffOption[];
 }

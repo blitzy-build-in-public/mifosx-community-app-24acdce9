@@ -325,57 +325,28 @@ export interface LoanTimeline {
 }
 
 /**
- * The loan's money totals as `GET /loans/{id}?associations=all` reports them (AAP 0.7.2).
- *
- * Every member is optional because the set present depends on the loan's state: a submitted loan
- * has no disbursement totals, and a closed one reports no outstanding balance. The view renders the
- * members it receives and shows an empty value for the rest, never a computed substitute.
- */
-export interface LoanSummary {
-  /** Total the borrower is expected to repay over the life of the loan. */
-  readonly totalExpectedRepayment?: number;
-
-  /** Total still outstanding. */
-  readonly totalOutstanding?: number;
-
-  /** Total repaid so far. */
-  readonly totalRepayment?: number;
-
-  /** Principal actually disbursed, the fork's `LoanSummaryData.principalDisbursed`. */
-  readonly principalDisbursed?: number;
-
-  /** Principal still outstanding. */
-  readonly principalOutstanding?: number;
-
-  /** Principal repaid so far. */
-  readonly principalPaid?: number;
-
-  /** Interest still outstanding. */
-  readonly interestOutstanding?: number;
-
-  /** Interest repaid so far. */
-  readonly interestPaid?: number;
-
-  /**
-   * Fees still outstanding, the fork's `LoanSummaryData.feeChargesOutstanding`. AAP 0.7.2 names this
-   * member `feesOutstanding`; `GET /loans/{id}?associations=all` sends no such key.
-   */
-  readonly feeChargesOutstanding?: number;
-
-  /** Penalty charges still outstanding. */
-  readonly penaltyChargesOutstanding?: number;
-}
-
-/**
  * A loan account as `GET /loans/{id}?associations=all` returns it — the record the view screen
  * renders — and the same body `GET /loans/{id}?template=true&associations=...` returns to seed the
  * edit form (AAP 0.7.3, "Loan edit").
  *
  * Only the members the API always sends are required. The rest are optional because the server
- * omits them depending on the state of the loan and on the associations requested: a summary or a
- * repayment schedule is absent unless it was asked for, `approvedPrincipal` is absent before
- * approval, and the transaction and charge lists are empty rather than missing for a loan that has
- * neither. A screen renders what it receives and shows its empty state for the rest (AAP 0.7.4).
+ * omits them depending on the state of the loan and on the associations requested: the repayment
+ * schedule is absent from the `template=true` answer, `approvedPrincipal` is absent before approval,
+ * and the transaction list is empty rather than missing for a loan that has none. A screen renders
+ * what it receives and shows its empty state for the rest (AAP 0.7.4).
+ *
+ * **No `summary` member and no `charges` member, because the fork sends neither.** AAP 0.7.2's row for
+ * this model lists both. This fork's `LoanAccountData` carries no `summary` on any answer
+ * `GET /loans/{id}` gives — with `associations=all`, `associations=summary`, or `template=true` — and
+ * no `charges` array either, whatever association set is asked for. It publishes the loan's money
+ * totals inside `repaymentSchedule` instead: the loan-wide figures as `totalRepaymentExpected`,
+ * `totalOutstanding`, `totalPrincipalExpected`, `totalPrincipalPaid`, `totalInterestCharged`,
+ * `totalFeeChargesCharged`, `totalPenaltyChargesCharged`, `totalWaived` and `totalWrittenOff`, and the
+ * principal, interest, fee and penalty balances as the per-period outstanding members of
+ * {@link RepaymentPeriod}. The charges come from their own endpoint, `GET /loans/{id}/charges`, which
+ * `LoanService.charges` reads. Neither member is modelled here, so no screen can read one and paint an
+ * empty figure or save an empty charge list from it again (AAP 0.3.4: the running fork's payload is
+ * the contract; Rule 1 clause 2).
  */
 export interface LoanAccount {
   /** Loan id, the `{id}` of every loan endpoint. */
@@ -423,17 +394,14 @@ export interface LoanAccount {
   /** Dated milestones of the loan's lifecycle. */
   readonly timeline?: LoanTimeline;
 
-  /** Money totals, present when the request asked for the `summary` association. */
-  readonly summary?: LoanSummary;
-
-  /** Repayment schedule, present when the request asked for the `repaymentSchedule` association. */
+  /**
+   * Repayment schedule: the loan-wide money totals and one row per period, and the only source of
+   * the figures the record's summary block prints (see this interface's note on `summary`).
+   */
   readonly repaymentSchedule?: RepaymentSchedule;
 
   /** Transactions posted against the loan, oldest first as the server returns them. */
   readonly transactions?: readonly LoanTransaction[];
-
-  /** Charges attached to the loan. */
-  readonly charges?: readonly LoanCharge[];
 }
 
 /**
@@ -450,6 +418,17 @@ export interface LoanAccount {
  * `complete` is what marks a period as paid, and the first period's `totalDueForPeriod` is the
  * amount the repayment form defaults to for workflow W6: it is read from this array and never
  * hard-coded, because the figure depends on the product, the principal and the run date.
+ *
+ * **The outstanding members are the record's balances, and the fork omits the ones that carry
+ * nothing.** A record's schedule sends `principalOutstanding`, `interestOutstanding`,
+ * `feeChargesOutstanding`, `penaltyChargesOutstanding` and `totalOutstandingForPeriod` on every
+ * period that reports an amount for them, and leaves the member out of a period that does not — the
+ * `period: 0` disbursement row in particular, which carries only its due date, the principal it
+ * disbursed and the fee amounts it charged. Summing one of them across the periods therefore reads
+ * an absent member as zero: that is the reading the fork's own `CommonLoanSummaryDataProvider`
+ * applies when it totals `interestOutstanding` over the schedule, and the sums add up to the
+ * schedule's `totalOutstanding` for every loan the fixture holds. Each of the five is optional for
+ * that reason, and the record's summary block sums them (see `loan-view.component.ts`).
  */
 export interface RepaymentPeriod {
   /** Period number, 1-based; the schedule table's first column. */
@@ -482,25 +461,43 @@ export interface RepaymentPeriod {
   /** Total originally scheduled for this period, before rescheduling. */
   readonly totalOriginalDueForPeriod: number;
 
-  /** Principal still outstanding after this period. */
-  readonly principalOutstanding: number;
+  /** Principal still outstanding after this period, the fork's per-period principal balance. */
+  readonly principalOutstanding?: number;
 
   /** Interest still outstanding after this period. */
-  readonly interestOutstanding: number;
+  readonly interestOutstanding?: number;
+
+  /**
+   * Fees still outstanding after this period, the fork's `feeChargesOutstanding`.
+   *
+   * One of the two members the record's "Fees" balance is summed from; a period that carries no fee
+   * charge omits it, which is why it is optional (see this interface's note on the outstanding
+   * members).
+   */
+  readonly feeChargesOutstanding?: number;
+
+  /** Penalties still outstanding after this period, the fork's `penaltyChargesOutstanding`. */
+  readonly penaltyChargesOutstanding?: number;
 
   /** Total still outstanding after this period. */
-  readonly totalOutstandingForPeriod: number;
+  readonly totalOutstandingForPeriod?: number;
 
   /** Whether the period has been fully paid. */
   readonly complete: boolean;
 }
 
 /**
- * A repayment schedule: the ordered periods, plus the totals a schedule calculation returns.
+ * A repayment schedule: the ordered periods, plus the loan-wide money totals the fork returns
+ * alongside them.
  *
- * The totals are present on the `POST /loans?command=calculateLoanSchedule` preview and absent from
- * a record's schedule, so they are optional. The schedule table renders `periods` only; the totals
- * exist for a screen that wants to state the loan's cost before submitting it.
+ * Both answers that carry a schedule carry these totals with it — the record's
+ * `GET /loans/{id}?associations=all` and the application form's
+ * `POST /loans?command=calculateLoanSchedule` — so they are optional only because a screen may have
+ * no schedule yet, never because the record omits them. They are where the record's summary figures
+ * live: `totalRepaymentExpected` is the loan's total and `totalOutstanding` its outstanding
+ * balance, and the rest are the charges, repayments, waivers and write-offs that stand behind the
+ * per-period balances of {@link RepaymentPeriod} (AAP 0.7.2; AAP 0.3.4: the running fork's payload
+ * is the contract).
  */
 export interface RepaymentSchedule {
   /** Periods in schedule order; the array order is meaningful and is preserved. */
@@ -512,14 +509,32 @@ export interface RepaymentSchedule {
   /** Total principal the schedule expects to collect. */
   readonly totalPrincipalExpected?: number;
 
+  /** Total principal repaid so far. */
+  readonly totalPrincipalPaid?: number;
+
   /** Total interest charged over the loan's life. */
   readonly totalInterestCharged?: number;
 
   /** Total fee charges charged over the loan's life. */
   readonly totalFeeChargesCharged?: number;
 
+  /** Total penalty charges charged over the loan's life. */
+  readonly totalPenaltyChargesCharged?: number;
+
+  /** Total of every charge and interest amount waived on the loan. */
+  readonly totalWaived?: number;
+
+  /** Total written off the loan. */
+  readonly totalWrittenOff?: number;
+
   /** Total the borrower repays, principal and interest and fees together. */
   readonly totalRepaymentExpected?: number;
+
+  /** Total repaid so far, of every component. */
+  readonly totalRepayment?: number;
+
+  /** Total still outstanding, the record's outstanding balance. */
+  readonly totalOutstanding?: number;
 
   /** Length of the loan term in days, as the calculation reports it. */
   readonly loanTermInDays?: number;
@@ -570,7 +585,14 @@ export interface LoanTransaction {
 }
 
 /**
- * A charge attached to a loan, as the record's `charges[]` reports it (AAP 0.7.2).
+ * A charge attached to a loan, as `GET /loans/{id}/charges` reports it (AAP 0.7.2 row `LoanCharge`;
+ * AAP 0.7.3 row "Loan charges").
+ *
+ * This endpoint is the only place a loan's charges are reported: the loan record
+ * (`GET /loans/{id}?associations=all`) and the edit seed
+ * (`GET /loans/{id}?template=true&associations=charges,…`) both answer without a `charges` member on
+ * this fork. The record's charge section lists these rows and the loan edit re-posts them, which is
+ * why every member the pay, waive and re-post bodies need is declared here.
  *
  * The paid, waived and outstanding amounts are separate members because the charge list shows them
  * separately and the pay and waive forms act on the outstanding portion.
@@ -579,11 +601,32 @@ export interface LoanCharge {
   /** Charge id, the `{chargeId}` of the charge action endpoint. */
   readonly id: number;
 
+  /**
+   * Definition id of the charge this loan carries, the fork's `LoanChargeData.chargeId`.
+   *
+   * Distinct from {@link id}: `id` numbers the charge on this loan, while `chargeId` names the
+   * charge definition it was created from. `PUT /loans/{id}` needs both in a `charges` row — without
+   * `id` the fork deletes and re-creates the charge instead of keeping it — so the loan edit
+   * re-posts this member beside its own id (AAP 0.7.2 row `LoanCharge`; AAP 0.3.4: the running
+   * fork's payload is the contract).
+   */
+  readonly chargeId: number;
+
   /** Charge name, rendered as the server sent it. */
   readonly name: string;
 
   /** Amount charged. */
   readonly amount: number;
+
+  /**
+   * The amount the charge is defined with, the fork's `LoanChargeData.amountOrPercentage`: the flat
+   * amount of a flat charge, or the percentage of a percentage charge.
+   *
+   * It is the member the legacy loan edit posts back for a charge it keeps
+   * (`EditLoanAccAppController.submit` reads `charge.amountOrPercentage`), so an edit re-posts the
+   * charge with the amount it was created with rather than with the amount still outstanding.
+   */
+  readonly amountOrPercentage: number;
 
   /** Amount already paid. */
   readonly amountPaid: number;
@@ -733,8 +776,34 @@ export interface LoanApplicationRequest {
   /** Fund to draw on, when one was chosen from `fundOptions`. */
   fundId?: number;
 
-  /** Charges applied with the application, as the picked charge ids and their amounts. */
-  charges?: readonly { readonly chargeId: number; readonly amount: number }[];
+  /**
+   * Charges carried by the body, one row per charge, in the order the form lists them.
+   *
+   * A new application names the charge definition and the amount (`{chargeId, amount}`), which is
+   * what `POST /loans` takes. A loan edit re-posts the charges `GET /loans/{id}/charges` reports, and
+   * such a row also says which loan charge it keeps and when it falls due: `PUT /loans/{id}` treats the
+   * array as the loan's **complete** charge set, so an absent array deletes every charge and a row
+   * without `id` is deleted and re-created rather than kept (legacy `EditLoanAccAppController.submit`
+   * posts the same four members; AAP 0.7.2 row `LoanApplicationRequest`; AAP 0.3.4: the running
+   * fork's accepted member set wins over the plan's shorthand).
+   */
+  charges?: readonly {
+    /** Loan charge the row keeps, on an edit that re-posts a charge the loan already carries. */
+    readonly id?: number;
+
+    /** Charge definition the row applies, the record charge's `chargeId`. */
+    readonly chargeId: number;
+
+    /** Amount charged, taken from the record charge's `amountOrPercentage`. */
+    readonly amount: number;
+
+    /**
+     * Due date of a charge that carries one, held as a `Date` the service formats at the boundary;
+     * absent for a charge that falls due on disbursement. A specified-due-date charge refuses a row
+     * without it, so an edit re-posts the date the record reported.
+     */
+    readonly dueDate?: Date | null;
+  }[];
 
   /** Payload date format, set by the service from `AppConfig.dateFormat`. */
   dateFormat: AppDateFormat;
@@ -751,6 +820,11 @@ export interface LoanApplicationRequest {
  * run confirms from the `GET /loans/{id}?template=true` payload whether this fork marks a member
  * submit-only; such a member would then be hidden from the edit form rather than given a
  * locally invented rule (Rule 1 clause 3).
+ *
+ * One member is not merely echoed: `charges`. This endpoint treats the array as the loan's complete
+ * charge set, so the edit form re-posts the charges `GET /loans/{id}/charges` reports —
+ * `{id, chargeId, amount, dueDate}` rows — and posts the empty array for a loan that has none, instead
+ * of letting an absent member delete them (AAP 0.3.4: the running fork's contract decides).
  */
 export type LoanEditRequest = LoanApplicationRequest;
 
@@ -850,9 +924,10 @@ export type LoanActionRequest =
 /**
  * The body `POST /loans/{id}/transactions?command=repayment` posts (AAP 0.7.3, "W6 repayment").
  *
- * The amount defaults to the first unpaid period's `totalDueForPeriod` from the loan's repayment
- * schedule and the date to the run date, but both are editable before submission, so neither is
- * fixed here.
+ * Both values are seeded from `GET /loans/{id}/transactions/template?command=repayment` — the read
+ * legacy's own repayment form is seeded from — whose `amount` is the figure due next and whose `date`
+ * is the next due date, the browser clock standing in when the template carries none (AAP 0.10.5
+ * item 15). Both stay editable before submission, so neither is fixed here.
  */
 export interface LoanRepaymentRequest {
   /** Date the repayment is recorded on, as the form holds it; `null` when it is empty. */
@@ -897,26 +972,34 @@ export interface LoanChargeRequest {
 
 /**
  * The body of one loan-charge action, as a discriminated union on the command
- * `POST /loans/{id}/charges/{chargeId}?command=` takes (AAP 0.7.2 row `LoanChargeActionRequest`;
- * AAP 0.7.3, "Loan charges").
+ * `POST /loans/{id}/charges/{loanChargeId}?command=` takes (AAP 0.7.2 row
+ * `LoanChargeActionRequest`; AAP 0.7.3, "Loan charges").
  *
- * `pay` books a money movement, so it carries the amount, its date and a payment type; `waive`
- * books none, so it sends the amount alone. The amount defaults to the charge's outstanding portion
- * and stays editable in both.
+ * **The member sets are the ones the running server accepts**, which is what AAP 0.7.3 makes the
+ * contract's source of truth — the fork's `*ApiResourceSwagger.java` annotations and the running
+ * server's own binding — and what AAP 0.3.4 settles as "where the code disagrees with the request,
+ * the code wins": `pay` takes the booked date beside the format pair, and `waive` takes the format
+ * pair alone.
+ *
+ * The plan's row also names an `amount` on both arms and a `paymentTypeId` on `pay`, and the fork
+ * refuses every one of them on the parameter binding before any state rule runs — HTTP 400
+ * `"The parameter amount is not supported."` and `"The parameter paymentTypeId is not supported."`,
+ * observed against the running server. The reason is the endpoint's own semantics: it pays or waives
+ * the charge's whole outstanding portion, so there is no client-supplied amount to carry, and paying
+ * one moves no payment-type choice onto the wire. Legacy's `pay` and `waive` POSTs carried no amount
+ * either — its form held the transaction date and the format pair alone — so neither arm below is a
+ * member this application invented (Rule 1 clauses 2 and 3).
+ *
+ * A date travels as a `Date | null`; `LoanService.chargeAction` formats it and writes the two format
+ * members as it serialises, so no screen holds either.
  */
 export type LoanChargeActionRequest =
   | {
-      /** Pays the outstanding portion of the charge. */
+      /** Pays the charge's whole outstanding portion. */
       command: 'pay';
-
-      /** Amount paid. */
-      amount: number;
 
       /** Date the payment is recorded on, as the form holds it and `null` while it is empty. */
       transactionDate: Date | null;
-
-      /** Payment type id chosen from `paymentTypeOptions`. */
-      paymentTypeId: number;
 
       /** Payload date format, set by the service from `AppConfig.dateFormat`. */
       dateFormat: AppDateFormat;
@@ -925,11 +1008,8 @@ export type LoanChargeActionRequest =
       locale: string;
     }
   | {
-      /** Waives the outstanding portion of the charge. */
+      /** Waives the charge's whole outstanding portion; it books no money movement and no date. */
       command: 'waive';
-
-      /** Amount waived. */
-      amount: number;
 
       /** Payload date format, set by the service from `AppConfig.dateFormat`. */
       dateFormat: AppDateFormat;

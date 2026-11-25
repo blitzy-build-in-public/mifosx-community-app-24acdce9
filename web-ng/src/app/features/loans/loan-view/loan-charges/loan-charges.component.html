@@ -1,0 +1,70 @@
+<!--
+  Charges section of the individual loan record (`#/viewloanaccount/:id`; AAP 0.7.1 row `loans`,
+  AAP 0.7.2 row `LoanCharge`, AAP 0.7.3 row "Loan charges"). It renders the rows the parent read with
+  `GET /loans/{id}/charges` — this fork's loan record carries no `charges` member — and issues no
+  request of its own (Rule 1 clause 2; Rule 2: no URL, host or endpoint appears here).
+
+  Exactly one of the two branches renders. A loan that carries no charges shows the shared explicit
+  empty state and no error, which is the state AAP 0.7.4 requires of this surface; the table renders
+  otherwise, one row per element of `rows()` in the order the API returned them — no sort, filter,
+  pager or subtotal (Rule 1 clause 3). Every cell is the server's own value: `name` verbatim and never
+  through `TranslatePipe`, because translating a charge's name would put words in the server's mouth;
+  amounts through `DecimalPipe`, the same grouping the legacy table's `number` filter applies; and the
+  due date through the shared display pattern, so a charge that falls due on disbursement renders an
+  empty cell rather than an invalid date. The legacy tab's fee-or-penalty, payment-due,
+  calculation-type and waived columns are not reproduced here, and that narrowing rests on the plan
+  recording it as an intentional difference (AAP 0.10.5).
+
+  The two row actions are links to the screens that post them — `pay` and `waive` on
+  `#/loanaccountcharge/:id/:action/:chargeId`, the route `loans.routes.ts` declares — and each is
+  gated by `HasPermissionDirective` on the single code the record passes down, which is the code the
+  record's own action group uses (AAP 0.14.1). Neither link is hidden or disabled by the charge's
+  state: whether the step is legal is the server's decision, exactly as the record's action group
+  treats its own commands (Rule 1 clause 3).
+
+  The look is entirely global: `.table.table-striped` for the table, `.btn.btn-primary.btn-sm` for the
+  row actions and the empty state's own `.text-center.text-muted`. The owning record page supplies the
+  card, so this file adds no panel, no heading, no stylesheet, no inline style and no colour of its own
+  (Rule 1 clause 6).
+-->
+@if (isEmpty()) {
+  <app-empty-state id="loan-charges-empty" [message]="'label.nodata' | translate" />
+} @else {
+  <table class="table table-striped" id="loan-charges">
+    <thead>
+      <tr>
+        <th scope="col">{{ 'label.heading.name' | translate }}</th>
+        <!-- The charge's own due date is labelled with label.heading.dueasof: that is the caption the
+             legacy record heads this column with, and the key every locale bundle carries. -->
+        <th scope="col">{{ 'label.heading.dueasof' | translate }}</th>
+        <th scope="col">{{ 'label.heading.amount' | translate }}</th>
+        <th scope="col">{{ 'label.heading.paid' | translate }}</th>
+        <th scope="col">{{ 'label.heading.outstanding' | translate }}</th>
+        <th scope="col">{{ 'label.heading.actions' | translate }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (row of rows(); track row.id) {
+        <tr>
+          <td>{{ row.name }}</td>
+          <td>{{ row.dueDate | date: displayFormat }}</td>
+          <td>{{ row.amount | number }}</td>
+          <td>{{ row.amountPaid | number }}</td>
+          <td>{{ row.amountOutstanding | number }}</td>
+          <td>
+            <a
+              class="btn btn-primary btn-sm"
+              [routerLink]="['/loanaccountcharge', loanId(), 'pay', row.id]"
+              [hasPermission]="actionPermission()"
+            >{{ 'label.button.paycharge' | translate }}</a>
+            <a
+              class="btn btn-primary btn-sm"
+              [routerLink]="['/loanaccountcharge', loanId(), 'waive', row.id]"
+              [hasPermission]="actionPermission()"
+            >{{ 'label.button.waivecharge' | translate }}</a>
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+}

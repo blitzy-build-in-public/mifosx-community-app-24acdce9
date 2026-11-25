@@ -9,9 +9,7 @@ import type {
   Client,
   ClientAccountSummary,
   ClientActionCommand,
-  ClientActionRequest,
   ClientCreateRequest,
-  ClientEditRequest,
   ClientIdentifier,
   ClientIdentifierTemplate,
   ClientListPage,
@@ -19,7 +17,7 @@ import type {
   ClientNarrationTemplate,
   ClientTemplate,
 } from './client.models';
-import { ClientService } from './client.service';
+import { ClientService, type ClientActionInput, type ClientEditInput } from './client.service';
 
 /**
  * Contract spec for `ClientService`: the one place the clients family composes a Fineract URL and
@@ -355,10 +353,17 @@ const ENTITY_CREATE_WIRE: Readonly<Record<string, unknown>> = {
  */
 const CALLER_LOCALE_CREATE: ClientCreateRequest = { ...PERSON_CREATE, locale: 'de' };
 
-/** The one case table of `PUT /clients/{id}`, whose two branches differ in the activation date. */
+/**
+ * The one case table of `PUT /clients/{id}`, whose two branches differ in the activation date.
+ *
+ * Each request is a `ClientEditInput`: the fields the edit screen holds, with no `dateFormat` or
+ * `locale`, because the service fills both from the configuration at the boundary. The wire
+ * expectations below still carry the pair, which is what proves it comes from the configuration and
+ * not from the caller (AAP 0.7.2 "Date handling"; Rule 1 clause 2).
+ */
 const EDIT_CASES: readonly {
   readonly label: string;
-  readonly request: ClientEditRequest;
+  readonly request: ClientEditInput;
   readonly wire: Readonly<Record<string, unknown>>;
 }[] = [
   {
@@ -367,8 +372,6 @@ const EDIT_CASES: readonly {
       firstname: 'Ada',
       lastname: 'Okonkwo',
       externalId: 'CL-002',
-      dateFormat: FINERACT_DATE_FORMAT,
-      locale: APP_LOCALE,
     },
     wire: {
       dateFormat: FINERACT_DATE_FORMAT,
@@ -384,8 +387,6 @@ const EDIT_CASES: readonly {
       firstname: 'Ada',
       lastname: 'Okonkwo',
       activationDate: CLIENT_DATE,
-      dateFormat: FINERACT_DATE_FORMAT,
-      locale: APP_LOCALE,
     },
     wire: {
       dateFormat: FINERACT_DATE_FORMAT,
@@ -401,8 +402,6 @@ const EDIT_CASES: readonly {
     label: 'its activation date alone',
     request: {
       activationDate: CLIENT_DATE,
-      dateFormat: FINERACT_DATE_FORMAT,
-      locale: APP_LOCALE,
     },
     wire: {
       dateFormat: FINERACT_DATE_FORMAT,
@@ -415,8 +414,6 @@ const EDIT_CASES: readonly {
     request: {
       fullname: 'Blitzy Bakery LLC',
       mobileNo: '2025550101',
-      dateFormat: FINERACT_DATE_FORMAT,
-      locale: APP_LOCALE,
     },
     wire: {
       dateFormat: FINERACT_DATE_FORMAT,
@@ -433,12 +430,15 @@ const COMMAND_PARAM_VALUES: readonly Extract<ClientActionCommand, 'close' | 'rej
 
 /**
  * The five lifecycle commands, each with the body its own command posts and the body that must
- * reach the server. The reason ids are the ids `GET /clients/template?commandParam=…` returns, never
- * constants a screen invents.
+ * reach the server. Every request is a `ClientActionInput` — the fields the action screen holds, with
+ * no `dateFormat` or `locale` — and every wire expectation carries the pair the service adds from the
+ * configuration, so these cases prove the caller supplies neither member and the payload still does
+ * (AAP 0.7.2 "Date handling"; Rule 1 clause 2). The reason ids are the ids
+ * `GET /clients/template?commandParam=…` returns, never constants a screen invents.
  */
 const ACTION_CASES: readonly {
   readonly command: ClientActionCommand;
-  readonly request: ClientActionRequest;
+  readonly request: ClientActionInput;
   readonly wire: Readonly<Record<string, unknown>>;
 }[] = [
   {
@@ -446,8 +446,6 @@ const ACTION_CASES: readonly {
     request: {
       command: 'activate',
       activationDate: CLIENT_DATE,
-      dateFormat: FINERACT_DATE_FORMAT,
-      locale: APP_LOCALE,
     },
     wire: {
       dateFormat: FINERACT_DATE_FORMAT,
@@ -461,8 +459,6 @@ const ACTION_CASES: readonly {
       command: 'close',
       closureDate: CLIENT_DATE,
       closureReasonId: 5,
-      dateFormat: FINERACT_DATE_FORMAT,
-      locale: APP_LOCALE,
     },
     wire: {
       dateFormat: FINERACT_DATE_FORMAT,
@@ -477,8 +473,6 @@ const ACTION_CASES: readonly {
       command: 'reject',
       rejectionDate: CLIENT_DATE,
       rejectionReasonId: 6,
-      dateFormat: FINERACT_DATE_FORMAT,
-      locale: APP_LOCALE,
     },
     wire: {
       dateFormat: FINERACT_DATE_FORMAT,
@@ -493,8 +487,6 @@ const ACTION_CASES: readonly {
       command: 'withdraw',
       withdrawalDate: CLIENT_DATE,
       withdrawalReasonId: 5,
-      dateFormat: FINERACT_DATE_FORMAT,
-      locale: APP_LOCALE,
     },
     wire: {
       dateFormat: FINERACT_DATE_FORMAT,
@@ -511,13 +503,68 @@ const ACTION_CASES: readonly {
     request: {
       command: 'reactivate',
       reactivationDate: CLIENT_DATE,
-      dateFormat: FINERACT_DATE_FORMAT,
-      locale: APP_LOCALE,
     },
     wire: {
       dateFormat: FINERACT_DATE_FORMAT,
       locale: APP_LOCALE,
       reactivationDate: CLIENT_DATE_TEXT,
+    },
+  },
+];
+
+/**
+ * The three commands whose reason member is posted only when a reason was chosen, each with the body
+ * a tenant that configures no narration produces: the action's own date and the date-format pair the
+ * service adds, and no reason member at all.
+ *
+ * `GET /clients/template?commandParam=<command>` may answer `{"isStaff":false,"narrations":[]}`, and
+ * legacy posts these actions anyway with whatever its unvalidated reason select held — nothing — so
+ * the member is left out entirely rather than sent as `undefined` or `null`, and Fineract's own
+ * refusal is what the screen renders (Rule 1 clause 3; AAP 0.7.4).
+ */
+const UNREASONED_ACTION_CASES: readonly {
+  readonly command: Extract<ClientActionCommand, 'close' | 'reject' | 'withdraw'>;
+  readonly reasonKey: string;
+  readonly request: ClientActionInput;
+  readonly wire: Readonly<Record<string, unknown>>;
+}[] = [
+  {
+    command: 'close',
+    reasonKey: 'closureReasonId',
+    request: {
+      command: 'close',
+      closureDate: CLIENT_DATE,
+    },
+    wire: {
+      dateFormat: FINERACT_DATE_FORMAT,
+      locale: APP_LOCALE,
+      closureDate: CLIENT_DATE_TEXT,
+    },
+  },
+  {
+    command: 'reject',
+    reasonKey: 'rejectionReasonId',
+    request: {
+      command: 'reject',
+      rejectionDate: CLIENT_DATE,
+    },
+    wire: {
+      dateFormat: FINERACT_DATE_FORMAT,
+      locale: APP_LOCALE,
+      rejectionDate: CLIENT_DATE_TEXT,
+    },
+  },
+  {
+    command: 'withdraw',
+    reasonKey: 'withdrawalReasonId',
+    request: {
+      command: 'withdraw',
+      withdrawalDate: CLIENT_DATE,
+    },
+    wire: {
+      dateFormat: FINERACT_DATE_FORMAT,
+      locale: APP_LOCALE,
+      withdrawalDate: CLIENT_DATE_TEXT,
     },
   },
 ];
@@ -887,8 +934,6 @@ describe('ClientService', () => {
         command: 'withdraw',
         withdrawalDate: null,
         withdrawalReasonId: 5,
-        dateFormat: FINERACT_DATE_FORMAT,
-        locale: APP_LOCALE,
       })
       .subscribe();
 
@@ -906,13 +951,28 @@ describe('ClientService', () => {
     sent.flush(MUTATION_RESULT);
   });
 
+  for (const { command, reasonKey, request: body, wire } of UNREASONED_ACTION_CASES) {
+    it(`posts a ${command} with no reason chosen and sends no reason member at all`, () => {
+      service.action(CLIENT_ID, command, body).subscribe();
+
+      const sent = httpMock.expectOne(isRequest('POST', clientUrl('clients', CLIENT_ID)));
+
+      expect(sent.request.params.get('command')).toBe(command);
+      expect(sent.request.body).toEqual(wire);
+
+      // `toEqual` ignores a member whose value is `undefined`, so the absence is asserted on the key
+      // list: the body carries no reason member to send at all.
+      expect(bodyKeys(sent.request)).not.toContain(reasonKey);
+
+      sent.flush(MUTATION_RESULT);
+    });
+  }
+
   it('refuses a body that describes another command and issues no request', () => {
-    const closure: ClientActionRequest = {
+    const closure: ClientActionInput = {
       command: 'close',
       closureDate: CLIENT_DATE,
       closureReasonId: 5,
-      dateFormat: FINERACT_DATE_FORMAT,
-      locale: APP_LOCALE,
     };
 
     // The command travels in the query string and the body describes the action, so a mismatch would
@@ -921,6 +981,32 @@ describe('ClientService', () => {
       /describes the 'close' command but the request issues 'activate'/,
     );
     httpMock.expectNone(isRequest('POST', clientUrl('clients', CLIENT_ID)));
+  });
+
+  it('refuses a crafted route id with the guard message and issues no request at all', () => {
+    // The router hands an `:id` over URL-decoded, so this value reaches the service as a path that
+    // would leave `/api/v1` and read another resource on the same host (CWE-20, CWE-22). The refusal
+    // arrives as an observable error, which is the form every caller of this service already handles
+    // (`firstValueFrom` inside a `try`, or a `catchError` beside it) — `defer` is what makes the
+    // invalid id an error value rather than an exception thrown out of a `switchMap` projection.
+    const crafted = '../../../users';
+    let message = '';
+    let emissions = 0;
+
+    service.get(crafted).subscribe({
+      next: () => (emissions += 1),
+      error: (failure: unknown) => {
+        message = failure instanceof Error ? failure.message : String(failure);
+      },
+    });
+
+    expect(emissions).toBe(0);
+    expect(message).toContain(`'${crafted}'`);
+    expect(message).toContain('ClientService.get');
+    // Nothing was sent: no read of the family this call owns, and no request of any other shape. The
+    // teardown's `verify()` states the same expectation for the whole case.
+    httpMock.expectNone(isRequest('GET', clientUrl('clients', crafted)));
+    httpMock.expectNone(() => true);
   });
 });
 

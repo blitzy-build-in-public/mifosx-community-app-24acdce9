@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { toClientStatusKey, type Client } from '../../client.models';
 import {
@@ -9,14 +10,19 @@ import {
 /**
  * One `Key: value` run of the record header's inline metadata strip.
  *
- * The two members are display strings: `label` is carried by this component and `value` is
+ * `labelKey` is the legacy translation key the run's label binds — the key the legacy record
+ * template hands to angular-translate (`app/views/clients/viewclient.html`) — and `value` is
  * whatever the client record holds, including the empty string for a field the record does not
  * fill. It is declared here rather than in `client.models.ts` because it describes the header's
  * own layout, not a Fineract payload.
  */
 export interface RecordHeaderField {
-  /** Key shown before the colon, e.g. `'Client Number'`. */
-  readonly label: string;
+  /**
+   * Legacy translation key shown before the colon, e.g. `'label.heading.clientno'`; the key is
+   * resolved by `TranslatePipe` in the template, so the wording follows the active language
+   * instead of the component carrying English copy (Rule 1 clause 6, AAP 0.10.2).
+   */
+  readonly labelKey: string;
 
   /** Value shown after the colon as the record holds it; empty when the record has none. */
   readonly value: string;
@@ -30,7 +36,10 @@ export interface RecordHeaderField {
  *
  * Presentational only. The record is already loaded by the client view screen and arrives through
  * the `client` input, so this component issues no request, holds no state, formats no date and
- * knows nothing of a URL or a tenant (AAP 0.4.2, Rule 1 clauses 2 and 5). The status is the design's
+ * knows nothing of a URL or a tenant (AAP 0.4.2, Rule 1 clauses 2 and 5). The runs' labels are the
+ * legacy bundle's own keys, resolved through `TranslatePipe` — the one collaborator this component
+ * takes — so every word it paints comes either from the record or from the active locale, and no
+ * English copy is held here (Rule 1 clause 6, AAP 0.10.2). The status is the design's
  * colour indicator and never its word, so it goes through `StatusSwatchComponent` in its `dot`
  * geometry and the server's own status label is never read (AAP 0.10.5 deliberate difference 11,
  * Rule 1 clause 3). Every colour, size and rule belongs to the global stylesheet, which is why the
@@ -42,7 +51,7 @@ export interface RecordHeaderField {
  */
 @Component({
   selector: 'app-record-header',
-  imports: [StatusSwatchComponent],
+  imports: [StatusSwatchComponent, TranslatePipe],
   templateUrl: './record-header.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -65,18 +74,18 @@ export class RecordHeaderComponent {
    *
    * A member the record leaves unset becomes the empty string rather than a placeholder, so the
    * run paints its key with nothing after the colon, exactly as the design shows it, and a value is
-   * never invented (AAP 0.7.4, Rule 1 clause 3). The three labels are display strings held in this
-   * one place — the wording of the strip has a single home, and resolving them through the legacy
-   * translation keys later is a change to this computed alone, which is why they are not threaded
-   * through a service here.
+   * never invented (AAP 0.7.4, Rule 1 clause 3). Each run carries the legacy bundle's own key for
+   * its label, which the template resolves through `TranslatePipe`, so the strip reads in the
+   * active language and one key set serves every locale the legacy bundles ship (Rule 1 clause 6,
+   * AAP 0.10.2).
    */
   protected readonly metadataRuns = computed<readonly RecordHeaderField[]>(() => {
     const client = this.client();
 
     return [
-      { label: 'Client Number', value: client.accountNo },
-      { label: 'External ID', value: client.externalId ?? '' },
-      { label: 'Staff', value: client.staffName ?? '' },
+      { labelKey: 'label.heading.clientno', value: client.accountNo },
+      { labelKey: 'label.input.externalid', value: client.externalId ?? '' },
+      { labelKey: 'label.input.staff', value: client.staffName ?? '' },
     ];
   });
 }

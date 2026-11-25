@@ -64,8 +64,8 @@
           <!--
             The label is the authenticated account name from `GET /users/{id}` — `mifos` after a
             login as `mifos` — which is the value legacy prints from `currentSession.user.name` in
-            this same place, and it is the only session-derived value this component displays
-            (Rule 1 clause 9).
+            this same place, or the name the signed-in shell handed in when it supplied one; it is
+            the only session-derived value this component displays (Rule 1 clause 9).
 
             An anchor rather than a native button because `.navbar-nav > li > a` is the Bootstrap
             rule that paints the design's #5099ED label; `role="button"` plus `tabindex` and the
@@ -84,7 +84,7 @@
             (keydown.enter)="toggleUserMenu()"
             (keydown.space)="toggleUserMenu(); $event.preventDefault()"
           >
-            {{ username() }} <span class="caret"></span>
+            {{ displayName() }} <span class="caret"></span>
           </a>
 
           <!--

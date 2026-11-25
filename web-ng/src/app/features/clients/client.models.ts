@@ -68,7 +68,8 @@ export type ClientActionCommand = 'activate' | 'close' | 'reject' | 'withdraw' |
  * `{ id: 300, code: 'clientStatusType.active', value: 'Active' }`), on `GET /clients` rows, on
  * `GET /clients/{id}` and on `GET /clients/{id}/accounts` entries.
  *
- * `code` is the only member the application acts on, through `toClientStatusKey`. `value` is the
+ * `code` is the only member the application acts on, through `toClientStatusKey` for a client's own
+ * status and `toAccountStatusKey` for a loan or savings account row's status. `value` is the
  * server's English display text and is deliberately never rendered: the design paints a colour
  * swatch with no word beside it (AAP 0.2.1 step 2, AAP 0.10.5 deliberate difference 11), and
  * showing `value` would put English on a screen whose translations come from
@@ -274,7 +275,7 @@ export interface ClientTemplate {
  * command. The server's `isStaff` member is not modelled because no in-scope screen reads it, as
  * with every unread member in this module.
  *
- * This is the typed source of the reason ids `ClientActionRequest` requires (AAP 0.7.2 row
+ * This is the typed source of the reason ids `ClientActionRequest` carries (AAP 0.7.2 row
  * `ClientActionRequest`): a `close` body reads its `closureReasonId`, a `reject` body its
  * `rejectionReasonId` and a `withdraw` body its `withdrawalReasonId` from `narrations`. A screen
  * therefore never invents an id as a constant, because the configured reasons differ per tenant.
@@ -544,19 +545,23 @@ export interface ClientEditRequest {
  * (AAP 0.7.2 row `ClientActionRequest`; AAP 0.7.3 row "Client actions").
  *
  * The discriminant is the thing that keeps a screen honest: a component holding an
- * `activate` request cannot read `closureReasonId` from it, a `close` request without a reason id
- * does not compile, and a closure date can never be posted to `activate`. Each reason id comes from
- * the reason list the action screen reads (`ClientNarrationTemplate.narrations`, from
- * `GET /clients/template?commandParam=…`), never from a constant, because the ids differ per
- * tenant. Dates are `Date | null`, serialised by `client.service.ts`; the server rejects an action
- * that needs a date and receives none, with the message the screen shows verbatim.
+ * `activate` request cannot read `closureReasonId` from it, and a closure date can never be posted to
+ * `activate`. Each reason id comes from the reason list the action screen reads
+ * (`ClientNarrationTemplate.narrations`, from `GET /clients/template?commandParam=…`), never from a
+ * constant, because the ids differ per tenant; it is optional because a tenant may offer none, and
+ * the server is what refuses a body whose command requires one, with the message the screen shows
+ * verbatim. Dates are `Date | null`, serialised by `client.service.ts`; the server rejects an action
+ * that needs a date and receives none, with that same message.
  *
  * The commands the server accepts are exactly these five (`POST /clients/{id}?command=…`):
  * `activate` takes an activation date, `close`, `reject` and `withdraw` each take their own date and
- * a mandatory reason id (the fork validates each reason id with `notNull`), and `reactivate` takes a
- * reactivation date, which the fork requires just as strictly: `ClientDataValidator.validateReactivate`
- * applies `notNull` to `reactivationDate` and rejects a blank body outright with `InvalidJsonException`,
- * so the date is a member of the payload rather than an optional extra.
+ * a reason id the server requires (the fork validates each reason id with `notNull`), and
+ * `reactivate` takes a reactivation date, which the fork requires just as strictly:
+ * `ClientDataValidator.validateReactivate` applies `notNull` to `reactivationDate` and rejects a
+ * blank body outright with `InvalidJsonException`, so the date is a member of the payload rather than
+ * an optional extra. A reason id is left to the screen and the server's own message rather than made
+ * client-required, because legacy's reason select carries no validator and posts whatever is chosen
+ * (Rule 1 clause 3; AAP 0.7.4).
  */
 export type ClientActionRequest =
   | {
@@ -579,8 +584,14 @@ export type ClientActionRequest =
       /** Closure date the action posts; required by the server. */
       closureDate: Date | null;
 
-      /** Chosen closure reason, from the reason list the action screen reads. */
-      closureReasonId: number;
+      /**
+       * Chosen closure reason. The id comes from the `commandParam=close` template call and is posted
+       * only when the tenant's narration list offers one; the fork validates it with `notNull`, so a
+       * body without it is refused with the message the action screen renders verbatim. Legacy's
+       * closure reason select carries no validator and posts whatever is chosen, so making it
+       * client-required would be a behaviour legacy does not have (Rule 1 clause 3; AAP 0.7.4).
+       */
+      closureReasonId?: number;
 
       /** Payload date format, filled by `client.service.ts` from `AppConfig.dateFormat`. */
       dateFormat: AppDateFormat;
@@ -595,8 +606,14 @@ export type ClientActionRequest =
       /** Rejection date the action posts; required by the server. */
       rejectionDate: Date | null;
 
-      /** Chosen rejection reason, from the reason list the action screen reads. */
-      rejectionReasonId: number;
+      /**
+       * Chosen rejection reason. The id comes from the `commandParam=reject` template call and is
+       * posted only when the tenant's narration list offers one; the fork validates it with `notNull`,
+       * so a body without it is refused with the message the action screen renders verbatim. Legacy's
+       * rejection reason select carries no validator and posts whatever is chosen, so making it
+       * client-required would be a behaviour legacy does not have (Rule 1 clause 3; AAP 0.7.4).
+       */
+      rejectionReasonId?: number;
 
       /** Payload date format, filled by `client.service.ts` from `AppConfig.dateFormat`. */
       dateFormat: AppDateFormat;
@@ -611,8 +628,14 @@ export type ClientActionRequest =
       /** Withdrawal date the action posts; required by the server. */
       withdrawalDate: Date | null;
 
-      /** Chosen withdrawal reason, from the reason list the action screen reads. */
-      withdrawalReasonId: number;
+      /**
+       * Chosen withdrawal reason. The id comes from the `commandParam=withdraw` template call and is
+       * posted only when the tenant's narration list offers one; the fork validates it with `notNull`,
+       * so a body without it is refused with the message the action screen renders verbatim. Legacy's
+       * withdrawal reason select carries no validator and posts whatever is chosen, so making it
+       * client-required would be a behaviour legacy does not have (Rule 1 clause 3; AAP 0.7.4).
+       */
+      withdrawalReasonId?: number;
 
       /** Payload date format, filled by `client.service.ts` from `AppConfig.dateFormat`. */
       dateFormat: AppDateFormat;
@@ -772,4 +795,99 @@ export function toClientStatusKey(code: string | undefined): StatusKey {
   }
 
   return STATUS_KEY_BY_CODE[normaliseClientStatusCode(code)] ?? 'other';
+}
+
+/**
+ * The loan and savings account status codes `GET /clients/{id}/accounts` returns, mapped to the
+ * indicator vocabulary `StatusSwatchComponent` owns.
+ *
+ * An account row carries an account-level code, not a client-level one: the fork's `LoanStatus.java`
+ * sends `loanStatusType.*` and its `SavingsAccountStatusType.java` sends
+ * `savingsAccountStatusType.*`, neither of which {@link STATUS_KEY_BY_CODE} claims — that table holds
+ * the client family's own codes. The keys here are those two enums' codes, normalised by
+ * {@link normaliseAccountStatusCode} and nothing else: `invalid`, `transfer.in.progress` and
+ * `transfer.on.hold` are absent by design, because a transition this build cannot vouch for paints
+ * the neutral colour rather than claiming a state.
+ *
+ * Every terminal state is `closed` — the loan's closed obligations met, closed written off, closed
+ * with a rescheduled outstanding amount, withdrawn by client and rejected, and the savings account's
+ * closed, pre-mature closure, matured, withdrawn by applicant and rejected — because the indicator's
+ * vocabulary carries one colour for a finished record (AAP 0.2.3 row `StatusSwatch`). A loan
+ * submitted and pending approval or approved, and a savings account in either of those two states, are
+ * `pending`: nothing has been disbursed or activated yet, so neither is `active`.
+ */
+const ACCOUNT_STATUS_KEY_BY_CODE: Readonly<Partial<Record<string, StatusKey>>> = {
+  active: 'active',
+
+  /** A loan awaiting approval or approved but not yet disbursed; a savings account in either state. */
+  submittedandpendingapproval: 'pending',
+  approved: 'pending',
+
+  /** Every terminal state of either family, which the indicator paints with one colour. */
+  closed: 'closed',
+  closedobligationsmet: 'closed',
+  closedwrittenoff: 'closed',
+  closedrescheduleoutstandingamount: 'closed',
+  prematureclosure: 'closed',
+  matured: 'closed',
+  rejected: 'closed',
+  withdrawnbyclient: 'closed',
+  withdrawnbyapplicant: 'closed',
+};
+
+/**
+ * The normalisation an account status code is reduced to before it is looked up in
+ * {@link ACCOUNT_STATUS_KEY_BY_CODE}: lower-cased, the account family's message-code prefix removed
+ * when the payload carried it, and every non-alphanumeric character stripped, so the whole remaining
+ * name is the key.
+ *
+ * `loanStatusType.closed.written.off`, `savingsAccountStatusType.pre.mature.closure` and
+ * `CLOSED_OBLIGATIONS_MET` therefore normalise to `closedwrittenoff`, `prematureclosure` and
+ * `closedobligationsmet`.
+ *
+ * The prefix is matched family-agnostically (`[a-z]+statustype.`) because one response mixes two
+ * families, which is also why this table has its own normaliser rather than the client-only one
+ * above.
+ */
+function normaliseAccountStatusCode(code: string): string {
+  return code.toLowerCase().replace(/^[a-z]+statustype\./, '').replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * The single mapping from a Fineract account status code to the status indicator's key, used for both
+ * row families of the client record's accounts table (AAP 0.2.3 row `StatusSwatch`; AAP 0.7.2 rows
+ * `ClientLoanAccountSummary` and `ClientSavingsAccountSummary`; AAP 0.7.4 `#/viewclient/:id`).
+ *
+ * The account's own state decides the swatch, which is the row legacy colours through its
+ * `StatusLookup` (Rule 1 clause 3). The lookup is exact and is matched against the code's whole
+ * normalised name — never just its last dot-segment — so
+ * `loanStatusType.closed.reschedule.outstanding.amount` is `closed` and never the colour of a
+ * single word inside it.
+ *
+ * Recognised codes, by the state they indicate:
+ *
+ *   - `active` → `active`, in both families;
+ *   - `submittedandpendingapproval` (a loan) and `approved` (either family) → `pending`;
+ *   - `closed`, `closedobligationsmet`, `closedwrittenoff`,
+ *     `closedrescheduleoutstandingamount`, `prematureclosure`, `matured`, `rejected`,
+ *     `withdrawnbyclient` and `withdrawnbyapplicant` → `closed`, because every terminal state shares
+ *     the design's one finished colour;
+ *   - everything else → `other`: `invalid`, `transfer.in.progress`, `transfer.on.hold`, any code the
+ *     fork adds later, an empty string and `undefined`.
+ *
+ * Failure is neutral, never `active`: a code this table does not recognise must not paint a pending
+ * or transferred account as active, and `other` carries a colour of its own without claiming a state.
+ * The result is colour only — no status word, `title` or `aria-label` is derived here, because the
+ * indicator is deliberately text-free (AAP 0.10.5 item 11; Rule 1 clause 3). Pure and total — no I/O,
+ * no logging, no throw — so it can run for every row.
+ *
+ * @param code The `code` of an account's status object, or `undefined` when a response carried none.
+ * @returns One of the four keys `StatusSwatchComponent` renders.
+ */
+export function toAccountStatusKey(code: string | undefined): StatusKey {
+  if (code === undefined) {
+    return 'other';
+  }
+
+  return ACCOUNT_STATUS_KEY_BY_CODE[normaliseAccountStatusCode(code)] ?? 'other';
 }

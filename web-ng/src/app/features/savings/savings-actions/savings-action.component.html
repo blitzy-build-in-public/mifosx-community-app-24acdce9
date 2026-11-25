@@ -35,15 +35,15 @@
         <div class="panel-body">
           @if (notFound()) {
             <div class="text-center text-muted">
-              <h4 class="panel-title">{{ notFoundHeadingKey | translate }}</h4>
+              <h3 class="panel-title">{{ notFoundHeadingKey | translate }}</h3>
               <p>{{ notFoundMessageKey | translate }}</p>
             </div>
-          } @else if (operation; as op) {
+          } @else if (operation(); as op) {
             @if (error(); as message) {
               <div class="alert alert-danger" role="alert">{{ message }}</div>
             }
 
-            <h4 class="panel-title">{{ op.headingKey | translate }}</h4>
+            <h3 class="panel-title">{{ op.headingKey | translate }}</h3>
 
             @if (op.mode === 'action') {
               @if (op.command === 'approve') {
@@ -65,7 +65,7 @@
                     >
                       {{ op.submitKey | translate }}
                     </button>
-                    <a class="btn btn-default" [routerLink]="['/viewsavingaccount', id]">{{
+                    <a class="btn btn-default" [routerLink]="['/viewsavingaccount', id()]">{{
                       'label.button.cancel' | translate
                     }}</a>
                   </div>
@@ -88,7 +88,7 @@
                     >
                       {{ op.submitKey | translate }}
                     </button>
-                    <a class="btn btn-default" [routerLink]="['/viewsavingaccount', id]">{{
+                    <a class="btn btn-default" [routerLink]="['/viewsavingaccount', id()]">{{
                       'label.button.cancel' | translate
                     }}</a>
                   </div>
@@ -139,7 +139,7 @@
                   >
                     {{ op.submitKey | translate }}
                   </button>
-                  <a class="btn btn-default" [routerLink]="['/viewsavingaccount', id]">{{
+                  <a class="btn btn-default" [routerLink]="['/viewsavingaccount', id()]">{{
                     'label.button.cancel' | translate
                   }}</a>
                 </div>

@@ -1,39 +1,30 @@
-import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
-  OnInit,
   computed,
   inject,
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink, type ParamMap } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
 
-import { ApiError, toApiError } from '../../../core/http/api-error';
-import { fromFineractDate } from '../../../shared/date-format.util';
+import { ApiError, screenFailure, toDisplayableFailure } from '../../../core/http/api-error';
 import { DateFieldComponent } from '../../../shared/date-field/date-field.component';
 import {
   SelectFieldComponent,
   type SelectValue,
 } from '../../../shared/select-field/select-field.component';
 import { createSubmitGuard } from '../../../shared/submit-guard.util';
-import type {
-  ChargeTemplate,
-  LoanAccount,
-  LoanCharge,
-  LoanChargeActionCommand,
-  LoanChargeActionRequest,
-  LoanChargeOption,
-  LoanChargeRequest,
-  LoanTransactionTemplate,
-  OptionItem,
-} from '../loan.models';
-import { LoanService } from '../loan.service';
+import type { ChargeTemplate, LoanChargeOption } from '../loan.models';
+import {
+  LoanService,
+  type LoanChargeActionInput,
+  type LoanChargeInput,
+} from '../loan.service';
 
 /**
  * Charge time type whose charge falls due on a date the user picks, as the legacy add-charge screen
@@ -48,73 +39,15 @@ import { LoanService } from '../loan.service';
 const SPECIFIED_DUE_DATE_CHARGE_TIME_TYPE_ID = 2;
 
 /**
- * Which of the two routes — and which operation within them — this instance serves, resolved once
- * from the route parameters before any request is made.
+ * Which of the two routes — and which operation within them — the current route parameters name,
+ * resolved from every emission of the route's parameter map before that emission's request is made.
  *
- * `'notfound'` is a resolved outcome rather than an error: a `:action` the application does not
- * serve, a route without the `:id` it needs, or a charge the loan does not carry. A screen in that
- * mode issues no request at all and offers no form.
+ * `'notfound'` is a resolved outcome rather than an error: an `:action` the application does not
+ * serve, or a route without the `:id` it needs. A screen in that mode issues no request at all and
+ * offers no form. A charge the loan does not carry is not this screen's verdict to make: the POST
+ * answers 404 with the server's own message, which `applyFailure` renders in the inline error region.
  */
 type LoanChargeFormMode = 'add' | 'pay' | 'waive' | 'notfound';
-
-/**
- * The add-charge body this screen assembles, less the two members `LoanService` writes itself.
- *
- * `LoanChargeRequest` declares `dateFormat` and `locale` required because they belong to the payload
- * that leaves the process, and `LoanService`'s serialiser fills both from configuration at the
- * boundary. A feature component that set them would hold the one date-format pattern the contract
- * fixes a second time (Rule 1 clause 2; AAP 0.14.1), so the body is assembled without them and
- * reconciled with the model in `buildAddRequest`.
- */
-type AddChargeBody = Omit<LoanChargeRequest, 'dateFormat' | 'locale'>;
-
-/**
- * The `?command=pay` body this screen assembles, less `dateFormat` and `locale`, for the reason
- * {@link AddChargeBody} states. Its `command` member stays: it discriminates the request union and
- * `LoanService` drops it before the request leaves, because Fineract takes the command from the
- * query string.
- */
-type PayChargeBody = Omit<
-  Extract<LoanChargeActionRequest, { command: 'pay' }>,
-  'dateFormat' | 'locale'
->;
-
-/**
- * The `?command=waive` body: the amount and the discriminating command, and deliberately neither
- * `transactionDate` nor `paymentTypeId`, which the server rejects beside `command=waive`
- * (AAP 0.7.2; `LoanService.chargeAction` drops them again for any caller that supplies them).
- */
-type WaiveChargeBody = Omit<
-  Extract<LoanChargeActionRequest, { command: 'waive' }>,
-  'dateFormat' | 'locale'
->;
-
-/**
- * The one displayable failure a rejected service call produces.
- *
- * A request that fails reaches a screen in one of two shapes: `ApiError`, which the single HTTP
- * interceptor maps from Fineract's envelope, or the raw `HttpErrorResponse` when a test drives the
- * service without that interceptor. Both are normalised here so every HTTP path ends in a rendered
- * message rather than a swallowed rejection (AAP 0.14.2), and the Fineract text itself is passed
- * through untouched (Rule 1 clause 3).
- *
- * @param thrown Whatever a rejected observable delivered.
- * @returns The failure to render.
- */
-function asApiError(thrown: unknown): ApiError {
-  if (thrown instanceof ApiError) {
-    return thrown;
-  }
-
-  if (thrown instanceof HttpErrorResponse) {
-    return toApiError(thrown);
-  }
-
-  // Neither shape: a programming failure rather than a server answer. Its own message is reported
-  // instead of being discarded, and status 0 marks it as the transport-level failure `ApiError`
-  // documents for "no response received".
-  return new ApiError(thrown instanceof Error ? thrown.message : '', 0);
-}
 
 /**
  * The loan charge screen of the individual-loan family: it adds a charge to a loan, and it pays or
@@ -128,20 +61,36 @@ function asApiError(thrown: unknown): ApiError {
  *
  * **What it drives.** `GET /loans/{id}/charges/template` fills the add form's charge picker,
  * `POST /loans/{id}/charges` attaches the picked charge, and
- * `POST /loans/{id}/charges/{chargeId}?command=pay` / `?command=waive` act on an attached one
- * (AAP 0.7.3 row "Loan charges"). Two further reads are already in the endpoint table and are made
- * only where the mode needs them: `GET /loans/{id}` (`associations=all`, W6's record read) supplies
- * the charge an action acts on, and `GET /loans/{id}/transactions/template?command=repayment`
- * supplies the payment types the pay form offers (AAP 0.7.3 row "W6 repayment"). No other request is
- * issued, and every URL is composed by `LoanService`: this file imports no `HttpClient` and holds no
- * Fineract path (Rule 1 clause 5; AAP 0.14.1).
+ * `POST /loans/{id}/charges/{loanChargeId}?command=pay` / `?command=waive` act on a charge the loan
+ * already carries (AAP 0.7.3 row "Loan charges"). Add issues that one read; pay and waive issue none
+ * at all, because both post only what their own field collects and the bodies the endpoint accepts
+ * carry nothing this screen would have to read the loan for. Every URL is composed by `LoanService`:
+ * this file imports no `HttpClient` and holds no Fineract path (Rule 1 clause 5; AAP 0.14.1).
+ *
+ * **The path segment is the loan-charge id.** `:chargeId` on
+ * `#/loanaccountcharge/:id/:action/:chargeId` is the `id` of the charge row the loan carries — the
+ * `resourceId` the add call answers — and it is posted as the endpoint's `{loanChargeId}` segment
+ * unchanged. It is not the charge definition id the picker offers: a definition id there answers 404
+ * "Loan charge with identifier … does not exist for loan …" (see `LoanService.chargeAction`).
+ *
+ * **One route emission, one screen.** `:id`, `:chargeId` and `:action` are read from
+ * `route.paramMap`, never from the snapshot: the router reuses this component when the URL moves from
+ * one charge route to another — a loan record's charge links carry the loan's own id, and its pay and
+ * waive links carry one charge of it — so a single read would leave the first loan's charge screen, its
+ * picker and its message in place and would issue no request at all. Every emission therefore resolves
+ * the mode again, clears the picker, the form values and the failure, and re-reads what the new route
+ * needs, exactly as `loan-edit` handles the same reuse; an answer that arrives after the URL moved on is
+ * discarded rather than painted, and leaving the screen cancels the read it left outstanding.
  *
  * **The bodies.** Add posts `{chargeId, amount}` and `dueDate` only when the picked charge falls due
- * on a specified date; `?command=pay` posts `{amount, transactionDate, paymentTypeId}`;
- * `?command=waive` posts `{amount}` alone. Bodies are built in exactly one place each —
+ * on a specified date; `?command=pay` posts `{transactionDate}`; `?command=waive` posts nothing
+ * beyond the format pair the service adds. Neither action posts an amount or a payment type, because
+ * the endpoint pays or waives the charge's whole outstanding portion and refuses both members on the
+ * parameter binding, so neither is collected here. Bodies are built in exactly one place each —
  * {@link buildAddRequest} and {@link buildActionRequest} — and hold numbers as numbers, dates as
  * `Date | null`, and no formatted date at all (AAP 0.7.2; AAP 0.14.1 "dates never travel as strings
- * built in a template").
+ * built in a template"). Each returns the service's own input type, so a member the payload cannot
+ * carry is a compile error rather than an assertion.
  *
  * **Findings recorded here, because nothing outside this folder may change.**
  * - The specified-due-date test is the legacy screen's own `chargeTimeType.id == 2`, reproduced as
@@ -149,31 +98,20 @@ function asApiError(thrown: unknown): ApiError {
  *   charge with `chargeTimeType: {id: 2, code: 'chargeTimeType.specifiedDueDate', value: …}`, but
  *   `LoanChargeOption.chargeTimeType` models the id and the display text and not the code, so the id
  *   is the field this screen can read; carrying the code into the model is outside this folder.
- * - `GET /loans/{id}?associations=all` answers `charges: null` for a loan that carries none, which
- *   the look-up below reads as "no charges" rather than as a malformed record.
- * - `dateFormat` and `locale` are declared required on both request models while the serialiser
- *   writes them from configuration, so each builder assembles the body without them and reconciles
- *   it with the model in one documented assertion (see {@link AddChargeBody}).
- * - The pay form's payment types are the repayment transaction template's own list, rendered in its
- *   order, and its first entry is preselected as the legacy repayment form preselects it. When that
- *   payload carries no list the picker stays empty: a hard-coded payment type id would be a value
- *   this application invented.
- * - Legacy's pay and waive screens seeded themselves from `GET /loans/{id}/charges/{chargeId}` (with
- *   `command=pay`). That read is not in `endpoint-allowlist.json` — AAP 0.7.3 names only the four
- *   charge endpoints — so the acting charge comes from the W6 record read instead, and its
- *   `amountOutstanding` is the payment's and the waiver's default, exactly as the server reports it.
- * - Legacy's pay and waive POSTs carried no amount; AAP 0.7.2 names one on both, so both send the
- *   outstanding portion the form shows. That difference belongs in the parity report's
- *   `intentional-diff` list (AAP 0.10.5) rather than in a silent deviation.
+ * - Legacy's pay screen seeded its payment date from `GET /loans/{id}/charges/{chargeId}`, the charge's
+ *   own terms. That read is not in `endpoint-allowlist.json` — AAP 0.7.3 names the four charge
+ *   endpoints, and the allowlist is not this screen's to grow — so this screen issues no read at all and
+ *   the payment date defaults from the browser clock, which AAP 0.10.5 item 15 registers as legacy's own
+ *   behaviour for a form's default date.
  *
- * **Behaviour inherited rather than improved** (Rule 1 clause 3). The pickers arrive from the
- * template endpoints in the server's order and are neither sorted nor relabelled; the amount seeds
- * from the picked charge's own amount and stays editable; the only validators are the `required`
- * ones the legacy form carries — no bound, no pattern, no minimum — so Fineract's own message is
- * what the user sees; the charge-dependent fields stay hidden until a charge is picked, as the
- * legacy `isCollapsed` toggle hides them; submission is gated on the form's own validity, as the
- * legacy `rc-submit` gate is; one click sends exactly one POST through `createSubmitGuard`; and no
- * confirmation step, extra field or extra request is added.
+ * **Behaviour inherited rather than improved** (Rule 1 clause 3). The charge picker arrives from the
+ * template endpoint in the server's order and is neither sorted nor relabelled; the amount seeds from
+ * the picked charge's own amount and stays editable; the only validators are the `required` ones the
+ * legacy form carries — no bound, no pattern, no minimum — so Fineract's own message is what the user
+ * sees; the charge-dependent fields stay hidden until a charge is picked, as the legacy `isCollapsed`
+ * toggle hides them; submission is gated on the form's own validity, as the legacy `rc-submit` gate
+ * is; one click sends exactly one POST through `createSubmitGuard`; and no confirmation step, extra
+ * field or extra request is added.
  *
  * **Presentation** comes entirely from the global Bootstrap 3 layer: this component declares no
  * stylesheet, no inline style and no colour (Rule 1 clause 6), and its two controls are the
@@ -193,7 +131,7 @@ function asApiError(thrown: unknown): ApiError {
   templateUrl: './loan-charge-form.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class LoanChargeFormComponent implements OnInit {
+export class LoanChargeFormComponent {
   private readonly loan = inject(LoanService);
 
   private readonly route = inject(ActivatedRoute);
@@ -207,24 +145,43 @@ export class LoanChargeFormComponent implements OnInit {
    * coerced: it is passed to the service and back to the router unchanged (AAP 0.14.1).
    *
    * Empty when the route carries no `:id`, which no route of this application does; the mode then
-   * resolves to `'notfound'` and nothing is requested.
+   * resolves to `'notfound'` and nothing is requested. A signal, not a snapshot value: the router
+   * reuses this component across charge routes, so the id has to follow every emission of
+   * `route.paramMap` and every reader of it — the read, the post and the Cancel link.
    */
-  readonly loanId: string = this.route.snapshot.paramMap.get('id') ?? '';
+  readonly loanId = signal('');
 
   /**
-   * The route's `:chargeId`, present on the pay and waive route and absent on the add route. It is
-   * the key the acting charge is looked up by; the id posted to Fineract is the charge's own numeric
-   * id from the loan record, never this string.
+   * The route's `:chargeId`, present on the pay and waive route and absent on the add route.
+   *
+   * It is the loan-charge id — the `id` of the charge row the loan carries, which is the
+   * `resourceId` the add call answers — and it is posted as the endpoint's own path segment
+   * unchanged. It is not the charge definition id the add form's picker offers: a definition id
+   * there would name a charge the loan does not carry (see the class doc).
+   *
+   * A signal for the same reason as {@link loanId}: it is one of the segments that decides which
+   * screen a reused instance is showing.
    */
-  readonly chargeId: string | null = this.route.snapshot.paramMap.get('chargeId');
+  readonly chargeId = signal<string | null>(null);
 
-  /** Which operation this instance serves; set once in the constructor. */
+  /** Which operation the route's current parameters name; re-resolved on every emission. */
   readonly mode = signal<LoanChargeFormMode>('add');
 
   /**
-   * Whether this screen has nothing to show: an unknown `:action`, a route without `:id`, a charge
-   * the loan does not carry, or a 404 from the record read. The template renders the not-found
-   * message in place of the form while the rest of the shell stays usable (AAP 0.7.4 state rules).
+   * Which read is the current one, incremented by every run of {@link load}.
+   *
+   * The router reuses this component across charge routes, so moving in place starts a second read
+   * while the first is still in flight and the earlier one can answer last. A superseded run compares
+   * its own number with this one after the await and writes nothing — not the picker, not the failure,
+   * not `loading`, which belongs to the run that replaced it — the guard `loan-edit` keeps over its own
+   * load sequence.
+   */
+  private loadSequence = 0;
+
+  /**
+   * Whether this screen has nothing to show: an unknown `:action`, or a route without the `:id` it
+   * needs. The template renders the not-found message in place of the form while the rest of the
+   * shell stays usable (AAP 0.7.4 state rules).
    */
   readonly notFound = signal(false);
 
@@ -245,16 +202,9 @@ export class LoanChargeFormComponent implements OnInit {
   readonly chargeOptions = signal<readonly LoanChargeOption[]>([]);
 
   /**
-   * Payment types the pay form offers, from the repayment transaction template's `paymentTypeOptions`
-   * in its own order. Empty on the add and waive routes, which offer none.
+   * The charge the user picked in the add form's picker, or `null` while none is picked.
    */
-  readonly paymentTypes = signal<readonly OptionItem[]>([]);
-
-  /** The charge the user picked in the add form's picker, or `null` while none is picked. */
   readonly selectedCharge = signal<LoanChargeOption | null>(null);
-
-  /** The charge a pay or waive action acts on, as the loan record reported it. */
-  readonly charge = signal<LoanCharge | null>(null);
 
   /** {@link mode} narrowed for the template's three sections. */
   readonly isAddMode = computed(() => this.mode() === 'add');
@@ -275,17 +225,18 @@ export class LoanChargeFormComponent implements OnInit {
   );
 
   /**
-   * Whether the charge-dependent fields may render: in add mode once a charge is picked, the legacy
-   * `isCollapsed` toggle, and on the action routes once the loan's charge has been read.
+   * Whether the fields below the picker may render: in add mode once a charge is picked — the legacy
+   * `isCollapsed` toggle — and in the pay and waive modes always, because their single field is the
+   * command's own rather than a charge's.
    */
   readonly formVisible = computed(() =>
-    this.mode() === 'add' ? this.selectedCharge() !== null : this.charge() !== null,
+    this.mode() === 'add' ? this.selectedCharge() !== null : true,
   );
 
   /** Charge picked in the add form; `SelectValue` because a select reports the id it was given. */
   readonly chargeIdControl = new FormControl<SelectValue | null>(null);
 
-  /** Amount charged, paid or waived — required in every mode, and bounded by nothing. */
+  /** Amount the charge is added for — required in add mode, and bounded by nothing. */
   readonly amountControl = new FormControl<number | null>(null);
 
   /** Due date of a specified-due-date charge; held as a `Date` and formatted only by the service. */
@@ -294,51 +245,79 @@ export class LoanChargeFormComponent implements OnInit {
   /** Date a charge payment is recorded on; used by the pay mode alone. */
   readonly transactionDateControl = new FormControl<Date | null>(null);
 
-  /** Payment type id chosen from {@link paymentTypes}; used by the pay mode alone. */
-  readonly paymentTypeIdControl = new FormControl<SelectValue | null>(null);
-
   /**
-   * The five controls as one form, so the legacy `rc-submit` gate — post only what the form accepts —
-   * is a single `invalid` test rather than five, and so the template may bind either this group or
-   * the individual controls.
+   * The four controls as one form, so the legacy `rc-submit` gate — post only what the form accepts —
+   * is a single `invalid` test rather than four, and so the template may bind either this group or
+   * the individual controls. A control a mode does not use carries no validator and posts nothing.
    */
   readonly form = new FormGroup({
     chargeId: this.chargeIdControl,
     amount: this.amountControl,
     dueDate: this.dueDateControl,
     transactionDate: this.transactionDateControl,
-    paymentTypeId: this.paymentTypeIdControl,
   });
 
   /** One click, one POST: the trigger binds `busy()` and `runOnce` refuses re-entry. */
   readonly guard = createSubmitGuard();
 
+  /**
+   * Wires the picker to the amount control and subscribes to the route's parameters, which is the
+   * screen's whole entry point.
+   *
+   * One subscription, never a `snapshot` read beside it: Angular reuses this component when the URL
+   * moves from one charge route to another, and a single read would leave the first loan's mode,
+   * picker, values and message on screen for the route the URL now names. Each emission therefore
+   * resolves the mode again, resets the screen and re-runs the one read that mode needs, the way
+   * `loan-edit` handles the same reuse.
+   */
   constructor() {
-    const mode = this.resolveMode();
-    this.mode.set(mode);
-    this.applyValidators(mode);
-
-    if (mode === 'notfound') {
-      this.notFound.set(true);
-    }
-
-    // The amount follows the picked charge, whatever picked it: the picker writes the control and
-    // this subscription seeds the amount from that option's own value (Rule 1 clause 3).
+    // The amount follows the picked charge: the picker writes the control and this subscription seeds
+    // the amount from that option's own value (Rule 1 clause 3).
     this.chargeIdControl.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((value) => {
         this.applySelectedCharge(value);
       });
+
+    this.route.paramMap
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((params: ParamMap) => {
+        this.loanId.set(params.get('id') ?? '');
+        this.chargeId.set(params.get('chargeId'));
+
+        const mode = this.resolveMode(params);
+
+        this.mode.set(mode);
+        this.reset(mode);
+        void this.load();
+      });
   }
 
-  /** Starts the mode's own reads; a `'notfound'` screen issues none (AAP 0.7.4 state rules). */
-  ngOnInit(): void {
-    if (this.notFound()) {
-      this.loading.set(false);
-      return;
-    }
+  /**
+   * Clears everything the previous route put on the screen, so an emission that names another loan or
+   * another operation never shows the earlier picker, the earlier entered values or the earlier
+   * message.
+   *
+   * The form is reset rather than rebuilt, because the template binds these control instances; a reset
+   * also returns every control to untouched, which keeps the new screen's error markers off the form.
+   * The validators then belong to the new mode, and pay mode's date returns to the browser clock —
+   * legacy's own default for a form's date (AAP 0.10.5 item 15), because the charge read legacy's pay
+   * screen made first is not an endpoint this application may call.
+   *
+   * @param mode the operation the emission resolved to.
+   */
+  private reset(mode: LoanChargeFormMode): void {
+    this.notFound.set(mode === 'notfound');
+    this.loading.set(true);
+    this.error.set(null);
+    this.chargeOptions.set([]);
+    this.selectedCharge.set(null);
+    this.form.reset();
+    this.applyValidators(mode);
 
-    void this.load();
+    if (mode === 'pay') {
+      this.transactionDateControl.setValue(new Date());
+    }
   }
 
   /**
@@ -360,14 +339,18 @@ export class LoanChargeFormComponent implements OnInit {
       return;
     }
 
+    // The loan is read once, when the click is accepted: a route emission that lands mid-flight must
+    // not retarget the POST or the record the screen returns to.
+    const loanId = this.loanId();
+
     await this.guard.runOnce(async () => {
       this.error.set(null);
 
       try {
-        await this.post();
-        await this.router.navigate(['/viewloanaccount', this.loanId]);
+        await this.post(loanId);
+        await this.router.navigate(['/viewloanaccount', loanId]);
       } catch (thrown) {
-        this.error.set(asApiError(thrown));
+        this.error.set(screenFailure(thrown));
       }
     });
   }
@@ -383,58 +366,45 @@ export class LoanChargeFormComponent implements OnInit {
    * @returns The add-charge body, ready for `LoanService.addCharge`.
    * @throws Error when called with no charge picked; `submit()` posts only a form it has validated.
    */
-  buildAddRequest(): LoanChargeRequest {
+  buildAddRequest(): LoanChargeInput {
     const charge = this.selectedCharge();
 
     if (charge === null) {
       throw new Error('No charge is selected, so the add-charge form has no body to post.');
     }
 
-    const body: AddChargeBody = { chargeId: charge.id, amount: this.requireAmount() };
+    const body: LoanChargeInput = { chargeId: charge.id, amount: this.requireAmount() };
     const dueDate = this.dueDateControl.value;
 
     if (this.dueDateRequired() && dueDate !== null) {
       body.dueDate = dueDate;
     }
 
-    // `LoanChargeRequest` types the payload's final shape, `dateFormat` and `locale` included, and
-    // `LoanService` writes both from configuration as the request is serialised. This is the one
-    // place the body assembled above meets that model, so no date pattern reaches this file.
-    return body as LoanChargeRequest;
+    return body;
   }
 
   /**
-   * The body `POST /loans/{id}/charges/{chargeId}?command=` posts, shaped by the resolved mode
+   * The body `POST /loans/{id}/charges/{loanChargeId}?command=` posts, shaped by the resolved mode
    * (AAP 0.7.2 row `LoanChargeActionRequest`).
    *
-   * `pay` books a money movement, so it carries the amount, the date it is recorded on and a payment
-   * type. `waive` books none, so it carries the amount alone: no `transactionDate` and no
-   * `paymentTypeId` are set on it, not even as `null`, because the server rejects both beside
-   * `command=waive`.
+   * `pay` books a money movement and carries the date it is recorded on. `waive` books none and
+   * carries the discriminating command alone. Neither carries an amount or a payment type: the
+   * endpoint pays or waives the charge's whole outstanding portion and refuses both members on the
+   * parameter binding, so a value collected here would be a field the server rejects.
    *
    * @returns The action body, ready for `LoanService.chargeAction`.
-   * @throws Error when no amount is entered, or — in pay mode — when no payment type is chosen.
+   * @throws Error when the resolved mode posts no charge action at all.
    */
-  buildActionRequest(): LoanChargeActionRequest {
-    const amount = this.requireAmount();
-
-    if (this.mode() === 'waive') {
-      const waived: WaiveChargeBody = { command: 'waive', amount };
-
-      // `LoanChargeActionRequest` types the payload's final shape; the two members it declares and
-      // this screen omits are written by `LoanService` as the request is serialised.
-      return waived as LoanChargeActionRequest;
+  buildActionRequest(): LoanChargeActionInput {
+    if (this.mode() === 'pay') {
+      return { command: 'pay', transactionDate: this.transactionDateControl.value };
     }
 
-    const paid: PayChargeBody = {
-      command: 'pay',
-      amount,
-      transactionDate: this.transactionDateControl.value,
-      paymentTypeId: this.requirePaymentTypeId(),
-    };
+    if (this.mode() === 'waive') {
+      return { command: 'waive' };
+    }
 
-    // As above: the serialiser supplies `dateFormat` and `locale`, so the body carries neither.
-    return paid as LoanChargeActionRequest;
+    throw new Error(`The '${this.mode()}' screen posts no charge action, so it has no body to post.`);
   }
 
   /**
@@ -443,16 +413,18 @@ export class LoanChargeFormComponent implements OnInit {
    * `:chargeId` absent is the add route; present, `:action` must be `pay` or `waive`. Everything else
    * — an unknown action, a charge-scoped route without an `:action`, a route without `:id` — is
    * `'notfound'`, so no request is made for a screen this application does not serve (AAP 0.9.2).
+   *
+   * @param params the emission's parameter map, which is also what {@link loanId} and
+   *   {@link chargeId} were just set from.
    */
-  private resolveMode(): LoanChargeFormMode {
-    const params = this.route.snapshot.paramMap;
+  private resolveMode(params: ParamMap): LoanChargeFormMode {
     const action = params.get('action');
 
-    if (this.loanId === '') {
+    if (this.loanId() === '') {
       return 'notfound';
     }
 
-    if (this.chargeId === null) {
+    if (this.chargeId() === null) {
       return action === null ? 'add' : 'notfound';
     }
 
@@ -461,20 +433,18 @@ export class LoanChargeFormComponent implements OnInit {
 
   /**
    * Applies the `required` validators the legacy form carries and no others (Rule 1 clause 3): the
-   * picker in add mode, the amount in every mode, the payment date and payment type in pay mode. The
-   * due date's validator is set per picked charge by {@link applyDueDateRule}.
+   * picker and the amount in add mode, and the payment date in pay mode. The due date's validator is
+   * set per picked charge by {@link applyDueDateRule}.
    */
   private applyValidators(mode: LoanChargeFormMode): void {
     this.chargeIdControl.setValidators(mode === 'add' ? [Validators.required] : []);
-    this.amountControl.setValidators([Validators.required]);
+    this.amountControl.setValidators(mode === 'add' ? [Validators.required] : []);
     this.transactionDateControl.setValidators(mode === 'pay' ? [Validators.required] : []);
-    this.paymentTypeIdControl.setValidators(mode === 'pay' ? [Validators.required] : []);
     this.dueDateControl.setValidators([]);
 
     this.chargeIdControl.updateValueAndValidity({ emitEvent: false });
     this.amountControl.updateValueAndValidity({ emitEvent: false });
     this.transactionDateControl.updateValueAndValidity({ emitEvent: false });
-    this.paymentTypeIdControl.updateValueAndValidity({ emitEvent: false });
     this.dueDateControl.updateValueAndValidity({ emitEvent: false });
   }
 
@@ -525,116 +495,103 @@ export class LoanChargeFormComponent implements OnInit {
   }
 
   /**
-   * Performs the reads the resolved mode needs and nothing more, then releases the loading state.
+   * Performs the read the resolved mode needs and nothing more, then releases the loading state.
    *
-   * A failure is turned into {@link error}, except a 404 on the record read, which is the
-   * not-found state AAP 0.7.4 requires to be rendered in place of the record.
+   * Add mode reads the charge template its picker renders. The pay and waive modes read nothing at
+   * all: the bodies the charge endpoint accepts carry only what their own field collects, and the one
+   * read legacy's pay and waive screens made is not an endpoint this application may call. A failure
+   * becomes {@link error}, which the template renders above the form, and a 404 becomes the not-found
+   * state AAP 0.7.4 requires to be rendered in place of the record. A `'notfound'` screen issues no
+   * request at all (AAP 0.7.4 state rules).
+   *
+   * Every run takes the next {@link loadSequence} number, and the read is tied to this component's
+   * lifetime, so a run the route has since superseded — or that the screen outlived — writes nothing at
+   * all, and `loading` is only cleared by the run that is still current.
    */
   private async load(): Promise<void> {
-    const mode = this.mode();
+    const load = ++this.loadSequence;
 
     try {
-      if (mode === 'add') {
-        await this.loadChargeOptions();
-      } else if (mode === 'pay' || mode === 'waive') {
-        await this.loadActingCharge(mode);
+      if (this.mode() === 'add') {
+        const options = await this.loadChargeOptions();
+
+        if (this.isCurrent(load)) {
+          this.chargeOptions.set(options);
+        }
       }
     } catch (thrown) {
-      this.applyFailure(thrown);
+      if (this.isCurrent(load)) {
+        this.applyFailure(thrown);
+      }
     } finally {
-      this.loading.set(false);
+      if (this.isCurrent(load)) {
+        this.loading.set(false);
+      }
     }
   }
 
   /**
    * `GET /loans/{id}/charges/template` — the add form's charge picker, published in the server's
    * order with no sorting, filtering or renaming (AAP 0.7.3 row "Loan charges"; Rule 1 clause 3).
-   */
-  private async loadChargeOptions(): Promise<void> {
-    const template: ChargeTemplate = await firstValueFrom(this.loan.chargeTemplateFor(this.loanId));
-
-    this.chargeOptions.set(template.chargeOptions);
-  }
-
-  /**
-   * Loads the charge a pay or waive action acts on, from the loan record the W6 row already reads
-   * (`GET /loans/{id}`, `associations=all`), and seeds the form from it.
    *
-   * The amount defaults to the charge's `amountOutstanding` exactly as the server reports it — never
-   * recomputed, rounded or defaulted to the charge's full amount or to the principal. Pay mode then
-   * reads `GET /loans/{id}/transactions/template?command=repayment` for its payment types and
-   * preselects the first, as the legacy repayment form does; waive mode issues no such read and
-   * renders neither a payment date nor a payment type, because the server rejects both.
-   *
-   * A charge the loan does not carry is not a record this screen may act on: it resolves to the
-   * not-found state, and no further request is made (AAP 0.7.4).
+   * @returns the payload's `chargeOptions`, for the caller to publish once it knows the run is still
+   *   the current one.
    */
-  private async loadActingCharge(mode: LoanChargeActionCommand): Promise<void> {
-    const routeChargeId = this.requireRouteChargeId();
-    const loan: LoanAccount = await firstValueFrom(this.loan.get(this.loanId));
-    const charge = (loan.charges ?? []).find(
-      (candidate) => String(candidate.id) === routeChargeId,
+  private async loadChargeOptions(): Promise<readonly LoanChargeOption[]> {
+    const template: ChargeTemplate = await firstValueFrom(
+      this.loan.chargeTemplateFor(this.loanId()).pipe(takeUntilDestroyed(this.destroyRef)),
     );
 
-    if (charge === undefined) {
-      this.mode.set('notfound');
-      this.notFound.set(true);
-      return;
-    }
-
-    this.charge.set(charge);
-    this.amountControl.setValue(charge.amountOutstanding);
-
-    if (mode === 'waive') {
-      return;
-    }
-
-    this.seedPaymentDate(charge);
-
-    const template: LoanTransactionTemplate = await firstValueFrom(
-      this.loan.actionTemplate(this.loanId, 'repayment'),
-    );
-    const paymentTypes = template.paymentTypeOptions ?? [];
-
-    this.paymentTypes.set(paymentTypes);
-    this.paymentTypeIdControl.setValue(paymentTypes[0]?.id ?? null);
+    return template.chargeOptions;
   }
 
   /**
-   * Seeds the payment date from the charge's own due date, which is what the legacy pay form does
-   * (`LoanAccountActionsController`, `paycharge`), and from the browser clock when the charge carries
-   * no date this parser accepts (AAP 0.10.5 item 15). The value stays editable.
+   * Whether a run still speaks for the screen: it is the newest run, and the screen it belongs to has
+   * not been destroyed, so a read the route or the teardown cancelled can neither paint nor clear the
+   * loading state of whatever replaced it.
+   *
+   * @param load the run's sequence number.
    */
-  private seedPaymentDate(charge: LoanCharge): void {
-    this.transactionDateControl.setValue(fromFineractDate(charge.dueDate) ?? new Date());
+  private isCurrent(load: number): boolean {
+    return !this.destroyRef.destroyed && load === this.loadSequence;
   }
 
   /**
-   * Records a failed read. A 404 means the loan itself is not there, which the template renders as
-   * the not-found message in place of the form with the shell still usable; every other failure is
-   * the server's own message, rendered verbatim above the form (AAP 0.7.4; Rule 1 clause 3).
+   * Records a failed read. A 404 means the resource itself is not there — the loan, or the charge the
+   * route names — which the template renders as the not-found message in place of the form with the
+   * shell still usable; any other 4xx is the server's own message, rendered verbatim above the form
+   * (AAP 0.7.4; Rule 1 clause 3). A 5xx or a transport failure answers `null` from `screenFailure`,
+   * because the single interceptor has already raised that failure's one notification.
    */
   private applyFailure(thrown: unknown): void {
-    const failure = asApiError(thrown);
+    const failure = toDisplayableFailure(thrown);
 
     if (failure.status === 404) {
       this.notFound.set(true);
       return;
     }
 
-    this.error.set(failure);
+    this.error.set(screenFailure(failure));
   }
 
   /**
    * Posts the one request the resolved mode makes: the charge on the add route, the command on the
    * pay and waive ones. A `'notfound'` screen posts nothing, and the command travels in the query
    * string rather than the body because that is how Fineract takes it (AAP 0.7.3).
+   *
+   * The charge an action acts on is the route's own `:chargeId`, which is the loan-charge id — the
+   * `id` of the charge row the loan carries, never the definition id the add form's picker offers —
+   * so the request names exactly the charge the record linked to. A charge the loan does not carry
+   * answers 404 with the server's own message, which {@link submit} records for the inline error
+   * region.
+   *
+   * @param loanId the loan the submission addresses, captured when the click was accepted.
    */
-  private async post(): Promise<void> {
+  private async post(loanId: string): Promise<void> {
     const mode = this.mode();
 
     if (mode === 'add') {
-      await firstValueFrom(this.loan.addCharge(this.loanId, this.buildAddRequest()));
+      await firstValueFrom(this.loan.addCharge(loanId, this.buildAddRequest()));
       return;
     }
 
@@ -643,64 +600,40 @@ export class LoanChargeFormComponent implements OnInit {
     }
 
     await firstValueFrom(
-      this.loan.chargeAction(
-        this.loanId,
-        this.requireActingCharge().id,
-        mode,
-        this.buildActionRequest(),
-      ),
+      this.loan.chargeAction(loanId, this.requireRouteChargeId(), mode, this.buildActionRequest()),
     );
   }
 
-  /** The amount the form holds, which both bodies carry as a number. */
+  /**
+   * The amount the add form holds, as the number its body carries.
+   *
+   * The control is typed `FormControl<number | null>`, but an accessor writes whatever its input
+   * element reports, so the value is checked here and refused unless it is a finite number: the
+   * charge body carries a JSON number, exactly as legacy's amount did, and a value that arrived as
+   * text must never reach the server as a string (Rule 1 clauses 2 and 4).
+   *
+   * @returns The amount to post.
+   * @throws Error when the control holds no amount, or one that is not a finite number.
+   */
   private requireAmount(): number {
-    const amount = this.amountControl.value;
+    const amount: unknown = this.amountControl.value;
 
-    if (amount === null) {
-      throw new Error('No amount is entered, so the charge form has no body to post.');
+    if (typeof amount !== 'number' || !Number.isFinite(amount)) {
+      throw new Error('No usable amount is entered, so the add-charge form has no body to post.');
     }
 
     return amount;
   }
 
-  /**
-   * The chosen payment type's id, read from the template's own option list so the body carries the
-   * number the server sent rather than a stringified copy of the select's value.
-   */
-  private requirePaymentTypeId(): number {
-    const value = this.paymentTypeIdControl.value;
-    const option =
-      value === null
-        ? undefined
-        : this.paymentTypes().find((candidate) => String(candidate.id) === String(value));
-
-    if (option === undefined) {
-      throw new Error('No payment type is chosen, so the charge payment has no body to post.');
-    }
-
-    return option.id;
-  }
-
   /** The route's `:chargeId`, which `resolveMode()` guarantees is present on the pay and waive routes. */
   private requireRouteChargeId(): string {
-    const chargeId = this.chargeId;
+    const chargeId = this.chargeId();
 
     if (chargeId === null) {
       throw new Error('This route declares no :chargeId, so no charge can be acted on.');
     }
 
     return chargeId;
-  }
-
-  /** The loaded charge an action posts against, which the pay and waive modes load before their form. */
-  private requireActingCharge(): LoanCharge {
-    const charge = this.charge();
-
-    if (charge === null) {
-      throw new Error('No charge has been loaded, so the charge action has nothing to post against.');
-    }
-
-    return charge;
   }
 }
 

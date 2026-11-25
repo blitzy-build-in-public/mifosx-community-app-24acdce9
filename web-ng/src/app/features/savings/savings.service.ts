@@ -1,9 +1,10 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { map, type Observable } from 'rxjs';
+import { defer, map, type Observable } from 'rxjs';
 
 import type { AppDateFormat } from '../../core/config/app-config.model';
 import { AppConfigService } from '../../core/config/app-config.service';
+import { resourceId } from '../../core/http/path-segment.util';
 import { toFineractDate } from '../../shared/date-format.util';
 import type {
   SavingsAccount,
@@ -41,6 +42,12 @@ import type {
  * renders verbatim, and it is the only place the auth and tenant headers exist (AAP 0.4.2, AAP 0.7.4;
  * Rule 1 clauses 2 and 9). A `catchError` in this file would hide the server message the workflow
  * depends on.
+ *
+ * **Every identifier is checked before its URL is composed.** `resourceId` from
+ * `core/http/path-segment.util.ts` accepts one or more ASCII digits and refuses anything else, so a
+ * crafted `:id` from the record route cannot move a request to another path on the same host; the
+ * check runs inside `defer`, so the refusal reaches the caller as an observable error with no request
+ * issued, while a valid id still composes the byte-identical URL legacy sent (Rule 1 clause 2).
  *
  * **Two command spellings stay apart on purpose.** The account endpoint takes
  * `command=approve|activate` and the transactions endpoint takes `command=deposit|withdrawal`, while
@@ -199,7 +206,12 @@ export class SavingsService {
   get(id: number | string): Observable<SavingsAccount> {
     const params = new HttpParams().set('associations', 'all');
 
-    return this.http.get<SavingsAccount>(this.config.apiUrl('savingsaccounts/' + id), { params });
+    return defer(() =>
+      this.http.get<SavingsAccount>(
+        this.config.apiUrl(`savingsaccounts/${resourceId(id, 'SavingsService.get')}`),
+        { params },
+      ),
+    );
   }
 
   /**
@@ -217,12 +229,18 @@ export class SavingsService {
    * @throws Error when `command` and the body's date member disagree.
    */
   action(id: number | string, command: SavingsCommand, body: SavingsActionInput): Observable<void> {
+    // The pair check stays a synchronous throw: a caller that passes mismatched arguments has a bug
+    // this service cannot resolve, and `defer` wraps the request composition only.
     const request = this.actionBody(command, body);
     const params = new HttpParams().set('command', command);
 
-    return this.http
-      .post<unknown>(this.config.apiUrl('savingsaccounts/' + id), request, { params })
-      .pipe(map((): void => undefined));
+    return defer(() =>
+      this.http
+        .post<unknown>(this.config.apiUrl(`savingsaccounts/${resourceId(id, 'SavingsService.action')}`), request, {
+          params,
+        })
+        .pipe(map((): void => undefined)),
+    );
   }
 
   /**
@@ -231,8 +249,12 @@ export class SavingsService {
    * screen renders one form and posts it with the command the route selected.
    */
   transactionTemplate(id: number | string): Observable<SavingsTransactionTemplate> {
-    return this.http.get<SavingsTransactionTemplate>(
-      this.config.apiUrl('savingsaccounts/' + id + '/transactions/template'),
+    return defer(() =>
+      this.http.get<SavingsTransactionTemplate>(
+        this.config.apiUrl(
+          `savingsaccounts/${resourceId(id, 'SavingsService.transactionTemplate')}/transactions/template`,
+        ),
+      ),
     );
   }
 
@@ -264,9 +286,15 @@ export class SavingsService {
     };
     const params = new HttpParams().set('command', command);
 
-    return this.http
-      .post<unknown>(this.config.apiUrl('savingsaccounts/' + id + '/transactions'), request, { params })
-      .pipe(map((): void => undefined));
+    return defer(() =>
+      this.http
+        .post<unknown>(
+          this.config.apiUrl(`savingsaccounts/${resourceId(id, 'SavingsService.transaction')}/transactions`),
+          request,
+          { params },
+        )
+        .pipe(map((): void => undefined)),
+    );
   }
 
   /**

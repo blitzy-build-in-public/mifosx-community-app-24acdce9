@@ -316,15 +316,18 @@ describe('RepaymentPreviewComponent', () => {
     );
     const [cells] = renderedCells(hostOf(fixture));
 
-    // Two decimals and grouping, from the payload's own numbers.
-    expect(cells[3]).toBe('1,234.50');
-    expect(cells[4]).toBe('65.50');
-    expect(cells[5]).toBe('25.00');
-    expect(cells[6]).toBe('5,000.00');
+    // Grouping and the payload's own fraction digits, with no forced decimals: the default `number`
+    // pipe the record page's schedule table and legacy's own `number` filter use, so 5000 reads
+    // 5,000 here exactly as it does there (Rule 1 clause 3, AAP 0.10.2 "displayed data ... and their
+    // formatting").
+    expect(cells[3]).toBe('1,234.5');
+    expect(cells[4]).toBe('65.5');
+    expect(cells[5]).toBe('25');
+    expect(cells[6]).toBe('5,000');
 
-    // The total is the server's figure, not the sum of its parts: 1,234.50 + 65.50 + 25 is 1,325.00,
-    // and the outstanding cell holds its own payload value rather than a running balance.
-    expect(cells[6]).not.toBe('1,325.00');
+    // The total is the server's figure, not the sum of its parts: 1,234.5 + 65.5 + 25 is 1,325, and
+    // the outstanding cell holds its own payload value rather than a running balance.
+    expect(cells[6]).not.toBe('1,325');
     expect(cells[7]).toBe('8,765.43');
   });
 

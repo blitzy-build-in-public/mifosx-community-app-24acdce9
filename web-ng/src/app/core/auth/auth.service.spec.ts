@@ -107,10 +107,45 @@ function authResponse(overrides: Partial<AuthResponse> = {}): AuthResponse {
   };
 }
 
-/** `GET /users/{id}` as the restore reads it: the id and the account name, with no permission list. */
+/** The `GET /users/{id}` as the restore reads it: the id and the account name, with no permission list. */
 function projection(): SessionUserResponse {
   return { id: USER_ID, username: USERNAME };
 }
+
+/**
+ * The message a login is refused with when its `POST /authentication` response cannot describe a
+ * session, stated here from this spec's own reading of the contract — the login screen renders it, so
+ * it is a value a user sees (AAP 0.14.1) — and carrying no member value the response sent.
+ */
+const MALFORMED_RESPONSE_MESSAGE =
+  'The authentication response did not carry a user id, an authentication key and a permission list, ' +
+  'so no session was created.';
+
+/**
+ * `POST /authentication` answers that cannot describe a session, each with the member it omits or
+ * mistypes. The response is a network boundary, so a member copied out of it unchecked would either
+ * persist a partial entry or reach the interceptor as `Authorization: Basic undefined` (cr3-F07;
+ * AAP 0.7.2 row `AuthResponse`).
+ */
+const MALFORMED_AUTHENTICATION_RESPONSES: Array<[string, Record<string, unknown>]> = [
+  [
+    'a response that omits the permission list',
+    { userId: USER_ID, username: USERNAME, base64EncodedAuthenticationKey: KEY_PARTS.join('') },
+  ],
+  [
+    'a response that omits the authentication key',
+    { userId: USER_ID, username: USERNAME, permissions: [...GRANTED] },
+  ],
+  [
+    'a response whose userId is a string',
+    {
+      userId: String(USER_ID),
+      username: USERNAME,
+      base64EncodedAuthenticationKey: KEY_PARTS.join(''),
+      permissions: [...GRANTED],
+    },
+  ],
+];
 
 /** The session entry the fixture login must record, exactly the three legacy fields. */
 function expectedSession(overrides: Partial<SessionData> = {}): SessionData {
@@ -215,7 +250,6 @@ describe('AuthService', () => {
     expect(service.session()).toBeNull();
     expect(service.isAuthenticated()).toBe(false);
     expect(service.permissions()).toEqual([]);
-    expect(service.permissionsSignal()).toEqual([]);
     expect(service.username()).toBeNull();
     expect(permissions.can('READ_CLIENT')).toBe(false);
   });
@@ -301,7 +335,6 @@ describe('AuthService', () => {
     expect(service.session()).toEqual(expectedSession());
     expect(service.isAuthenticated()).toBe(true);
     expect(service.permissions()).toEqual(GRANTED);
-    expect(service.permissionsSignal()).toEqual(GRANTED);
     // The label comes from `GET /users/{id}`, not from the submitted account name.
     expect(service.username()).toBe(USERNAME);
     expect(sessions.user()).toEqual({ id: USER_ID, username: USERNAME });
@@ -352,6 +385,31 @@ describe('AuthService', () => {
     httpMock.expectNone(byMethodAndUrl('GET', usersUrl(USER_ID)));
   });
 
+  it.each(MALFORMED_AUTHENTICATION_RESPONSES)(
+    'stores no session for %s and rejects with the described ApiError',
+    async (_label: string, body: Record<string, unknown>) => {
+      const login = service.login(USERNAME, submittedPassword());
+
+      httpMock.expectOne(byMethodAndUrl('POST', AUTHENTICATION_URL)).flush(body);
+
+      const failure = await rejectionOf(login);
+
+      assertApiError(failure);
+      expect(failure.message).toBe(MALFORMED_RESPONSE_MESSAGE);
+      // The exchange succeeded, so the failure is the response body's: status 200 and no field failure.
+      expect(failure.status).toBe(200);
+      expect(failure.validationErrors).toEqual([]);
+
+      // Nothing reached storage, no session is in effect and the restore read is never issued, which is
+      // what keeps a partial entry and `Authorization: Basic undefined` out of the application.
+      expect(window.localStorage.length).toBe(0);
+      expect(service.session()).toBeNull();
+      expect(service.isAuthenticated()).toBe(false);
+      expect(service.permissions()).toEqual([]);
+      httpMock.expectNone(byMethodAndUrl('GET', usersUrl(USER_ID)));
+    },
+  );
+
   it('receives the password-renewal and two-factor flags without acting on them', async () => {
     await loginThrough(httpMock, service, {
       password: submittedPassword(),
@@ -380,7 +438,6 @@ describe('AuthService', () => {
     expect(service.session()).toBeNull();
     expect(service.isAuthenticated()).toBe(false);
     expect(service.permissions()).toEqual([]);
-    expect(service.permissionsSignal()).toEqual([]);
     expect(service.username()).toBeNull();
     expect(permissions.can('READ_CLIENT')).toBe(false);
     // Logout is local: no sign-out endpoint is called, as in legacy.

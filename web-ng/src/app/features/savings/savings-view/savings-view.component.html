@@ -1,0 +1,183 @@
+<!--
+  The record page of a savings account (`#/viewsavingaccount/:id`), the last screen of workflow W8:
+  open an account, approve it, activate it, deposit 1,000, withdraw 200, and read the record back
+  (AAP 0.9.1 scope group 4, AAP 0.10.1 W8 row, AAP 0.7.1 Features row `savings`). This is the whole
+  of what `SavingsViewComponent` renders — the action links, the summary and the transaction list
+  with its empty state — so the component has a template to compile and the record a markup to paint.
+
+  One request, issued by the component and owned by the family's service. This file renders what
+  `SavingsService.get(id)` has already returned: the account read that requests every association
+  carries the status, the three balance figures and the transaction list together (AAP 0.7.3 W8 row),
+  so no further read is needed here. It issues no request of its own and holds no URL, host, port,
+  API path, HTTP method, query parameter or body — those belong to `savings.service.ts` alone (Rule 1
+  clause 2, AAP 0.14.1). Every navigation is a `routerLink` path and never a URL string — a router
+  path array carrying the account id for the parameterised action routes, the in-scope `/clients`
+  path for the not-found card's way back — because routing mirrors the legacy URLs with hash
+  location (Rule 1 clause 5, AAP 0.4.4).
+
+  Exactly one branch renders, and there is deliberately no `@else`. While the read is outstanding the
+  component's `loading` is true and `notFound()`, `clientError()` and `account()` are all empty, so
+  nothing but the page grid is painted: no half-built record, and no empty state or not-found card
+  flashing before the first response has been read. A 404 — or a route carrying no id, for which no
+  request is issued at all — renders the not-found card **in place of the record** and leaves the
+  shell usable; any other 4xx renders Fineract's own message verbatim in an alert, which is the state
+  AAP 0.7.4 requires of every record screen.
+
+  The status indicator is a colour and never a word (AAP 0.10.5 deliberate difference 11, Rule 1
+  clause 3): `app-status-swatch` with no text, `title`, `aria-label` or hidden copy beside it. The
+  `dot` variant is the record-page geometry — the circle painted beside a record's identity on Figma
+  node `1:4` — where the default `swatch` is the clients list's 12.5px square on node `1:3`; a record
+  page that took the default would paint the list's geometry (AAP 0.2.3 row `StatusSwatch`).
+
+  Every action link is gated by `[hasPermission]="actionPermission"`, so an operator without the
+  savings permission sees no action at all (AAP 0.7.1 row `hasPermission`, AAP 0.9.1 item 1). They
+  are links only: which lifecycle step is legal is the server's decision, so no link is enabled,
+  disabled or reordered by the account's status, and none posts anything itself (Rule 1 clause 3).
+
+  Two wording decisions, both taken from the bundles rather than invented. The withdrawals caption is
+  `label.totalwithdarawals` — legacy's own key, spelled that way in `app/global-translations/`, where
+  it reads "Total withdrawals" — because the correctly spelled `label.heading.totalwithdrawals` is
+  defined by no bundle and would render as a missing-key humanisation. The empty transaction list
+  reuses `label.nodata` ("No Data"), the key the client record's accounts section and the loan
+  record's transactions section already render. Every other caption is the legacy
+  `label.heading.*` / `label.button.*` / `label.anchor.*` key for the same words.
+
+  Data is rendered as the server sent it. The three figures are `summary` values and are never
+  recomputed from the transactions; the transaction rows keep the server's order and their own type
+  text, which is Fineract's label and is therefore never translated; and a row the server sends
+  without a running balance leaves its balance cell empty rather than showing a zero or a dash it
+  never reported (Rule 1 clause 3). Amounts go through `number` with the component's own
+  `amountFormat` and no currency symbol: the record shape this screen renders is the plan's
+  `SavingsAccount` (AAP 0.7.2), which declares no currency member, so a symbol taken from the
+  response's own `currency` block would print a field the model does not carry and that no in-scope
+  requirement asks for (AAP 0.7.2 date and number discipline).
+
+  The look is entirely global. `.container-fluid`/`.row`/`.col-md-12` is the page grid, `.panel`,
+  `.panel-heading`, `.panel-title` and `.panel-body` are the record's cards, `.table` and
+  `.table-striped` the summary and transaction tables, `.btn-group` with `.btn.btn-primary` the
+  joined action group, `.alert.alert-danger` the verbatim failure, and `.text-center`/`.text-muted`
+  the not-found block — all of them the Bootstrap 3 layer `web-ng/src/styles.scss` compiles (Rule 1
+  clause 6). This file therefore carries no style block, no style attribute, no colour literal, no
+  pixel value and no image or icon.
+-->
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-md-12">
+      @if (notFound()) {
+        <div class="panel panel-default savings-not-found">
+          <div class="panel-body">
+            <div class="text-center">
+              <h3 class="panel-title">{{ 'label.heading.notavailable' | translate }}</h3>
+              <p class="text-muted">{{ 'error.msg.resource.not.found' | translate }}</p>
+              <a class="btn btn-default" routerLink="/clients">{{
+                'label.button.clients' | translate
+              }}</a>
+            </div>
+          </div>
+        </div>
+      } @else if (clientError(); as e) {
+        <div class="alert alert-danger" role="alert">{{ e.message }}</div>
+      } @else if (account(); as a) {
+        <div class="btn-group" role="group">
+          <a
+            class="btn btn-primary"
+            [hasPermission]="actionPermission"
+            [routerLink]="['/savingaccount', accountId(), 'approve']"
+          >{{ 'label.button.approve' | translate }}</a>
+          <a
+            class="btn btn-primary"
+            [hasPermission]="actionPermission"
+            [routerLink]="['/savingaccount', accountId(), 'activate']"
+          >{{ 'label.button.activate' | translate }}</a>
+          <a
+            class="btn btn-primary"
+            [hasPermission]="actionPermission"
+            [routerLink]="['/savingaccount', accountId(), 'deposit']"
+          >{{ 'label.button.deposit' | translate }}</a>
+          <a
+            class="btn btn-primary"
+            [hasPermission]="actionPermission"
+            [routerLink]="['/savingaccount', accountId(), 'withdraw']"
+          >{{ 'label.anchor.withdraw' | translate }}</a>
+        </div>
+
+        <div class="panel panel-default savings-summary">
+          <div class="panel-heading">
+            <h3 class="panel-title">
+              {{ a.accountNo }} <span class="text-muted">{{ a.savingsProductName }}</span>
+            </h3>
+          </div>
+          <div class="panel-body">
+            <table class="table">
+              <tbody>
+                <tr>
+                  <th scope="row">{{ 'label.heading.accnum' | translate }}</th>
+                  <td>{{ a.accountNo }}</td>
+                </tr>
+                <tr>
+                  <th scope="row">{{ 'label.heading.product' | translate }}</th>
+                  <td>{{ a.savingsProductName }}</td>
+                </tr>
+                <tr>
+                  <th scope="row">{{ 'label.heading.status' | translate }}</th>
+                  <td><app-status-swatch [status]="statusKey()" variant="dot" /></td>
+                </tr>
+                <tr>
+                  <th scope="row">{{ 'label.heading.currentBalance' | translate }}</th>
+                  <td>{{ a.summary.accountBalance | number: amountFormat }}</td>
+                </tr>
+                <tr>
+                  <th scope="row">{{ 'label.heading.totaldeposits' | translate }}</th>
+                  <td>{{ a.summary.totalDeposits | number: amountFormat }}</td>
+                </tr>
+                <tr>
+                  <th scope="row">{{ 'label.totalwithdarawals' | translate }}</th>
+                  <td>{{ a.summary.totalWithdrawals | number: amountFormat }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel panel-default savings-transactions">
+          <div class="panel-heading">
+            <h3 class="panel-title">{{ 'label.heading.transactions' | translate }}</h3>
+          </div>
+          <div class="panel-body">
+            @if (transactionRows().length > 0) {
+              <table class="table table-striped" id="savings-transactions">
+                <thead>
+                  <tr>
+                    <th scope="col">{{ 'label.heading.date' | translate }}</th>
+                    <th scope="col">{{ 'label.heading.type' | translate }}</th>
+                    <th scope="col">{{ 'label.heading.amount' | translate }}</th>
+                    <th scope="col">{{ 'label.heading.balance' | translate }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (row of transactionRows(); track row.id) {
+                    <tr>
+                      <td>{{ row.date | date: dateFormat }}</td>
+                      <td>{{ row.type }}</td>
+                      <td>{{ row.amount | number: amountFormat }}</td>
+                      <td>
+                        @if (row.balance !== null) {
+                          {{ row.balance | number: amountFormat }}
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            } @else {
+              <app-empty-state
+                id="savings-transactions-empty"
+                [message]="'label.nodata' | translate"
+              />
+            }
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+</div>

@@ -880,6 +880,119 @@ export const SEED_SAVINGS_PRODUCT = {
   nominalAnnualInterestRate: 2,
 } as const satisfies SavingsProductSeed;
 
+/**
+ * One narration value a client lifecycle action needs: an entry of the `narrations` list
+ * `GET /clients/template?commandParam=<close|reject|withdraw>` answers with, and the reason id the
+ * matching `POST /clients/{id}?command=<close|reject|withdraw>` requires.
+ *
+ * The AAP 0.10.1 table fixes no reason, and a freshly migrated database carries no value under any of
+ * its codes, so the seed creates one per narration code itself: without it the three templates answer
+ * `narrations: []`, the commands refuse the body for a missing reason id, and close, reject, withdraw
+ * and the reactivate that follows a close cannot be produced on the plan's own fixture (AAP 0.9.1
+ * row 2, the five lifecycle actions).
+ */
+export interface ClientActionReasonSeed {
+  /**
+   * Narration code the value belongs to, as `GET /codes` names it, e.g. `ClientClosureReason`. The seed
+   * keys its write by this name rather than by the code's numeric id, which is created by the tenant's
+   * migration and is therefore not a value this repository may fix.
+   */
+  readonly codeName: string;
+  /**
+   * Name of the value the seed creates under that code. This module fixes it because the action
+   * template's `narrations` list is what the screens offer and the specs select, so it is the one string
+   * the reason is recognised by.
+   */
+  readonly valueName: string;
+}
+
+/**
+ * The narration values the client lifecycle actions need, one per action that takes a reason.
+ * `reactivate` is not among them: it is offered only on a closed client and carries no reason.
+ */
+export interface ClientActionReasonsSeed {
+  /** Reason the close action offers and submits. */
+  readonly closure: ClientActionReasonSeed;
+  /** Reason the reject action offers and submits. */
+  readonly rejection: ClientActionReasonSeed;
+  /** Reason the withdraw action offers and submits. */
+  readonly withdrawal: ClientActionReasonSeed;
+}
+
+/**
+ * The three client-action narration values the seed creates, consumed by `seed/seed.ts` and by the
+ * client-action specs, which select a reason by {@link ClientActionReasonSeed.valueName}.
+ */
+export const SEED_CLIENT_ACTION_REASONS = {
+  closure: { codeName: 'ClientClosureReason', valueName: 'Parity Closure Reason' },
+  rejection: { codeName: 'ClientRejectReason', valueName: 'Parity Rejection Reason' },
+  withdrawal: { codeName: 'ClientWithdrawReason', valueName: 'Parity Withdrawal Reason' },
+} as const satisfies ClientActionReasonsSeed;
+
+/** The one column of {@link ClientActionGateSeed}'s datatable, as `POST /datatables` declares it. */
+export interface ClientActionGateColumnSeed {
+  /** Column name, as the gate's `columnHeaders` and the datatable row report it. */
+  readonly name: string;
+  /** Fineract column type. `String` is the free-text type the action's note is stored in. */
+  readonly type: 'String';
+  /** Maximum length the column accepts, in characters. */
+  readonly length: number;
+  /**
+   * Whether Fineract refuses a row without a value. `false`, so the row a legacy front end posts before
+   * an action can never be rejected on this column.
+   */
+  readonly mandatory: boolean;
+}
+
+/**
+ * The client datatable and its entity-datatable check: the fixture the datatable gate is exercised
+ * with, and the reason the gate's two calls have rows to read at all.
+ *
+ * The gate is `GET /entityDatatableChecks?limit=-1`, then `GET /datatables/{table}/{clientId}` with
+ * `genericResultSet=true`, for a check that names the client entity and the client's status (AAP 0.7.3,
+ * "Client actions: datatable gate"). With no check registered both calls answer nothing and the gate is
+ * an unverifiable pass-through, so the seed registers one table and one check for it.
+ */
+export interface ClientActionGateSeed {
+  /** Datatable name, which is the table's identity: the create call answers it a name, not an id. */
+  readonly datatableName: string;
+  /** Entity the table hangs off — `m_client`, the entity the AAP 0.7.3 gate row names. */
+  readonly apptableName: string;
+  /**
+   * Fineract's entity sub-type selector. `none` for a table every client row shares, and mandatory on
+   * this fork's create body: the body without it is refused.
+   */
+  readonly entitySubType: 'none';
+  /** One row per client rather than one row per client and sub-type. */
+  readonly multiRow: boolean;
+  /** The table's single column. */
+  readonly column: ClientActionGateColumnSeed;
+  /**
+   * Status the check is registered for: `600`, the CLOSE status. Not `300` (ACTIVATE): a legacy client
+   * action submits a datatable row before the action when the check's status matches and the client has
+   * no row (`submitDatatable`), which would add a request legacy's W2 makes and the new app's does not.
+   * CLOSE keeps W2 identical on both front ends and puts the check and its table on the in-scope close
+   * screen, where the gate's two-call read is observable.
+   */
+  readonly checkStatus: number;
+  /** The status {@link ClientActionGateSeed.checkStatus} encodes, in the fork's own vocabulary. */
+  readonly checkStatusMeaning: 'close';
+}
+
+/**
+ * The client-action datatable and its check, consumed by `seed/seed.ts`, which registers both, and by
+ * the client-view specs, which read the gate's answer through the API.
+ */
+export const SEED_CLIENT_ACTION_GATE = {
+  datatableName: 'client_action_check',
+  apptableName: 'm_client',
+  entitySubType: 'none',
+  multiRow: false,
+  column: { name: 'notes', type: 'String', length: 100, mandatory: false },
+  checkStatus: 600,
+  checkStatusMeaning: 'close',
+} as const satisfies ClientActionGateSeed;
+
 /** The client W2 creates and W3 reads back. */
 export interface ScenarioClient {
   /** Given name typed into the create form. */

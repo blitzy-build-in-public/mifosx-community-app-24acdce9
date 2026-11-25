@@ -10,7 +10,7 @@ import {
   type TestRequest,
 } from '@angular/common/http/testing';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
-import { ActivatedRoute, Router } from '@angular/router';
+import { provideRouter } from '@angular/router';
 import { provideTranslateService, TranslateService } from '@ngx-translate/core';
 import { catchError, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -38,7 +38,8 @@ import { ClientListComponent } from './client-list.component';
  *  2. the paged envelope's `pageItems` become the rows, in the server's order, with no sort, filter
  *     or reformatting (Rule 1 clause 3);
  *  3. the two display filters — "Show Closed" and the filter field — narrow the rows already in hand
- *     and cost no request at all, and the filter compares `displayName` case-insensitively;
+ *     and cost no request at all, and the filter compares the row's name (a page row's `displayName`)
+ *     case-insensitively;
  *  4. a 4xx renders Fineract's own message on `errorMessage` and empties the rows, which is the state
  *     the template shows in place of the table (AAP 0.7.4 states; workflow W7);
  *  5. a 5xx leaves `errorMessage` empty and only flags the failure, because the interceptor has
@@ -56,8 +57,8 @@ import { ClientListComponent } from './client-list.component';
  * because every client URL is composed from it. The ngx-translate stack is registered for the
  * template's pipe. `PermissionsService` is a stub typed against the real class, because the
  * component imports the permission directive its toolbar gates "Create Client" with; no session is
- * ever assembled for a spec. `Router` and `ActivatedRoute` are empty stand-ins for the link the
- * component imports, and the router is never asked to navigate by this screen.
+ * ever assembled for a spec. `provideRouter([])` supplies the router the row and "Create Client"
+ * links need in order to render; the empty route table is enough because no case navigates.
  *
  * The error mapping is the one production piece the TestBed supplies itself: `core/http` owns the
  * mapping of a Fineract failure to `ApiError`, and installing it as an interceptor means the
@@ -201,8 +202,10 @@ describe('ClientListComponent', () => {
         provideHttpClientTesting(),
         provideTranslateService(),
         { provide: PermissionsService, useValue: new PermissionsStub() },
-        { provide: Router, useValue: {} },
-        { provide: ActivatedRoute, useValue: {} },
+        // The screen links rows and the "Create Client" control through `RouterLink`, so the router
+        // has to exist for the template to render at all; an empty route table is enough because no
+        // case navigates (the same provider the search-results spec uses).
+        provideRouter([]),
       ],
     });
 
@@ -252,8 +255,8 @@ describe('ClientListComponent', () => {
     expect(component.loading()).toBe(false);
     expect(component.failed()).toBe(false);
     expect(component.errorMessage()).toBeNull();
-    expect(component.rows().map((client) => client.id)).toEqual([2, 3, 4]);
-    expect(component.rows().map((client) => client.displayName)).toEqual([ADA, MARCUS, JOSE]);
+    expect(component.rows().map((row) => row.clientId)).toEqual([2, 3, 4]);
+    expect(component.rows().map((row) => row.name)).toEqual([ADA, MARCUS, JOSE]);
   });
 
   it('narrows the loaded rows client-side: closed rows hidden unless shown, and the filter is case-insensitive', () => {
@@ -263,22 +266,23 @@ describe('ClientListComponent', () => {
 
     // The terminal client is hidden by default: the design's swatch vocabulary treats closed,
     // rejected and withdrawn as one "closed" state, and the checkbox is what reveals them.
-    expect(component.visibleRows().map((row) => row.client.displayName)).toEqual([ADA, JOSE]);
+    expect(component.visibleRows().map((row) => row.name)).toEqual([ADA, JOSE]);
     expect(component.visibleRows().map((row) => row.statusKey)).toEqual(['active', 'pending']);
 
     component.toolbar.controls.showClosed.setValue(true);
 
-    expect(component.visibleRows().map((row) => row.client.displayName)).toEqual([ADA, MARCUS, JOSE]);
+    expect(component.visibleRows().map((row) => row.name)).toEqual([ADA, MARCUS, JOSE]);
     expect(component.visibleRows().map((row) => row.statusKey)).toContain('closed');
 
-    // The filter compares `displayName` case-insensitively, so a lower-case needle matches.
+    // The filter compares the row's name — the client's `displayName` on a page row — so a lower-case
+    // needle matches.
     component.toolbar.controls.filter.setValue('ada');
 
-    expect(component.visibleRows().map((row) => row.client.displayName)).toEqual([ADA]);
+    expect(component.visibleRows().map((row) => row.name)).toEqual([ADA]);
 
     component.toolbar.controls.filter.setValue('ROWE');
 
-    expect(component.visibleRows().map((row) => row.client.displayName)).toEqual([MARCUS]);
+    expect(component.visibleRows().map((row) => row.name)).toEqual([MARCUS]);
 
     component.toolbar.controls.filter.setValue('nobody');
 
@@ -292,12 +296,17 @@ describe('ClientListComponent', () => {
   it('shows Fineract’s own message for a 4xx and empties the rows', () => {
     mount();
 
-    // The page the previous read left on screen, arranged directly rather than fetched: a re-read
-    // keeps the rows it has until the response settles, and the failure below has to clear them.
-    component.rows.set(FIRST_PAGE.pageItems);
+    // A page lands first: a re-read keeps the rows it already holds until its own response settles,
+    // and the failure below is what has to clear them.
+    initialRead.flush(FIRST_PAGE);
     expect(component.rows()).toHaveLength(3);
 
-    initialRead.flush(
+    // The second read — the find submitted with an empty field re-reads the page — is the one that
+    // fails, so the state asserted below is that read's outcome.
+    component.onFind();
+    const failing = httpMock.match(isClientListRead);
+    expect(failing).toHaveLength(1);
+    failing[0].flush(
       { defaultUserMessage: REFUSED_MESSAGE },
       { status: 400, statusText: 'Bad Request' },
     );
@@ -316,9 +325,13 @@ describe('ClientListComponent', () => {
   it('leaves the message empty for a 5xx, because the interceptor has already notified it', () => {
     mount();
 
-    component.rows.set(FIRST_PAGE.pageItems);
+    initialRead.flush(FIRST_PAGE);
+    expect(component.rows()).toHaveLength(3);
 
-    initialRead.flush({}, { status: 503, statusText: 'Service Unavailable' });
+    component.onFind();
+    const failing = httpMock.match(isClientListRead);
+    expect(failing).toHaveLength(1);
+    failing[0].flush({}, { status: 503, statusText: 'Service Unavailable' });
 
     expect(component.failed()).toBe(true);
     // Reporting a 5xx here as well would show the same problem twice (AAP 0.7.4).

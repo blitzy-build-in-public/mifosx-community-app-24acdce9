@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   FormBuilder,
   FormControl,
@@ -6,7 +7,7 @@ import {
   ReactiveFormsModule,
   Validators,
 } from '@angular/forms';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
 
@@ -21,7 +22,7 @@ import {
 } from '../../../shared/select-field/select-field.component';
 import { createSubmitGuard } from '../../../shared/submit-guard.util';
 import { isLoanAccount } from '../loan.models';
-import type { LoanAccount, LoanEditRequest } from '../loan.models';
+import type { LoanAccount, LoanCharge, LoanEditRequest } from '../loan.models';
 import { LoanService } from '../loan.service';
 
 /**
@@ -354,13 +355,99 @@ function requireStrategyCode(value: SelectValue | null): string {
 }
 
 /**
+ * One `charges` row of the edit body, taken from the model's own row type.
+ *
+ * Derived rather than re-declared, so the row this screen builds and the row `LoanEditRequest`
+ * declares cannot drift apart: a member added to the model widens this alias with it, and this file
+ * cannot post a row the endpoint's contract does not describe (AAP 0.7.2 row
+ * `LoanApplicationRequest`; Rule 1 clause 4).
+ */
+type LoanChargeRow = NonNullable<LoanEditRequest['charges']>[number];
+
+/**
+ * The text shown when an action rejects with something the interceptor did not map to an `ApiError`.
+ *
+ * Every Fineract answer reaches a screen as `ApiError`, whose `message` is the server's own
+ * `defaultUserMessage` rendered verbatim (AAP 0.4.2, AAP 0.4.4 decision 6). A rejection of another
+ * shape is a fault in this application rather than an answer from Fineract, so it has no server text
+ * to show; this fixed sentence keeps the form from displaying nothing at all, and it is deliberately
+ * not translated, because no locale bundle carries wording for a fault the server never reported.
+ */
+const UNMAPPED_FAILURE = 'The request could not be completed.';
+
+/**
+ * Reads whatever a call rejected with into the one error type a screen renders.
+ *
+ * An `ApiError` is passed through untouched, so the message, the status and the field-level failures
+ * are exactly what `toApiError` produced from the Fineract body and nothing re-shapes them
+ * (Rule 1 clause 3: the message is surfaced verbatim). Any other rejection — the plain `Error`
+ * {@link requireNumber} and {@link chargeRow} throw for a record the body cannot be built from, a
+ * transport fault that bypassed the interceptor — becomes an `ApiError` carrying its own `message`
+ * when it has one, and status `0`, which is the class's own marker for "no HTTP answer"
+ * (`core/http/api-error.ts`). Every failure path therefore ends in a rendered message, which is what
+ * AAP 0.14.2 requires; nothing is rethrown at a caller that would render nothing. It never logs,
+ * never inspects the request and never reads a header or a body, so no session material can reach a
+ * screen through it (Rule 1 clause 9).
+ *
+ * @param cause The value a `firstValueFrom(...)` awaited here rejected with, or the fault this file
+ *   threw while assembling the body.
+ * @returns The error the screen renders.
+ */
+function toDisplayableFailure(cause: unknown): ApiError {
+  if (cause instanceof ApiError) {
+    return cause;
+  }
+
+  const message = cause instanceof Error && cause.message !== '' ? cause.message : UNMAPPED_FAILURE;
+
+  return new ApiError(message, 0);
+}
+
+/**
+ * One `charges` row of the body, for a charge the loan carries.
+ *
+ * `id` and `chargeId` are both required by `PUT /loans/{id}`, and for different reasons: `id` is the
+ * loan charge the row keeps, so a row without it is deleted and re-created instead of preserved, and
+ * `chargeId` names the charge definition that is applied. A charge the charge read answers without
+ * either one therefore cannot be re-posted at all; it reports itself as a fault this screen renders
+ * rather than being dropped, because a dropped charge is exactly the deletion this body exists to
+ * prevent (AAP 0.3.4: the running fork's accepted member set is the contract).
+ *
+ * The amount is the charge's own `amountOrPercentage`, the member legacy's edit posts back, and the
+ * due date stays a `Date` here: `LoanService.update` formats it at the boundary, so no payload date is
+ * built in a template or a component (AAP 0.14.1, "Dates never travel as strings built in a
+ * template"; Rule 1 clause 2). A charge with no due date posts no `dueDate` member at all, exactly as
+ * legacy sent it.
+ *
+ * @param charge One row of `GET /loans/{id}/charges`.
+ * @returns The row the body carries, with its date still a `Date`.
+ */
+function chargeRow(charge: LoanCharge): LoanChargeRow {
+  const { id, chargeId, amountOrPercentage } = charge;
+
+  if (typeof id !== 'number' || typeof chargeId !== 'number') {
+    throw new Error('The loaded loan carries a charge this form cannot re-post.');
+  }
+
+  const dueDate = fromFineractDate(charge.dueDate);
+
+  return {
+    id,
+    chargeId,
+    amount: amountOrPercentage,
+    ...(dueDate === null ? {} : { dueDate }),
+  };
+}
+
+/**
  * Edit form of an individual loan application: the persisted application, re-read from Fineract and
  * posted back to the endpoint that saves it.
  *
- * **The two calls, and nothing else.**
+ * **Three calls, and nothing else.** Two reads and one write:
  * `GET /loans/{id}?template=true&associations=charges,collateral,meeting,multiDisburseDetails` seeds
- * the screen through `LoanService.getWithTemplate`, and `PUT /loans/{id}` saves it through
- * `LoanService.update`. Both live in `loan.service.ts`, which owns every loans URL, so this file
+ * the screen through `LoanService.getWithTemplate`, `GET /loans/{id}/charges` supplies the charge set
+ * the save must re-post through `LoanService.charges`, and `PUT /loans/{id}` saves it through
+ * `LoanService.update`. All three live in `loan.service.ts`, which owns every loans URL, so this file
  * holds no host, path, query parameter, `dateFormat` or `locale` literal (Rule 1 clauses 2 and 5;
  * Rule 2). It never imports `HttpClient`, notifies nothing and retries nothing.
  *
@@ -384,9 +471,26 @@ function requireStrategyCode(value: SelectValue | null): string {
  *
  * **Open item the run settles.** The body posts the application field set the plan fixes. If the
  * fork's `GET /loans/{id}?template=true` payload (or a `PUT` refusal) shows that a member is
- * submit-only, the answer is to hide that member rather than to invent a rule for it. Charges are not
- * part of this form, so the body carries none: the parity run records how the fork treats an absent
- * `charges` array on an edit.
+ * submit-only, the answer is to hide that member rather than to invent a rule for it.
+ *
+ * **The loan's own charges are re-posted, not edited.** `PUT /loans/{id}` treats `charges` as the
+ * loan's complete charge set: an absent array answers `{"changes":{"charges":[]}}` and deletes every
+ * charge, and a row without its loan-charge `id` is deleted and re-created. This fork's edit seed
+ * carries no `charges` member at all, so the screen reads them from the endpoint that has them,
+ * `GET /loans/{id}/charges` through {@link LoanService.charges}, and {@link buildRequest} posts one
+ * row per charge — `{id, chargeId, amount: amountOrPercentage, dueDate}`, the four members legacy's
+ * `EditLoanAccAppController.submit` posts — and the empty array for a loan that carries none.
+ * A failed charge read aborts the load and is rendered like any other failure, because a form whose
+ * charge set is unknown would save a deletion nobody asked for. This adds no charge editor: the rows
+ * are the loan's own charges carried through the save unchanged, which is what keeps an edit from
+ * being a deletion (Rule 1 clause 2; AAP 0.3.4: the running fork's contract decides).
+ *
+ * **One id, one load per navigation.** `:id` is read from `route.paramMap`, never from the snapshot:
+ * the router reuses this component when the URL moves from one `#/editloanaccount/{id}` to another, so
+ * every emission clears the previous loan's form, options and message and re-reads the loan the URL now
+ * names, exactly as `client-actions` handles the same reuse. Because two reads can then be in flight,
+ * a response that arrives after the URL moved on is discarded rather than applied, so one loan's values
+ * can never appear under another loan's URL (see {@link loadSequence}).
  *
  * **Template fields outside the model.** The endpoint answers the loan form's own members — the
  * persisted term, frequency, amortisation, interest and strategy values plus the option lists that
@@ -397,9 +501,10 @@ function requireStrategyCode(value: SelectValue | null): string {
  * never invents an enumeration.
  *
  * **States.** A `404`, or a body the `isLoanAccount` guard rejects, replaces the form with the
- * not-found block while the shell stays usable; any other `ApiError` is rendered verbatim above the
- * form with every entered value kept. A `5xx` or a transport failure is already reported once by the
- * interceptor, so this file shows the message and never notifies again.
+ * not-found block while the shell stays usable; any other failure — an `ApiError`, or a fault this
+ * file raises while assembling the body — is rendered above the form with every entered value kept,
+ * so no failure path ends in a silent no-op (AAP 0.14.2). A `5xx` or a transport failure is already
+ * reported once by the interceptor, so this file shows the message and never notifies again.
  */
 @Component({
   selector: 'app-loan-edit',
@@ -407,7 +512,7 @@ function requireStrategyCode(value: SelectValue | null): string {
   imports: [ReactiveFormsModule, RouterLink, TranslatePipe, DateFieldComponent, SelectFieldComponent],
   templateUrl: './loan-edit.component.html',
 })
-export class LoanEditComponent implements OnInit {
+export class LoanEditComponent {
   private readonly loans = inject(LoanService);
 
   private readonly route = inject(ActivatedRoute);
@@ -417,6 +522,21 @@ export class LoanEditComponent implements OnInit {
   private readonly config = inject(APP_CONFIG);
 
   private readonly formBuilder = inject(FormBuilder);
+
+  /** Completes the route subscription should the screen be destroyed before it emits. */
+  private readonly destroyRef = inject(DestroyRef);
+
+  /**
+   * Which load is the current one, incremented by every run of {@link load}.
+   *
+   * The router reuses this component when the URL moves from one `#/editloanaccount/{id}` to another,
+   * so an in-place move starts a second read while the first is still in flight and the earlier one
+   * can answer last. A superseded run compares its own number with this one after the await and
+   * returns instead of writing, so a late response can neither seed the earlier loan's values under
+   * the later loan's URL nor clear the loading state of the run that replaced it — the guard
+   * `client-actions` keeps over its own load sequence.
+   */
+  private loadSequence = 0;
 
   /** `true` until the read settles, which is what the template shows while the card fills. */
   readonly loading = signal(true);
@@ -429,6 +549,17 @@ export class LoanEditComponent implements OnInit {
 
   /** The loaded loan, the source of the identifiers the body echoes and of the seeded values. */
   readonly account = signal<LoanAccount | null>(null);
+
+  /**
+   * The charges the loan carries, as `GET /loans/{id}/charges` reported them — the rows the save
+   * re-posts, and the reason this screen reads that endpoint at all: the edit seed carries no
+   * `charges` member on this fork, and `PUT /loans/{id}` treats an absent or empty array as "delete
+   * every charge" (AAP 0.7.3 rows "Loan edit" and "Loan charges"; AAP 0.3.4).
+   *
+   * `null` until the charge read answers, which is also the state in which {@link buildRequest}
+   * refuses to assemble a body: a save that cannot name the loan's charges must not run at all.
+   */
+  readonly charges = signal<readonly LoanCharge[] | null>(null);
 
   /** The template portion of the payload: the persisted enumerations and their option lists. */
   readonly template = signal<LoanEditTemplateFields>(EMPTY_TEMPLATE_FIELDS);
@@ -450,12 +581,24 @@ export class LoanEditComponent implements OnInit {
 
   /**
    * The route's `:id`, kept as the raw string so the read, the save and the return link cannot
-   * disagree about which loan they address; `null` when the route carried none.
+   * disagree about which loan they address; `null` before the route emits and when it carried none.
+   *
+   * A signal, not a snapshot value: the router reuses this component when the URL moves from one edit
+   * route to another, so the id has to follow every emission of `route.paramMap` and every reader of
+   * it — the save, the read and the Cancel link — has to see the current loan.
    */
-  readonly loanId: string | null;
+  readonly loanId = signal<string | null>(null);
 
+  /**
+   * Creates the form once, so every control reference the template binds is stable, and subscribes to
+   * the route's parameters, which is the screen's whole entry point.
+   *
+   * One subscription, never a `snapshot` read beside it: Angular reuses this component when the URL
+   * moves from one `#/editloanaccount/{id}` to another, and a single read would leave the first loan's
+   * form, ids and option lists on screen for the second loan's URL. Each emission therefore resets the
+   * screen and re-runs the one read, the way `client-actions` handles the same reuse.
+   */
   constructor() {
-    this.loanId = this.route.snapshot.paramMap.get('id');
     this.form = this.formBuilder.group({
       principal: new FormControl<number | null>(null, Validators.required),
       loanTermFrequency: new FormControl<number | null>(null, Validators.required),
@@ -475,11 +618,14 @@ export class LoanEditComponent implements OnInit {
       fundId: new FormControl<SelectValue | null>(null),
     });
     this.controls = this.form.controls;
-  }
 
-  /** Reads the loan once, with no retry and no polling. */
-  ngOnInit(): void {
-    void this.load();
+    this.route.paramMap
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((params: ParamMap) => {
+        this.loanId.set(params.get('id'));
+        this.reset();
+        void this.load();
+      });
   }
 
   /**
@@ -487,8 +633,10 @@ export class LoanEditComponent implements OnInit {
    *
    * An invalid form is the legacy screen's own required set and stops here after marking every
    * control touched; nothing else is checked, so a value Fineract must judge is sent to Fineract.
-   * A refusal is rendered verbatim above the form with the entered values intact, and a success
-   * navigates to `#/viewloanaccount/{id}` through the router (never `window.location`).
+   * A refusal is rendered verbatim above the form with the entered values intact, and a rejection of
+   * any other shape — the plain `Error` this file throws for a record the body cannot be built from
+   * — is rendered the same way, so Save never ends in a silent no-op (AAP 0.14.2). A success navigates
+   * to `#/viewloanaccount/{id}` through the router (never `window.location`).
    */
   async submit(): Promise<void> {
     if (this.form.invalid) {
@@ -497,7 +645,7 @@ export class LoanEditComponent implements OnInit {
       return;
     }
 
-    const loanId = this.loanId;
+    const loanId = this.loanId();
 
     if (loanId === null) {
       return;
@@ -511,13 +659,7 @@ export class LoanEditComponent implements OnInit {
         await this.router.navigate(['/viewloanaccount', loanId]);
       });
     } catch (error: unknown) {
-      if (error instanceof ApiError) {
-        this.error.set(error);
-
-        return;
-      }
-
-      throw error;
+      this.error.set(toDisplayableFailure(error));
     }
   }
 
@@ -529,6 +671,14 @@ export class LoanEditComponent implements OnInit {
    * locale); the strategy travels as the code the fork accepts rather than an id; and the three
    * identifiers the form does not edit are echoed unchanged from the record. A member the form left
    * empty is posted as absent by the serialiser, so the server's own required-field rule reports it.
+   *
+   * One member comes from the loan's charge read rather than from a control: `charges`. The array is
+   * always posted, one row per charge `GET /loans/{id}/charges` answered and empty for a loan that
+   * carries none, because the endpoint treats its absence as "delete every charge" (AAP 0.3.4;
+   * Rule 1 clause 2).
+   *
+   * @throws Error when no loan is loaded, or when its charges were never read, so a save that could
+   *   only delete them is refused before a request is made.
    */
   buildRequest(): LoanEditRequest {
     const account = this.account();
@@ -586,21 +736,71 @@ export class LoanEditComponent implements OnInit {
       submittedOnDate: this.controls.submittedOnDate.value,
       ...(loanOfficerId === null ? {} : { loanOfficerId }),
       ...(fundId === null ? {} : { fundId }),
+      charges: this.chargeRows(),
       dateFormat: this.config.dateFormat,
       locale: this.config.locale,
     };
   }
 
   /**
-   * Reads the loan once and seeds the form from it.
+   * The save body's `charges` rows: one per charge the loan carries, built from the charge read.
    *
-   * A `404` and a body the guard rejects both become the not-found block, which is the only state in
-   * which the form is never shown; any other `ApiError` is kept for the error region with the form
-   * drawn from whatever loaded. A failure that is not an `ApiError` is rethrown rather than
-   * swallowed, and `loading` is cleared on every path.
+   * The rows are the loan's own charges carried through unchanged, and the array is posted even when
+   * it is empty, because `PUT /loans/{id}` reads an absent array as "delete every charge".
+   *
+   * @throws Error when the charge read never answered, so the form cannot state the loan's charge set:
+   *   posting an empty array in that case would delete charges nobody asked to delete.
+   */
+  private chargeRows(): LoanChargeRow[] {
+    const charges = this.charges();
+
+    if (charges === null) {
+      throw new Error('The loan edit form has no loaded charges to save.');
+    }
+
+    return charges.map(chargeRow);
+  }
+
+  /**
+   * Clears everything the previous loan put on the screen, so a route emission for another loan never
+   * shows the earlier one's form, identifiers or message.
+   *
+   * The form is reset rather than rebuilt, because the template binds these control instances; a reset
+   * also returns every control to untouched, which is what keeps the new loan's error markers off the
+   * screen. `loading` goes back to `true` until the new read settles.
+   */
+  private reset(): void {
+    this.account.set(null);
+    this.charges.set(null);
+    this.template.set(EMPTY_TEMPLATE_FIELDS);
+    this.loanOfficerOptions.set([]);
+    this.fundOptions.set([]);
+    this.error.set(null);
+    this.notFound.set(false);
+    this.loading.set(true);
+    this.form.reset();
+  }
+
+  /**
+   * Reads the loan and its charges, then seeds the form from them.
+   *
+   * Two reads, in order: the edit seed (`GET /loans/{id}?template=true&associations=…`) and then the
+   * loan's charges (`GET /loans/{id}/charges`), because the seed carries no `charges` member and the
+   * save re-posts that set. A failure of either is rendered: a `404` and a body the guard rejects
+   * become the not-found block, which is the only state in which the form is never shown, and any
+   * other failure is kept for the error region with the form drawn from whatever loaded, a rejection
+   * of another shape included, so no failure path ends without a message (AAP 0.14.2). A failed
+   * charge read therefore aborts the load instead of letting the form save an empty array over the
+   * loan's charges. `loading` is cleared on every path.
+   *
+   * Every run takes the next {@link loadSequence} number and a run the route has since superseded
+   * writes nothing at all — not the seeded record, charges, options or form, not the not-found or
+   * error state the response would produce, and not `loading`, which belongs to the run that
+   * replaced it.
    */
   private async load(): Promise<void> {
-    const loanId = this.loanId;
+    const load = ++this.loadSequence;
+    const loanId = this.loanId();
 
     if (loanId === null) {
       this.notFound.set(true);
@@ -612,31 +812,52 @@ export class LoanEditComponent implements OnInit {
     try {
       const payload = await firstValueFrom(this.loans.getWithTemplate(loanId));
 
+      // One await is the whole read, so this check covers every write below it: a superseded loan's
+      // answer is dropped here rather than seeded under the loan the URL now names.
+      if (load !== this.loadSequence) {
+        return;
+      }
+
       if (!isLoanAccount(payload)) {
         this.notFound.set(true);
 
         return;
       }
 
+      const charges = await firstValueFrom(this.loans.charges(loanId));
+
+      // The same guard after the second await: the charges of the loan the URL has since left must
+      // not land under the loan it now names either.
+      if (load !== this.loadSequence) {
+        return;
+      }
+
       const template = readTemplateFields(payload);
 
       this.account.set(payload);
+      this.charges.set(charges);
       this.template.set(template);
       this.loanOfficerOptions.set(template.loanOfficerOptions);
       this.fundOptions.set(template.fundOptions);
       this.seedForm(payload, template);
     } catch (error: unknown) {
-      if (error instanceof ApiError) {
-        if (error.status === 404) {
-          this.notFound.set(true);
-        } else {
-          this.error.set(error);
-        }
+      if (load !== this.loadSequence) {
+        return;
+      }
+
+      const failure = toDisplayableFailure(error);
+
+      if (failure.status === 404) {
+        this.notFound.set(true);
       } else {
-        throw error;
+        this.error.set(failure);
       }
     } finally {
-      this.loading.set(false);
+      // Only the current run owns the loading state: the superseded one must not clear the flag the
+      // newer read set, or the card would stop reporting that it is still filling.
+      if (load === this.loadSequence) {
+        this.loading.set(false);
+      }
     }
   }
 

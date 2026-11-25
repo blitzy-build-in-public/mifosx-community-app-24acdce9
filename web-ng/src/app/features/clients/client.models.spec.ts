@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { toClientStatusKey } from './client.models';
+import { toAccountStatusKey, toClientStatusKey } from './client.models';
 import type { StatusKey } from '../../shared/status-swatch/status-swatch.component';
 
 /**
@@ -36,5 +36,67 @@ describe('toClientStatusKey', () => {
     expect(toClientStatusKey(undefined)).toBe('other');
     expect(toClientStatusKey('')).toBe('other');
     expect(toClientStatusKey('clientStatusType.notAStateYet')).toBe('other');
+  });
+});
+
+/**
+ * Every status the fork's two account enums declare — `LoanStatus.java` for `loanStatusType.*` and
+ * `SavingsAccountStatusType.java` for `savingsAccountStatusType.*` — with the indicator key the client
+ * record's accounts table must paint for it, plus the transition codes it deliberately leaves neutral.
+ * Both families are listed because `GET /clients/{id}/accounts` mixes them in one response, so a table
+ * that recognised only one family's codes would paint the other family's rows with the neutral colour.
+ */
+const ACCOUNT_STATUS_CASES: readonly { readonly code: string; readonly key: StatusKey }[] = [
+  { code: 'loanStatusType.active', key: 'active' },
+  { code: 'savingsAccountStatusType.active', key: 'active' },
+  { code: 'loanStatusType.submitted.and.pending.approval', key: 'pending' },
+  { code: 'loanStatusType.approved', key: 'pending' },
+  { code: 'savingsAccountStatusType.submitted.and.pending.approval', key: 'pending' },
+  { code: 'savingsAccountStatusType.approved', key: 'pending' },
+  { code: 'loanStatusType.closed.obligations.met', key: 'closed' },
+  { code: 'loanStatusType.closed.written.off', key: 'closed' },
+  { code: 'loanStatusType.closed.reschedule.outstanding.amount', key: 'closed' },
+  { code: 'loanStatusType.withdrawn.by.client', key: 'closed' },
+  { code: 'loanStatusType.rejected', key: 'closed' },
+  { code: 'savingsAccountStatusType.closed', key: 'closed' },
+  { code: 'savingsAccountStatusType.matured', key: 'closed' },
+  { code: 'savingsAccountStatusType.pre.mature.closure', key: 'closed' },
+  { code: 'savingsAccountStatusType.withdrawn.by.applicant', key: 'closed' },
+  { code: 'savingsAccountStatusType.rejected', key: 'closed' },
+  { code: 'loanStatusType.invalid', key: 'other' },
+  { code: 'savingsAccountStatusType.invalid', key: 'other' },
+  { code: 'loanStatusType.transfer.in.progress', key: 'other' },
+  { code: 'savingsAccountStatusType.transfer.on.hold', key: 'other' },
+];
+
+describe('toAccountStatusKey', () => {
+  it('paints the key of every code the two account status enums declare', () => {
+    for (const { code, key } of ACCOUNT_STATUS_CASES) {
+      expect(toAccountStatusKey(code), code).toBe(key);
+    }
+  });
+
+  it('strips either family prefix and every separator before the lookup', () => {
+    expect(toAccountStatusKey('ACTIVE')).toBe('active');
+    expect(toAccountStatusKey('LOANSTATUSTYPE.ACTIVE')).toBe('active');
+    expect(toAccountStatusKey('SAVINGSACCOUNTSTATUSTYPE.ACTIVE')).toBe('active');
+    expect(toAccountStatusKey('loanStatusType.closed.written.off')).toBe('closed');
+    expect(toAccountStatusKey('closed_written_off')).toBe('closed');
+    expect(toAccountStatusKey('submittedAndPendingApproval')).toBe('pending');
+    expect(toAccountStatusKey('preMatureClosure')).toBe('closed');
+  });
+
+  it('matches the whole normalised name, not one dot-segment of it', () => {
+    // `closed` is the segment the colour comes from; a table keyed on a single word would paint the
+    // outstanding-amount form of the same state from the wrong entry.
+    expect(toAccountStatusKey('loanStatusType.closed.reschedule.outstanding.amount')).toBe('closed');
+    expect(toAccountStatusKey('loanStatusType.transfer.in.progress')).toBe('other');
+  });
+
+  it('keeps a missing or unrecognised code neutral rather than claiming a state', () => {
+    expect(toAccountStatusKey(undefined)).toBe('other');
+    expect(toAccountStatusKey('')).toBe('other');
+    expect(toAccountStatusKey('loanStatusType.notAStateYet')).toBe('other');
+    expect(toAccountStatusKey('savingsAccountStatusType.overpaid')).toBe('other');
   });
 });

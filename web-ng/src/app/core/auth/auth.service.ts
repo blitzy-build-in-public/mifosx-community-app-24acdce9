@@ -1,8 +1,9 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable, computed, inject, type Signal } from '@angular/core';
+import { Injectable, inject, type Signal } from '@angular/core';
 import { firstValueFrom, type Observable } from 'rxjs';
 
 import { AppConfigService } from '../config/app-config.service';
+import { ApiError } from '../http/api-error';
 import type { AuthResponse, SessionData, SessionUserResponse } from './session.model';
 import { SessionService, type SessionUserReader } from './session.service';
 
@@ -34,6 +35,67 @@ export interface AuthenticationRequest {
 const NO_PERMISSIONS: readonly string[] = Object.freeze([]);
 
 /**
+ * The message a `POST /authentication` response that cannot describe a session is refused with. It
+ * names the members the response had to carry and never repeats a value it received, so no
+ * authentication key or password can reach the login screen, a log or a captured exchange through an
+ * error (Rule 1 clause 9, AAP 0.10.4).
+ */
+const MALFORMED_AUTHENTICATION_RESPONSE =
+  'The authentication response did not carry a user id, an authentication key and a permission list, ' +
+  'so no session was created.';
+
+/**
+ * Narrows the `POST /authentication` answer into the session this application stores, or `null` when
+ * it cannot become one (AAP 0.7.2, row `AuthResponse`; AAP 0.4.3 row 2).
+ *
+ * The response is a network boundary, so its members are checked at run time rather than trusted from
+ * the declared type: `userId` has to be a finite number, `base64EncodedAuthenticationKey` a non-empty
+ * string and `permissions` an array of strings. A response missing one of them would otherwise persist
+ * a partial entry or reach the interceptor as `Authorization: Basic undefined`. The two flags the
+ * response also carries are deliberately not read here (AAP 0.10.5 item 13).
+ *
+ * This is the documented boundary where the wire value is narrowed (Rule 1 clause 4), and it answers
+ * the stored shape rather than the wire shape, so `SessionService.write()` receives exactly the three
+ * members the legacy entry holds.
+ *
+ * @param value the response body, still unverified.
+ * @returns the session to store, or `null` when the body cannot describe one.
+ */
+function toSession(value: unknown): SessionData | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return null;
+  }
+
+  const response = value as Record<string, unknown>;
+  const userId = response['userId'];
+  const authenticationKey = response['base64EncodedAuthenticationKey'];
+  const permissions = response['permissions'];
+
+  if (typeof userId !== 'number' || !Number.isFinite(userId)) {
+    return null;
+  }
+
+  if (typeof authenticationKey !== 'string' || authenticationKey.length === 0) {
+    return null;
+  }
+
+  if (!Array.isArray(permissions)) {
+    return null;
+  }
+
+  // Filtered through a type predicate rather than a boolean test, so the list below is a `string[]`
+  // this function has actually checked instead of the loosely typed array `Array.isArray` leaves
+  // behind. A single non-string entry makes the whole list unusable.
+  const codes: string[] = permissions.filter((code): code is string => typeof code === 'string');
+
+  if (codes.length !== permissions.length) {
+    return null;
+  }
+
+  return { userId, authenticationKey, userPermissions: codes };
+}
+
+/**
  * The application's login and logout entry point, and the only place a credential is exchanged
  * (AAP 0.7.1 core row "`AuthService`"; AAP 0.4.2 "Security architecture"; AAP 0.11.1 row 14).
  *
@@ -56,7 +118,9 @@ const NO_PERMISSIONS: readonly string[] = Object.freeze([]);
  *     header: a logout removes the authorization by removing the session (AAP 0.4.2).
  *   - Failure shaping. A Fineract error reaches the caller as the `ApiError` the interceptor
  *     produced, whose `message` is the server's `defaultUserMessage` verbatim, so the login screen
- *     renders the server's own words and keeps the typed username (AAP 0.4.4 decision 6).
+ *     renders the server's own words and keeps the typed username (AAP 0.4.4 decision 6). The one
+ *     error this class raises itself is the `ApiError` for an authentication response that cannot
+ *     describe a session, so a screen reads every login failure the same way.
  *   - Navigation. `login()` and `logout()` return before any route change; the login screen replays
  *     the `returnUrl` it kept, and the sign-out button and the idle timeout navigate.
  *   - The password policy, password renewal and two-factor authentication. None is a behaviour of the
@@ -113,21 +177,19 @@ export class AuthService {
   readonly username: Signal<string | null> = this.sessions.username;
 
   /**
-   * The signed-in user's permission list as a signal, so a template that renders permission-gated
-   * navigation re-evaluates when a login supplies the list and when a logout withdraws it. It reads
-   * the same list `permissions()` answers with and is empty when there is no session.
-   */
-  readonly permissionsSignal: Signal<readonly string[]> = computed(() => this.permissions());
-
-  /**
    * Authenticates with Fineract and puts the resulting session into effect (AAP 0.7.1
    * `login(username, password): Promise<void>`; AAP 0.10.1 W1).
    *
    * 1. `POST /authentication` with exactly `{username, password}` and no query parameter.
-   * 2. The response's `userId`, `base64EncodedAuthenticationKey` and `permissions` are written as
-   *    the legacy session entry, so an AngularJS screen on the same origin reads the same login.
+   * 2. The response is checked before anything is kept — a finite numeric `userId`, a non-empty
+   *    `base64EncodedAuthenticationKey` and a `permissions` array of strings — and only then written
+   *    as the legacy session entry, so an AngularJS screen on the same origin reads the same login.
    * 3. The entry is restored, which issues `GET /users/{id}` and publishes the user label and the
    *    permission list the gates read.
+   *
+   * A response that cannot describe a session rejects with the `ApiError` `toSession()` refuses it
+   * with, before the entry is written: nothing is persisted, no session is published and no request
+   * can carry `Authorization: Basic undefined` (AAP 0.4.3 row 2).
    *
    * A restore that resolves `false` does not fail the login: the entry is already written, and the
    * session it describes is not in effect, which is the state a 401 ends for good — a decision the
@@ -135,9 +197,9 @@ export class AuthService {
    *
    * @param username the account name, forwarded verbatim; it is neither trimmed nor validated here.
    * @param password the submitted password, used once inside the request body and then dropped.
-   * @returns a promise that resolves once the session is in effect, and rejects with the error the
-   * interceptor produced — `ApiError`, whose `message` is Fineract's own text — when the exchange
-   * fails.
+   * @returns a promise that resolves once the session is in effect, and rejects with an `ApiError` —
+   * whose `message` a screen renders verbatim — when the exchange fails or the response cannot
+   * describe a session.
    */
   async login(username: string, password: string): Promise<void> {
     const request: AuthenticationRequest = { username, password };
@@ -146,17 +208,44 @@ export class AuthService {
       this.http.post<AuthResponse>(this.config.apiUrl('authentication'), request),
     );
 
-    this.sessions.write({
-      userId: response.userId,
-      authenticationKey: response.base64EncodedAuthenticationKey,
-      userPermissions: response.permissions,
-    });
+    const session = toSession(response);
+
+    if (session === null) {
+      // Nothing has been persisted at this point, so refusing the response leaves no entry, no
+      // session signal and no header behind.
+      throw new ApiError(MALFORMED_AUTHENTICATION_RESPONSE, 200);
+    }
+
+    this.sessions.write(session);
 
     // The entry exists from here on even if the restore fails, so its result is deliberately not
     // tested: a projection read that failed is a request the interceptor answers, and failing the
     // login instead would report a credential rejection that never happened. With no session in
     // effect afterwards the permission gate is closed, which is the state a 401 settles.
     await this.sessions.restore(this.readUser);
+  }
+
+  /**
+   * Resumes the session a stored legacy entry describes (AAP 0.3.4 claim 9: "restore re-reads it and
+   * calls `userResource.get({userId})`"; AAP 0.7.1 `SessionService.restore(): Promise<boolean>`).
+   *
+   * The application start-up sequence calls this once, from the `provideAppInitializer` in
+   * `web-ng/src/app/app.config.ts`, before the router performs its first navigation: a page reload
+   * carries the session in `localStorage` but nothing in memory, so without this the `authGuard` would
+   * read `isAuthenticated()` as false and send a returning user to the login screen. That is the
+   * reload case of workflow W1, and the legacy application restored the same entry on every start
+   * (`app/scripts/services/SessionManager.js:36-48`).
+   *
+   * It is this service's job rather than the initializer's because the projection read it needs is
+   * `GET /users/{id}`, and the request itself lives here — the one file in the application allowed to
+   * compose that URL (AAP 0.14.1). A failed projection resolves `false` rather than rejecting: the
+   * entry stays where a 401 can act on it, and the permission gate stays closed, so start-up never
+   * fails over a session the server has already refused.
+   *
+   * @returns whether a session is in effect once the restore has finished.
+   */
+  async restore(): Promise<boolean> {
+    return this.sessions.restore(this.readUser);
   }
 
   /**

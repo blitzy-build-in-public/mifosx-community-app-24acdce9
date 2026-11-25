@@ -64,6 +64,15 @@ const TEMPLATE_PATH = '/clients/template';
 const CLIENTS_PATH = '/clients';
 
 /**
+ * The legacy name rule's message, the value `validation.msg.client.name.cannot.start.specialchar.ornumber`
+ * carries in the shipped English bundle (`app/global-translations/locale-en.json`).
+ */
+const NAME_RULE_MESSAGE = 'Name cannot start with special character or number';
+
+/** The legacy mobile-number rule's message, the value `label.mustbenumeric` carries in that bundle. */
+const NUMERIC_RULE_MESSAGE = 'Must be numeric';
+
+/**
  * The legacy captions the bundle carries for this screen, keyed exactly as the shipped flat
  * translation bundles key them (`app/global-translations/`). A key that did not resolve would render
  * humanised through the missing-translation handler, so serving the real bundle is what proves the
@@ -82,6 +91,8 @@ const TRANSLATIONS: Readonly<Record<string, string>> = {
   'label.input.active': 'Active',
   'label.menu.selectloanofficer': 'Select Staff',
   'label.requiredfield': 'Required field',
+  'validation.msg.client.name.cannot.start.specialchar.ornumber': NAME_RULE_MESSAGE,
+  'label.mustbenumeric': NUMERIC_RULE_MESSAGE,
   'label.button.save': 'Submit',
   'label.button.cancel': 'Cancel',
 };
@@ -267,6 +278,8 @@ describe('ClientCreateComponent', () => {
     expect(optionLabels(selectFor('staffId'))).toEqual(['--Select Staff--', 'Officer, Parity']);
     // The submission date keeps the browser clock's default: the template carries no submission date.
     expect(component.form.controls.submittedOnDate.value).toEqual(startOfToday());
+    // The activation date is seeded from this read — the only one the form ever takes its date from.
+    expect(component.form.controls.activationDate.value).toEqual(new Date(2026, 10, 24));
     expect(component.form.controls.active.value).toBe(false);
   });
 
@@ -302,6 +315,35 @@ describe('ClientCreateComponent', () => {
     expect(component.form.controls.staffId.value).toBeNull();
     expect(optionLabels(selectFor('staffId'))).toEqual(['--Select Staff--', 'Officer, Branch']);
     // Applying the answer must not re-enter the office subscription.
+    httpMock.expectNone(isTemplateRead);
+  });
+
+  it('keeps the active choice and the activation date the operator made when the office changes, and clears the staff', async () => {
+    fillActiveForm();
+    const chosen = new Date(2026, 11, 1);
+    component.form.controls.activationDate.setValue(chosen);
+    component.form.controls.staffId.setValue(7);
+
+    // The operator ticks Active and picks a date, then files the client under another office.
+    component.form.controls.active.setValue(true);
+    component.form.controls.officeId.setValue(2);
+
+    const pending = httpMock.match(isTemplateRead);
+    expect(pending).toHaveLength(1);
+    pending[0].flush(BRANCH_TEMPLATE);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // The date the operator picked survives the read an office change triggers...
+    expect(component.form.controls.activationDate.value).toEqual(chosen);
+    // ...and so does the Active box, which legacy's `changeOffice` never touches...
+    expect(component.form.controls.active.value).toBe(true);
+    // ...so the field the choice reveals is still on screen with the chosen date in it.
+    expect(host().querySelector('#activationDate')).not.toBeNull();
+    // ...while the state the new office does own follows its template as before.
+    expect(component.form.controls.officeId.value).toBe(2);
+    expect(component.form.controls.staffId.value).toBeNull();
+    expect(optionLabels(selectFor('staffId'))).toEqual(['--Select Staff--', 'Officer, Branch']);
     httpMock.expectNone(isTemplateRead);
   });
 
@@ -384,6 +426,70 @@ describe('ClientCreateComponent', () => {
     const lastname = host().querySelector('#lastname');
     expect(lastname?.getAttribute('aria-invalid')).toBe('true');
     expect(host().textContent).toContain('Required field');
+  });
+
+  // The legacy create form marks a name that does not start with a letter pattern-invalid and shows
+  // `validation.msg.client.name.cannot.start.specialchar.ornumber` (Rule 1 clause 3 carries the
+  // legacy rule rather than a new one). Each value starts with a digit or with a special character the
+  // legacy character class excludes, and the screen posted all of them before this rule existed.
+  it.each(['2Parity', '-Parity', '.Parity'])(
+    'shows the legacy name rule for "%s" and sends nothing',
+    async (name) => {
+      fillValidForm();
+      component.form.controls.firstname.setValue(name);
+
+      await component.submit();
+      fixture.detectChanges();
+
+      httpMock.expectNone({ method: 'POST', url: `${API_ROOT}${CLIENTS_PATH}` });
+      expect(component.form.controls.firstname.hasError('pattern')).toBe(true);
+      expect(host().querySelector('#firstname')?.getAttribute('aria-invalid')).toBe('true');
+      expect(host().querySelector('#firstname-pattern-error')?.textContent?.trim()).toBe(
+        NAME_RULE_MESSAGE,
+      );
+      // A value that is present but malformed reports the rule it breaks, not the missing-value message.
+      expect(host().querySelector('#firstname-error')).toBeNull();
+    },
+  );
+
+  // The legacy mobile rule is `/^[0-9]+$/` with `label.mustbenumeric`: a plus sign, a separator or a
+  // space fails it on the screen, where legacy refused it, instead of after a round trip.
+  it.each(['+12025550101', '202-555-0101', '202 555 0101'])(
+    'shows the legacy numeric rule for "%s" and sends nothing',
+    async (mobileNo) => {
+      fillValidForm();
+      component.form.controls.mobileNo.setValue(mobileNo);
+
+      await component.submit();
+      fixture.detectChanges();
+
+      httpMock.expectNone({ method: 'POST', url: `${API_ROOT}${CLIENTS_PATH}` });
+      expect(component.form.controls.mobileNo.hasError('pattern')).toBe(true);
+      expect(host().querySelector('#mobileNo')?.getAttribute('aria-invalid')).toBe('true');
+      expect(host().querySelector('#mobileNo-pattern-error')?.textContent?.trim()).toBe(
+        NUMERIC_RULE_MESSAGE,
+      );
+    },
+  );
+
+  it('accepts the multi-word names and the numeric mobile number the legacy rules allow', async () => {
+    fillValidForm();
+    // Legacy's expression is unanchored at the end, so only the first character of a name is
+    // constrained: a space, an apostrophe and a hyphen stay inside the value.
+    component.form.controls.firstname.setValue('Ada Okafor');
+    component.form.controls.lastname.setValue("O'Kafo-Bennett");
+
+    const submission = component.submit();
+    const post = httpMock.expectOne({ method: 'POST', url: `${API_ROOT}${CLIENTS_PATH}` });
+
+    expect(component.form.controls.firstname.hasError('pattern')).toBe(false);
+    expect(component.form.controls.lastname.hasError('pattern')).toBe(false);
+    expect(component.form.controls.mobileNo.hasError('pattern')).toBe(false);
+
+    post.flush({ resourceId: 42 });
+    await submission;
+
+    expect(navigate).toHaveBeenCalledWith(['/viewclient', 42]);
   });
 
   it('refuses a second submit while the first is still in flight', async () => {

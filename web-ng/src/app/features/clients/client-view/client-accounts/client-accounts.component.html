@@ -16,16 +16,21 @@
   `StatusSwatch`, `EmptyState`).
 -->
 <div class="panel-body">
-  <!-- Four mutually exclusive states, in the order a viewer meets them. While the first response is
-       in flight nothing is painted: the design shows no spinner, skeleton or placeholder, and
-       AAP 0.2.4 records that the flow carries no such asset, so emitting nothing is the faithful
-       state rather than a missing one. -->
+  <!-- Four mutually exclusive states, in the order a viewer meets them, and a failed read never
+       reaches the empty state. While the first response is in flight nothing is painted: the design
+       shows no spinner, skeleton or placeholder, and AAP 0.2.4 records that the flow carries no such
+       asset, so emitting nothing is the faithful state rather than a missing one. -->
   @if (loading()) {
   } @else if (failed()) {
-    <!-- A failed read paints nothing here either. The interceptor has already raised the
-         notification carrying Fineract's own message, and the section must not claim "no accounts"
-         about a client whose accounts were never read. The explicit empty state below is reserved
-         for the client that genuinely holds none (AAP 0.7.4). -->
+    <!-- Fineract's own failure text, verbatim and untranslated, for the failures the interceptor
+         does not notify — a 4xx — because it raises its single notification for status `0` and
+         `>= 500` alone. A 5xx or a transport fault leaves the message empty, so this branch paints
+         nothing and the notification already raised stays the one report of it. The section must
+         never claim "no accounts" about a client whose accounts were never read, so the explicit
+         empty state below is reserved for the client that genuinely holds none (AAP 0.7.4). -->
+    @if (errorMessage(); as message) {
+      <div class="alert alert-danger" role="alert">{{ message }}</div>
+    }
   } @else if (isEmpty()) {
     <app-empty-state id="client-accounts-empty" [message]="emptyMessageKey | translate" />
   } @else {

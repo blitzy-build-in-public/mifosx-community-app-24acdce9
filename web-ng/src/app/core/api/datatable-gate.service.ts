@@ -1,8 +1,9 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, forkJoin, map, of, switchMap, throwError } from 'rxjs';
+import { Observable, defer, forkJoin, map, of, switchMap, throwError } from 'rxjs';
 
 import { AppConfigService } from '../config/app-config.service';
+import { datatableName, resourceId } from '../http/path-segment.util';
 
 /**
  * The entity a datatable check must name to apply to a client.
@@ -345,9 +346,12 @@ function applicableTableNames(
  * **Nothing is added to the legacy calls.** No pagination, offset, search text, caching, retry,
  * debounce, memoisation or default row set: `limit=-1` and `genericResultSet=true` are the two
  * parameters legacy sends and the only two sent here, so the parity capture sees the same requests
- * (Rule 1 clauses 2 and 3; AAP 0.10.5). The table name and the client id travel as path segments and
- * are interpolated raw, never encoded, because a datatable name is `[a-z0-9_]` and legacy sends it
- * as-is — an encoded segment would show up as a URL difference in the parity comparison.
+ * (Rule 1 clauses 2 and 3; AAP 0.10.5). The table name and the client id travel as path segments,
+ * checked against Fineract's own identifier shapes and then written unchanged: a registered table name
+ * is `[A-Za-z0-9_]` and a client id is one or more ASCII digits, so a valid value stays byte-identical
+ * to what legacy sent — no encoding, which would show up as a URL difference in the parity comparison
+ * — and a value of any other shape is refused by `core/http/path-segment.util.ts` before a request is
+ * issued, because a segment of that shape could move the read to another path on the same host.
  *
  * **Headers and errors are the interceptor's.** This service attaches no header: the single
  * `fineractInterceptor` adds `Authorization` and `Fineract-Platform-TenantId` and maps a Fineract
@@ -375,19 +379,23 @@ export class DataTableGateService {
    * to the client entity in the status the action represents, then reads each surviving check's table
    * for this client.
    *
+   * The gate runs on subscribe: the observable this returns is `defer`red, so {@link runGate} and every
+   * request it composes happen when a caller subscribes, and a refusal reaches that caller as an
+   * observable error rather than as an exception thrown out of the call.
+   *
    * @param clientId the client the action is about, sent as the last path segment of every datatable
    * read — the `entityId` legacy forwards as
    * `DataTablesResource.getTableDetails({datatablename, entityId, genericResultSet: 'true'})`
-   * (`app/scripts/controllers/client/ClientActionsController.js:35`). A number stays a number in the
-   * path and a string is used as given, so a route parameter reaches Fineract spelled as the route
-   * held it.
+   * (`app/scripts/controllers/client/ClientActionsController.js:35`). A number and a route parameter
+   * that holds digits are written as they are; any other value is refused before a request is issued.
    * @param action the lifecycle action being run, as the route's `:action` segment states it. It
    * selects the check status through {@link CLIENT_ACTION_CHECK_STATUS}.
    * @returns one {@link DataTableGateResult} per checked table, in the order the server listed the
    * checks; an empty array when no check applies, and then no datatable request is issued at all.
-   * @throws through the returned observable — never synchronously — when the action has no mapped check
-   * status, with no request issued. An unmapped action must fail rather than read nothing and report a
-   * gate that passed.
+   * @throws through the returned observable — never synchronously — when the client id is not a
+   * Fineract identifier, when a checked table's name is not a registered table name, or when the action
+   * has no mapped check status, with no request issued. An unmapped action must fail rather than read
+   * nothing and report a gate that passed.
    * @throws through the returned observable when the checks answer cannot be read: a body that is not the
    * paged envelope, a row that is not an object or names no entity, a client row whose `status` is not
    * the Fineract enum the comparison needs, or a client row that names no table. Such an answer fails
@@ -400,6 +408,23 @@ export class DataTableGateService {
     clientId: number | string,
     action: ClientActionName,
   ): Observable<DataTableGateResult[]> {
+    return defer(() => this.runGate(clientId, action));
+  }
+
+  /**
+   * The gate's own composition, run on subscribe by {@link checkClientActionGate}.
+   *
+   * The client id is checked first, so a crafted route value issues no request at all — not even the
+   * id-less checks call — and each checked table's name is checked where its own read path is
+   * composed, so a name of any other shape refuses the gate instead of steering the read elsewhere on
+   * the host (`core/http/path-segment.util.ts`).
+   *
+   * @param clientId the client the action is about.
+   * @param action the lifecycle action being run.
+   * @returns the emissions and the failures {@link checkClientActionGate} documents.
+   */
+  private runGate(clientId: number | string, action: ClientActionName): Observable<DataTableGateResult[]> {
+    const segment = resourceId(clientId, 'DataTableGateService.checkClientActionGate');
     const status = CLIENT_ACTION_CHECK_STATUS.get(action);
 
     if (status === undefined) {
@@ -447,9 +472,11 @@ export class DataTableGateService {
           const genericResultSet = new HttpParams().set('genericResultSet', true);
 
           return forkJoin(
-            tables.map((table: string) =>
-              this.http
-                .get<DataTableRowSet>(this.appConfig.apiUrl('datatables/' + table + '/' + clientId), {
+            tables.map((name: string) => {
+              const table = datatableName(name, 'DataTableGateService.checkClientActionGate');
+
+              return this.http
+                .get<DataTableRowSet>(this.appConfig.apiUrl(`datatables/${table}/${segment}`), {
                   params: genericResultSet,
                 })
                 .pipe(
@@ -459,8 +486,8 @@ export class DataTableGateService {
                       resultSet,
                     }),
                   ),
-                ),
-            ),
+                );
+            }),
           );
         }),
       );

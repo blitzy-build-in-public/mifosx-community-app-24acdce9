@@ -28,7 +28,7 @@
   amount, and the amount input carries no `min`, no `max` and no `pattern`: Fineract alone decides
   whether a figure is acceptable, and its message is what the user reads (Rule 1 clause 3;
   AAP 0.4.4 decision 6). The amount is not written into the markup either — the component seeds the
-  control from the schedule's first period, so there is one writer of that value.
+  control from the repayment transaction template's own `amount`, so there is one writer of that value.
 
   **Captions.** Every string is a key from the shipped legacy bundles, verified against
   `locale-en.json` of the reference clone, and none is written out here. The card title is
@@ -50,7 +50,7 @@
 
 <div class="panel">
   <div class="panel-heading">
-    <h4 class="panel-title">{{ 'label.heading.loanrepayments' | translate }}</h4>
+    <h3 class="panel-title">{{ 'label.heading.loanrepayments' | translate }}</h3>
   </div>
 
   @if (notFound()) {
@@ -97,9 +97,10 @@
         />
 
         <!--
-          The amount the repayment books, seeded by the component from the schedule's first period's
-          total due and left editable exactly as legacy leaves it. `step="0.01"` is the browser's own
-          increment for a money figure; `novalidate` on the form keeps it from ever blocking a submit.
+          The amount the repayment books, seeded by the component from the repayment transaction
+          template's own `amount` and left editable exactly as legacy leaves it. `step="0.01"` is the
+          browser's own increment for a money figure; `novalidate` on the form keeps it from ever
+          blocking a submit.
         -->
         <div class="form-group" [class.has-error]="amountInvalid">
           <label class="col-md-3 control-label" for="transactionAmount">

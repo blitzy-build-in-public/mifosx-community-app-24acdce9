@@ -40,6 +40,22 @@
       "note": "Seed-only write: the application only reads savings products through GET /savingsaccounts/template. The seed sends the AAP 0.10.1 values verbatim (name Parity Savings, shortName PARS) with no clone index or other suffix, and it is non-idempotent by design: every run is expected to start from a recreated database (npm run reset:db), which is what keeps the name unique. On a backend that already holds the product the seed fails fast on Fineract's duplicate-name rejection, as expected, because savings products cannot be deleted through the API (HTTP 405)."
     },
     {
+      "consumer": "web-ng/e2e/seed/seed.ts",
+      "method": "POST",
+      "prefix": "apiPath",
+      "path": "/codes/name/{codeName}/codevalues",
+      "purpose": "Create the active narration value each client lifecycle action offers — ClientClosureReason, ClientRejectReason and ClientWithdrawReason — so GET /clients/template?commandParam=close|reject|withdraw answers a narration and POST /clients/{id}?command=close|reject|withdraw reaches its end state instead of failing on a mandatory reason id.",
+      "note": "Seed-only write: the application reads a code's values through the three action templates and never creates one. OpenAPI operation createCodeValueByCodeName (CodeValuesApiResource) on the fork. The path is keyed by code name rather than by numeric code id, so the seed needs no GET /codes lookup and hard-codes no id the tenant's migration assigned, and the created value's id is the answer's subResourceId. Added under the AAP 0.10.4 addition policy: the consumer is named here and this URL never appears in endpoint-allowlist.json."
+    },
+    {
+      "consumer": "web-ng/e2e/seed/seed.ts",
+      "method": "POST",
+      "prefix": "apiPath",
+      "path": "/datatables",
+      "purpose": "Register the client datatable client_action_check (apptableName m_client, one non-mandatory notes column) that the client-action gate reads with GET /datatables/{table}/{clientId}?genericResultSet=true once its check matches.",
+      "note": "Seed-only write: the application reads a registered datatable through the gate and never creates one. OpenAPI operation DatatablesApiResource.createDatatable on the fork; entitySubType is mandatory on this fork's create body, and the answer carries the table's name rather than an id, so the fixture's identity is its name. Added under the AAP 0.10.4 addition policy: the consumer is named here, and the application's own datatable read stays in endpoint-allowlist.json as its own row and path."
+    },
+    {
       "consumer": "web-ng/e2e/seed/fixtures.ts",
       "method": "GET",
       "prefix": "apiPath",
