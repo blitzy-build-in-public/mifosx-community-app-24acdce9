@@ -42,6 +42,16 @@ const COMMAND_MEMBER = 'command';
 const WAIVE_OMITTED_MEMBERS: readonly string[] = ['transactionDate', 'paymentTypeId'];
 
 /**
+ * What a repayment form hands {@link LoanService.repay}: the models' `LoanRepaymentRequest` without its
+ * `dateFormat` and `locale` members, because this service fills both from the runtime configuration at
+ * the boundary where the body is built (AAP 0.7.2 "Date handling", AAP 0.14.1 "Dates never travel as
+ * strings built in a template"; Rule 1 clause 2). The screen therefore holds only the values the user
+ * typed or chose, plus the `Date | null` its transaction-date field carries, and can never pair a date
+ * with a format or a locale that disagrees with it.
+ */
+export type LoanRepaymentInput = Omit<LoanRepaymentRequest, 'dateFormat' | 'locale'>;
+
+/**
  * The loans family's single typed service: every individual-loan endpoint the in-scope screens use,
  * and the only file in `features/loans/` that imports `HttpClient` or holds a Fineract path.
  *
@@ -260,13 +270,15 @@ export class LoanService {
    * `POST /loans/{id}/transactions?command=repayment` — books a repayment (AAP 0.7.3, "W6 repayment").
    *
    * The amount and the date are the form's own values: the form seeds them from the schedule's first
-   * unpaid period and the run date, and the service changes neither.
+   * period and the run date, and the service changes neither. `dateFormat` and `locale` are not the
+   * form's to supply — this method writes both from the configuration, which is why it takes
+   * {@link LoanRepaymentInput} rather than the full `LoanRepaymentRequest` model.
    *
    * @param id Loan being repaid.
    * @param body The repayment as the form holds it.
    * @returns The loan's id and the changes the server applied.
    */
-  repay(id: number | string, body: LoanRepaymentRequest): Observable<LoanActionResult> {
+  repay(id: number | string, body: LoanRepaymentInput): Observable<LoanActionResult> {
     const params = new HttpParams().set('command', 'repayment');
 
     return this.http.post<LoanActionResult>(this.config.apiUrl(`/loans/${id}/transactions`), this.toDatedBody(body), {
