@@ -9,9 +9,9 @@
   `LoanRepaymentComponent` draws the whole card itself, with its own `.panel`, heading, body and
   footer. Wrapping that card here would nest one `.panel` inside another and so double both the
   shadow and the padding the global layer gives a card, which no legacy action screen shows
-  (Rule 1 clauses 3 and 6). Repayment mode is also the one mode with nothing to wait for: this
-  screen reads no action template for it, so the child stands outside the `loading()` gate, which
-  belongs to the reads the other five modes make.
+  (Rule 1 clauses 3 and 6). Repayment mode is also the one mode whose child stands outside the
+  `loading()` gate: this screen reads no action template for it, so there is nothing to wait for, and
+  that gate belongs only to the approve and disburse reads.
 
   Every visual value comes from the global Bootstrap 3 layer compiled in `web-ng/src/styles.scss`, so
   this file carries no styling of its own (Rule 1 clause 6): `.container-fluid` is the page container,

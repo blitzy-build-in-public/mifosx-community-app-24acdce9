@@ -13,7 +13,7 @@ import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { Validators } from '@angular/forms';
 import { ActivatedRoute, Router, convertToParamMap, type ParamMap } from '@angular/router';
 import { provideTranslateService, TranslateService } from '@ngx-translate/core';
-import { catchError, of, throwError } from 'rxjs';
+import { catchError, of, Subject, throwError, type Observable } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { DEFAULT_APP_CONFIG } from '../../../core/config/app-config.model';
@@ -55,8 +55,17 @@ const API_ROOT = `${SERVED_CONFIG.apiBaseUrl}${SERVED_CONFIG.apiPath}`;
 /** The loan every case acts on, as the `:id` segment delivers it. */
 const LOAN_ID = '9';
 
+/**
+ * A second loan, so one component instance can be handed two URLs in a row — the router reuses the
+ * screen across `#/loanaccount/{id}/{action}` — and the two reads they start can answer out of order.
+ */
+const OTHER_LOAN_ID = '10';
+
 /** `GET /loans/{id}/template` — the approval form's seed. */
 const APPROVAL_TEMPLATE_URL = `${API_ROOT}/loans/${LOAN_ID}/template`;
+
+/** The same read for {@link OTHER_LOAN_ID}: the superseded one of the reuse cases. */
+const OTHER_APPROVAL_TEMPLATE_URL = `${API_ROOT}/loans/${OTHER_LOAN_ID}/template`;
 
 /** `GET /loans/{id}/transactions/template` — the disbursement and repayment forms' seed. */
 const TRANSACTIONS_TEMPLATE_URL = `${API_ROOT}/loans/${LOAN_ID}/transactions/template`;
@@ -101,6 +110,16 @@ const APPROVAL_TEMPLATE: LoanActionTemplate = {
   approvalDate: [2026, 11, 24],
   expectedDisbursementDate: [2026, 11, 24],
   approvalAmount: 5000,
+};
+
+/**
+ * The approval template {@link OTHER_LOAN_ID} answers with: a different figure, so a template that
+ * seeded the wrong loan's form is visible in the assertion rather than hidden by equal amounts.
+ */
+const OTHER_APPROVAL_TEMPLATE: LoanActionTemplate = {
+  approvalDate: [2026, 11, 24],
+  expectedDisbursementDate: [2026, 11, 24],
+  approvalAmount: 2750,
 };
 
 /**
@@ -177,6 +196,11 @@ function isApprovalTemplateRead(request: { readonly url: string }): boolean {
   return request.url === APPROVAL_TEMPLATE_URL;
 }
 
+/** Matches the approval-template read of the second loan the reuse cases hand one component. */
+function isOtherApprovalTemplateRead(request: { readonly url: string }): boolean {
+  return request.url === OTHER_APPROVAL_TEMPLATE_URL;
+}
+
 /** Matches the seed read of one loan-transaction command. */
 function isTransactionsTemplateRead(command: string): (request: TestRequest['request']) => boolean {
   return (request) =>
@@ -225,19 +249,14 @@ describe('LoanActionComponent', () => {
   }
 
   /**
-   * Mounts the screen for one `#/loanaccount/:id/:action` URL.
+   * Mounts the screen on a route stub, and is the one place the TestBed is configured.
    *
-   * Every case starts here so the mode, the id and the route stub are the only thing it changes. The
-   * component's own constructor resolves the segments and issues the mode's seed read, so the pending
-   * request is what each case answers with the payload it wants the form seeded from.
+   * Each case mounts for its own URL, so the module is reset first: the route stub is the one provider a
+   * case supplies, and a module left instantiated by the previous case cannot take a new one.
    *
-   * @param action the `:action` segment, or `null` for a route that carries none.
-   * @param id the `:id` segment, or `null` for a route that carries none.
+   * @param paramMap the route's own `paramMap`, which decides how many URLs the instance is handed.
    */
-  async function show(action: string | null, id: string | null = LOAN_ID): Promise<void> {
-    // Each case mounts the screen for its own URL, so the module is reset first: the route stub is the
-    // one provider a case supplies, and a module left instantiated by the previous case cannot take a
-    // new one.
+  async function mount(paramMap: Observable<ParamMap>): Promise<void> {
     TestBed.resetTestingModule();
 
     TestBed.configureTestingModule({
@@ -247,7 +266,7 @@ describe('LoanActionComponent', () => {
         provideHttpClientTesting(),
         provideTranslateService(),
         { provide: Router, useValue: { navigate } },
-        { provide: ActivatedRoute, useValue: { paramMap: of(paramsFor(action, id)) } },
+        { provide: ActivatedRoute, useValue: { paramMap } },
       ],
     });
 
@@ -260,6 +279,39 @@ describe('LoanActionComponent', () => {
     httpMock = TestBed.inject(HttpTestingController);
     fixture = TestBed.createComponent(LoanActionComponent);
     component = fixture.componentInstance;
+  }
+
+  /**
+   * Mounts the screen for one `#/loanaccount/:id/:action` URL.
+   *
+   * Every case that acts on a single URL starts here, so the mode, the id and the route stub are the
+   * only thing it changes. The component's own constructor resolves the segments and issues the mode's
+   * seed read, so the pending request is what each case answers with the payload it wants the form
+   * seeded from.
+   *
+   * @param action the `:action` segment, or `null` for a route that carries none.
+   * @param id the `:id` segment, or `null` for a route that carries none.
+   */
+  async function show(action: string | null, id: string | null = LOAN_ID): Promise<void> {
+    await mount(of(paramsFor(action, id)));
+  }
+
+  /**
+   * Mounts the screen on a route stub the case drives itself, so one instance can be handed two URLs.
+   *
+   * This is how the reuse the router performs across `#/loanaccount/{id}/{action}` is reproduced: the
+   * component subscribes once, two emissions follow, and the reads they start can be answered in either
+   * order — which is what a superseded answer is.
+   *
+   * @returns the subject the case emits through, one parameter map per URL.
+   */
+  async function showRouted(): Promise<Subject<ParamMap>> {
+    const params = new Subject<ParamMap>();
+
+    await mount(params);
+    fixture.detectChanges();
+
+    return params;
   }
 
   /** Answers the mode's seed read and renders what the seeded form looks like. */
@@ -325,19 +377,116 @@ describe('LoanActionComponent', () => {
     httpMock.expectNone(isRecordRead);
   });
 
-  it('reads the same approval template for a rejection, whose date the template does not carry', async () => {
+  it('rejects without reading any template, then posts the date and the note alone', async () => {
     await show('reject');
-    await settle(APPROVAL_TEMPLATE);
+
+    // The rejection screen issues no seed read at all: its form holds the rejection date and a note,
+    // legacy's rejection branch reads no template, and AAP 0.7.3's W5 row declares the approval template
+    // on the approve path alone. There is nothing to wait for, so the form is on screen at once.
+    httpMock.expectNone(() => true);
+    fixture.detectChanges();
 
     expect(component.mode()).toBe('reject');
     expect(component.command()).toBe('reject');
-    // The rejection date is not in the approval payload either, so the form takes the default
-    // legacy's rejection screen assigns — the browser clock's day — and stays required.
-    expect(isLocalMidnightToday(component.rejectForm.controls.rejectedOnDate.value)).toBe(true);
-    expect(component.rejectForm.controls.rejectedOnDate.hasError('required')).toBe(false);
-    expect(component.rejectForm.controls.rejectedOnDate.hasValidator(Validators.required)).toBe(true);
-    // The heading follows the command, not the endpoint that was read.
+    expect(component.loading()).toBe(false);
     expect(host().querySelector('h3.panel-title')?.textContent?.trim()).toBe('Reject Loan Account');
+    expect(host().querySelector('#rejectedOnDate')).not.toBeNull();
+    // The date is the browser clock's own day at local midnight — the default legacy's rejection screen
+    // assigns — and stays editable and required, so the server decides whether it is acceptable.
+    const rejectedOnDate = component.rejectForm.controls.rejectedOnDate;
+
+    expect(isLocalMidnightToday(rejectedOnDate.value)).toBe(true);
+    expect(rejectedOnDate.hasError('required')).toBe(false);
+    expect(rejectedOnDate.hasValidator(Validators.required)).toBe(true);
+    expect(host().querySelector<HTMLInputElement>('#rejectedOnDate')?.value).toBe(todayInputValue());
+
+    component.rejectForm.patchValue({
+      rejectedOnDate: new Date(2026, 10, 24),
+      note: '  rejected at the branch  ',
+    });
+
+    const submission = component.submit();
+    const post = httpMock.expectOne(isActionPost('reject'));
+
+    expect(post.request.params.get('command')).toBe('reject');
+    // The body is the command's own fields plus the pattern and language the service writes as it
+    // serialises; the note travels trimmed, and the command never appears in the body.
+    expect(post.request.body).toEqual({
+      rejectedOnDate: '24 November 2026',
+      note: 'rejected at the branch',
+      dateFormat: 'dd MMMM yyyy',
+      locale: 'en',
+    });
+
+    post.flush({ resourceId: 9 });
+    await submission;
+
+    expect(navigate).toHaveBeenCalledWith(RECORD_ROUTE);
+    // A note that carries no text adds no member at all, as legacy's untouched note field does.
+    component.rejectForm.controls.note.setValue('   ');
+    expect(component.buildRequest()).toEqual({
+      command: 'reject',
+      rejectedOnDate: new Date(2026, 10, 24),
+    });
+  });
+
+  it('drops a superseded approval read so the current loan keeps its own amount', async () => {
+    const params = await showRouted();
+
+    // One instance, two URLs — the reuse the router performs — so both reads are in flight at once.
+    params.next(paramsFor('approve', LOAN_ID));
+    const superseded = httpMock.expectOne(isApprovalTemplateRead);
+
+    params.next(paramsFor('approve', OTHER_LOAN_ID));
+    const current = httpMock.expectOne(isOtherApprovalTemplateRead);
+
+    expect(superseded.request.url).toBe(APPROVAL_TEMPLATE_URL);
+    expect(current.request.url).toBe(OTHER_APPROVAL_TEMPLATE_URL);
+
+    // The loan the address now names answers first ...
+    current.flush(OTHER_APPROVAL_TEMPLATE);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(component.id()).toBe(OTHER_LOAN_ID);
+    expect(component.loading()).toBe(false);
+    expect(component.approveForm.controls.approvedLoanAmount.value).toBe(2750);
+
+    // ... and the loan the URL has left answers last: its figure must seed nothing, or it would reach
+    // the current loan's approve POST.
+    superseded.flush(APPROVAL_TEMPLATE);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(component.approveForm.controls.approvedLoanAmount.value).toBe(2750);
+    expect(component.loading()).toBe(false);
+    expect(component.notFound()).toBe(false);
+    expect(component.error()).toBeNull();
+  });
+
+  it('keeps the current loan’s form when a superseded read answers 404', async () => {
+    const params = await showRouted();
+
+    params.next(paramsFor('approve', LOAN_ID));
+    const superseded = httpMock.expectOne(isApprovalTemplateRead);
+
+    params.next(paramsFor('approve', OTHER_LOAN_ID));
+    const current = httpMock.expectOne(isOtherApprovalTemplateRead);
+
+    current.flush(OTHER_APPROVAL_TEMPLATE);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // The loan the URL has left is gone, which must not turn the current loan's form into the
+    // not-found message nor paint its failure above it.
+    superseded.flush({ defaultUserMessage: 'Loan not found' }, { status: 404, statusText: 'Not Found' });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(component.notFound()).toBe(false);
+    expect(component.error()).toBeNull();
+    expect(host().querySelector('form')).not.toBeNull();
+    expect(component.approveForm.controls.approvedLoanAmount.value).toBe(2750);
   });
 
   it('seeds the disbursement form from the transactions template of the disburse command', async () => {

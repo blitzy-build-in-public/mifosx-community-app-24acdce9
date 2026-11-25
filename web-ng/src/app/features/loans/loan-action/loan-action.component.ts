@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  DestroyRef,
+  inject,
+  signal,
+} from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink, type ParamMap } from '@angular/router';
@@ -219,12 +226,13 @@ function today(): Date {
  *
  * **What it calls, and through what** (AAP 0.7.3 row "W5 approve and disburse"):
  *
- * - `approve` and `reject` — `GET /loans/{id}/template?templateType=approval` through
+ * - `approve` — `GET /loans/{id}/template?templateType=approval` through
  *   {@link LoanService.approvalTemplate}, the form's seed;
  * - `disburse` — `GET /loans/{id}/transactions/template?command=disburse` through
  *   {@link LoanService.actionTemplate}, the same command's own seed;
- * - `undoapproval` and `undodisbursal` — no template call: the two confirm views have no fields to
- *   seed;
+ * - `reject`, `undoapproval` and `undodisbursal` — no call at all: the rejection screen takes its date
+ *   from the browser clock and seeds nothing from a template, and the two confirm views have no fields
+ *   to seed either;
  * - `repayment` — no call from this component: the child loads its own template and schedule;
  * - `POST /loans/{id}?command=<command>` through {@link LoanService.action}, once per click.
  *
@@ -300,6 +308,16 @@ export class LoanActionComponent {
   private readonly router = inject(Router);
 
   /**
+   * Emits once this screen is destroyed, which ends the subscription the route's `paramMap` keeps and
+   * cancels the mode's seed read with it.
+   *
+   * Held explicitly rather than only read at subscription time, because {@link isCurrent} asks it
+   * whether the screen is still alive: a read that outlived the component it was started for must write
+   * nothing, the same reason `loan-edit` and `loan-charge-form` hold theirs.
+   */
+  private readonly destroyRef = inject(DestroyRef);
+
+  /**
    * Id of the loan the action applies to, as the `:id` segment delivered it.
    *
    * Kept as the raw string segment rather than parsed with `Number()`: every `LoanService` method
@@ -320,7 +338,15 @@ export class LoanActionComponent {
    */
   readonly command = signal<LoanCommand | null>(null);
 
-  /** Whether the mode's seed read is in flight, so the template withholds the form until it settles. */
+  /**
+   * Whether the current mode's seed read is in flight, so the template withholds the form until it
+   * settles.
+   *
+   * Owned by the run {@link load} considers current: it is raised for a mode that reads a template,
+   * lowered by that same run once the read settles, and lowered at once by a mode that issues no read
+   * at all — so moving from an action whose read is still in flight to one that reads nothing leaves
+   * the form rendered rather than withheld behind a run that no longer speaks for the screen.
+   */
   readonly loading = signal(false);
 
   /** The failure the template renders above the form, or `null` while the last call succeeded. */
@@ -389,8 +415,10 @@ export class LoanActionComponent {
    *
    * `rejectedOnDate` is the command's mandatory member and starts at the browser clock's own day,
    * the default legacy's rejection screen assigns with `new Date()` (AAP 0.10.5 item 15). It stays
-   * editable and required, so the server decides whether the date it receives is acceptable; the
-   * approval template carries no rejection date and none is invented from it. The note is optional.
+   * editable and required, so the server decides whether the date it receives is acceptable. The
+   * rejection screen issues no seed read at all — legacy's rejection branch reads no template — so
+   * neither this date nor anything else in this form comes from the approval template, which only the
+   * approve path reads. The note is optional.
    */
   readonly rejectForm = new FormGroup({
     rejectedOnDate: new FormControl<Date | null>(today(), { validators: [Validators.required] }),
@@ -429,13 +457,26 @@ export class LoanActionComponent {
   readonly guard = createSubmitGuard();
 
   /**
+   * Which seed read is the current one, incremented by every run of {@link load}.
+   *
+   * The router reuses this component across `#/loanaccount/{id}/{action}`, so moving in place starts a
+   * second run while the first is still in flight and the earlier one can answer last. A superseded run
+   * compares its own number with this one after the await and writes nothing — not the seeded amount,
+   * not the not-found or error state, not `loading` — so another loan's template can neither seed the
+   * form the URL now shows nor decide what that form reports (the guard `loan-edit` and
+   * `loan-charge-form` keep over their own load sequences).
+   */
+  private loadSequence = 0;
+
+  /**
    * Reads the route's two segments and drives the screen's one load per navigation.
    *
    * One `paramMap` subscription is the whole entry point — never `snapshot` beside a subscription —
    * because Angular reuses this component when the URL moves from one action of the same route to
    * another, and a snapshot read taken at construction would leave the first action's form on screen
    * for the second action's URL. Every emission re-resolves the mode, clears the previous outcome and
-   * issues that mode's own read, so the displayed form always belongs to the segment in the address.
+   * issues that mode's own read, so the displayed form always belongs to the segment in the address; a
+   * read the previous emission started writes nothing once it answers (see {@link load}).
    */
   constructor() {
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe((params: ParamMap) => {
@@ -529,58 +570,111 @@ export class LoanActionComponent {
   }
 
   /**
-   * Runs the resolved mode's one seed read, in the order AAP 0.7.3 row "W5 approve and disburse" lists
-   * it: the approval template for `approve` and `reject`, the transactions template for `disburse`, and
-   * nothing at all for the two confirm views and the repayment form, which have no defaults to seed.
+   * Runs the resolved mode's own seed read, per mode and never one read on another mode's behalf:
+   * `approve` reads the approval template (`GET /loans/{id}/template?templateType=approval`),
+   * `disburse` reads the transaction template of its own command
+   * (`GET /loans/{id}/transactions/template?command=disburse`), and `reject`, the two confirm views and
+   * the repayment form issue no request at all — `reject` included, because its form holds only the
+   * rejection date and a note, legacy's rejection branch reads no template, and the approval template
+   * belongs to the approve path alone (AAP 0.7.3 row "W5 approve and disburse"; Rule 1 clauses 2, 3).
+   *
+   * Every run takes the next {@link loadSequence} number and its read is tied to this component's
+   * lifetime, so a run the route has since superseded — or that the screen outlived — writes nothing at
+   * all: not the seeded amount, not the not-found or error state, and not `loading`, which belongs to
+   * the run that replaced it. The form therefore always holds the loan the address names, and the
+   * amount a later POST carries is never another loan's template figure.
    *
    * A 404 sets `notFound`, which the template renders in place of the form: the id is not a loan, or
    * not a loan in a state this action applies to. Any other 4xx sets `error` through `screenFailure`,
    * whose message is rendered verbatim; a 5xx or a transport failure leaves `error` `null`, because
    * the interceptor has already raised its one notification (AAP 0.7.4). Neither unmounts the screen
-   * nor resets a form. `loading` is cleared whichever way the read settles, so the form is never
-   * withheld for ever.
+   * nor resets a form. `loading` ends false on every path of the current run, the mode that issues no
+   * read included, so the form is never withheld for ever.
    *
    * @param mode The served mode whose seed is read.
    * @param loanId Loan the action applies to, as the route delivered it.
    */
   private async load(mode: ServedMode, loanId: number | string): Promise<void> {
-    if (mode === 'repayment' || mode === 'undoapproval' || mode === 'undodisbursal') {
-      return;
-    }
-
-    this.loading.set(true);
+    const load = ++this.loadSequence;
 
     try {
-      if (mode === 'disburse') {
-        const template: LoanTransactionTemplate = await firstValueFrom(
-          this.loans.actionTemplate(loanId, 'disburse'),
-        );
+      switch (mode) {
+        case 'approve': {
+          this.loading.set(true);
 
-        this.seedDisbursement(template);
-      } else {
-        const template: LoanActionTemplate = await firstValueFrom(this.loans.approvalTemplate(loanId));
+          const template: LoanActionTemplate = await firstValueFrom(
+            this.loans.approvalTemplate(loanId).pipe(takeUntilDestroyed(this.destroyRef)),
+          );
 
-        this.seedApproval(template);
+          // Checked before the form is written: an answer that arrives after the route moved on
+          // describes another loan, and its figure must not reach the current loan's POST.
+          if (this.isCurrent(load)) {
+            this.seedApproval(template);
+          }
+
+          break;
+        }
+
+        case 'disburse': {
+          this.loading.set(true);
+
+          const template: LoanTransactionTemplate = await firstValueFrom(
+            this.loans.actionTemplate(loanId, 'disburse').pipe(takeUntilDestroyed(this.destroyRef)),
+          );
+
+          if (this.isCurrent(load)) {
+            this.seedDisbursement(template);
+          }
+
+          break;
+        }
+
+        default: {
+          // No read of its own. `reject` is the one dated action with nothing to seed — its form holds
+          // the rejection date and a note, and legacy's rejection branch reads no template either — so
+          // it joins the two confirm views and the repayment form here and issues no request at all,
+          // and the `finally` below is what releases the loading state this run inherited
+          // (AAP 0.7.3 row "W5 approve and disburse"; Rule 1 clauses 2 and 3).
+          break;
+        }
       }
     } catch (cause: unknown) {
-      const failure = toDisplayableFailure(cause);
+      if (this.isCurrent(load)) {
+        const failure = toDisplayableFailure(cause);
 
-      if (failure.status === 404) {
-        this.notFound.set(true);
-      } else {
-        this.error.set(screenFailure(failure));
+        if (failure.status === 404) {
+          this.notFound.set(true);
+        } else {
+          this.error.set(screenFailure(failure));
+        }
       }
     } finally {
-      this.loading.set(false);
+      // Only the current run owns the loading state, and the run that issued no read ends it here: the
+      // superseded one must not clear the flag the newer read set, and no mode may leave the form
+      // withheld for ever.
+      if (this.isCurrent(load)) {
+        this.loading.set(false);
+      }
     }
+  }
+
+  /**
+   * Whether a run still speaks for the screen: it is the newest run, and the screen it belongs to has
+   * not been destroyed, so a read the route or the teardown cancelled can neither seed a form nor paint
+   * a failure nor clear the loading state of whatever replaced it.
+   *
+   * @param load the run's sequence number.
+   */
+  private isCurrent(load: number): boolean {
+    return !this.destroyRef.destroyed && load === this.loadSequence;
   }
 
   /**
    * Seeds the approve form's principal from the approval template's own `approvalAmount`.
    *
-   * The template serves both dated approval modes, so the value is written whenever the endpoint sends
-   * one; a mode that renders no amount field simply does not show it, and one that sends none leaves
-   * the field empty and required rather than inventing a figure (Rule 1 clause 3).
+   * The approve screen is the approval template's only reader: the rejection form holds no amount, so
+   * nothing else consumes this value, and a template that sends none leaves the field empty and
+   * required rather than inventing a figure (Rule 1 clause 3).
    *
    * @param template The approval template the endpoint answered with.
    */
