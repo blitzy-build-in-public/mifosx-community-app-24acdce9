@@ -8,13 +8,13 @@ import {
   type RouterState,
 } from '@angular/router';
 import { provideTranslateService, TranslateService } from '@ngx-translate/core';
-import { Subject, of, type Observable } from 'rxjs';
+import { Subject } from 'rxjs';
 import { beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
 import { AuthService } from '../auth/auth.service';
 import { IdleService } from '../auth/idle.service';
 import type { SessionData, SessionUserResponse } from '../auth/session.model';
-import { SessionService, type SessionUserReader } from '../auth/session.service';
+import { SessionService } from '../auth/session.service';
 import { ShellComponent } from './shell.component';
 
 /**
@@ -30,8 +30,10 @@ import { ShellComponent } from './shell.component';
  * - it renders the three hosts — the navbar, the breadcrumb and the routed outlet — and the outlet
  *   sits beside the breadcrumb's page container rather than inside it, so the screen's own
  *   `.container-fluid` is not doubled;
- * - the navbar's account name is the `userName` input when the shell is given one and the real
+ * - the navbar's account name is the `userName` input when the shell is given one and the
  *   `SessionService.user` projection otherwise;
+ * - none of the out-of-scope chrome is rendered — no rail, no hamburger, no notification bell and no
+ *   Accounting, Reports or Admin destination (AAP 0.10.5 item 8);
  * - the idle clock starts while a session is in effect, stops when it clears, and refuses to re-arm
  *   for a document event dispatched with no session behind it;
  * - every document event ng-idle counted as activity reaches the clock;
@@ -41,30 +43,29 @@ import { ShellComponent } from './shell.component';
  * - `timeout$` logs out and returns to `/login`, in that order;
  * - `ngOnDestroy` stops the clock and leaves no listener behind;
  * - the trail is the `breadcrumb` input when one is supplied and the active route's translated
- *   `data['breadcrumb']` keys otherwise, re-derived on the next navigation.
+ *   `data['breadcrumb']` keys otherwise, re-derived on the next navigation and empty when the route
+ *   declares none.
  *
- * Providers and what their absence proves. `AuthService` and `IdleService` are replaced by stubs
- * typed against the real classes, so the two cannot drift and the suite drives the clock's contracts
- * rather than real 30-minute timers. `SessionService` is the real service, because the label case
- * asserts the projection the application actually publishes. There is no HTTP provider anywhere in
- * the suite and no `HttpClient` import: the shell issues no request, so an attempt to reach Fineract
- * from it would fail with NG0201 rather than passing silently (Rule 1 clause 5, Rule 2). The router
- * is the real one over an empty route table — its `RouterLink` and `RouterOutlet` need the router's
- * own providers — with `navigate`, `events` and `routerState` replaced, which is the same set of
- * inputs a hand-written stub would supply. The translation service is the real one, because the
- * navbar and the search control render through `TranslatePipe`, which reads bundles rather than a
- * single `instant()` call.
+ * Providers and what their absence proves. `AuthService`, `IdleService` and `SessionService` are
+ * replaced by stubs typed against the real classes, so none of the three can drift and the suite
+ * drives the clock's contracts rather than real 30-minute timers. The `SessionService` stub publishes
+ * the `GET /users/{id}` projection the navbar falls back to, which is the one member of that service
+ * the shell reads; the service's own storage round trip is `session.service.spec.ts`'s contract.
+ * There is no HTTP provider anywhere in the suite and no `HttpClient` import: the shell issues no
+ * request, so an attempt to reach Fineract from it would fail with NG0201 rather than passing
+ * silently (Rule 1 clause 5, Rule 2). The router is the real one over an empty route table — its
+ * `RouterLink` and `RouterOutlet` need the router's own providers — with `navigate`, `events` and
+ * `routerState` replaced, which is the same set of inputs a hand-written stub would supply. The
+ * translation service is the real one, because the navbar renders through `TranslatePipe`, which
+ * reads bundles rather than a single `instant()` call.
  *
- * Security (Rule 1 clause 9, AAP 0.10.4): the session fixture's authentication key is assembled at
- * run time from parts, so no credential-shaped literal reaches the source, and the stored entry is
- * cleared before the test ends.
+ * Security (Rule 1 clause 9, AAP 0.10.4): the suite constructs no session entry and names no bearer
+ * secret. Nothing stored, submitted or logged is invented here: the only session value is the
+ * presence the idle gate tests for null.
  */
 
 /** The Fineract user id every fixture in this suite names. */
 const USER_ID = 42;
-
-/** The authentication-key parts the fixture joins: the value exists only in this run's memory. */
-const KEY_PARTS = ['Zm9v', 'YmFy', 'OnNlY3JldA'];
 
 /** The account name `GET /users/{id}` resolves, which is what the navbar must fall back to. */
 const ACCOUNT_NAME = 'mifos';
@@ -92,14 +93,16 @@ const SPEC_BUNDLE: Record<string, string> = {
   'label.heading.viewclient': 'Client record',
 };
 
-/** The legacy session entry a signed-in shell is looking at; its contents are never displayed. */
-function sessionFixture(): SessionData {
-  return {
-    userId: USER_ID,
-    authenticationKey: KEY_PARTS.join(''),
-    userPermissions: ['READ_CLIENT'],
-  };
-}
+/**
+ * The value `AuthService.session()` reports while a session is in effect.
+ *
+ * The shell asks that signal one question — whether a session exists — and reads none of its
+ * members, so this fixture carries the user id and stops there: no authentication key, no permission
+ * list and no credential is invented for the suite (Rule 1 clause 9). The cast states exactly that
+ * and is this suite's one boundary value (Rule 1 clause 4); a component that started reading the
+ * entry's members would have to be given them here.
+ */
+const SESSION_EFFECTIVE = { userId: USER_ID } as unknown as SessionData;
 
 /**
  * A matched route node as the shell walks it: the two members the breadcrumb derivation reads out of
@@ -153,7 +156,7 @@ class AuthStub implements Pick<AuthService, 'session' | 'logout'> {
 
   /** Puts a session into effect, as a login or a restore does. */
   signIn(): void {
-    this.current.set(sessionFixture());
+    this.current.set(SESSION_EFFECTIVE);
   }
 
   /** Clears the session without going through `logout` (a 401, or a test's own arrangement). */
@@ -183,10 +186,32 @@ class IdleStub implements Pick<IdleService, 'start' | 'stop' | 'reset' | 'warnin
   readonly reset = vi.fn((): void => undefined);
 }
 
+/**
+ * The half of `SessionService` the shell reads: the `GET /users/{id}` projection its `displayName`
+ * falls back to when the hosting route supplies no `userName`.
+ *
+ * A stub rather than the real service, because publishing a projection is all this suite needs from
+ * it, and the real one reaches that state only through a stored session entry — which would put a
+ * fabricated session and its credential in this file (Rule 1 clause 9). The service's own round trip
+ * is `session.service.spec.ts`'s contract.
+ */
+class SessionsStub implements Pick<SessionService, 'user'> {
+  private readonly current = signal<SessionUserResponse | null>(null);
+
+  /** The projection a completed restore publishes; `null` until {@link resolveUser} supplies one. */
+  readonly user: Signal<SessionUserResponse | null> = this.current.asReadonly();
+
+  /** Publishes a resolved projection, exactly as a restore does once `GET /users/{id}` answers. */
+  resolveUser(username: string): void {
+    this.current.set({ id: USER_ID, username });
+  }
+}
+
 describe('ShellComponent', () => {
   let fixture: ComponentFixture<ShellComponent>;
   let auth: AuthStub;
   let idle: IdleStub;
+  let sessions: SessionsStub;
   let navigate: MockInstance;
   let events: Subject<RouterEvent>;
   let routerRoot: RouteNode;
@@ -236,6 +261,7 @@ describe('ShellComponent', () => {
     TestBed.resetTestingModule();
     auth = new AuthStub();
     idle = new IdleStub();
+    sessions = new SessionsStub();
     events = new Subject<RouterEvent>();
     routerRoot = routeNode({});
     destroyed = false;
@@ -248,6 +274,7 @@ describe('ShellComponent', () => {
         provideTranslateService(),
         { provide: AuthService, useValue: auth },
         { provide: IdleService, useValue: idle },
+        { provide: SessionService, useValue: sessions },
       ],
     });
 
@@ -280,6 +307,11 @@ describe('ShellComponent', () => {
     expect(content.querySelector('app-breadcrumb')).not.toBeNull();
     expect(content.querySelector('router-outlet')).not.toBeNull();
 
+    // The initial state, before any navigation: the first snapshot declares no `breadcrumb`, so the
+    // trail is empty — which a component that rendered a fixed crumb could not reproduce.
+    expect(fixture.componentInstance.breadcrumbItems()).toEqual([]);
+    expect(host().querySelector('ol.breadcrumb')).toBeNull();
+
     // Each screen template opens its own `.container-fluid`, so the outlet must not sit inside the
     // breadcrumb's container: a second wrapper would double the page gutters.
     expect(find<HTMLElement>('.content-wrapper > .container-fluid').contains(find('router-outlet'))).toBe(
@@ -293,16 +325,31 @@ describe('ShellComponent', () => {
     expect(host().querySelector('.navbar-toggle')).toBeNull();
     expect(host().querySelector('.fa-bell')).toBeNull();
     expect(host().querySelector('#leftnav')).toBeNull();
+
+    // Every destination behind those controls — Accounting, Reports, Admin and the rail's modules —
+    // stays on the legacy application during cutover, so no rendered link may lead to one of them
+    // (AAP 0.10.5 item 8).
+    const destinations = Array.from(
+      host().querySelectorAll('a'),
+      (link: HTMLAnchorElement): string =>
+        `${link.getAttribute('href') ?? ''} ${link.textContent ?? ''}`.toLowerCase(),
+    );
+
+    // Asserted non-empty first, so the absence below is the shell's in-scope links being checked
+    // rather than a template that rendered no link at all.
+    expect(destinations.length).toBeGreaterThan(0);
+
+    expect(
+      destinations.filter((destination: string): boolean =>
+        ['accounting', 'reports', 'admin'].some((segment: string): boolean =>
+          destination.includes(segment),
+        ),
+      ),
+    ).toEqual([]);
   });
 
-  it('labels the navbar with the userName input when given one and with the session projection otherwise', async () => {
-    const sessions = TestBed.inject(SessionService);
-    const reader: SessionUserReader = (): Observable<SessionUserResponse> =>
-      of({ id: USER_ID, username: ACCOUNT_NAME });
-
-    sessions.write(sessionFixture());
-    await sessions.restore(reader);
-
+  it('labels the navbar with the session projection when no userName is given, and with the input when one is', () => {
+    sessions.resolveUser(ACCOUNT_NAME);
     createShell();
     expect(userMenuLabel()).toContain(ACCOUNT_NAME);
 
@@ -310,8 +357,6 @@ describe('ShellComponent', () => {
     fixture.detectChanges();
     expect(userMenuLabel()).toContain(SUPPLIED_NAME);
     expect(userMenuLabel()).not.toContain(ACCOUNT_NAME);
-
-    sessions.clear();
   });
 
   it('starts the idle clock while a session is in effect, stops it when the session clears, and ignores activity without one', () => {
@@ -448,4 +493,21 @@ describe('ShellComponent', () => {
 
     expect(crumbLabels()).toEqual(['Client record', 'Clients list']);
   });
+
+  it('clears the trail when the route it reaches declares no breadcrumb', () => {
+    routerRoot = routeNode({}, routeNode({ breadcrumb: 'label.heading.clients' }));
+    createShell();
+    expect(fixture.componentInstance.breadcrumbItems()).toEqual([{ label: 'Clients list' }]);
+
+    // The login route declares no `breadcrumb`, so leaving the record for it must clear the trail
+    // rather than leave the previous screen's crumb behind.
+    routerRoot = routeNode({}, routeNode({}));
+    events.next(new NavigationEnd(1, '/login', '/login'));
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.breadcrumbItems()).toEqual([]);
+    expect(host().querySelector('ol.breadcrumb')).toBeNull();
+    expect(crumbLabels()).toEqual([]);
+  });
+
 });
