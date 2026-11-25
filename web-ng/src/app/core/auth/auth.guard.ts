@@ -23,6 +23,12 @@
  * of the stored entry — so a returning user passes on the first navigation, before any restore has
  * revalidated the session, which is the reload case of workflow W1.
  *
+ * **Why the read is not wrapped.** It is a plain signal read, with no request, no parse and no
+ * fallible step of its own, so a `catch` around it could only do the one thing this guard must never
+ * do: convert an unexpected error into a silent login redirect. A read that throws therefore
+ * propagates out of the guard and aborts the navigation, which never proceeds as authenticated —
+ * `auth.guard.spec.ts` pins the propagation and the absence of a redirect.
+ *
  * **What it never does.** It logs nothing, reads no key, and names no host, API path or tenant
  * (Rule 1 clause 9, Rule 2). It also needs no check for the login route itself: `app.routes.ts`
  * declares `login` beside the guarded layout route rather than beneath it, so the guard never runs

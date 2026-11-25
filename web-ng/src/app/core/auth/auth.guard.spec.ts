@@ -20,7 +20,10 @@
  *   than being flattened into the redirect's own query — the search route
  *   (`/search/:query?scope=`) is exactly such a URL, so its `scope` must travel inside `returnUrl`;
  * - the guard never navigates: `Router.navigate` and `Router.navigateByUrl` are both untouched, since
- *   the tree is the whole contract (AAP 0.4.4 decision 3's "no second navigation racing the first").
+ *   the tree is the whole contract (AAP 0.4.4 decision 3's "no second navigation racing the first");
+ * - a session read that throws leaves the guard as that very error, with no answer and no navigation,
+ *   because the read is deliberately unwrapped — and the guard yields the login tree again once the
+ *   read answers, so it holds no error state between calls.
  *
  * **Why the assertions go through the injected router.** The guard builds its answer with
  * `router.createUrlTree`, so serializing and parsing it with the *same* `Router` instance is what
@@ -39,7 +42,7 @@
  *
  * Nothing in this file assembles a session, names a host, an API path or a tenant, logs anything, or
  * carries a credential-shaped literal (Rule 1 clauses 2, 4 and 9; Rule 2). The `AuthService` stub
- * below answers one boolean and holds nothing else.
+ * below answers one boolean, or throws the error a case hands it, and holds nothing else.
  */
 import { TestBed } from '@angular/core/testing';
 import {
@@ -92,12 +95,31 @@ const UNREAD_ROUTE = {} as ActivatedRouteSnapshot;
 class AuthStub implements Pick<AuthService, 'isAuthenticated'> {
   private signedIn = false;
 
+  /** The error the read should raise instead of answering, or `null` while it answers. */
+  private failure: Error | null = null;
+
   /** Whether a session is in effect, as the guard's only input. */
-  readonly isAuthenticated = vi.fn((): boolean => this.signedIn);
+  readonly isAuthenticated = vi.fn((): boolean => {
+    if (this.failure !== null) {
+      throw this.failure;
+    }
+
+    return this.signedIn;
+  });
 
   /** Puts a session in effect, the state a login produces. */
   signIn(): void {
     this.signedIn = true;
+  }
+
+  /** Makes the session read raise `error` — the failure no guard clause can answer for. */
+  failReadsWith(error: Error): void {
+    this.failure = error;
+  }
+
+  /** Lets the session read answer again, the state after a transient failure has passed. */
+  stopFailing(): void {
+    this.failure = null;
   }
 }
 
@@ -245,5 +267,38 @@ describe('authGuard', () => {
     // answer; the tree is the whole contract (AAP 0.4.2, AAP 0.4.4 decision 3).
     expect(navigate).not.toHaveBeenCalled();
     expect(navigateByUrl).not.toHaveBeenCalled();
+  });
+
+  it('lets a throwing session read propagate, with no answer and no navigation, and holds no error state', () => {
+    const failure = new Error('the session read failed');
+    const navigate = vi.spyOn(router(), 'navigate');
+    const navigateByUrl = vi.spyOn(router(), 'navigateByUrl');
+    auth.failReadsWith(failure);
+
+    let answer: GuardAnswer | null = null;
+    let thrown: Error | null = null;
+
+    try {
+      answer = runGuard(stateFor(CLIENT_VIEW_URL));
+    } catch (error: unknown) {
+      thrown = error instanceof Error ? error : null;
+    }
+
+    // The read is unwrapped, so the very instance the session raised is what leaves the guard. A catch
+    // that answered the login tree here would hide a broken session read behind a redirect, and the
+    // user would sign in only to be sent back to the same failure.
+    expect(thrown).toBe(failure);
+    // No answer at all — neither `true` nor a tree — so the navigation never proceeds authenticated.
+    expect(answer).toBeNull();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(navigateByUrl).not.toHaveBeenCalled();
+
+    // The failure belongs to the read and not to the guard: with the read answering again, the guard
+    // gives the ordinary denial answer, so it carries no error state from one call to the next.
+    auth.stopFailing();
+
+    expect(router().serializeUrl(asUrlTree(runGuard(stateFor(CLIENT_VIEW_URL))))).toBe(
+      '/login?returnUrl=%2Fviewclient%2F2',
+    );
   });
 });

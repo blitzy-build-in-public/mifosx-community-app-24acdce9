@@ -20,13 +20,19 @@ import { HasPermissionDirective } from './has-permission.directive';
  *   hidden even while `ALL_FUNCTIONS` grants every code — the directive's own blank-code
  *   precondition, not the service's answer, is what keeps a nameless gate shut;
  * - a permission granted after the first render reveals the element, which is the only proof that
- *   the directive tracks the permissions signal rather than reading it once.
+ *   the directive tracks the permissions signal rather than reading it once;
+ * - with no session present the element stays hidden for a requested code and for a negated one
+ *   alike, because the service it asks fails closed, and the negated element is revealed only once
+ *   a session exists and the signed-in user genuinely lacks the code.
  *
  * The permission algebra is not this directive's, so the suite supplies it at the real token. The
- * stub below mirrors the contract `core/auth/permissions.service.ts` publishes — the `can`/`has`
- * pair, `ALL_FUNCTIONS`, the leading `!` and the fail-closed answer — and is typed against the real
- * class so the two cannot drift. The real service is never instantiated here: it reads the session,
- * which a unit test has no business assembling.
+ * stub below reproduces the two states `core/auth/permissions.service.ts` answers from: while no
+ * session is present it answers `false` to every question, a negated one included; once a session is
+ * present it answers from the granted list, with `ALL_FUNCTIONS` granting every code and a leading
+ * `!` inverting the question. The service's `ALL_FUNCTIONS_READ` wildcard is outside what these
+ * cases ask about, so the stub does not model it. The stub is typed against the real class — the
+ * `can`/`has` pair the directive calls — so the two cannot drift. The real service is never
+ * instantiated here: it reads the session, which a unit test has no business assembling.
  *
  * The host component holds the bound code in a signal because the application runs zoneless
  * (AAP 0.4.1), where a plain field would not mark the host view for refresh and a rebound code could
@@ -37,23 +43,39 @@ import { HasPermissionDirective } from './has-permission.directive';
 const ALL_FUNCTIONS = 'ALL_FUNCTIONS';
 
 /**
- * The permissions the signed-in user holds, with the legacy answers for `!`, `ALL_FUNCTIONS` and a
- * code that names nothing, replacing `PermissionsService` only for this suite.
+ * The permission answers `PermissionsService` gives in the state a test puts it in — none while no
+ * session is present, and the legacy answers for the list, `!` and `ALL_FUNCTIONS` once one is —
+ * replacing the real service only for this suite.
  */
 class PermissionsStub implements Pick<PermissionsService, 'can' | 'has'> {
   private readonly granted = signal<readonly string[]>([]);
+
+  /**
+   * True once a login has supplied a list, false before that and again after `clear()`, exactly as
+   * the real service's own gate holds it: a session that never arrived is not a user who holds
+   * nothing.
+   */
+  private readonly sessionPresent = signal(false);
 
   /** Mirror of the service's public list, so a test can assert what the directive is reading. */
   readonly permissions: Signal<readonly string[]> = this.granted.asReadonly();
 
   /** Plain membership; `ALL_FUNCTIONS` grants every code, as it does in legacy. */
   can(key: string): boolean {
+    if (!this.sessionPresent()) {
+      return false;
+    }
+
     const code = key.trim();
     return this.granted().includes(ALL_FUNCTIONS) || this.granted().includes(code);
   }
 
   /** The directive-facing question: a leading `!` asks for the permission's absence. */
   has(key: string): boolean {
+    if (!this.sessionPresent()) {
+      return false;
+    }
+
     const code = key.trim();
     if (code.startsWith('!')) {
       const negated = code.slice(1).trim();
@@ -62,9 +84,16 @@ class PermissionsStub implements Pick<PermissionsService, 'can' | 'has'> {
     return this.can(code);
   }
 
-  /** Replaces the granted list, the way a login or a permission refresh does. */
+  /** Replaces the granted list and marks the session present, the way a login or a restore does. */
   grant(codes: readonly string[]): void {
     this.granted.set(codes);
+    this.sessionPresent.set(true);
+  }
+
+  /** Empties the list and marks the session absent, the way a logout and a 401 response do. */
+  clear(): void {
+    this.granted.set([]);
+    this.sessionPresent.set(false);
   }
 }
 
@@ -205,5 +234,35 @@ describe('HasPermissionDirective', () => {
 
     expect(stub.permissions()).toEqual(['CLIENT_VIEW']);
     expect(gated.style.display).toBe('');
+  });
+
+  it('hides both elements while no session is present and reveals only the negated one once one is', () => {
+    // No session has ever been granted, and the service's answer here is the fail-closed one: every
+    // question is false, a negated code included, so neither element may be revealed. The stub
+    // reproduces that answer rather than deriving the negated question from the empty list.
+    fixture.detectChanges();
+
+    const gated = buttonWithId(fixture, 'gated');
+    const negated = buttonWithId(fixture, 'negated');
+
+    expect(gated.style.display).toBe('none');
+    expect(negated.style.display).toBe('none');
+    expect(negated.isConnected).toBe(true);
+
+    // A session with an empty list is a different state: the signed-in user genuinely lacks
+    // READ_CLIENT, so the negated gate opens while the plain one stays shut.
+    stub.grant([]);
+    fixture.detectChanges();
+
+    expect(negated.style.display).toBe('');
+    expect(gated.style.display).toBe('none');
+
+    // A logout or a 401 withdraws the session again, and the gate closes on both shapes: the
+    // signed-out answer is not merely the one a stub starts in.
+    stub.clear();
+    fixture.detectChanges();
+
+    expect(gated.style.display).toBe('none');
+    expect(negated.style.display).toBe('none');
   });
 });
