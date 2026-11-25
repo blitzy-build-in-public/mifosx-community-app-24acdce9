@@ -7,7 +7,7 @@
   this file carries no style, no colour and no pixel: `.container-fluid` and `.row`/`.col-md-*` are
   the page and its grid, `.panel`/`.panel-heading`/`.panel-title`/`.panel-body` the white square card
   with its shadow, `.form-group`/`.control-label` the field layout, `.form-control` the legacy
-  fixed-height input, `.checkbox` the boxed choice, `.btn.btn-primary` the brand fill, `.btn.btn-default`
+  fixed-height input, `.btn.btn-primary` the brand fill, `.btn.btn-default`
   the cancel control and `.alert.alert-danger` the failure banner (Rule 1 clause 6; AAP 0.5.2).
   `span.required` is the legacy marker rule the global stylesheet carries.
 
@@ -65,7 +65,7 @@
             <!-- The form exists only once the seed resolved: an empty form would post values the
                  user never chose. -->
             @if (ready()) {
-              <form [formGroup]="form" (ngSubmit)="submit()">
+              <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
                 <fieldset>
                   @if (isEntity()) {
                     <!-- `PUT /clients/{id}` for an entity: the business name, and no individual
@@ -182,6 +182,12 @@
                       marks required for that state; a pending client has none, and Fineract rejects
                       an activation date sent with one. The native date input is the registered
                       replacement for the legacy jQuery datepicker (AAP 0.10.5 item 1).
+
+                      The field owns its own `.form-group` and `.has-error`, so the message for its
+                      invalid state is projected into the slot it renders after the control: without
+                      it a cleared activation date would report itself by colour alone, and the form
+                      refuses to submit while it is empty. The wording is the same
+                      `label.requiredfield` string every other required control on this screen shows.
                     -->
                     <div class="row">
                       <div class="col-md-6">
@@ -192,7 +198,11 @@
                           inputId="activationDate"
                           [control]="form.controls.activationDate"
                           [required]="true"
-                        />
+                        >
+                          @if (showsRequiredError(form.controls.activationDate)) {
+                            <span class="help-block">{{ 'label.requiredfield' | translate }}</span>
+                          }
+                        </app-date-field>
                       </div>
                     </div>
                   }
