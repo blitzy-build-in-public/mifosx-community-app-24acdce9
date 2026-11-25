@@ -18,6 +18,12 @@ import { isClosedClientStatus, toClientStatusKey } from '../client.models';
 import { ClientService } from '../client.service';
 
 /**
+ * How many page links the pager renders at once — `dir-pagination-controls`' own `max-size` default,
+ * so a client list of a thousand rows paints nine links around the page in view rather than sixty-six.
+ */
+const PAGE_NUMBER_WINDOW = 9;
+
+/**
  * One rendered row of the clients table: the six values the table prints, plus the key the loop
  * tracks, the id a row opens and the status code the "Show Closed" filter reads — resolved once per
  * row from whichever read produced it.
@@ -151,8 +157,13 @@ interface ClientListToolbarValues {
  * it and {@link rows} keeps the order the server answered with.
  *
  * **What it deliberately does not do, per Rule 1 clause 3 (match legacy, do not improve it).**
- * No pager, no rows-per-page selector and no infinite scroll (AAP 0.5.4 leaves client-list
- * pagination an open item; the design paints five rows and no pager); no spinner, skeleton or
+ * Paging is legacy's own and nothing more: the server is asked for fifteen rows at a time and the
+ * pager appears only when the match spans more than one page, which is what the legacy
+ * `dir-pagination-controls` does and why the design's five-client capture paints none
+ * (`app/views/clients/clients.html:79-82`; AAP 0.5.4 has `.pagination` supply the styling). No
+ * rows-per-page selector and no infinite scroll: legacy carries neither, and the "Rows" control the
+ * Figma raster paints belongs to a different generation of the product (Rule 1 clause 3). No
+ * spinner, skeleton or
  * progress element (the design carries no loader asset — AAP 0.2.4); no ordering beyond that
  * display-name sort, and no renaming, trimming or reformatting of a server value; no textual status
  * anywhere, because the design paints a colour swatch and a word would be an improvement the
@@ -342,22 +353,56 @@ export class ClientListComponent {
   );
 
   /**
-   * Rows to skip — the first page, because the screen renders none of the pager's controls.
-   *
-   * The pair with {@link pageLimit} is the whole of this screen's paging: the family's
-   * `ClientListParams` records that the legacy list pages with `offset: (page - 1) * clientsPerPage`
-   * and `limit: clientsPerPage`, and the design paints no pager inside the card, so both values live
-   * in these two constants for a single correction to reach.
-   */
-  readonly pageOffset: number = 0;
-
-  /**
    * Rows per page: the legacy client list's own fifteen, as the family's `ClientListParams` records
    * it. Deliberately not the larger page a fresh screen might prefer — the request the parity
    * harness compares is the legacy request, and a different `limit` would show up as a difference in
    * every client-list workflow (Rule 1 clauses 2 and 3).
    */
   readonly pageLimit: number = 15;
+
+  /**
+   * The page the table is showing, 1-based — the pager's own state and the `offset` the list read
+   * derives from it (`(page - 1) * 15`, exactly legacy's `offset: (page - 1) * clientsPerPage`).
+   *
+   * A signal rather than a plain field because the pager renders it and this view is zoneless and
+   * `OnPush`, so a plain property would leave the pager marking the page it first painted.
+   */
+  readonly page = signal(1);
+
+  /**
+   * How many rows the last read matched across every page, as the envelope's
+   * `totalFilteredRecords` reports them — the only member that can say how many pages exist, which
+   * is why {@link ClientListPage} models it rather than flattening the envelope to its rows.
+   *
+   * `0` after a find, because a search answer is not paged and its own count is not a page count,
+   * and `0` after a failed read, because nothing measured the match then.
+   */
+  readonly totalRecords = signal(0);
+
+  /**
+   * How many pages the last read's match spans — never fewer than one, so a single-page result is
+   * still the first of one rather than an empty pager.
+   */
+  readonly pageCount = computed<number>(() =>
+    Math.max(1, Math.ceil(this.totalRecords() / this.pageLimit)),
+  );
+
+  /**
+   * The page numbers the pager renders: all of them for a match of nine pages or fewer, and
+   * otherwise a nine-page window centred on the page in view. Nine is `dir-pagination-controls`'
+   * own `max-size` default, and the window is what keeps a tenant with thousands of clients from
+   * painting one link per page.
+   */
+  readonly pageNumbers = computed<readonly number[]>(() => {
+    const pageCount = this.pageCount();
+    const size = Math.min(PAGE_NUMBER_WINDOW, pageCount);
+    const first = Math.min(
+      Math.max(1, this.page() - Math.floor(PAGE_NUMBER_WINDOW / 2)),
+      Math.max(1, pageCount - PAGE_NUMBER_WINDOW + 1),
+    );
+
+    return Array.from({ length: size }, (_, index) => first + index);
+  });
 
   /**
    * Reads the first page as soon as the screen is constructed, which is what makes `#/clients` the
@@ -372,7 +417,7 @@ export class ClientListComponent {
    *
    * The field's text is trimmed. When it carries something the find runs as a search — `GET /search`,
    * the call legacy makes for the same field. When it has been cleared the list is re-read with no
-   * filter at all, so clearing the field restores the full page, which is exactly what the legacy
+   * filter at all, so clearing the field restores the first page, which is exactly what the legacy
    * controller does with an empty `searchText` (`ClientController.search()`). Exactly one request
    * goes out per submit, and an empty field never sends an empty `query` (Rule 1 clauses 2 and 3).
    */
@@ -380,6 +425,9 @@ export class ClientListComponent {
     const query = this.toolbar.controls.find.value.trim();
 
     if (query === '') {
+      // Clearing the find returns to the start of the unfiltered list rather than to whatever page
+      // the user had paged to, because the search that replaced the rows was never paged.
+      this.page.set(1);
       this.load();
       return;
     }
@@ -388,11 +436,34 @@ export class ClientListComponent {
   }
 
   /**
+   * Moves the table to another page of the same read — the pager's only entry point.
+   *
+   * The click is a read, never a navigation: `href` exists only so the control is a focusable,
+   * Enter-activatable link, and the default is always prevented so the hash route cannot change.
+   * A page outside 1..{@link pageCount}, or the page already shown, is a no-op, so a second click on
+   * the current page cannot send a second read (AAP 0.1.1 duplicate-submission protection).
+   *
+   * @param event the anchor's click event, whose default navigation is suppressed.
+   * @param page the 1-based page the user picked.
+   */
+  goToPage(event: Event, page: number): void {
+    event.preventDefault();
+
+    if (page < 1 || page > this.pageCount() || page === this.page()) {
+      return;
+    }
+
+    this.page.set(page);
+    this.load();
+  }
+
+  /**
    * Reads one page of `GET /clients` and replaces the rows it holds (AAP 0.7.3 row "Client list and
    * edit").
    *
-   * The request carries `offset` and `limit` and nothing else. `orderBy` and `sortOrder` stay unset
-   * because the in-scope screen offers no sort affordance and the legacy list sends neither;
+   * The request carries `offset` and `limit` and nothing else. `offset` is the page in view's start,
+   * `(page - 1) * 15`, which is how legacy pages the same endpoint. `orderBy` and `sortOrder` stay
+   * unset because the in-scope screen offers no sort affordance and the legacy list sends neither;
    * `searchText` is deliberately not sent, because this endpoint does not accept it and the
    * allowlist does not declare it — the find is the separate search read below. `dateFormat` and
    * `locale` are absent because a list read carries no date payload — the service applies that pair
@@ -408,7 +479,7 @@ export class ClientListComponent {
     this.errorMessage.set(null);
 
     const params: ClientListParams = {
-      offset: this.pageOffset,
+      offset: (this.page() - 1) * this.pageLimit,
       limit: this.pageLimit,
     };
 
@@ -420,9 +491,12 @@ export class ClientListComponent {
       )
       .subscribe({
         // The endpoint answers with the paged envelope `{totalFilteredRecords, pageItems}` rather
-        // than a bare array, so the page's own rows are what the table holds. `totalFilteredRecords`
-        // is deliberately not kept: this screen renders no pager, so nothing would read it.
-        next: (page) => this.rows.set(page.pageItems.map(toPageRow)),
+        // than a bare array, so the page's own rows are what the table holds and the envelope's count
+        // is what the pager counts pages with — a row list alone could not say how many pages exist.
+        next: (envelope) => {
+          this.totalRecords.set(envelope.totalFilteredRecords);
+          this.rows.set(envelope.pageItems.map(toPageRow));
+        },
         error: (error: unknown) => this.onFailure(error),
       });
   }
@@ -457,6 +531,10 @@ export class ClientListComponent {
     this.loading.set(true);
     this.failed.set(false);
     this.errorMessage.set(null);
+    // The find replaces the rows with a search answer, which is not a page of the list: the pager
+    // starts again at the view's first page and is not offered over an answer that carries no count.
+    this.page.set(1);
+    this.totalRecords.set(0);
 
     // Legacy's own derivation, kept verbatim: only a quote at either end is removed, and the flag is
     // true exactly when that removal changed the text. `exactMatch` is always a member of the
@@ -490,6 +568,8 @@ export class ClientListComponent {
   private onFailure(error: unknown): void {
     this.rows.set([]);
     this.failed.set(true);
+    // Nothing measured the match, so the pager must not claim a page count from a failed read.
+    this.totalRecords.set(0);
 
     if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
       this.errorMessage.set(error.message);

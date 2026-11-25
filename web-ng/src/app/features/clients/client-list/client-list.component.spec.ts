@@ -56,11 +56,13 @@ import { ClientListComponent } from './client-list.component';
  *     (`ClientController.search()`, `app/scripts/controllers/client/ClientController.js:44-62`;
  *     Rule 1 clause 2; AAP 0.7.2 `GlobalSearchParams`), and the answer's rows replace the page's.
  *
- * **No DOM is asserted here, and that is deliberate.** Every assertion above is made on the
- * component's own signals and on `HttpTestingController`, which is what this spec owns: the traffic
- * the screen sends and the state it holds. The markup beside this file renders those signals and is
- * covered by its own compilation and lint pass, so restating its wording here would make this file
- * move every time a heading is reworded without pinning anything the signals do not already pin.
+ * **The DOM is asserted in one place only, and that is deliberate.** Every other assertion above is
+ * made on the component's own signals and on `HttpTestingController`, which is what this spec owns:
+ * the traffic the screen sends and the state it holds. The rest of the markup renders those signals
+ * and is covered by its own compilation and lint pass, so restating its wording here would make this
+ * file move every time a heading is reworded without pinning anything the signals do not already
+ * pin. The exception is the pager: it only paints for a match of more than one page, which no seeded
+ * workflow reaches, so its rendered links are asserted here or nowhere.
  *
  * **Providers.** The configuration is loaded from a stubbed `fetch` before the component exists,
  * because every client URL is composed from it. The ngx-translate stack is registered for the
@@ -89,6 +91,9 @@ const SEARCH_URL = `${API_ROOT}/search`;
 /** The first page's offset and page size, which are the legacy list's own `offset: 0, limit: 15`. */
 const FIRST_PAGE_OFFSET = '0';
 const PAGE_LIMIT = '15';
+
+/** The second page's offset: fifteen rows skipped, which is legacy's `(page - 1) * clientsPerPage`. */
+const SECOND_PAGE_OFFSET = '15';
 
 /** The office the Head Office fixtures are filed under. */
 const OFFICE_NAME = 'Head Office';
@@ -192,6 +197,22 @@ const MIXED_STATUS_PAGE = {
 } as const;
 
 /**
+ * A match larger than one page, as `GET /clients` answers it: 31 rows at fifteen per page is three
+ * pages, which is the smallest shape in which the pager has something to do. Only the counts and the
+ * single row per page matter here; the rows themselves are the fixtures above.
+ */
+const LARGE_MATCH_FIRST_PAGE = {
+  totalFilteredRecords: 31,
+  pageItems: [ACTIVE_CLIENT],
+} as const;
+
+/** The same match on its second page: the same server-side total, a different row. */
+const LARGE_MATCH_SECOND_PAGE = {
+  totalFilteredRecords: 31,
+  pageItems: [PENDING_CLIENT],
+} as const;
+
+/**
  * Installs the production mapping of a Fineract failure onto the test transport, so a rejection
  * arrives as the `ApiError` the component narrows in the application (AAP 0.4.2; workflow W7).
  */
@@ -245,6 +266,18 @@ describe('ClientListComponent', () => {
     const pending = httpMock.match(isClientListRead);
     expect(pending).toHaveLength(1);
     initialRead = pending[0];
+  }
+
+  /**
+   * The pager's page links as rendered, and the one DOM read this suite makes: the pager is the
+   * surface this screen adds, and it paints only for a match larger than one page, so nothing else
+   * observes it.
+   */
+  function pageLinks(): readonly HTMLAnchorElement[] {
+    // The single boundary cast of the suite: the framework types the fixture's host element loosely.
+    const host = fixture.nativeElement as HTMLElement;
+
+    return Array.from(host.querySelectorAll<HTMLAnchorElement>('.pagination li a'));
   }
 
   beforeEach(async () => {
@@ -615,5 +648,103 @@ describe('ClientListComponent', () => {
     expect(component.rows()).toEqual([]);
     expect(component.loading()).toBe(false);
     expect(httpMock.match(isClientListRead)).toHaveLength(0);
+  });
+
+  it('pages a larger match by asking for the next page’s offset and counts pages from the server’s total', () => {
+    mount();
+
+    initialRead.flush(LARGE_MATCH_FIRST_PAGE);
+
+    // The envelope's `totalFilteredRecords` is what the pager counts with: 31 rows at the legacy 15
+    // per page is three pages, which is why the family models the count rather than the rows alone.
+    expect(component.page()).toBe(1);
+    expect(component.pageCount()).toBe(3);
+    expect(component.pageNumbers()).toEqual([1, 2, 3]);
+
+    const click = new MouseEvent('click', { cancelable: true });
+    component.goToPage(click, 2);
+
+    // Paging is a read, not a navigation: the anchor's default is suppressed, so the hash route the
+    // screen was reached by cannot change.
+    expect(click.defaultPrevented).toBe(true);
+
+    const secondPage = httpMock.match(isClientListRead);
+    expect(secondPage).toHaveLength(1);
+    // Legacy's own paging arithmetic, `offset: (page - 1) * clientsPerPage`, with the page size kept.
+    expect(secondPage[0].request.params.get('offset')).toBe(SECOND_PAGE_OFFSET);
+    expect(secondPage[0].request.params.get('limit')).toBe(PAGE_LIMIT);
+
+    secondPage[0].flush(LARGE_MATCH_SECOND_PAGE);
+
+    expect(component.page()).toBe(2);
+    expect(component.rows().map((row) => row.name)).toEqual([JOSE]);
+    expect(component.loading()).toBe(false);
+  });
+
+  it('neither pages past the last page nor re-reads the page already in view', () => {
+    mount();
+    initialRead.flush(LARGE_MATCH_FIRST_PAGE);
+
+    const click = new MouseEvent('click', { cancelable: true });
+
+    // The page being shown, then one beyond the third and only, last page: neither is a read.
+    component.goToPage(click, 1);
+    component.goToPage(click, 4);
+
+    httpMock.expectNone(isClientListRead);
+    expect(component.page()).toBe(1);
+    expect(component.loading()).toBe(false);
+  });
+
+  it('offers no pager for a single page, nor over a find’s answer', () => {
+    mount();
+    initialRead.flush(FIRST_PAGE);
+
+    // Three rows at fifteen per page is one page — the state the design's five-client capture paints,
+    // where the card shows no pager at all.
+    expect(component.pageCount()).toBe(1);
+    expect(component.pageNumbers()).toEqual([1]);
+
+    component.toolbar.controls.find.setValue('Ada');
+    component.onFind();
+    httpMock.match(isFindRead)[0].flush([]);
+
+    // A search answer is not a page of the list and carries no count, so the pager is not offered.
+    expect(component.totalRecords()).toBe(0);
+    expect(component.pageCount()).toBe(1);
+  });
+
+  it('renders one page link per page and marks the page in view', () => {
+    mount();
+    initialRead.flush(LARGE_MATCH_FIRST_PAGE);
+    fixture.detectChanges();
+
+    // One span of the pager's markup only: the page links, which are the surface this change adds.
+    // The rest of the template is covered by its compilation and lint pass, as this file's header
+    // records.
+    const firstPageLinks = pageLinks();
+
+    expect(firstPageLinks.map((link) => link.textContent?.trim())).toEqual(['1', '2', '3']);
+    expect(firstPageLinks[0].getAttribute('aria-current')).toBe('page');
+    expect(firstPageLinks[0].closest('li')?.classList.contains('active')).toBe(true);
+    expect(firstPageLinks[1].getAttribute('aria-current')).toBeNull();
+
+    component.goToPage(new MouseEvent('click', { cancelable: true }), 2);
+    httpMock.match(isClientListRead)[0].flush(LARGE_MATCH_SECOND_PAGE);
+    fixture.detectChanges();
+
+    const secondPageLinks = pageLinks();
+
+    expect(secondPageLinks[1].getAttribute('aria-current')).toBe('page');
+    expect(secondPageLinks[0].getAttribute('aria-current')).toBeNull();
+  });
+
+  it('paints no pager for a single page', () => {
+    mount();
+    initialRead.flush(FIRST_PAGE);
+    fixture.detectChanges();
+
+    // The design's five-client capture shows this state: the card ends at the table.
+    expect(pageLinks()).toEqual([]);
   });
 });
