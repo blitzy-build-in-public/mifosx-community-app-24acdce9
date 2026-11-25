@@ -100,6 +100,7 @@ const TRANSLATIONS: Readonly<Record<string, string>> = {
   'label.button.cancel': 'Cancel',
   'label.heading.notavailable': 'Not Available',
   'error.msg.resource.not.found': 'The requested resource is not available.',
+  'label.areyousure': 'Are you sure?',
 };
 
 /**
@@ -532,7 +533,8 @@ describe('LoanActionComponent', () => {
     // field on both applications.
     expect(host().querySelector('#approvedOnDate')).not.toBeNull();
     expect(host().querySelector('#approvedLoanAmount')).not.toBeNull();
-    expect(host().querySelector('#approveNote')).not.toBeNull();
+    // The note is `note` — the legacy textarea's own id — so both applications expose one note id.
+    expect(host().querySelector('#note')).not.toBeNull();
     // A required amount shows the legacy marker beside its caption, as every other required field
     // in the loan and savings forms does.
     const principalLabel = host().querySelector('label[for="approvedLoanAmount"]');
@@ -702,6 +704,13 @@ describe('LoanActionComponent', () => {
     fixture.detectChanges();
 
     expect(host().querySelector('h3.panel-title')?.textContent?.trim()).toBe('Undo Disburse Loan Account');
+    // The confirm view states the action and offers its submit in the card's footer; it holds no control,
+    // which is why its primary button is not a form submit.
+    expect(host().querySelector('app-empty-state')?.textContent?.trim()).toBe('Are you sure?');
+    expect(host().querySelector('form')).toBeNull();
+    expect(host().querySelector('.panel-footer button.btn-primary')?.textContent?.trim()).toBe(
+      'Undo Disbursal',
+    );
 
     const submission = component.submit();
     const post = httpMock.expectOne(isActionPost('undodisbursal'));

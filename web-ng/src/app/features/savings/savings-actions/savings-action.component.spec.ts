@@ -235,6 +235,24 @@ describe('SavingsActionComponent', () => {
     return element;
   }
 
+  /** The `.form-group` that carries the cash-transaction amount and its invalid state. */
+  function amountGroup(): HTMLElement {
+    const element: unknown = host().querySelector('input#transactionAmount')?.closest('.form-group');
+    if (!(element instanceof HTMLElement)) {
+      throw new Error('the screen rendered no amount field group');
+    }
+    return element;
+  }
+
+  /** The cash-transaction amount field itself, whose native increment the form must not leave at 1. */
+  function amountInput(): HTMLInputElement {
+    const element: unknown = host().querySelector('input#transactionAmount');
+    if (!(element instanceof HTMLInputElement)) {
+      throw new Error('the screen rendered no amount field');
+    }
+    return element;
+  }
+
   /** The rendered text of the host, whitespace-collapsed for a stable containment test. */
   function renderedText(): string {
     return (host().textContent ?? '').replace(/\s+/g, ' ').trim();
@@ -355,6 +373,49 @@ describe('SavingsActionComponent', () => {
       paymentTypeId: CHOSEN_PAYMENT_TYPE_ID,
     });
     expect(router.navigate).toHaveBeenCalledWith(['/viewsavingaccount', ACCOUNT_ID]);
+  });
+
+  it('keeps the amount field on a two-decimal increment, so a money figure is never natively invalid', async () => {
+    savings.transactionTemplate.mockReturnValue(of(PAYMENT_TYPES));
+
+    await render(ACCOUNT_ID, 'deposit');
+
+    // The browser's own increment for the field. Left at the `type="number"` default of one whole unit,
+    // an ordinary two-decimal amount would be reported as a step mismatch; the form's `novalidate` keeps
+    // the increment from ever blocking a submit the server decides (Rule 1 clause 3).
+    expect(amountInput().getAttribute('step')).toBe('0.01');
+  });
+
+  it('flags the amount as soon as an entered value is cleared, and only then', async () => {
+    savings.transactionTemplate.mockReturnValue(of(PAYMENT_TYPES));
+
+    await render(ACCOUNT_ID, 'deposit');
+
+    // Untouched and empty, the field reports nothing: the operator has not entered a value yet, so
+    // there is nothing to correct.
+    expect(amountGroup().classList.contains('has-error')).toBe(false);
+    expect(renderedText()).not.toContain('label.requiredfield');
+
+    // Entering a value and clearing it leaves the control invalid and dirty while it is still focused,
+    // which is the state the screen must report without waiting for the field to be left. A programmatic
+    // `setValue` reports through the model side of the form, so the dirty flag is set the way the value
+    // accessor sets it on a user edit.
+    const amount = component.transactionForm.controls.transactionAmount;
+    amount.setValue(TRANSACTION_AMOUNT);
+    amount.setValue(null);
+    amount.markAsDirty();
+
+    expect(amount.touched).toBe(false);
+    expect(amount.dirty).toBe(true);
+
+    fixture.detectChanges();
+
+    expect(amountGroup().classList.contains('has-error')).toBe(true);
+    expect(amountGroup().querySelector('.help-block')?.textContent?.trim()).toBe('label.requiredfield');
+    // The message is a display concern only: the form stays unsendable for the missing value, and no
+    // rule beyond the legacy `required` was added.
+    expect(amount.invalid).toBe(true);
+    expect(savings.transaction).not.toHaveBeenCalled();
   });
 
   it('submits a cash transaction with no payment type chosen as paymentTypeId null', async () => {

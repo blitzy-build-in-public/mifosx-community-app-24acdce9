@@ -17,8 +17,17 @@
  * as the record's own action links do, so the route gate and the control that leads to it cannot
  * disagree (AAP 0.14.1).
  *
- * Every route states its code in `data['permission']` and its trail in `data['breadcrumb']`
- * (translation keys resolved by the shell against the legacy bundles served in place, Rule 1 clause 6).
+ * **The guard is declared here, on each route.** The shell route in `app.routes.ts` carries the
+ * authentication guard only, so an entry that states a code without also naming `permissionGuard` in
+ * `canActivate` would leave its screen reachable by any signed-in user and its code purely decorative.
+ * Each entry therefore names the guard beside the code it reads (AAP 0.7.1 `permissionGuard`);
+ * removing it is not a simplification, it is an ungate.
+ *
+ * **The trail is the legacy screens' own.** Each route states its code in `data['permission']` and its
+ * breadcrumb keys in `data['breadcrumb']`: `label.anchor.savings` followed by the screen's own
+ * `label.heading.*` key, every one of them present in the legacy bundles the shell resolves in place,
+ * so the trail renders the wording the legacy savings screens carried rather than an empty strip
+ * (Rule 1 clauses 3 and 6).
  */
 import type { Routes } from '@angular/router';
 

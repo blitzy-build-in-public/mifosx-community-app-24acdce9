@@ -107,6 +107,7 @@ const SILENT_FAILURES: readonly { readonly label: string; readonly failure: () =
 ];
 const LABELS = {
   'label.nodatafound': NO_DATA_TEXT,
+  'label.heading.search': 'Search',
   'label.heading.name': 'Name',
   'label.heading.accnum': 'Account No',
   'label.heading.clientname': 'Client Name',
@@ -260,6 +261,25 @@ describe('SearchResultsComponent', () => {
     expect(rendered[1]?.textContent).toContain('Ada Okafor');
     expect(rendered[0]?.querySelector('app-status-swatch')).not.toBeNull();
     expect(rendered[1]?.querySelector('app-status-swatch .status-swatch')).not.toBeNull();
+  });
+
+  it('names the card and echoes the query, showing the title alone for a blank one', async () => {
+    // The card title names the screen and the search the rows answer, so the same screen showing a
+    // second search's results can never be misread as the first's. Whitespace is collapsed before
+    // the comparison because the title is written across the template's own line breaks.
+    const title = (): string =>
+      (host().querySelector('.panel-title')?.textContent ?? '').replace(/\s+/g, ' ').trim();
+
+    expect(title()).toBe('Search “Parity”');
+
+    params.next(convertToParamMap({ query: '   ' }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // A blank query is trimmed to nothing, so there is no search to echo and no quotes to open.
+    expect(title()).toBe('Search');
+    expect(host().querySelector('#search-results-empty')?.textContent?.trim()).toBe(NO_DATA_TEXT);
   });
 
   it('maps each family status code onto the four keys the indicator paints', async () => {

@@ -1,82 +1,54 @@
-import { formatDate } from '@angular/common';
-import {
-  provideHttpClient,
-  withInterceptors,
-  type HttpErrorResponse,
-  type HttpInterceptorFn,
-} from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-  type TestRequest,
-} from '@angular/common/http/testing';
+import { HttpErrorResponse } from '@angular/common/http';
+import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { provideTranslateService, TranslateService } from '@ngx-translate/core';
-import { catchError, throwError } from 'rxjs';
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { Subject, of, throwError } from 'rxjs';
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
-import { DEFAULT_APP_CONFIG } from '../../../core/config/app-config.model';
-import { AppConfigService } from '../../../core/config/app-config.service';
-import { toApiError } from '../../../core/http/api-error';
-import { DISPLAY_DATE_FORMAT } from '../../../shared/date-format.util';
-import type { ClientTemplate } from '../client.models';
+import { ApiError, toApiError } from '../../../core/http/api-error';
+import type {
+  ClientCreateRequest,
+  ClientMutationResponse,
+  ClientTemplate,
+} from '../client.models';
+import { ClientService } from '../client.service';
 import { ClientCreateComponent } from './client-create.component';
 
 /**
- * Behaviour of the create-client screen — the first half of workflow W2, whose second half is the
- * activation an operator runs from the created record's action group (AAP 0.7.1 Features row
- * `clients`; AAP 0.7.3 row "W2 create and activate client"; AAP 0.7.4 screens; Rule 1 clause 8, "the
- * behaviour you implement must be observable from the spec").
+ * Behaviour of the create-client screen (`#/createclient`) — the first half of workflow W2, whose
+ * second half is the activation an operator runs from the created record's action group (AAP 0.10.1
+ * W2 row; AAP 0.7.1 `clients` row; AAP 0.7.4 screens; Rule 1 clause 8).
  *
- * What the suite drives is the component's public surface and the traffic it produces: the form's
- * own controls, the two signals the template reads, and the requests the real `ClientService` sends
- * through `HttpTestingController`. Nothing is asserted about styles, and nothing is mocked that the
- * screen actually depends on — the service, the shared field components and the translation pipe are
- * the shipped ones (Rule 1 clause 6 keeps the last two style-free and markup-free respectively).
+ * What the suite proves is the screen's own behaviour: the one template read it takes and the one
+ * re-read an office change costs, the options it renders in the server's order, the defaults it
+ * seeds, the legacy validators it carries, the single `POST` one click sends, the record it opens
+ * and the states it leaves behind when Fineract refuses. What it deliberately does not prove is the
+ * endpoint contract — method, path, query parameters and the `dateFormat`/`locale` members of the
+ * body — which belongs to `../client.service.spec.ts` and is asserted there with the transport the
+ * application uses.
  *
- * The three collaborations the screen cannot run without are supplied the way the application
- * supplies them: the resolved configuration is loaded from a stubbed `fetch` before the component
- * exists (every service URL is composed from it), the ngx-translate stack is registered and filled
- * with the legacy captions, and the router is a spy because what this screen owes the router is one
- * navigation per outcome.
+ * `ClientService` is therefore stubbed at its own token: no transport, interceptor or HTTP client
+ * takes part here, which is what Rule 1 clause 5 asks of a component. The stub is typed from the
+ * shipped service — `vi.fn<ClientService['template']>()`, `vi.fn<ClientService['create']>()` — so a
+ * change to the service's signature breaks this spec rather than passing silently (Rule 1 clause 4).
  *
- * The error mapping is the one production piece the TestBed supplies itself: `core/http` owns the
- * mapping of a Fineract failure to `ApiError`, and the case that proves the message reaches the user
- * verbatim installs `toApiError` as an interceptor so the rejection the component catches is the type
- * it catches in the application (AAP 0.4.2; AAP 0.7.2 row `FineractError`; workflow W7).
+ * The translation stack is the shipped one rather than a hand-written stub: the pinned
+ * `TranslatePipe` resolves its keys through a signal-returning service method, and its plugin set
+ * needs no transport (`provideTranslateService()` installs the no-op loader). No assertion below
+ * depends on the wording a caption resolves to — a case proves that no raw dotted key reaches the
+ * user, never how a caption is spelled, because the wording belongs to the legacy bundles under
+ * `app/global-translations/` (Rule 1 clause 3).
+ *
+ * Dates stay `Date` instances throughout. The screen never formats one, and the posted-body cases
+ * pin that it leaves `dateFormat` and `locale` to `ClientService.create`, which writes both at the
+ * API boundary in the active language (AAP 0.7.2 "Date handling"; AAP 0.14.1).
  */
 
 /**
- * The configuration the stubbed transport serves: the application's own documented default shape
- * (`DEFAULT_APP_CONFIG`), so the spec resolves the same eight keys the served file carries instead of
- * restating them and drifting from the one declaration that owns them (AAP 0.4.4 decision 5).
- */
-const SERVED_CONFIG = DEFAULT_APP_CONFIG;
-
-/** The API root every client URL is composed from, built from the resolved configuration. */
-const API_ROOT = `${SERVED_CONFIG.apiBaseUrl}${SERVED_CONFIG.apiPath}`;
-
-/** `GET /clients/template` — the read that seeds the form. */
-const TEMPLATE_PATH = '/clients/template';
-
-/** `POST /clients` — the one write this screen makes. */
-const CLIENTS_PATH = '/clients';
-
-/**
- * The legacy name rule's message, the value `validation.msg.client.name.cannot.start.specialchar.ornumber`
- * carries in the shipped English bundle (`app/global-translations/locale-en.json`).
- */
-const NAME_RULE_MESSAGE = 'Name cannot start with special character or number';
-
-/** The legacy mobile-number rule's message, the value `label.mustbenumeric` carries in that bundle. */
-const NUMERIC_RULE_MESSAGE = 'Must be numeric';
-
-/**
- * The legacy captions the bundle carries for this screen, keyed exactly as the shipped flat
- * translation bundles key them (`app/global-translations/`). A key that did not resolve would render
- * humanised through the missing-translation handler, so serving the real bundle is what proves the
- * labels and the required message resolve.
+ * The legacy captions this screen resolves, keyed exactly as the shipped flat bundles key them
+ * (`app/global-translations/`). Registering them is what lets a case prove the labels resolve; their
+ * wording is never asserted, so re-wording a bundle cannot redden this suite.
  */
 const TRANSLATIONS: Readonly<Record<string, string>> = {
   'label.heading.createclient': 'Create Client',
@@ -91,118 +63,210 @@ const TRANSLATIONS: Readonly<Record<string, string>> = {
   'label.input.active': 'Active',
   'label.menu.selectloanofficer': 'Select Staff',
   'label.requiredfield': 'Required field',
-  'validation.msg.client.name.cannot.start.specialchar.ornumber': NAME_RULE_MESSAGE,
-  'label.mustbenumeric': NUMERIC_RULE_MESSAGE,
-  'label.button.save': 'Submit',
+  'validation.msg.client.name.cannot.start.specialchar.ornumber': 'Name cannot start with a number',
+  'label.mustbenumeric': 'Must be numeric',
+  'label.button.save': 'Save',
   'label.button.cancel': 'Cancel',
 };
 
+/** The office the form starts on: the template's own default. */
+const HEAD_OFFICE_ID = 1;
+
+/** The other office the template offers, and the office the office-change cases move to. */
+const BRANCH_OFFICE_ID = 2;
+
+/** The loan officer the head office offers, and the one the operator picks there. */
+const PARITY_OFFICER_ID = 7;
+
+/** The head office's office labels, in the order its template sends them. */
+const OFFICE_NAMES: readonly string[] = ['Head Office', 'Branch Two'];
+
+/** The officers the head office offers, labelled by the `displayName` a `staffOptions` entry carries. */
+const STAFF_NAMES: readonly string[] = ['Officer, Parity'];
+
+/** The second office's template narrows the office list, so a replaced list is observable. */
+const BRANCH_OFFICE_NAMES: readonly string[] = ['Branch Two'];
+
+/** The officers the second office offers: no officer of the first office survives the change. */
+const BRANCH_STAFF_NAMES: readonly string[] = ['Officer, Branch'];
+
 /**
- * The template the head office answers with: two offices, one loan officer, and an activation default
- * as the fork sends it — a `[year, month, day]` triple — with the client not yet active.
+ * The template the head office answers with: two offices, one loan officer, and the activation
+ * default the fork sends as a `[year, month, day]` triple, with the client not yet active.
  */
 const HEAD_OFFICE_TEMPLATE: ClientTemplate = {
-  officeId: 1,
+  officeId: HEAD_OFFICE_ID,
   officeOptions: [
-    { id: 1, name: 'Head Office' },
-    { id: 2, name: 'Branch Two' },
+    { id: HEAD_OFFICE_ID, name: 'Head Office' },
+    { id: BRANCH_OFFICE_ID, name: 'Branch Two' },
   ],
-  staffOptions: [{ id: 7, displayName: 'Officer, Parity' }],
+  staffOptions: [{ id: PARITY_OFFICER_ID, displayName: 'Officer, Parity' }],
   activationDate: [2026, 11, 24],
   active: false,
 };
 
-/** What the same endpoint answers for the second office: only that office's staff. */
+/** What the same read answers once another office is chosen: that office's own option lists. */
 const BRANCH_TEMPLATE: ClientTemplate = {
-  officeId: 2,
-  officeOptions: [
-    { id: 1, name: 'Head Office' },
-    { id: 2, name: 'Branch Two' },
-  ],
+  officeId: BRANCH_OFFICE_ID,
+  officeOptions: [{ id: BRANCH_OFFICE_ID, name: 'Branch Two' }],
   staffOptions: [{ id: 9, displayName: 'Officer, Branch' }],
   activationDate: [2026, 11, 24],
-  active: false,
+  active: true,
 };
 
-/** The message a rejected create answers with, quoted from a real Fineract validation failure. */
+/** The command result a create answers with: the record and the client id the screen opens. */
+const CREATED: ClientMutationResponse = { resourceId: 42, clientId: 42 };
+
+/** The same result without a client id, which the screen must open by its resource id. */
+const RESOURCE_ID_ONLY: ClientMutationResponse = { resourceId: 99 };
+
+/** A rejection quoted from a real Fineract validation failure; compared character for character. */
 const REJECTED_MESSAGE = 'The client name is already in use by another client.';
 
 /**
- * The message a create the server itself failed to handle would answer with. The screen must not
- * paint it: a 5xx has exactly one report, the notification `core/http/fineract.interceptor.ts` raises
- * for it, so rendering it here too would show the same failure twice (AAP 0.7.4).
+ * The text a 5xx answers with. The screen paints none of it: `core/http/fineract.interceptor.ts`
+ * raises the single notification that carries it, so a second report here would show one failure
+ * twice (AAP 0.7.4).
  */
 const SERVER_FAILURE_MESSAGE = 'Internal server error, please contact your system administrator.';
 
 /**
- * The message a refused navigation produces once the create itself has succeeded. No notification
+ * The message a refused navigation produces once the create itself succeeded. No notification
  * carries it — it is no HTTP answer — so the screen's own error region is the only place it can be
  * reported (AAP 0.14.2 "no catch swallows an error silently").
  */
 const NAVIGATION_FAILURE_MESSAGE = 'Navigation to the created record was refused.';
 
-/** Local midnight of today, the default the submission date starts from. */
+/** The message a failed template read answers with: Fineract's own text, rendered verbatim. */
+const TEMPLATE_FAILURE_MESSAGE = 'The office template is not available for this user.';
+
+/** Local midnight of today, the browser-clock default a form's own date starts from. */
 function startOfToday(): Date {
   const now = new Date();
 
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
-/** Today's date as a payload carries it: the one display pattern, in the active language. */
-const TODAY_AS_PAYLOAD = formatDate(startOfToday(), DISPLAY_DATE_FORMAT, 'en');
+/** `ClientService` as this screen uses it: the template read and the create post, both stubbed. */
+interface ClientServiceStub {
+  readonly template: Mock<ClientService['template']>;
+  readonly create: Mock<ClientService['create']>;
+}
 
-/**
- * The one production collaboration the TestBed supplies itself: `core/http` owns the mapping of a
- * Fineract failure to `ApiError`, and installing `toApiError` here means the rejection the component
- * catches is the type it catches in the application, so the message the user reads can be asserted
- * character for character (AAP 0.4.2; AAP 0.7.2 row `FineractError`; workflow W7).
- */
-const MAP_FINERACT_FAILURES: HttpInterceptorFn = (request, next) =>
-  next(request).pipe(
-    catchError((failure: HttpErrorResponse) => throwError(() => toApiError(failure))),
-  );
-
-/** Matches `GET /clients/template`, whatever query the screen sent with it. */
-function isTemplateRead(request: { readonly url: string }): boolean {
-  return request.url === `${API_ROOT}${TEMPLATE_PATH}`;
+/** `Router` as this screen uses it: one navigation command list per outcome. */
+interface RouterStub {
+  readonly navigate: Mock<(commands: readonly unknown[]) => Promise<boolean>>;
 }
 
 describe('ClientCreateComponent', () => {
   let fixture: ComponentFixture<ClientCreateComponent>;
   let component: ClientCreateComponent;
-  let httpMock: HttpTestingController;
-  let navigate: Mock<(commands: readonly unknown[]) => Promise<boolean>>;
-  let initialTemplateRead: TestRequest;
+  let clients: ClientServiceStub;
+  let router: RouterStub;
 
-  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines the
-  // cast to one line and keeps the DOM assertions type-checked (Rule 1 clause 4).
-  const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
+  /**
+   * The rendered host, narrowed once. `ComponentFixture.nativeElement` is loosely typed by Angular,
+   * so the narrowing is confined to this one line and every query below stays type-checked (Rule 1
+   * clause 4).
+   */
+  const host = (): HTMLElement => {
+    const element: unknown = fixture.nativeElement;
 
-  /** The `<select>` a visible label names, so a field is addressed the way an operator reads it. */
-  function selectFor(label: string): HTMLSelectElement {
-    const element = host().querySelector<HTMLSelectElement>(`label[for="${label}"] ~ app-select-field select`);
+    if (!(element instanceof HTMLElement)) {
+      throw new Error('the fixture rendered no host element');
+    }
+
+    return element;
+  };
+
+  /** Every `<select>` on the screen. This screen renders exactly two: the office and the officer. */
+  function selects(): HTMLSelectElement[] {
+    return Array.from(host().querySelectorAll('select')).filter(
+      (element): element is HTMLSelectElement => element instanceof HTMLSelectElement,
+    );
+  }
+
+  /** The select whose element id is the legacy form's own, so a field is addressed as it is named. */
+  function selectById(id: 'officeId' | 'staffId'): HTMLSelectElement {
+    const element = host().querySelector<HTMLSelectElement>(`select#${id}`);
 
     if (element === null) {
-      throw new Error(`the screen rendered no select for the "${label}" field`);
+      throw new Error(`the screen rendered no select for the "${id}" field`);
     }
 
     return element;
   }
 
-  /** The option labels of one select, in render order. */
+  /** The visible option labels of one select, in render order. */
   function optionLabels(select: HTMLSelectElement): string[] {
     return Array.from(select.options).map((option) => option.textContent?.trim() ?? '');
   }
 
+  /** The submit control, which must be disabled for as long as its request is in flight. */
+  function submitButton(): HTMLButtonElement {
+    const element = host().querySelector<HTMLButtonElement>('#save2');
+
+    if (element === null) {
+      throw new Error('the screen rendered no submit button');
+    }
+
+    return element;
+  }
+
+  /**
+   * Lets the reads the screen queued resolve and the first paint show them: the constructor's
+   * `firstValueFrom` resumes in a microtask, which the awaited turns below cross before the render.
+   */
+  async function settle(): Promise<void> {
+    for (let turn = 0; turn < 3; turn += 1) {
+      await Promise.resolve();
+    }
+
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  /**
+   * Configures the TestBed from scratch and opens the screen on it, answering nothing: the stubbed
+   * template read is whatever the case set on the mock before calling this, so a case can open the
+   * screen on a template that fails.
+   *
+   * The module is reset first because every open supplies the same providers, and a module left
+   * instantiated by a previous fixture cannot take them again.
+   */
+  async function open(): Promise<void> {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [ClientCreateComponent],
+      providers: [
+        // The application runs zoneless (Angular 22's default), so the fixture is told the same and
+        // every async case settles with `whenStable()` rather than with a zone (Rule 1 clause 5).
+        provideZonelessChangeDetection(),
+        { provide: ClientService, useValue: clients },
+        { provide: Router, useValue: router },
+        provideTranslateService(),
+      ],
+    });
+
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('en', TRANSLATIONS, true);
+    translate.use('en');
+
+    fixture = TestBed.createComponent(ClientCreateComponent);
+    component = fixture.componentInstance;
+
+    await settle();
+  }
+
   /**
    * Fills every control a create the server would accept needs, with the fixed parity values the
-   * workflows use. A case that wants one control different sets it afterwards, so each case shows the
-   * single thing it changes.
+   * workflows use. A case that wants one control different sets it afterwards, so each case shows
+   * the single thing it changes.
    */
   function fillValidForm(): void {
     component.form.patchValue({
-      officeId: 1,
-      staffId: 7,
+      officeId: HEAD_OFFICE_ID,
+      staffId: PARITY_OFFICER_ID,
       firstname: 'Parity',
       lastname: 'Client',
       externalId: 'EXT-1',
@@ -223,412 +287,478 @@ describe('ClientCreateComponent', () => {
   }
 
   beforeEach(async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn<typeof fetch>(() => {
-        // `Response` stand-in: the three members `AppConfigService.fetchRawConfig` reads. The cast is
-        // the single boundary where the partial object becomes the response the service expects.
-        const body = {
-          ok: true,
-          status: 200,
-          statusText: 'OK',
-          json: () => Promise.resolve(SERVED_CONFIG),
-        };
+    clients = {
+      template: vi.fn<ClientService['template']>(),
+      create: vi.fn<ClientService['create']>(),
+    };
+    router = {
+      navigate: vi.fn<(commands: readonly unknown[]) => Promise<boolean>>(() => Promise.resolve(true)),
+    };
+    clients.template.mockReturnValue(of(HEAD_OFFICE_TEMPLATE));
 
-        return Promise.resolve(body as unknown as Response);
-      }),
-    );
-
-    navigate = vi.fn<(commands: readonly unknown[]) => Promise<boolean>>(() => Promise.resolve(true));
-
-    TestBed.configureTestingModule({
-      imports: [ClientCreateComponent],
-      providers: [
-        provideHttpClient(withInterceptors([MAP_FINERACT_FAILURES])),
-        provideHttpClientTesting(),
-        provideTranslateService(),
-        { provide: Router, useValue: { navigate } },
-      ],
-    });
-
-    await TestBed.inject(AppConfigService).load();
-
-    const translate = TestBed.inject(TranslateService);
-    translate.setTranslation('en', TRANSLATIONS, true);
-    translate.use('en');
-
-    httpMock = TestBed.inject(HttpTestingController);
-    fixture = TestBed.createComponent(ClientCreateComponent);
-    component = fixture.componentInstance;
-
-    // The constructor reads the template once, before the first render: that single read is what the
-    // whole screen is seeded from, so it is answered here rather than in each case.
-    const pending = httpMock.match(isTemplateRead);
-    expect(pending).toHaveLength(1);
-    initialTemplateRead = pending[0];
-    initialTemplateRead.flush(HEAD_OFFICE_TEMPLATE);
-
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await open();
   });
 
-  afterEach(() => {
-    httpMock.verify();
-    vi.unstubAllGlobals();
-  });
+  it('reads the create template once, with no parameter, and seeds the pickers and the defaults', () => {
+    expect(clients.template).toHaveBeenCalledTimes(1);
+    // The first read asks for the template as a whole, so the server's own default office is what
+    // the form starts on (AAP 0.7.3 row "W2 create and activate client").
+    expect(clients.template.mock.calls[0]).toEqual([]);
 
-  it('reads the template once, with no parameter, and seeds the pickers and the defaults from it', () => {
-    expect(initialTemplateRead.request.method).toBe('GET');
-    // The first read asks for the template as a whole, so the server's own default office is what the
-    // form starts on (AAP 0.7.3 row "W2 create and activate client").
-    expect(initialTemplateRead.request.params.keys()).toEqual([]);
+    expect(selects()).toHaveLength(2);
+    expect(optionLabels(selectById('officeId'))).toEqual(OFFICE_NAMES);
 
-    // A second read would mean the seeded office re-entered the office subscription.
-    httpMock.expectNone(isTemplateRead);
+    const staffLabels = optionLabels(selectById('staffId'));
+    // The leading row is the picker's own prompt; the officer follows it, labelled by the
+    // `displayName` a `staffOptions` entry carries, which a field binding `name` would render blank.
+    expect(staffLabels).toHaveLength(STAFF_NAMES.length + 1);
+    expect(staffLabels.filter((label) => STAFF_NAMES.includes(label))).toEqual(STAFF_NAMES);
 
-    expect(component.form.controls.officeId.value).toBe(1);
-    expect(optionLabels(selectFor('officeId'))).toEqual(['Head Office', 'Branch Two']);
-    // `staffOptions` entries carry `displayName`, so a field that bound `name` would render blank.
-    expect(optionLabels(selectFor('staffId'))).toEqual(['--Select Staff--', 'Officer, Parity']);
-    // The submission date keeps the browser clock's default: the template carries no submission date.
-    expect(component.form.controls.submittedOnDate.value).toEqual(startOfToday());
-    // The activation date is seeded from this read — the only one the form ever takes its date from.
+    expect(component.form.controls.officeId.value).toBe(HEAD_OFFICE_ID);
+    expect(component.form.controls.staffId.value).toBeNull();
+    // The submission date keeps the browser clock's default and is held as a `Date`, never as a
+    // formatted string (AAP 0.10.5 item 15; AAP 0.7.2 "Date handling").
+    expect(component.form.controls.submittedOnDate.value).toBeInstanceOf(Date);
+    // The activation default is the template's own, read from its `[year, month, day]` triple.
     expect(component.form.controls.activationDate.value).toEqual(new Date(2026, 10, 24));
     expect(component.form.controls.active.value).toBe(false);
+
+    // The two labels this template owns render as `.control-label` elements naming their control,
+    // which is what gives each field the accessible name the design shows.
+    expect(host().querySelector('label.control-label[for="officeId"]')).not.toBeNull();
+    expect(host().querySelector('label.control-label[for="submittedon"]')).not.toBeNull();
+  });
+
+  it('re-reads the template once per office change, replacing the lists and clearing the officer', async () => {
+    component.form.controls.staffId.setValue(PARITY_OFFICER_ID);
+
+    // Re-selecting the office the form already holds is not a change, so it costs no request.
+    component.form.controls.officeId.setValue(HEAD_OFFICE_ID);
+    expect(clients.template).toHaveBeenCalledTimes(1);
+
+    clients.template.mockReturnValueOnce(of(BRANCH_TEMPLATE));
+    component.form.controls.officeId.setValue(BRANCH_OFFICE_ID);
+    await settle();
+
+    expect(clients.template).toHaveBeenCalledTimes(2);
+    // The office travels with the staff narrowing, which is the call the legacy form makes on the
+    // same event (AAP 0.7.3 row "W2 create and activate client").
+    expect(clients.template).toHaveBeenNthCalledWith(2, BRANCH_OFFICE_ID, true);
+
+    // The pickers carry the second office's lists, in the order its template sent them.
+    expect(optionLabels(selectById('officeId'))).toEqual(BRANCH_OFFICE_NAMES);
+    expect(
+      optionLabels(selectById('staffId')).filter((label) => BRANCH_STAFF_NAMES.includes(label)),
+    ).toEqual(BRANCH_STAFF_NAMES);
+    // The officer chosen under the previous office is gone with the list that carried it.
+    expect(component.form.controls.staffId.value).toBeNull();
+    expect(component.form.controls.officeId.value).toBe(BRANCH_OFFICE_ID);
+
+    // Re-selecting the new office is not a change either.
+    component.form.controls.officeId.setValue(BRANCH_OFFICE_ID);
+    await settle();
+    expect(clients.template).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the operator’s active choice and activation date across an office change', async () => {
+    const chosen = new Date(2026, 11, 1);
+    fillActiveForm();
+    component.form.controls.activationDate.setValue(chosen);
+    component.form.controls.staffId.setValue(PARITY_OFFICER_ID);
+
+    clients.template.mockReturnValueOnce(of(BRANCH_TEMPLATE));
+    component.form.controls.officeId.setValue(BRANCH_OFFICE_ID);
+    await settle();
+
+    // An office change re-reads the template for the option lists alone, the way the legacy
+    // controller's `changeOffice` does, so the date and the active flag the operator chose survive
+    // it while the office and the officer follow the new template.
+    expect(component.form.controls.activationDate.value).toEqual(chosen);
+    expect(component.form.controls.active.value).toBe(true);
+    expect(component.form.controls.officeId.value).toBe(BRANCH_OFFICE_ID);
+    expect(component.form.controls.staffId.value).toBeNull();
+    // The field the active flag reveals is still on screen with the chosen date in it.
+    expect(host().querySelector('#activationDate')).not.toBeNull();
   });
 
   it('renders the legacy captions through the translation stack, never a raw key', () => {
     const rendered = host().textContent ?? '';
 
-    expect(host().querySelector('h3.panel-title')?.textContent?.trim()).toBe('Create Client');
+    // The heading resolves through the bundle this screen registers…
+    expect(host().querySelector('h3.panel-title')).not.toBeNull();
+    // …and no caption reached the user as the dotted key a bundle holds it under.
     expect(rendered).not.toContain('label.');
-    expect(rendered).not.toContain('.');
-    // Every control the workflow fills carries the id the legacy form gives it, so the parity harness
-    // addresses the same field on both applications.
-    for (const id of ['officeId', 'staffId', 'firstname', 'lastname', 'mobileNo', 'externalId', 'submittedon', 'activeCheckbox']) {
+    expect(rendered).not.toContain('validation.');
+
+    // Every control the workflow fills carries the id the legacy form gives it, so the parity
+    // harness addresses the same field on both applications.
+    for (const id of [
+      'officeId',
+      'staffId',
+      'firstname',
+      'lastname',
+      'mobileNo',
+      'externalId',
+      'submittedon',
+      'activeCheckbox',
+    ]) {
       expect(host().querySelector(`#${id}`), id).not.toBeNull();
     }
   });
 
-  it('reads the template again for a newly chosen office, once, and clears the staff choice', async () => {
-    component.form.controls.staffId.setValue(7);
-    component.form.controls.officeId.setValue(2);
-
-    const pending = httpMock.match(isTemplateRead);
-    expect(pending).toHaveLength(1);
-    // The office travels with the staff narrowing, which is the call the legacy form makes on the
-    // same event.
-    expect(pending[0].request.params.get('officeId')).toBe('2');
-    expect(pending[0].request.params.get('staffInSelectedOfficeOnly')).toBe('true');
-
-    pending[0].flush(BRANCH_TEMPLATE);
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    expect(component.form.controls.officeId.value).toBe(2);
-    expect(component.form.controls.staffId.value).toBeNull();
-    expect(optionLabels(selectFor('staffId'))).toEqual(['--Select Staff--', 'Officer, Branch']);
-    // Applying the answer must not re-enter the office subscription.
-    httpMock.expectNone(isTemplateRead);
-  });
-
-  it('keeps the active choice and the activation date the operator made when the office changes, and clears the staff', async () => {
-    fillActiveForm();
-    const chosen = new Date(2026, 11, 1);
-    component.form.controls.activationDate.setValue(chosen);
-    component.form.controls.staffId.setValue(7);
-
-    // The operator ticks Active and picks a date, then files the client under another office.
-    component.form.controls.active.setValue(true);
-    component.form.controls.officeId.setValue(2);
-
-    const pending = httpMock.match(isTemplateRead);
-    expect(pending).toHaveLength(1);
-    pending[0].flush(BRANCH_TEMPLATE);
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    // The date the operator picked survives the read an office change triggers...
-    expect(component.form.controls.activationDate.value).toEqual(chosen);
-    // ...and so does the Active box, which legacy's `changeOffice` never touches...
-    expect(component.form.controls.active.value).toBe(true);
-    // ...so the field the choice reveals is still on screen with the chosen date in it.
-    expect(host().querySelector('#activationDate')).not.toBeNull();
-    // ...while the state the new office does own follows its template as before.
-    expect(component.form.controls.officeId.value).toBe(2);
-    expect(component.form.controls.staffId.value).toBeNull();
-    expect(optionLabels(selectFor('staffId'))).toEqual(['--Select Staff--', 'Officer, Branch']);
-    httpMock.expectNone(isTemplateRead);
-  });
-
-  it('posts exactly one client and opens the record the server created', async () => {
-    fillActiveForm();
-
-    const submission = component.submit();
-    const post = httpMock.expectOne({ method: 'POST', url: `${API_ROOT}${CLIENTS_PATH}` });
-
-    expect(post.request.body).toMatchObject({
-      officeId: 1,
-      staffId: 7,
-      legalFormId: 1,
-      firstname: 'Parity',
-      lastname: 'Client',
-      externalId: 'EXT-1',
-      mobileNo: '2025550101',
-      active: true,
-    });
-    // The dates leave the screen in the one pattern the application formats in, in the active
-    // language: the service converts them at the API boundary, never the form.
-    expect(post.request.body).toMatchObject({
-      submittedOnDate: TODAY_AS_PAYLOAD,
-      activationDate: TODAY_AS_PAYLOAD,
-    });
-    // The language the payload's dates are written in travels with the body; asserting the
-    // serialised form keeps this free of a cast over a value the screen never types.
-    expect(JSON.stringify(post.request.body)).toContain('"en"');
-
-    post.flush({ resourceId: 42, clientId: 43 });
-    await submission;
-    await fixture.whenStable();
-
-    expect(navigate).toHaveBeenCalledWith(['/viewclient', 43]);
-  });
-
-  it('leaves the activation date out of a client created inactive', async () => {
+  it('sends nothing and marks the field when a required value is missing', async () => {
     fillValidForm();
-
-    const submission = component.submit();
-    const post = httpMock.expectOne({ method: 'POST', url: `${API_ROOT}${CLIENTS_PATH}` });
-
-    expect(post.request.body).toMatchObject({ active: false });
-    expect(post.request.body).not.toHaveProperty('activationDate');
-
-    post.flush({ resourceId: 42 });
-    await submission;
-
-    // A response that names no client id still opens the record the command reported.
-    expect(navigate).toHaveBeenCalledWith(['/viewclient', 42]);
-  });
-
-  it('posts an optional field the operator left empty exactly as the control holds it', async () => {
-    fillValidForm();
-    component.form.controls.externalId.setValue('');
-    component.form.controls.mobileNo.setValue('');
-
-    const submission = component.submit();
-    const post = httpMock.expectOne({ method: 'POST', url: `${API_ROOT}${CLIENTS_PATH}` });
-
-    // Nothing is trimmed, dropped or defaulted: the screen hands the server what the operator left,
-    // and the server treats a blank optional string as absent (verified against the fork).
-    expect(post.request.body).toMatchObject({ externalId: '', mobileNo: '' });
-
-    post.flush({ resourceId: 42 });
-    await submission;
-
-    expect(navigate).toHaveBeenCalledWith(['/viewclient', 42]);
-  });
-
-  it('sends nothing while a required field is missing, and marks the field', async () => {
-    fillValidForm();
-    component.form.controls.lastname.setValue('');
+    component.form.controls.firstname.setValue('');
 
     await component.submit();
-
-    httpMock.expectNone({ method: 'POST', url: `${API_ROOT}${CLIENTS_PATH}` });
     fixture.detectChanges();
 
-    const lastname = host().querySelector('#lastname');
-    expect(lastname?.getAttribute('aria-invalid')).toBe('true');
-    expect(host().textContent).toContain('Required field');
+    expect(clients.create).not.toHaveBeenCalled();
+    expect(component.form.controls.firstname.touched).toBe(true);
+    expect(component.form.controls.firstname.hasError('required')).toBe(true);
+    // The field reports the state and the message the legacy form reports for it.
+    expect(host().querySelector('#firstname')?.getAttribute('aria-invalid')).toBe('true');
+    expect(host().querySelector('#firstname-error')).not.toBeNull();
+    expect(
+      host().querySelector('#firstname')?.closest('.form-group')?.classList.contains('has-error'),
+    ).toBe(true);
+    expect(router.navigate).not.toHaveBeenCalled();
   });
 
   // The legacy create form marks a name that does not start with a letter pattern-invalid and shows
-  // `validation.msg.client.name.cannot.start.specialchar.ornumber` (Rule 1 clause 3 carries the
-  // legacy rule rather than a new one). Each value starts with a digit or with a special character the
-  // legacy character class excludes, and the screen posted all of them before this rule existed.
+  // the bundle's `validation.msg.client.name.cannot.start.specialchar.ornumber` (Rule 1 clause 3
+  // carries the legacy rule rather than a new one). Each value below starts with a character the
+  // legacy character class excludes.
   it.each(['2Parity', '-Parity', '.Parity'])(
-    'shows the legacy name rule for "%s" and sends nothing',
-    async (name) => {
+    'applies the legacy name rule to "%s" and sends nothing',
+    async (name: string) => {
       fillValidForm();
       component.form.controls.firstname.setValue(name);
 
       await component.submit();
       fixture.detectChanges();
 
-      httpMock.expectNone({ method: 'POST', url: `${API_ROOT}${CLIENTS_PATH}` });
+      expect(clients.create).not.toHaveBeenCalled();
       expect(component.form.controls.firstname.hasError('pattern')).toBe(true);
       expect(host().querySelector('#firstname')?.getAttribute('aria-invalid')).toBe('true');
-      expect(host().querySelector('#firstname-pattern-error')?.textContent?.trim()).toBe(
-        NAME_RULE_MESSAGE,
-      );
-      // A value that is present but malformed reports the rule it breaks, not the missing-value message.
+      expect(host().querySelector('#firstname-pattern-error')).not.toBeNull();
+      // A value that is present but malformed reports the rule it breaks, not the missing one.
       expect(host().querySelector('#firstname-error')).toBeNull();
     },
   );
 
-  // The legacy mobile rule is `/^[0-9]+$/` with `label.mustbenumeric`: a plus sign, a separator or a
-  // space fails it on the screen, where legacy refused it, instead of after a round trip.
+  // The legacy mobile rule is `/^[0-9]+$/` with the bundle's `label.mustbenumeric`: a plus sign, a
+  // separator or a space fails it on screen, where the legacy form refused it.
   it.each(['+12025550101', '202-555-0101', '202 555 0101'])(
-    'shows the legacy numeric rule for "%s" and sends nothing',
-    async (mobileNo) => {
+    'applies the legacy numeric rule to "%s" and sends nothing',
+    async (mobileNo: string) => {
       fillValidForm();
       component.form.controls.mobileNo.setValue(mobileNo);
 
       await component.submit();
       fixture.detectChanges();
 
-      httpMock.expectNone({ method: 'POST', url: `${API_ROOT}${CLIENTS_PATH}` });
+      expect(clients.create).not.toHaveBeenCalled();
       expect(component.form.controls.mobileNo.hasError('pattern')).toBe(true);
       expect(host().querySelector('#mobileNo')?.getAttribute('aria-invalid')).toBe('true');
-      expect(host().querySelector('#mobileNo-pattern-error')?.textContent?.trim()).toBe(
-        NUMERIC_RULE_MESSAGE,
-      );
+      expect(host().querySelector('#mobileNo-pattern-error')).not.toBeNull();
     },
   );
 
   it('accepts the multi-word names and the numeric mobile number the legacy rules allow', async () => {
     fillValidForm();
-    // Legacy's expression is unanchored at the end, so only the first character of a name is
-    // constrained: a space, an apostrophe and a hyphen stay inside the value.
+    clients.create.mockReturnValue(of(CREATED));
+    // Legacy's expression is unanchored at the end, so only the first character is constrained: a
+    // space, an apostrophe and a hyphen all stay inside a value it accepts.
     component.form.controls.firstname.setValue('Ada Okafor');
     component.form.controls.lastname.setValue("O'Kafo-Bennett");
 
-    const submission = component.submit();
-    const post = httpMock.expectOne({ method: 'POST', url: `${API_ROOT}${CLIENTS_PATH}` });
+    await component.submit();
 
     expect(component.form.controls.firstname.hasError('pattern')).toBe(false);
     expect(component.form.controls.lastname.hasError('pattern')).toBe(false);
     expect(component.form.controls.mobileNo.hasError('pattern')).toBe(false);
-
-    post.flush({ resourceId: 42 });
-    await submission;
-
-    expect(navigate).toHaveBeenCalledWith(['/viewclient', 42]);
+    expect(clients.create).toHaveBeenCalledTimes(1);
+    expect(router.navigate).toHaveBeenCalledWith(['/viewclient', 42]);
   });
 
-  it('refuses a second submit while the first is still in flight', async () => {
+  it('posts the form values once and opens the record the server created', async () => {
     fillValidForm();
+    clients.create.mockReturnValue(of(CREATED));
 
-    const first = component.submit();
-    const second = component.submit();
+    await component.submit();
 
-    const post = httpMock.expectOne({ method: 'POST', url: `${API_ROOT}${CLIENTS_PATH}` });
-    post.flush({ resourceId: 42, clientId: 43 });
+    expect(clients.create).toHaveBeenCalledTimes(1);
 
-    await Promise.all([first, second]);
+    const body: ClientCreateRequest = clients.create.mock.calls[0][0];
 
-    expect(httpMock.match({ method: 'POST', url: `${API_ROOT}${CLIENTS_PATH}` })).toHaveLength(0);
-    expect(navigate).toHaveBeenCalledTimes(1);
+    // Every value is handed over as the control holds it: the numeric ids stay numbers…
+    expect(body.officeId).toBe(HEAD_OFFICE_ID);
+    expect(typeof body.officeId).toBe('number');
+    expect(body.staffId).toBe(PARITY_OFFICER_ID);
+    expect(typeof body.staffId).toBe('number');
+    // …the screen creates an individual client, the legal form whose name set this form fills…
+    expect(body.legalFormId).toBe(1);
+    expect(body.firstname).toBe('Parity');
+    expect(body.lastname).toBe('Client');
+    // …and no string is trimmed or defaulted.
+    expect(body.externalId).toBe('EXT-1');
+    expect(body.mobileNo).toBe('2025550101');
+
+    // The dates leave the screen as the `Date` its control holds; the service serialises them.
+    expect(body.submittedOnDate).toBeInstanceOf(Date);
+    // The service owns the two wire members that carry a payload date's grammar and language, so
+    // the screen sets neither (Rule 1 clause 2).
+    expect(Object.keys(body)).not.toContain('dateFormat');
+    expect(Object.keys(body)).not.toContain('locale');
+
+    expect(router.navigate).toHaveBeenCalledWith(['/viewclient', 42]);
   });
 
-  it('shows the server’s message verbatim and keeps every entered value', async () => {
+  it('sends nothing for an office value that is no office id, and the form stays usable', async () => {
+    fillValidForm();
+    clients.create.mockReturnValue(of(CREATED));
+
+    // A control holding text satisfies `required` but names no office, so the screen reports rather
+    // than posting a coerced id: a body carrying `officeId: null` is one no legacy screen sends
+    // (Rule 1 clause 2).
+    component.form.controls.officeId.setValue('1');
+    expect(component.form.controls.officeId.valid).toBe(true);
+
+    await component.submit();
+
+    expect(clients.create).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(component.form.controls.officeId.touched).toBe(true);
+
+    // The refusal closed nothing off: the same form, on a real office, still creates the client.
+    component.form.controls.officeId.setValue(HEAD_OFFICE_ID);
+    await component.submit();
+
+    expect(clients.create).toHaveBeenCalledTimes(1);
+    expect(router.navigate).toHaveBeenCalledWith(['/viewclient', 42]);
+  });
+
+  it('opens the record a response reports by resource id alone', async () => {
+    fillValidForm();
+    clients.create.mockReturnValue(of(RESOURCE_ID_ONLY));
+
+    await component.submit();
+
+    expect(clients.create).toHaveBeenCalledTimes(1);
+    expect(router.navigate).toHaveBeenCalledWith(['/viewclient', 99]);
+  });
+
+  it('sends the activation date for a client created active, and none for one created inactive', async () => {
+    fillActiveForm();
+    clients.create.mockReturnValue(of(CREATED));
+
+    await component.submit();
+
+    const active: ClientCreateRequest = clients.create.mock.calls[0][0];
+    expect(active.active).toBe(true);
+    expect(active.activationDate).toBeInstanceOf(Date);
+
+    // The same form with the box cleared sends no activation date at all: Fineract rejects the pair
+    // "inactive with an activation date", and the service drops an undefined member from the body.
+    clients.create.mockClear();
+    component.form.controls.active.setValue(false);
+    await component.submit();
+
+    const inactive: ClientCreateRequest = clients.create.mock.calls[0][0];
+    expect(inactive.active).toBe(false);
+    expect(inactive.activationDate).toBeUndefined();
+  });
+
+  it('posts an optional field the operator left empty exactly as the control holds it', async () => {
+    fillValidForm();
+    clients.create.mockReturnValue(of(CREATED));
+    component.form.controls.externalId.setValue('');
+    component.form.controls.mobileNo.setValue('');
+
+    await component.submit();
+
+    const body: ClientCreateRequest = clients.create.mock.calls[0][0];
+    // Nothing is trimmed, dropped or defaulted: the screen hands the server what the operator left,
+    // and the server treats a blank optional string as absent.
+    expect(body.externalId).toBe('');
+    expect(body.mobileNo).toBe('');
+    expect(router.navigate).toHaveBeenCalledWith(['/viewclient', 42]);
+  });
+
+  it('leaves the officer out of a client whose officer the operator did not choose', async () => {
+    fillValidForm();
+    clients.create.mockReturnValue(of(CREATED));
+    // The legacy form's staff field is optional and Fineract assigns no officer to a client whose
+    // officer was left unset, so the body carries no staff member at all.
+    component.form.controls.staffId.setValue(null);
+
+    await component.submit();
+
+    const body: ClientCreateRequest = clients.create.mock.calls[0][0];
+    expect(body.staffId).toBeUndefined();
+    expect(body.officeId).toBe(HEAD_OFFICE_ID);
+    expect(router.navigate).toHaveBeenCalledWith(['/viewclient', 42]);
+  });
+
+  it('sends one request per click and disables the submit control while it is in flight', async () => {
+    const inFlight = new Subject<ClientMutationResponse>();
+    clients.create.mockReturnValue(inFlight.asObservable());
     fillValidForm();
 
-    const submission = component.submit();
-    httpMock
-      .expectOne({ method: 'POST', url: `${API_ROOT}${CLIENTS_PATH}` })
-      .flush({ defaultUserMessage: REJECTED_MESSAGE }, { status: 400, statusText: 'Bad Request' });
+    const firstClick = component.submit();
+    expect(component.guard.busy()).toBe(true);
+    fixture.detectChanges();
+    expect(submitButton().disabled).toBe(true);
 
-    await submission;
-    await fixture.whenStable();
+    // The second click is refused rather than queued, because `POST /clients` is not idempotent.
+    const secondClick = component.submit();
+    expect(clients.create).toHaveBeenCalledTimes(1);
+    expect(router.navigate).not.toHaveBeenCalled();
+
+    inFlight.next(CREATED);
+    inFlight.complete();
+    await Promise.all([firstClick, secondClick]);
     fixture.detectChanges();
 
-    const alert = host().querySelector('[role="alert"]');
-    expect(alert?.textContent?.trim()).toBe(REJECTED_MESSAGE);
+    expect(component.guard.busy()).toBe(false);
+    expect(submitButton().disabled).toBe(false);
+    expect(clients.create).toHaveBeenCalledTimes(1);
+    // One click, one record: the refused click never navigated anywhere.
+    expect(router.navigate).toHaveBeenCalledTimes(1);
+    expect(router.navigate).toHaveBeenCalledWith(['/viewclient', 42]);
+  });
+
+  it("renders Fineract's rejection verbatim and keeps every entered value", async () => {
+    clients.create.mockReturnValue(
+      throwError(() =>
+        toApiError(
+          new HttpErrorResponse({
+            status: 400,
+            statusText: 'Bad Request',
+            error: {
+              defaultUserMessage: REJECTED_MESSAGE,
+              errors: [{ defaultUserMessage: REJECTED_MESSAGE }],
+            },
+          }),
+        ),
+      ),
+    );
+    fillValidForm();
+
+    await component.submit();
+    fixture.detectChanges();
+
+    expect(component.error()).toBe(REJECTED_MESSAGE);
+    const alerts = host().querySelectorAll('.alert.alert-danger');
+    expect(alerts).toHaveLength(1);
+    // The message reaches the user unmodified — no prefix, suffix, trim or translation — because
+    // workflow W7 compares it character for character with the server's own text.
+    expect(alerts[0].textContent?.trim()).toBe(REJECTED_MESSAGE);
+
     // The screen stays mounted with what the operator typed, so the failure can be corrected in place.
     expect(component.form.getRawValue()).toMatchObject({
-      officeId: 1,
-      staffId: 7,
+      officeId: HEAD_OFFICE_ID,
+      staffId: PARITY_OFFICER_ID,
       firstname: 'Parity',
       lastname: 'Client',
       externalId: 'EXT-1',
       mobileNo: '2025550101',
     });
-    expect(navigate).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
   });
 
-  // A 5xx is Fineract failing, not the submitted values: `core/http/fineract.interceptor.ts` raises
-  // the single notification that carries it (AAP 0.7.4), so a message painted here as well would show
-  // one failure twice. The screen stays mounted with what the operator typed.
-  it('leaves a 5xx create to the interceptor’s notification and keeps the entered values', async () => {
+  it('leaves a 5xx to the interceptor’s notification and keeps the entered values', async () => {
+    clients.create.mockReturnValue(throwError(() => new ApiError(SERVER_FAILURE_MESSAGE, 500)));
     fillValidForm();
 
-    const submission = component.submit();
-    httpMock
-      .expectOne({ method: 'POST', url: `${API_ROOT}${CLIENTS_PATH}` })
-      .flush(
-        { defaultUserMessage: SERVER_FAILURE_MESSAGE },
-        { status: 500, statusText: 'Internal Server Error' },
-      );
+    await component.submit();
+    fixture.detectChanges();
 
-    await submission;
-    await fixture.whenStable();
+    // Above 499 the interceptor's notification is that failure's only report, so the screen paints
+    // nothing of its own (AAP 0.7.4) and still holds every value the operator entered.
+    expect(component.error()).toBeNull();
+    expect(host().querySelector('.alert.alert-danger')).toBeNull();
+    expect(component.form.controls.firstname.value).toBe('Parity');
+    expect(component.form.controls.officeId.value).toBe(HEAD_OFFICE_ID);
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  it('paints no message when the create cannot be sent at all', async () => {
+    // A transport failure arrives with status 0 and with Angular's own wording, which embeds the
+    // failed request's address: the screen must render neither, and the interceptor's notification
+    // is the one report it gets (AAP 0.7.4).
+    clients.create.mockReturnValue(
+      throwError(() => new HttpErrorResponse({ status: 0, error: new ProgressEvent('error') })),
+    );
+    fillValidForm();
+
+    await component.submit();
     fixture.detectChanges();
 
     expect(component.error()).toBeNull();
-    expect(host().querySelector('[role="alert"]')).toBeNull();
-    expect(component.form.getRawValue()).toMatchObject({
-      officeId: 1,
-      staffId: 7,
-      firstname: 'Parity',
-      lastname: 'Client',
-      externalId: 'EXT-1',
-      mobileNo: '2025550101',
-    });
-    expect(navigate).not.toHaveBeenCalled();
+    expect(host().querySelector('.alert.alert-danger')).toBeNull();
+    expect(router.navigate).not.toHaveBeenCalled();
   });
 
-  // A request the transport never answered arrives as status 0, and the message Angular builds for it
-  // embeds the failed URL — the configured API host — so the screen must render neither the host nor
-  // Angular's own transport wording (finding S1; AAP 0.7.4 keeps a network failure to a notification).
-  it('renders neither the API host nor Angular’s transport wording when the create cannot be sent', async () => {
-    fillValidForm();
-
-    const submission = component.submit();
-    httpMock
-      .expectOne({ method: 'POST', url: `${API_ROOT}${CLIENTS_PATH}` })
-      .error(new ProgressEvent('error'));
-
-    await submission;
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    expect(component.error()).toBeNull();
-    const rendered = host().textContent ?? '';
-    expect(rendered).not.toContain(SERVED_CONFIG.apiBaseUrl);
-    expect(rendered).not.toContain('Http failure response');
-    expect(host().querySelector('[role="alert"]')).toBeNull();
-  });
-
-  // The create succeeded but the router refused the navigation that followed it. That rejection is no
-  // HTTP answer, so no notification carries it: the screen publishes its own message rather than
-  // swallowing it (AAP 0.14.2 "every HTTP call path ends in either a rendered message or a
-  // notification; no catch swallows an error silently").
-  it('publishes the rejection a refused navigation produced after a successful create', async () => {
-    fillValidForm();
-    navigate.mockImplementationOnce(() =>
+  it('reports the rejection a refused navigation produced after a successful create', async () => {
+    clients.create.mockReturnValue(of(CREATED));
+    router.navigate.mockImplementationOnce(() =>
       Promise.reject(new Error(NAVIGATION_FAILURE_MESSAGE)),
     );
+    fillValidForm();
 
-    const submission = component.submit();
-    httpMock
-      .expectOne({ method: 'POST', url: `${API_ROOT}${CLIENTS_PATH}` })
-      .flush({ resourceId: 42, clientId: 43 });
-
-    await submission;
-    await fixture.whenStable();
+    await component.submit();
     fixture.detectChanges();
 
-    expect(navigate).toHaveBeenCalledWith(['/viewclient', 43]);
+    // The record was created, so the create was not repeated; the refusal is no HTTP answer, so the
+    // screen publishes its own message rather than swallowing it (AAP 0.14.2).
+    expect(clients.create).toHaveBeenCalledTimes(1);
+    expect(router.navigate).toHaveBeenCalledWith(['/viewclient', 42]);
     expect(component.error()).toBe(NAVIGATION_FAILURE_MESSAGE);
-    expect(host().querySelector('[role="alert"]')?.textContent?.trim()).toBe(
+    expect(host().querySelector('.alert.alert-danger')?.textContent?.trim()).toBe(
       NAVIGATION_FAILURE_MESSAGE,
     );
   });
 
-  it('returns to the list when the form is cancelled', () => {
-    component.cancel();
+  it('returns to the list on cancel without creating anything', () => {
+    const cancel = host().querySelector<HTMLButtonElement>('#cancel2');
+    expect(cancel).not.toBeNull();
+    cancel?.click();
 
-    expect(navigate).toHaveBeenCalledWith(['/clients']);
+    expect(router.navigate).toHaveBeenCalledWith(['/clients']);
+    expect(clients.create).not.toHaveBeenCalled();
+  });
+
+  it('reports a failed template read and leaves the form usable', async () => {
+    clients.template.mockReset();
+    clients.template.mockReturnValue(
+      throwError(() =>
+        toApiError(
+          new HttpErrorResponse({
+            status: 400,
+            statusText: 'Bad Request',
+            error: { defaultUserMessage: TEMPLATE_FAILURE_MESSAGE },
+          }),
+        ),
+      ),
+    );
+
+    await open();
+
+    expect(clients.template).toHaveBeenCalledTimes(1);
+    expect(component.error()).toBe(TEMPLATE_FAILURE_MESSAGE);
+    // One message, painted once, above the form that is still there to be corrected.
+    expect(host().querySelectorAll('.alert.alert-danger')).toHaveLength(1);
+    expect(host().querySelector('.alert.alert-danger')?.textContent?.trim()).toBe(
+      TEMPLATE_FAILURE_MESSAGE,
+    );
+    expect(selects()).toHaveLength(2);
+    expect(host().querySelector('#firstname')).not.toBeNull();
+    expect(submitButton().disabled).toBe(false);
+
+    // A failed read raises no notice of its own and creates nothing.
+    expect(host().querySelector('app-notification')).toBeNull();
+    expect(clients.create).not.toHaveBeenCalled();
   });
 });

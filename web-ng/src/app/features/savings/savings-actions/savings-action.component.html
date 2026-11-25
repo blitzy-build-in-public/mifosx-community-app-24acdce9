@@ -7,7 +7,8 @@
   One card per screen (AAP 0.7.4). Every visual value comes from the global Bootstrap 3 layer
   compiled in `web-ng/src/styles.scss`, so this file carries no style block, no style attribute and no
   colour literal (Rule 1 clause 6): `.container-fluid`/`.row`/`.col-md-12` is the page grid, `.panel`
-  the white square surface with its shadow and no border stroke, `.panel-body` the card's body,
+  the white square surface with its shadow and no border stroke, `.panel-heading` the white heading
+  band with the rule beneath it, `.panel-body` the card's body,
   `.panel-title` the card-title treatment, `.form-group`/`.control-label`/`.help-block` the field
   layout and its invalid state, `.alert.alert-danger` the verbatim Fineract failure, and
   `.btn.btn-primary`/`.btn.btn-default` the primary action and its cancel.
@@ -32,18 +33,21 @@
   <div class="row">
     <div class="col-md-12">
       <div class="panel panel-default">
+        <div class="panel-heading">
+          @if (notFound()) {
+            <h3 class="panel-title">{{ notFoundHeadingKey | translate }}</h3>
+          } @else if (operation(); as op) {
+            <h3 class="panel-title">{{ op.headingKey | translate }}</h3>
+          }
+        </div>
+
         <div class="panel-body">
           @if (notFound()) {
-            <div class="text-center text-muted">
-              <h3 class="panel-title">{{ notFoundHeadingKey | translate }}</h3>
-              <p>{{ notFoundMessageKey | translate }}</p>
-            </div>
+            <p class="text-center text-muted">{{ notFoundMessageKey | translate }}</p>
           } @else if (operation(); as op) {
             @if (error(); as message) {
               <div class="alert alert-danger" role="alert">{{ message }}</div>
             }
-
-            <h3 class="panel-title">{{ op.headingKey | translate }}</h3>
 
             @if (op.mode === 'action') {
               @if (op.command === 'approve') {
@@ -103,20 +107,30 @@
                   [required]="true"
                 />
 
-                <!-- The amount is required-only: no range, step or balance rule the legacy form lacks. -->
+                <!--
+                  The amount is required-only, exactly as the legacy form marks it: no range and no balance
+                  rule the legacy screen lacks, so Fineract stays the authority on the value (Rule 1 clause
+                  3). `step="0.01"` is the browser's own increment for a money figure, not a rule of its own:
+                  left at the `type="number"` default of one whole unit the browser would report an ordinary
+                  two-decimal amount as invalid, and `novalidate` on the form keeps the increment from ever
+                  blocking a submit. `dirty` joins `touched` so the message appears as soon as an entered
+                  amount is cleared, before the field is left — the legacy `form-validate` directive's own
+                  behaviour on this input.
+                -->
                 @let amount = transactionForm.controls.transactionAmount;
-                <div class="form-group" [class.has-error]="amount.invalid && amount.touched">
+                @let amountInvalid = amount.invalid && (amount.touched || amount.dirty);
+                <div class="form-group" [class.has-error]="amountInvalid">
                   <label class="control-label" for="transactionAmount">{{ amountLabel() }}</label>
                   <input
                     type="number"
+                    step="0.01"
                     class="form-control"
                     id="transactionAmount"
                     formControlName="transactionAmount"
-                    step="any"
                     aria-required="true"
-                    [attr.aria-invalid]="amount.invalid && amount.touched ? 'true' : null"
+                    [attr.aria-invalid]="amountInvalid ? 'true' : null"
                   />
-                  @if (amount.invalid && amount.touched) {
+                  @if (amountInvalid) {
                     <span class="help-block">{{ 'label.requiredfield' | translate }}</span>
                   }
                 </div>
