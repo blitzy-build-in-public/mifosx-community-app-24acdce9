@@ -32,6 +32,22 @@
   the screen has moved away from.
 -->
 <div class="container-fluid">
+  <!--
+    The record's own trail: the client's office name and the separator the design shows after it.
+    The shell renders a crumb only from a route's static `data['breadcrumb']`, which this record's
+    route deliberately does not declare, so exactly one trail is ever on screen and it describes the
+    client being looked at rather than the route that reached it — legacy's record template does the
+    same with `{{client.officeName}}` (`app/views/clients/viewclient.html:2-5`; AAP 0.7.4). An empty
+    value renders no trail at all, so a loading or failed read leaves none behind.
+  -->
+  @if (officeCrumb(); as crumb) {
+    <nav aria-label="Breadcrumb">
+      <ol class="breadcrumb">
+        <li class="active" aria-current="page">{{ crumb }}</li>
+      </ol>
+    </nav>
+  }
+
   <div class="row">
     <div class="col-md-12">
       @if (loading()) {
@@ -102,7 +118,13 @@
                   }
                 </div>
                 <div class="col-md-3">
-                  <app-profile-card [displayName]="record.displayName" [fields]="profileFields()" />
+                  <!-- The card's own rows and, under its `Performance History` sub-heading, the rows
+                       whose values the client payload does not carry. -->
+                  <app-profile-card
+                    [displayName]="record.displayName"
+                    [fields]="profileFields()"
+                    [historyFields]="historyFields()"
+                  />
                 </div>
               </div>
             </div>

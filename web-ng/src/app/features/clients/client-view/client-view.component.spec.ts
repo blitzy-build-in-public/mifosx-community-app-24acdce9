@@ -88,6 +88,17 @@ const SECOND_CLIENT: Client = {
   timeline: { submittedOnDate: '2026-11-24', activatedOnDate: [2026, 11, 24] },
 };
 
+/**
+ * The same client once its record has been closed: the one state on which the record offers
+ * `Reactivate`, because that is the state legacy's own action list carries the command for
+ * (`app/scripts/models/clientStatus.js`, "Closed" → `label.button.reactivate`; AAP 0.7.4
+ * "plus `Reactivate` for the states that allow it").
+ */
+const CLOSED_CLIENT: Client = {
+  ...CLIENT,
+  status: { id: 600, code: 'clientStatusType.closed', value: 'Closed' },
+};
+
 /** The account summary the accounts tab reads: a client holding none of either family. */
 const NO_ACCOUNTS: ClientAccountSummary = {};
 
@@ -109,6 +120,13 @@ const TRANSLATIONS: Readonly<Record<string, string>> = {
   'label.input.externalid': 'External ID',
   'label.input.office': 'Office',
   'label.input.staff': 'Staff',
+  'label.input.activationdate': 'Activation Date',
+  'label.heading.performancehistory': 'Performance History',
+  'label.heading.numofloancycle': 'No. of Loan Cycle',
+  'label.lastloanamount': 'Last Loan Amount',
+  'label.numofactiveloans': 'No. of Active Loans',
+  'label.totalsavings': 'Total Savings',
+  'label.numofactivesavings': 'No. of Active Savings',
   'label.heading.accountdetail': 'Account Detail',
   'label.heading.notavailable': 'Not Available',
   'error.msg.resource.not.found': 'The requested resource is not available.',
@@ -228,7 +246,10 @@ describe('ClientViewComponent', () => {
     return actionLinks(host).map((link) => link.getAttribute('href'));
   }
 
-  /** The eight in-scope action hrefs, for the client id a record is showing. */
+  /**
+   * The action hrefs every record shows, for the client id it is showing: the four entries of the
+   * joined row and the three lifecycle commands of its `More` menu, in render order.
+   */
   function expectedHrefs(id: string): string[] {
     return [
       `/editclient/${id}`,
@@ -238,8 +259,15 @@ describe('ClientViewComponent', () => {
       `/client/${id}/activate`,
       `/client/${id}/reject`,
       `/client/${id}/withdraw`,
-      `/client/${id}/reactivate`,
     ];
+  }
+
+  /**
+   * The hrefs a **closed** record adds to that set: `Reactivate`, last in the menu, because
+   * reactivation is the one command whose availability follows the record's state (AAP 0.7.4).
+   */
+  function expectedClosedHrefs(id: string): string[] {
+    return [...expectedHrefs(id), `/client/${id}/reactivate`];
   }
 
   /** Lets the queued reads and effects settle, then paints, which is what one navigation produces. */
@@ -255,6 +283,20 @@ describe('ClientViewComponent', () => {
       (row) => [
         (row.querySelector('[data-testid="profile-field-label"]')?.textContent ?? '').trim(),
         (row.querySelector('[data-testid="profile-field-value"]')?.textContent ?? '').trim(),
+      ],
+    );
+  }
+
+  /**
+   * The label and value cells of the profile card's `Performance History` rows, in render order.
+   * Every one of them carries an empty value, because `Client` models none of the summary figures
+   * legacy prints there (AAP 0.7.4).
+   */
+  function historyRows(host: HTMLElement): readonly (readonly [string, string])[] {
+    return Array.from(host.querySelectorAll<HTMLElement>('[data-testid="profile-history-field"]')).map(
+      (row) => [
+        (row.querySelector('[data-testid="profile-history-field-label"]')?.textContent ?? '').trim(),
+        (row.querySelector('[data-testid="profile-history-field-value"]')?.textContent ?? '').trim(),
       ],
     );
   }
@@ -303,13 +345,27 @@ describe('ClientViewComponent', () => {
     // (AAP 0.10.5 item 6).
     expect(tabLabels).toEqual(['General', 'Identities']);
 
-    // The profile card carries the client's own fields, and the external id this record does not
-    // carry is an empty value rather than a placeholder (AAP 0.7.4).
+    // The crumb is the record's own office — the design's "Head Office /" for this client — and not a
+    // static route trail (AAP 0.7.4).
+    expect(host.querySelector('ol.breadcrumb')?.textContent?.trim()).toBe(`${CLIENT.officeName} /`);
+
+    // The profile card carries the client's own fields, the activation date the payload supplies, and
+    // an empty value for the external id this record does not carry (AAP 0.7.4).
     expect(profileRows(host)).toEqual([
       ['Client Number', CLIENT.accountNo],
       ['External ID', ''],
       ['Office', CLIENT.officeName],
       ['Staff', CLIENT.staffName ?? ''],
+      ['Activation Date', '21 November 2026'],
+    ]);
+
+    // The performance-history rows are painted with their labels and no invented figure.
+    expect(historyRows(host)).toEqual([
+      ['No. of Loan Cycle', ''],
+      ['Last Loan Amount', ''],
+      ['No. of Active Loans', ''],
+      ['Total Savings', ''],
+      ['No. of Active Savings', ''],
     ]);
   });
 
@@ -369,19 +425,33 @@ describe('ClientViewComponent', () => {
     expect(renderedText(host)).not.toContain('Not Available');
   });
 
-  it('links every in-scope action to its own route', async () => {
+  it('renders no message of its own for a 5xx, because the interceptor has already notified', async () => {
+    const failure = 'There was an unexpected error in the server.';
+    clients.get.mockReturnValue(throwError(() => new ApiError(failure, 500)));
+
     const host = hostOf(await render(`/viewclient/${CLIENT_ID}`));
 
-    expect(actionHrefs(host)).toEqual([
-      `/editclient/${CLIENT_ID}`,
-      `/newclientloanaccount/${CLIENT_ID}`,
-      `/new_client_saving_application/${CLIENT_ID}`,
-      `/client/${CLIENT_ID}/close`,
-      `/client/${CLIENT_ID}/activate`,
-      `/client/${CLIENT_ID}/reject`,
-      `/client/${CLIENT_ID}/withdraw`,
-      `/client/${CLIENT_ID}/reactivate`,
-    ]);
+    // The interceptor raises the one notification a server or transport failure gets, so this screen
+    // shows neither that message a second time nor the not-found state, and the shell stays usable
+    // (AAP 0.7.4; AAP 0.4.2).
+    expect(host.querySelector('.alert')).toBeNull();
+    expect(renderedText(host)).not.toContain(failure);
+    expect(renderedText(host)).not.toContain('Not Available');
+    expect(host.querySelector('app-record-header')).toBeNull();
+    expect(actionLinks(host)).toHaveLength(0);
+  });
+
+  it('links every in-scope action to its own route, and offers reactivation only on a closed record', async () => {
+    const host = hostOf(await render(`/viewclient/${CLIENT_ID}`));
+
+    // An active client: the four row entries and the three lifecycle commands, and no `Reactivate`,
+    // because the command would be refused on this record (AAP 0.7.4).
+    expect(actionHrefs(host)).toEqual(expectedHrefs(CLIENT_ID));
+
+    clients.get.mockReturnValue(of(CLOSED_CLIENT));
+    const closed = hostOf(await render(`/viewclient/${CLIENT_ID}`));
+
+    expect(actionHrefs(closed)).toEqual(expectedClosedHrefs(CLIENT_ID));
   });
 
   it('hides every action whose permission the user does not hold', async () => {
@@ -390,7 +460,7 @@ describe('ClientViewComponent', () => {
     const host = hostOf(await render(`/viewclient/${CLIENT_ID}`));
     const links = actionLinks(host);
 
-    expect(links).toHaveLength(8);
+    expect(links).toHaveLength(7);
     expect(links.every((link) => link.style.display === 'none')).toBe(true);
   });
 
@@ -450,6 +520,7 @@ describe('ClientViewComponent', () => {
       ['External ID', ''],
       ['Office', SECOND_CLIENT.officeName],
       ['Staff', SECOND_CLIENT.staffName ?? ''],
+      ['Activation Date', '24 November 2026'],
     ]);
 
     // Every action href, and both tab inputs, address the client the URL names now.

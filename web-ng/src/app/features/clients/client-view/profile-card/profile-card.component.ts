@@ -19,8 +19,9 @@ export interface ProfileCardField {
 
 /**
  * Right-hand profile card of the individual client record: the client name as the card
- * heading, the decorative avatar, the label/value rows supplied by the parent and the
- * performance-history sub-heading (AAP 0.2.3 row `ProfileCard`, AAP 0.2.1 step 3).
+ * heading, the decorative avatar, the label/value rows supplied by the parent, the
+ * performance-history sub-heading and the rows the parent supplies under it (AAP 0.2.3
+ * row `ProfileCard`, AAP 0.2.1 step 3).
  *
  * Presentational only. It issues no request, holds no state of its own and knows no
  * `Client` model: the parent resolves every value into a display string before binding
@@ -48,6 +49,16 @@ export class ProfileCardComponent {
   /** The card's rows, rendered in the order received. A row whose `value` is empty
    *  renders its label with an empty value column (AAP 0.7.4). */
   readonly fields = input.required<readonly ProfileCardField[]>();
+
+  /**
+   * The rows rendered under the card's `Performance History` sub-heading, in the order received.
+   *
+   * Optional and empty by default: the caller owns which rows exist, exactly as it does for
+   * {@link fields}, so a caller with no history rows renders none. A row whose `value` is empty
+   * renders its label beside an empty value column, which is what the legacy record paints for a
+   * client whose summary the payload does not carry (AAP 0.7.4; Rule 1 clause 3).
+   */
+  readonly historyFields = input<readonly ProfileCardField[]>([]);
 
   /** Decorative client avatar, served from the legacy image tree through the `images/`
    *  entry of `angular.json` assets (AAP 0.2.4 asset inventory; the Figma file holds no

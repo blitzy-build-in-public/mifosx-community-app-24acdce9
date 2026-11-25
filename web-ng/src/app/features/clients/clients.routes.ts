@@ -44,6 +44,8 @@ import { ClientViewComponent } from './client-view/client-view.component';
  *
  * Exported as the array `app.routes.ts` loads lazily, so the family's paths, its access codes and its
  * breadcrumb keys are declared in one place and the parity route list has one thing to agree with.
+ * The record route is the one screen that declares no breadcrumb key, because it paints its own trail
+ * from the client's office; the comment on that entry states why.
  */
 export const CLIENTS_ROUTES: Routes = [
   {
@@ -73,10 +75,12 @@ export const CLIENTS_ROUTES: Routes = [
     path: 'viewclient/:id',
     component: ClientViewComponent,
     canActivate: [permissionGuard],
-    data: {
-      permission: 'READ_CLIENT',
-      breadcrumb: ['label.anchor.clients', 'label.heading.client'],
-    },
+    // The record is the one screen that declares no `breadcrumb`: it paints its own trail from the
+    // client's office (`ClientViewComponent.officeCrumb`), which is what the legacy record template
+    // shows — `{{client.officeName}}` in its `.breadcrumb`, `app/views/clients/viewclient.html:2-5`,
+    // and AAP 0.7.4's "Breadcrumb `Head Office /`". A static trail here would paint a second one above
+    // it and describe the route instead of the client on screen.
+    data: { permission: 'READ_CLIENT' },
   },
   {
     path: 'client/:id/:action',

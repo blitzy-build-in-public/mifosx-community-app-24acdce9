@@ -35,5 +35,15 @@
     <hr />
 
     <h5>{{ 'label.heading.performancehistory' | translate }}</h5>
+
+    <!-- The history rows the parent supplies, in its order and under the sub-heading legacy paints
+         them beneath. A row whose value the payload does not carry renders its label beside an empty
+         value cell rather than a stand-in figure (AAP 0.7.4). -->
+    @for (field of historyFields(); track $index) {
+      <div class="row" data-testid="profile-history-field">
+        <div class="col-xs-5"><span class="value-key" data-testid="profile-history-field-label">{{ field.label }}</span></div>
+        <div class="col-xs-7"><span data-testid="profile-history-field-value">{{ field.value }}</span></div>
+      </div>
+    }
   </div>
 </div>

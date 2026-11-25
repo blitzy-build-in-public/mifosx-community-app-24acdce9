@@ -238,4 +238,43 @@ describe('ProfileCardComponent', () => {
     expect(host(fixture).querySelector('h4.panel-title')?.textContent?.trim()).toBe(DISPLAY_NAME);
     expect(rows(fixture)).toHaveLength(0);
   });
+
+  it('renders the history rows under the sub-heading, each beside an empty value cell', () => {
+    const fixture = createCard();
+    const history: readonly ProfileCardField[] = [
+      { label: 'No. of Loan Cycle', value: '' },
+      { label: 'No. of Active Loans', value: '' },
+    ];
+
+    fixture.componentRef.setInput('historyFields', history);
+    fixture.detectChanges();
+
+    const rendered = Array.from(
+      host(fixture).querySelectorAll<HTMLElement>('[data-testid="profile-history-field"]'),
+    ).map((row) => [
+      cellText(row, 'profile-history-field-label'),
+      cellText(row, 'profile-history-field-value'),
+    ]);
+
+    expect(rendered).toEqual([
+      ['No. of Loan Cycle', ''],
+      ['No. of Active Loans', ''],
+    ]);
+
+    // They belong beneath the sub-heading, which is where legacy's record paints them.
+    const subheading = host(fixture).querySelector('h5');
+    const firstHistory = host(fixture).querySelector('[data-testid="profile-history-field"]');
+    const followsSubheading =
+      subheading !== null &&
+      firstHistory !== null &&
+      (subheading.compareDocumentPosition(firstHistory) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+
+    expect(followsSubheading).toBe(true);
+  });
+
+  it('renders no history row when the parent supplies none', () => {
+    const fixture = createCard();
+
+    expect(host(fixture).querySelectorAll('[data-testid="profile-history-field"]')).toHaveLength(0);
+  });
 });

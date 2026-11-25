@@ -11,8 +11,10 @@ import { ActivatedRoute, type ParamMap } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { finalize } from 'rxjs';
 
+import { AppConfigService } from '../../../core/config/app-config.service';
 import { ApiError } from '../../../core/http/api-error';
-import type { Client } from '../client.models';
+import { fromFineractDate, toFineractDate } from '../../../shared/date-format.util';
+import { toClientStatusKey, type Client } from '../client.models';
 import { ClientService } from '../client.service';
 import {
   ActionButtonGroupComponent,
@@ -60,6 +62,24 @@ function isClientRecordTab(value: string): value is ClientRecordTab {
 }
 
 /**
+ * The `Performance History` rows the record's profile card renders, as the legacy bundle's label
+ * keys and in the order legacy's `app/views/clients/viewclient.html` paints them.
+ *
+ * One exported list, so a label corrected after a screen comparison is fixed in one place. The value
+ * beside each label is a `ClientSummary` member legacy reads (`loanCycle`, `lastLoanAmount`,
+ * `activeLoans`, `totalSavings`, `activeSavings`); `Client` deliberately does not model that member,
+ * because no in-scope workflow reads it, so every row renders its label beside an empty value rather
+ * than a number the API never sent (AAP 0.7.4; Rule 1 clauses 3 and 4).
+ */
+export const CLIENT_HISTORY_LABEL_KEYS: readonly string[] = [
+  'label.heading.numofloancycle',
+  'label.lastloanamount',
+  'label.numofactiveloans',
+  'label.totalsavings',
+  'label.numofactivesavings',
+];
+
+/**
  * The individual client record — `#/viewclient/:id`, the last screen of the "Sign in and open a
  * client record" flow and the entry point of workflow W3's record read, of the lifecycle actions and
  * of the loan, savings and edit screens this record links to (AAP 0.7.1 Features row `clients`;
@@ -102,7 +122,8 @@ function isClientRecordTab(value: string): value is ClientRecordTab {
  *
  * **Every action is permission-gated, on legacy's own code.** The entry points the plan keeps are
  * `Edit`, `New Loan`, `New Saving` (rendered because Stretch ships, AAP 0.10.5 item 5) and `Close`,
- * plus the `More` menu holding `Activate`, `Reject`, `Withdraw` and `Reactivate` (AAP 0.7.4). Each
+ * plus the `More` menu holding `Activate`, `Reject`, `Withdraw` and `Reactivate`, the last only while
+ * the record is closed (AAP 0.7.4). Each
  * one carries the permission the legacy record gates it on — `UPDATE_CLIENT`, `CREATE_LOAN`,
  * `CREATE_SAVINGSACCOUNT`, `CLOSE_CLIENT`, `ACTIVATE_CLIENT`, `REJECT_CLIENT`, `WITHDRAW_CLIENT`
  * and `REACTIVATE_CLIENT` in `app/scripts/models/clientStatus.js` — on the descriptors
@@ -114,12 +135,14 @@ function isClientRecordTab(value: string): value is ClientRecordTab {
  * gated a second time here. Controls AAP 0.10.5 excludes — client charges, transfer, staff
  * assignment, signature, avatar upload and camera — are not rendered.
  *
- * **Dates and status.** Nothing here formats a date or reads the clock: the record's dates belong
- * to the blocks that display them, which render through the one `DISPLAY_DATE_FORMAT` pattern and
- * parse Fineract values with `fromFineractDate` (AAP 0.7.2 "Date handling"). The status is the
- * design's colour indicator and never its word, and it is painted by `RecordHeaderComponent`
- * through `toClientStatusKey`, the family's delegate to the one mapping the whole application
- * shares in `web-ng/src/app/shared/status-key.util.ts` (AAP 0.10.5 item 11).
+ * **Dates and status.** The only date this component formats is the profile card's activation date,
+ * through the one `DISPLAY_DATE_FORMAT` pattern and `fromFineractDate`/`toFineractDate`, in the locale
+ * `AppConfigService.activeLocale` reports; every other date on the record belongs to the block that
+ * displays it (AAP 0.7.2 "Date handling"), and nothing here reads the clock. The status is the
+ * design's colour indicator and never its word: `RecordHeaderComponent` paints it through
+ * `toClientStatusKey`, the family's delegate to the one mapping the whole application shares in
+ * `web-ng/src/app/shared/status-key.util.ts`, and this component reads the same key once to decide
+ * whether the record offers `Reactivate` (AAP 0.10.5 item 11).
  *
  * **Presentation.** The template and the global Bootstrap 3 layer in `web-ng/src/styles.scss` own
  * every visual value, which is why this component declares no stylesheet, no inline style and no
@@ -179,6 +202,14 @@ export class ClientViewComponent {
   private readonly translate = inject(TranslateService);
 
   /**
+   * Supplies the locale the one date this component prints is rendered in — `activeLocale`, the
+   * language the switcher currently has selected. Only the profile card's activation-date row needs
+   * it: every other date on the record belongs to a block that formats it through the same single
+   * pattern (AAP 0.7.2 "Date handling").
+   */
+  private readonly config = inject(AppConfigService);
+
+  /**
    * The client id the URL currently names, as text: the `:id` of `#/viewclient/:id`. Empty when the
    * route carried none, which is the only case in which the record read is not issued.
    *
@@ -236,6 +267,24 @@ export class ClientViewComponent {
   });
 
   /**
+   * The record's own crumb: the client's office name followed by the separator the design shows —
+   * `Head Office /` for the record the design captured, and the client's true office for every other
+   * record.
+   *
+   * Derived from the loaded client rather than hard-coded and rather than read from the route's
+   * static `data['breadcrumb']`, because that is what makes it truthful: legacy's record template
+   * renders `{{client.officeName}}` in its own `.breadcrumb`
+   * (`app/views/clients/viewclient.html:2-5`), so the trail describes the client on screen rather
+   * than the route that got there. Empty until a record arrives, so a loading or a failed read paints
+   * no crumb at all (AAP 0.7.4 "Client view").
+   */
+  readonly officeCrumb = computed<string>(() => {
+    const office = this.client()?.officeName;
+
+    return office === undefined || office.length === 0 ? '' : `${office} /`;
+  });
+
+  /**
    * The tabs the strip renders, in the design's order: `General` then `Identities`, labelled with
    * the legacy bundle's own keys (`label.heading.general`, `label.heading.identities`), which are
    * the headings legacy's `viewclient.html` gives these two tabs (Rule 1 clause 6).
@@ -259,15 +308,18 @@ export class ClientViewComponent {
   readonly activeTabId = signal<ClientRecordTab>('general');
 
   /**
-   * The right-hand profile card's rows: the client's own fields, in the order the design paints
-   * them, with a field the record leaves unset rendered as the empty string rather than a
+   * The right-hand profile card's own rows: the client's fields, in the order the legacy record
+   * paints them, with a field the record leaves unset rendered as the empty string rather than a
    * placeholder (AAP 0.7.4; Rule 1 clause 3).
    *
-   * Four rows and no more — the client number, the external id, the office and the staff — because
-   * every other value on the card (the activation date, the accounts, the performance history)
-   * belongs to a block that already renders it, and a derived row would be an addition the legacy
-   * record does not make. An unloaded record has no rows at all, so the card renders its heading and
-   * an empty body rather than claiming values it does not have.
+   * Five rows — the client number, the external id, the office, the staff and the activation date —
+   * which are the card's values the API actually supplies. The activation date is read from
+   * `Client.activationDate`, the field `GET /clients/{id}` sends as a `FineractDate`, and formatted
+   * once here through the one display pattern in the active locale rather than in the template,
+   * because the card takes already-resolved strings (AAP 0.7.2 "Date handling"). A client still
+   * pending carries no activation date, so that row's value is empty exactly as the design shows an
+   * unfilled row. An unloaded record has no rows at all, so the card renders its heading and an empty
+   * body rather than claiming values it does not have.
    */
   readonly profileFields = computed<readonly ProfileCardField[]>(() => {
     const record = this.client();
@@ -298,7 +350,35 @@ export class ClientViewComponent {
         label: this.translate.instant('label.input.staff'),
         value: record.staffName ?? '',
       },
+      {
+        label: this.translate.instant('label.input.activationdate'),
+        value:
+          toFineractDate(fromFineractDate(record.activationDate), this.config.activeLocale()) ?? '',
+      },
     ];
+  });
+
+  /**
+   * The rows under the card's `Performance History` sub-heading, in {@link CLIENT_HISTORY_LABEL_KEYS}
+   * order, each carrying an empty value because `Client` does not model the `ClientSummary` the values
+   * come from.
+   *
+   * The rows are still rendered: legacy's record paints the five labels whether or not the summary is
+   * present, and the design shows a card whose history rows carry no value, so omitting them would be
+   * a change to what the screen shows rather than a simplification of it (AAP 0.7.4; Rule 1 clause 3).
+   */
+  readonly historyFields = computed<readonly ProfileCardField[]>(() => {
+    if (this.client() === null) {
+      return [];
+    }
+
+    this.labelsRevision();
+    this.translate.currentLang();
+
+    return CLIENT_HISTORY_LABEL_KEYS.map((labelKey: string) => ({
+      label: this.translate.instant(labelKey),
+      value: '',
+    }));
   });
 
   /**
@@ -346,10 +426,34 @@ export class ClientViewComponent {
   readonly reactivatePermission = 'REACTIVATE_CLIENT';
 
   /**
+   * Whether the record on screen is a closed one, which is the single condition the action row adds
+   * `Reactivate` on.
+   *
+   * Read through `toClientStatusKey`, the family's delegate to the one status mapping the whole
+   * application shares, so the entry appears on exactly the records the design's closed colour marks
+   * (AAP 0.7.4, "plus `Reactivate` for the states that allow it"; AAP 0.10.5 item 11). No other entry
+   * is gated on the record's state: the plan keeps the rest of the action set fixed, and gating them
+   * further would be the improvement Rule 1 clause 3 forbids. Legacy gates this control on its own
+   * permission as well (`REACTIVATE_CLIENT` in `app/scripts/models/clientStatus.js`), which
+   * {@link reactivatePermission} and the action group's gate still enforce.
+   *
+   * The key is the design's folded one, so it covers every terminal client state — closed, rejected,
+   * withdrawn — each of which the legacy record answers with a command of its own (`undoReject`,
+   * `undoWithdrawn`). Those two commands are outside this build's action set, so a terminal record
+   * offers the one command the plan keeps for it rather than none.
+   */
+  private readonly clientIsClosed = computed<boolean>(() => {
+    const record = this.client();
+
+    return record !== null && toClientStatusKey(record.status.code) === 'closed';
+  });
+
+  /**
    * The record's action row, as the descriptors `ActionButtonGroupComponent` renders (AAP 0.2.3 row
    * `ActionButtonGroup`; AAP 0.7.4 "Client view"): `Edit`, `New Loan`, `New Saving` and `Close` in
-   * the visible row, then `Activate`, `Reject`, `Withdraw` and `Reactivate` in its `More` menu, in the
-   * order the legacy record lays them out.
+   * the visible row, then `Activate`, `Reject` and `Withdraw` in its `More` menu, in the order the
+   * legacy record lays them out, with `Reactivate` appended for a closed record alone
+   * ({@link clientIsClosed}).
    *
    * Every field is the legacy record's own — the shipped bundle's label key, the Font Awesome 4 class
    * the design shows, and the permission code the constants above name — so no key, glyph or code is
@@ -362,7 +466,13 @@ export class ClientViewComponent {
   readonly actionButtons = computed<readonly ClientActionButton[]>(() => {
     const clientId = this.clientId();
 
-    return [
+    // No id, no entry: every `routerLink` below is built from the id the URL names, so a route that
+    // names no client yields no descriptor rather than a link whose target is an empty segment.
+    if (clientId.length === 0) {
+      return [];
+    }
+
+    const actions: ClientActionButton[] = [
       {
         label: 'label.button.edit',
         icon: 'fa-edit',
@@ -405,13 +515,20 @@ export class ClientViewComponent {
         routerLink: `/client/${clientId}/withdraw`,
         menu: true,
       },
-      {
+    ];
+
+    // The one state-dependent entry, appended where legacy's `Closed` status lists it: last in the
+    // menu, and absent from a record that is not closed because the command would be refused.
+    if (this.clientIsClosed()) {
+      actions.push({
         label: 'label.button.reactivate',
         permission: this.reactivatePermission,
         routerLink: `/client/${clientId}/reactivate`,
         menu: true,
-      },
-    ];
+      });
+    }
+
+    return actions;
   });
 
 
