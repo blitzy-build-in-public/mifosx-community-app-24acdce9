@@ -1,6 +1,6 @@
 import type { AppDateFormat } from '../../core/config/app-config.model';
 import type { FineractDate } from '../../shared/date-format.util';
-import { toStatusKey, type StatusKey } from '../../shared/status-key.util';
+import { normaliseStatusCode, toStatusKey, type StatusKey } from '../../shared/status-key.util';
 
 /**
  * The single type module of the clients feature family (AAP 0.7.1 row `clients`; AAP 0.7.2 rows
@@ -752,6 +752,30 @@ export interface ClientMutationResponse {
  */
 export function toClientStatusKey(code: string | undefined): StatusKey {
   return toStatusKey(code);
+}
+
+/**
+ * Whether a Fineract client status code is the one the clients list's "Show Closed" checkbox hides —
+ * `clientStatusType.closed`, and nothing else.
+ *
+ * The checkbox is not the swatch's vocabulary. {@link toClientStatusKey} folds the three terminal
+ * states into one colour, while the legacy list hides a single code:
+ * `ng-show="client.status.code != 'clientStatusType.closed' || showClosed"`
+ * (`app/views/clients/clients.html:65`). A rejected or withdrawn client is therefore still on screen
+ * with "Show Closed" unticked, and answering from the colour key would hide two states legacy shows
+ * (Rule 1 clause 3; AAP 0.10.2's displayed-data comparison).
+ *
+ * The code is compared after {@link normaliseStatusCode} from the shared vocabulary, exactly as the
+ * colour lookup is, so `clientStatusType.closed`, `CLIENTSTATUSTYPE.CLOSED` and `closed` answer alike
+ * while `rejected` and `withdraw` answer false. A missing or empty code answers false as well:
+ * nothing may be hidden on a status the row did not carry. Pure and total — no I/O, no logging, no
+ * throw — so it can run for every row.
+ *
+ * @param code The `code` of a client status object, or `undefined` when a response carried none.
+ * @returns true only for the `closed` code.
+ */
+export function isClosedClientStatus(code: string | undefined): boolean {
+  return code !== undefined && normaliseStatusCode(code) === 'closed';
 }
 
 /**

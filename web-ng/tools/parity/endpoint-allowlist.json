@@ -34,7 +34,8 @@
       "resource": "globalSearch",
       "queryParameters": [
         "query",
-        "resource"
+        "resource",
+        "exactMatch"
       ]
     },
     {

@@ -14,12 +14,13 @@ import { HasPermissionDirective } from '../../../shared/has-permission.directive
 import type { StatusKey } from '../../../shared/status-key.util';
 import { StatusSwatchComponent } from '../../../shared/status-swatch/status-swatch.component';
 import type { Client, ClientListParams } from '../client.models';
-import { toClientStatusKey } from '../client.models';
+import { isClosedClientStatus, toClientStatusKey } from '../client.models';
 import { ClientService } from '../client.service';
 
 /**
- * One rendered row of the clients table: the six values the table prints, resolved once per row from
- * whichever read produced it.
+ * One rendered row of the clients table: the six values the table prints, plus the key the loop
+ * tracks, the id a row opens and the status code the "Show Closed" filter reads — resolved once per
+ * row from whichever read produced it.
  *
  * Exported so the sibling spec types its expectations against the same declaration instead of
  * restating the shape, and `readonly` throughout so a row cannot be edited in place by a template.
@@ -64,8 +65,23 @@ export interface ClientListRow {
    * The status indicator's key for this row, from the family's single mapping
    * (`toClientStatusKey`). Resolved once per row rather than once per change detection pass, so the
    * colour a row shows cannot drift between renders.
+   *
+   * Colour only: it collapses the three terminal states (closed, rejected, withdrawn) into `closed`,
+   * which is why it is not what the "Show Closed" filter reads.
    */
   readonly statusKey: StatusKey;
+
+  /**
+   * The raw Fineract client status code the payload carried — e.g. `'clientStatusType.closed'` — and
+   * the empty string when it carried none. It is the input {@link isClosedClientStatus} decides the
+   * "Show Closed" filter with.
+   *
+   * Deliberately not {@link statusKey}: that key is the swatch's colour vocabulary and gives closed,
+   * rejected and withdrawn the same `closed`, while the legacy list's checkbox hides one code only
+   * (`app/views/clients/clients.html:65`). Keeping the code as the payload sent it lets the filter
+   * hide exactly what legacy hides without re-deriving a colour from it (Rule 1 clause 3).
+   */
+  readonly statusCode: string;
 }
 
 /**
@@ -91,10 +107,11 @@ interface ClientListToolbarValues {
  *
  * **The two reads the screen makes.** It reads one page of `GET /clients` — `offset` and `limit`
  * only — when it is constructed, and re-reads that same page when the find field is submitted while
- * empty. A submit that carries text runs the legacy find instead: `GET /search` with `query` and
- * `resource=clients,clientIdentifiers`, exactly the call the legacy `ClientController.search()` makes
- * (`globalSearch.search({query, resource: 'clients,clientIdentifiers'})`), which is how the legacy
- * screen finds a client by name, mobile number, client number, external id or identifier
+ * empty. A submit that carries text runs the legacy find instead: `GET /search` with `query`,
+ * `resource=clients,clientIdentifiers` and the `exactMatch` flag, exactly the call the legacy
+ * `ClientController.search()` makes
+ * (`globalSearch.search({query, resource: 'clients,clientIdentifiers', exactMatch})`), which is how
+ * the legacy screen finds a client by name, mobile number, client number, external id or identifier
  * (AAP 0.7.3 row "Shell: global search"; AAP 0.10.5 item 9). Both reads go through
  * `ClientService.list()` and `SearchService.search()` — the families' only typed Fineract callers —
  * so this file composes no URL, sets no header and injects no HTTP client: those two services are
@@ -107,33 +124,42 @@ interface ClientListToolbarValues {
  * application's `web-ng/tools/parity/endpoint-allowlist.json` declares `offset`, `limit`, `orderBy`
  * and `sortOrder` for that row and nothing else. Sent there, the parameter was ignored and the find
  * answered with the unfiltered first page — a search that silently did not search, and a request the
- * parity harness flags (Rule 1 clause 2). The search endpoint's own `query` and `resource` are the
- * pair both the allowlist and AAP 0.10.1's W3 row declare, and `exactMatch` is deliberately absent
- * because the find field offers no such choice (Rule 1 clause 3).
+ * parity harness flags (Rule 1 clause 2). The search endpoint's own `query`, `resource` and
+ * `exactMatch` are the three parameters legacy's find sends, derived exactly as legacy derives them:
+ * `ClientController.search()` strips the field's surrounding double quotes and sets `exactMatch`
+ * from whether that stripping changed the text (`app/scripts/controllers/client/ClientController.js:44-62`),
+ * so a quoted find reaches Fineract without its quotes and matches exactly (Rule 1 clause 2;
+ * AAP 0.7.2 `GlobalSearchParams`).
  *
  * **The row view is projected at receipt.** A page row and a search row carry the same display
  * values under different names, so each response is projected once, as it arrives, into the one
- * {@link ClientListRow} the table binds: the payload's field names and its status code are read in
- * exactly one place per source and neither reaches the template, which also keeps the status mapping
- * to one pass per response rather than one per change detection pass. A row the projection does not
- * describe — the loan row the search union admits but the `clients` scope never asks for — is
- * dropped rather than rendered as a blank line.
+ * {@link ClientListRow} the table binds: the payload's field names are read in exactly one place per
+ * source and do not reach the template, and its status code is resolved there into the swatch's
+ * colour key while staying on the row as the code the "Show Closed" filter reads — one pass per
+ * response rather than one per change detection pass. A row the projection does not describe — the
+ * loan row the search union admits but the `clients` scope never asks for — is dropped rather than
+ * rendered as a blank line.
  *
- * **The two display filters are client-side.** The "Show Closed" checkbox and the filter field
- * narrow the rows already in hand and never become a query parameter, because the legacy screen
- * sends neither and inventing one would change the request the parity harness compares
- * (Rule 1 clauses 2 and 3). The server's order is kept exactly: nothing is sorted, ranked or
- * regrouped here.
+ * **The two display filters and the rendered order are client-side.** The "Show Closed" checkbox
+ * and the filter field narrow the rows already in hand and never become a query parameter, because
+ * the legacy screen sends neither and inventing one would change the request the parity harness
+ * compares (Rule 1 clauses 2 and 3). The rendered order is legacy's own:
+ * `| orderBy:'displayName':reverse` with `reverse` unset sorts the page by display name ascending
+ * before it paints, and AngularJS 1.7.9's default comparator lower-cases both names before it
+ * compares them, so that sort is case-insensitive and leaves names equal after lower-casing in the
+ * order the server sent them (`app/views/clients/clients.html:63`). {@link visibleRows} reproduces
+ * it and {@link rows} keeps the order the server answered with.
  *
  * **What it deliberately does not do, per Rule 1 clause 3 (match legacy, do not improve it).**
  * No pager, no rows-per-page selector and no infinite scroll (AAP 0.5.4 leaves client-list
  * pagination an open item; the design paints five rows and no pager); no spinner, skeleton or
- * progress element (the design carries no loader asset — AAP 0.2.4); no sorting, renaming, trimming
- * or reformatting of a server value; no textual status anywhere, because the design paints a colour
- * swatch and a word would be an improvement the migration may not make (AAP 0.10.5 deliberate
- * difference 11); no "Import Clients" control, no left icon rail, no Accounting/Reports/Admin
- * navigation, no hamburger and no bell (AAP 0.9.2; AAP 0.10.5 items 4 and 8). Every lifecycle
- * action, the datatable gate that precedes it and the record itself belong to their own screens.
+ * progress element (the design carries no loader asset — AAP 0.2.4); no ordering beyond that
+ * display-name sort, and no renaming, trimming or reformatting of a server value; no textual status
+ * anywhere, because the design paints a colour swatch and a word would be an improvement the
+ * migration may not make (AAP 0.10.5 deliberate difference 11); no "Import Clients" control, no left
+ * icon rail, no Accounting/Reports/Admin navigation, no hamburger and no bell (AAP 0.9.2; AAP 0.10.5
+ * items 4 and 8). Every lifecycle action, the datatable gate that precedes it and the record itself
+ * belong to their own screens.
  *
  * **The signed-in shell is not rendered here.** The navbar, breadcrumb, global search, language
  * switcher and user menu come from `core/layout` through this route's `data.breadcrumb`, so this
@@ -246,19 +272,28 @@ export class ClientListComponent {
   });
 
   /**
-   * The rows the table renders: the rows in hand with the two display filters applied, in the
-   * server's order.
+   * The rows the table renders: the rows in hand with the two display filters applied, in the order
+   * legacy rendered them — display name ascending, compared case-insensitively.
    *
-   * 1. a row whose status key is `closed` is left out unless "Show Closed" is ticked — `closed` is
-   *    the key the three terminal states (closed, rejected, withdrawn) share, which is the design's
-   *    own vocabulary;
-   * 2. a row whose name does not contain the filter text is left out when that text is non-empty,
-   *    compared case-insensitively and against the name column the filter belongs to;
-   * 3. the survivors are rendered as they are, because each row was already projected into a
-   *    {@link ClientListRow} and its status mapped when its response arrived.
+   * 1. a row whose client status code is `closed` is left out unless "Show Closed" is ticked — that
+   *    one code only, the way the legacy list hides exactly `clientStatusType.closed`
+   *    (`app/views/clients/clients.html:65`). A rejected or withdrawn client is terminal in the
+   *    swatch's colour vocabulary yet stays on screen, which is why the filter asks
+   *    {@link isClosedClientStatus} about the raw code rather than the row's colour key;
+   * 2. a row that shows none of the filter text is left out when that text is non-empty, compared
+   *    case-insensitively against every cell the table prints text in — the name, the client number,
+   *    the external id, the office and the staff member ({@link matchesDisplayFilter});
+   * 3. the survivors are ordered by name ascending, which is the order the legacy pipeline produces:
+   *    `dir-paginate="client in clients | orderBy:'displayName':reverse | filter:filterText |
+   *    itemsPerPage: clientsPerPage"` with `reverse` unset (`app/views/clients/clients.html:63`), so
+   *    the server's page order is not what the table shows (Rule 1 clause 3). The comparison is that
+   *    filter's own: AngularJS 1.7.9's default comparator lower-cases both display names and then
+   *    compares them with `<`/`>`, so the order is case-insensitive rather than a locale collation,
+   *    and two names equal after lower-casing keep the order the server sent them in.
    *
-   * Both filters are client-side and issue no request (Rule 1 clause 3). Nothing is sorted, ranked
-   * or regrouped here: the order is the one the server answered with.
+   * Both filters are client-side and issue no request (Rule 1 clause 3), and {@link rows} keeps the
+   * order the server answered with: it is this rendered view, not the held data, that legacy's
+   * `orderBy` reorders.
    */
   readonly visibleRows = computed<readonly ClientListRow[]>(() => {
     const needle = this.filterText().trim().toLowerCase();
@@ -266,16 +301,30 @@ export class ClientListComponent {
     const visible: ClientListRow[] = [];
 
     for (const row of this.rows()) {
-      if (!includeClosed && row.statusKey === 'closed') {
+      if (!includeClosed && isClosedClientStatus(row.statusCode)) {
         continue;
       }
 
-      if (needle !== '' && !row.name.toLowerCase().includes(needle)) {
+      if (needle !== '' && !matchesDisplayFilter(row, needle)) {
         continue;
       }
 
       visible.push(row);
     }
+
+    // Legacy's rendered order, kept as legacy produces it: `| orderBy:'displayName'` with `reverse`
+    // unset sorts ascending, and AngularJS 1.7.9's default comparator lower-cases both strings and
+    // only then compares them with `<`/`>` — `toLowerCase`, never `localeCompare`, so the comparison
+    // is case-insensitive and still a code-unit one rather than a locale collation. A pair that is
+    // equal after lower-casing compares equal here and keeps the order the server sent it in, which
+    // is what `sort`'s stability does and what the legacy sort's own index tie-breaker leaves
+    // (`app/views/clients/clients.html:63`; Rule 1 clause 3).
+    visible.sort((a, b) => {
+      const left = a.name.toLowerCase();
+      const right = b.name.toLowerCase();
+
+      return left < right ? -1 : left > right ? 1 : 0;
+    });
 
     return visible;
   });
@@ -385,8 +434,18 @@ export class ClientListComponent {
    * The requested scope is `clients`, carried in the `resource` member `GlobalSearchParams`
    * declares, which the service serialises as `resource=clients,clientIdentifiers` — the value the
    * legacy client list's find sends, and the reason a client is still found by one of its
-   * identifiers. `exactMatch` is left unset because the find field offers no such choice and the
-   * allowlist declares `query` and `resource` only for this endpoint (Rule 1 clauses 2 and 3).
+   * identifiers.
+   *
+   * The text and the flag are derived the way legacy derives them. `ClientController.search()`
+   * removes the surrounding double quotes from the field's text, compares the result with the text
+   * it started from, and passes both on:
+   * `searchString = searchString.replace(/(^"|"$)/g, '')`,
+   * `exactMatch = (searchString.localeCompare(raw) != 0)`, then
+   * `globalSearch.search({query: searchString, resource: "clients,clientIdentifiers", exactMatch})`
+   * (`app/scripts/controllers/client/ClientController.js:44-62`). So a quoted find searches for its
+   * unquoted text and asks for an exact match, and an unquoted find searches for its text verbatim
+   * with `exactMatch=false` — sent rather than omitted, because legacy's parameter distinguishes
+   * "false" from "absent" (Rule 1 clause 2; AAP 0.7.2 `GlobalSearchParams`).
    *
    * The subscription follows {@link load}'s shape for the same reasons: bound to the component's
    * lifetime, `loading` cleared by `finalize` on either outcome, and a failure turned into state
@@ -399,8 +458,13 @@ export class ClientListComponent {
     this.failed.set(false);
     this.errorMessage.set(null);
 
+    // Legacy's own derivation, kept verbatim: only a quote at either end is removed, and the flag is
+    // true exactly when that removal changed the text. `exactMatch` is always a member of the
+    // request, so an unquoted find sends `exactMatch=false` instead of omitting it (Rule 1 clause 2).
+    const stripped = query.replace(/(^"|"$)/g, '');
+
     this.searchService
-      .search({ query, resource: 'clients' })
+      .search({ query: stripped, resource: 'clients', exactMatch: stripped !== query })
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         finalize(() => this.loading.set(false)),
@@ -437,13 +501,41 @@ export class ClientListComponent {
 }
 
 /**
+ * Whether a row shows any of the filter field's text in a cell the table prints.
+ *
+ * The field's own label fixes what it searches: `label.input.filterbynameaccno` reads "Filter display
+ * by name/client number/staff/office" (`app/global-translations/locale-en.json:726`), and legacy
+ * narrowed the whole row with `| filter:filterText` (`app/views/clients/clients.html:63`). So every
+ * cell this table prints text in is searched — the name, the client number, the external id, the
+ * office and the staff member — each compared case-insensitively against the needle the filter has
+ * already lower-cased and trimmed. The status cell prints no text at all (a colour swatch and no
+ * word, AAP 0.10.5 item 11), so it holds nothing to match.
+ *
+ * @param row The row under consideration.
+ * @param needle The filter text as the caller normalised it: trimmed and lower-cased.
+ * @returns true when the row must stay on screen.
+ */
+function matchesDisplayFilter(row: ClientListRow, needle: string): boolean {
+  const cells: readonly string[] = [
+    row.name,
+    row.accountNo,
+    row.externalId,
+    row.officeName,
+    row.staffName,
+  ];
+
+  return cells.some((cell) => cell.toLowerCase().includes(needle));
+}
+
+/**
  * Projects one `GET /clients` row onto the table's row view.
  *
  * The page payload's own names are read here and nowhere else: `displayName` is the name column,
  * `accountNo` and `officeName` are carried as they arrived, and the two members the endpoint omits
  * when a client has none — `externalId` and `staffName` — become the empty string rather than a
  * stand-in the design never shows (Rule 1 clause 3). The key is the client's id because a client
- * appears at most once in one page.
+ * appears at most once in one page. The status arrives as an object on every page row, so its code is
+ * carried as received — the "Show Closed" filter's input — and mapped once to the swatch's colour key.
  *
  * @param client One element of the page envelope's `pageItems`, as the endpoint sent it.
  * @returns The row the table renders for it.
@@ -457,6 +549,7 @@ function toPageRow(client: Client): ClientListRow {
     externalId: client.externalId ?? '',
     officeName: client.officeName,
     staffName: client.staffName ?? '',
+    statusCode: client.status.code,
     statusKey: toClientStatusKey(client.status.code),
   };
 }
@@ -495,6 +588,10 @@ function toSearchRows(results: readonly SearchResult[]): readonly ClientListRow[
  *     `#/viewclient/{parentId}` did. The row carries no account number, office or staff the client
  *     list shows, so those cells are empty rather than borrowed from another member.
  *
+ * The status comes from `entityStatus`, the `{id, code, value}` object legacy reads the same members
+ * of, for either kind of row; a result that carries none leaves the code empty, which the "Show
+ * Closed" filter treats as an unclosed client rather than hiding the row on a status it never had.
+ *
  * @param result One element of the search answer, discriminated by its `entityType`.
  * @returns The row to render, or `null` for a result this screen does not render — a `LOAN` row the
  *   union admits but the `clients` scope never asks for, or a discriminator the server adds beyond
@@ -511,6 +608,7 @@ function toSearchRow(result: SearchResult): ClientListRow | null {
         externalId: result.entityExternalId ?? '',
         officeName: result.parentName ?? '',
         staffName: '',
+        statusCode: result.entityStatus?.code ?? '',
         statusKey: toClientStatusKey(result.entityStatus?.code),
       };
 
@@ -523,6 +621,7 @@ function toSearchRow(result: SearchResult): ClientListRow | null {
         externalId: '',
         officeName: '',
         staffName: '',
+        statusCode: result.entityStatus?.code ?? '',
         statusKey: toClientStatusKey(result.entityStatus?.code),
       };
 

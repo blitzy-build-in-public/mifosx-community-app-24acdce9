@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { toAccountStatusKey, toClientStatusKey } from './client.models';
+import { isClosedClientStatus, toAccountStatusKey, toClientStatusKey } from './client.models';
 import type { StatusKey } from '../../shared/status-key.util';
 
 /**
@@ -36,6 +36,37 @@ describe('toClientStatusKey', () => {
     expect(toClientStatusKey(undefined)).toBe('other');
     expect(toClientStatusKey('')).toBe('other');
     expect(toClientStatusKey('clientStatusType.notAStateYet')).toBe('other');
+  });
+});
+
+/**
+ * The clients list's "Show Closed" input, which is a different question from the swatch's colour: the
+ * list hides one code, exactly as the legacy template does
+ * (`ng-show="client.status.code != 'clientStatusType.closed' || showClosed"`,
+ * `app/views/clients/clients.html:65`), while `toClientStatusKey` paints closed, rejected and
+ * withdrawn alike.
+ */
+describe('isClosedClientStatus', () => {
+  it('answers true for the closed code and false for every other state the client enum declares', () => {
+    expect(isClosedClientStatus('clientStatusType.closed')).toBe(true);
+    // The two states the colour key folds in with it stay visible on the list (Rule 1 clause 3).
+    expect(isClosedClientStatus('clientStatusType.rejected')).toBe(false);
+    expect(isClosedClientStatus('clientStatusType.withdraw')).toBe(false);
+    expect(isClosedClientStatus('clientStatusType.active')).toBe(false);
+    expect(isClosedClientStatus('clientStatusType.pending')).toBe(false);
+  });
+
+  it('normalises the code before it answers, as the colour lookup does', () => {
+    expect(isClosedClientStatus('CLIENTSTATUSTYPE.CLOSED')).toBe(true);
+    expect(isClosedClientStatus('closed')).toBe(true);
+    expect(isClosedClientStatus('CLOSED')).toBe(true);
+    expect(isClosedClientStatus('REJECTED')).toBe(false);
+    expect(isClosedClientStatus('clientStatusType.transfer.in.progress')).toBe(false);
+  });
+
+  it('answers false for a code the row never carried, so nothing is hidden on a missing status', () => {
+    expect(isClosedClientStatus(undefined)).toBe(false);
+    expect(isClosedClientStatus('')).toBe(false);
   });
 });
 
