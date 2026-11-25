@@ -1,0 +1,1194 @@
+/**
+ * Parity report writer and type owner for the legacy-versus-next Playwright harness (AAP 0.11.1 row 51
+ * "Markdown + JSON parity report writer", Priority High; AAP 0.8.1 `report/parity-report.ts`; AAP 0.8.2,
+ * where `npm run e2e` runs "backend check -> reset -> specs -> report for each UI in turn"; AAP 0.10.4's
+ * report row; AAP 0.10.3 criterion 4).
+ *
+ * Writes, all of it under `web-ng/` (Rule 1 clause 1): `parity-report.md` and `parity-report.json` at the
+ * package root through {@link writeReport}, and the per-workflow records the fixture hands in through
+ * {@link writeWorkflowRecord} as `e2e/.captures/workflows/<project>__<workflow>.json`. All three are
+ * git-ignored, so neither output nor any record can be committed.
+ *
+ * Reads only `e2e/.captures/**`: the records, the normalised captures `capture/network-capture.ts` wrote
+ * and the reduced end states `capture/state-snapshot.ts` wrote. The backend is reached only through the
+ * harness's readers — `readBackendInfo()`/`resolveBackendInfo()` for provenance (Rule 2) and
+ * `readBusinessDate()` for the run date, the tenant's business date and never the browser clock (Rule 1
+ * clause 2; AAP 0.10.1, "Run date").
+ *
+ * Owns the vocabulary: every harness file that says "this workflow passed on this front end" writes a
+ * {@link WorkflowRecord} here, so AAP 0.10.4's closed status set lives in one place and criterion 4's
+ * reason-plus-AAP-0.10.5-item rule is enforced where a record is written.
+ *
+ * Imports with no side effect: `e2e/fixtures/parity-fixture.ts` imports this module while Playwright
+ * collects, so every sibling *value* is reached through a dynamic `await import()` and only types are
+ * static — which is what keeps `npx playwright test --list` exiting 0 (AAP 0.10.3).
+ *
+ * Rule 1 clause 9: neither output holds an `Authorization` value, an authentication key or a password.
+ * Masking happens upstream in `capture/network-capture.ts`; {@link writeReport} re-checks both documents
+ * and refuses to write either, naming the field, rather than serialising a credential.
+ */
+import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+import type { NormalizedExchange, NormalizedValue } from '../capture/network-capture';
+import type { StateSnapshot } from '../capture/state-snapshot';
+
+/**
+ * Every workflow the suite runs, in the order AAP 0.8.2 and 0.10.4 list them: W1 to W8 plus the
+ * `CHAIN` spec (`chain-w2-w4-w5-w6`). Nine ids — the plan's prose calls the folder "ten specs" while
+ * its own enumeration names nine, and the enumeration wins so no workflow is invented.
+ */
+export const WORKFLOW_IDS: readonly WorkflowId[] = ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8', 'CHAIN'];
+
+/** The two Playwright projects: the untouched AngularJS baseline and this application (AAP 0.10.1). */
+export const UI_PROJECTS: readonly UiProject[] = ['legacy', 'next'];
+
+/** The closed status set AAP 0.10.4 fixes, in the order the report lists them. */
+export const WORKFLOW_STATUSES: readonly WorkflowStatus[] = ['pass', 'fail', 'legacy-broken', 'intentional-diff'];
+
+/**
+ * Highest AAP 0.10.5 item number an `intentional-diff` row may cite. The plan registers exactly
+ * sixteen deliberate differences from legacy; a seventeenth number would name a difference the AAP
+ * never justified, which Rule 1 clause 3 forbids.
+ */
+const MAX_INTENTIONAL_DIFF_ID = 16;
+
+/** Workflow ids the harness knows by name (AAP 0.8.2); `CHAIN` is the W2 -> W4 -> W5 -> W6 spec. */
+export type WorkflowId = 'W1' | 'W2' | 'W3' | 'W4' | 'W5' | 'W6' | 'W7' | 'W8' | 'CHAIN';
+
+/** How one workflow ended on one front end (AAP 0.10.4's closed vocabulary). */
+export type WorkflowStatus = 'pass' | 'fail' | 'legacy-broken' | 'intentional-diff';
+
+/** Which front end a record describes: the legacy baseline or the new Angular application. */
+export type UiProject = 'legacy' | 'next';
+
+/**
+ * One difference between the two sides (AAP 0.10.2). A request difference carries the call it belongs to;
+ * an end-state difference is anchored to no call, so it carries {@link STATE_DIFF_METHOD} and an empty
+ * `path`, and its `field` names the section and field — `client.status`, `loan.totalOutstanding`.
+ */
+export interface WorkflowDiff {
+  /** HTTP method of the exchange that differs, or {@link STATE_DIFF_METHOD} for a state difference. */
+  method: string;
+  /** Normalised request path of that exchange, or `''` for a state difference. */
+  path: string;
+  /** What differs, as a value path: `query.command`, `requestBody.principal`, `client.status`. */
+  field: string;
+  /** The legacy side's value; `null` when that side has none. */
+  legacy: unknown;
+  /** The new app's value; `null` when that side has none. */
+  next: unknown;
+}
+
+/**
+ * One workflow's outcome on one front end — the record every spec writes through
+ * {@link writeWorkflowRecord}, and the document the report is built from (AAP 0.10.3 criterion 4).
+ */
+export interface WorkflowRecord {
+  /** Which workflow the record describes. */
+  workflow: WorkflowId;
+  /** Which front end it ran against. */
+  project: UiProject;
+  /** How it ended. */
+  status: WorkflowStatus;
+  /** Why: required for `legacy-broken` and `intentional-diff`, optional colour for any other status. */
+  reason?: string;
+  /** The AAP 0.10.5 item number an `intentional-diff` rests on; required for that status, `1` to `16`. */
+  intentionalDiffId?: number;
+  /** Path of the normalised capture `capture/network-capture.ts` wrote for this run. */
+  capturePath?: string;
+  /** Path of the reduced end state `capture/state-snapshot.ts` wrote for this run. */
+  statePath?: string;
+  /** Differences the spec itself observed, kept for a `fail` row. */
+  diffs?: WorkflowDiff[];
+  /** First failing step of a `fail` row. */
+  failingStep?: string;
+  /** When the fixture wrote the record, ISO 8601. */
+  recordedAt?: string;
+}
+
+/**
+ * The run the report describes: environment, backend provenance, the three addresses and the dates
+ * (AAP 0.10.4, 0.10.3, Rule 2).
+ */
+export interface ReportHeader {
+  /** Where the run happened, detected from `CODESPACES` (AAP 0.10.3 keeps environments to variables). */
+  environment: 'mac' | 'codespaces';
+  /** `owner/name` the backend was built from; `null` only when provenance is unverified. */
+  backendRemote: string | null;
+  /** Commit the backend reports; `null` only when provenance is unverified. */
+  backendCommit: string | null;
+  /** Backend address the run called, from `FINERACT_URL` (Rule 2). */
+  fineractUrl: string;
+  /** Legacy baseline address the run drove, from `LEGACY_URL`. */
+  legacyUrl: string;
+  /** New application address the run drove, from `NEXT_URL`. */
+  nextUrl: string;
+  /** The tenant's business date as `yyyy-mm-dd`; `''` when it could not be read — never a browser date. */
+  runDate: string;
+  /** When this report was generated, ISO 8601. */
+  generatedAt: string;
+  /** Whether provenance was recorded; `false` fails the command (Rule 2). */
+  backendVerified: boolean;
+}
+
+/**
+ * One cell of the report's workflow matrix: a record as the report sees it, or the `missing` row no
+ * record produced. `missing` is computed here and never written by a fixture.
+ */
+export interface WorkflowRow {
+  /** Which workflow the row describes. */
+  workflow: WorkflowId;
+  /** Which front end it ran against. */
+  project: UiProject;
+  /** How it ended, or `missing` when no record exists. */
+  status: WorkflowStatus | 'missing';
+  /** Why, for `legacy-broken` and `intentional-diff`. */
+  reason?: string;
+  /** The AAP 0.10.5 item an `intentional-diff` rests on. */
+  intentionalDiffId?: number;
+  /** First failing step, for a `fail` row. */
+  failingStep?: string;
+  /** Differences: the record's own, plus the ones {@link buildReport} computed. */
+  diffs?: WorkflowDiff[];
+  /** Whether this row's workflow could be compared at all — false when the legacy side is broken or absent. */
+  comparable: boolean;
+}
+
+/** A record the report could not read, with the path and the reason it was rejected. */
+export interface UnreadableRecord {
+  /** File the record was read from. */
+  readonly path: string;
+  /** Why it was rejected, in the module's own words — never the document's content (Rule 1 clause 9). */
+  readonly message: string;
+}
+
+/**
+ * The report itself: the header a human checks first and one row per workflow and front end.
+ *
+ * `unreadable` carries the records that could not be read. It is optional so a caller may build a
+ * report literal without it, and it exists because criterion 4 forbids a record being dropped
+ * silently: an unreadable record is reported with its path and fails the command rather than
+ * disappearing into a row that looks `missing`.
+ */
+export interface ParityReport {
+  /** The run's environment, backend, addresses and dates. */
+  header: ReportHeader;
+  /** Every workflow and front end, in {@link WORKFLOW_IDS} then {@link UI_PROJECTS} order. */
+  workflows: WorkflowRow[];
+  /** Records that could not be read; absent or empty when every record parsed and validated. */
+  readonly unreadable?: readonly UnreadableRecord[];
+}
+
+/**
+ * `method` of a difference in the backend end state: an end-state difference is not anchored to one
+ * API call, so this label marks it and keeps it apart from a request difference. Fineract has no such
+ * HTTP method, so the two can never be confused.
+ */
+const STATE_DIFF_METHOD = 'STATE';
+
+/**
+ * Directory the harness's artefacts live in, resolved from this module's own location so the suite
+ * finds them however it is launched — `npm run e2e` launches it from `web-ng/`, and a caller may launch
+ * it from anywhere. Mirrors `CAPTURES_DIR` in `capture/network-capture.ts`, which every harness writer
+ * resolves the same way.
+ */
+const CAPTURES_DIR = fileURLToPath(new URL('../.captures', import.meta.url));
+
+/** Where {@link writeWorkflowRecord} writes and {@link readWorkflowRecords} reads. */
+const WORKFLOWS_DIR = join(CAPTURES_DIR, 'workflows');
+
+/** The Markdown report, at the package root as AAP 0.10.4 names it. */
+const MARKDOWN_PATH = fileURLToPath(new URL('../../parity-report.md', import.meta.url));
+
+/** The JSON report, beside the Markdown one. */
+const JSON_PATH = fileURLToPath(new URL('../../parity-report.json', import.meta.url));
+
+/**
+ * Raised when a record cannot be trusted: an unknown workflow, project or status, or an acknowledged
+ * difference without the reason and AAP 0.10.5 item criterion 4 requires. It carries the offending
+ * record so a caller can see which one, without this module ever printing its content.
+ */
+export class ParityRecordError extends Error {
+  /** The record that was rejected, exactly as it arrived. */
+  readonly record: unknown;
+
+  constructor(message: string, record: unknown) {
+    super(message);
+    this.name = 'ParityRecordError';
+    this.record = record;
+  }
+}
+
+/** Raised when the report itself cannot be produced or safely written (Rule 1 clause 9, Rule 2). */
+export class ParityReportError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ParityReportError';
+  }
+}
+
+/** Narrows a parsed JSON value to an object with unknown fields — the harness's one unmodelled boundary. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * What a rejected value is, by type alone. Messages name the field and the shape it should have and
+ * never repeat the value it carried: a hand-written record could put a credential in any field, and a
+ * message reaches stderr and the report (Rule 1 clause 9).
+ */
+function typeName(value: unknown): string {
+  if (value === null) {
+    return 'null';
+  }
+  if (Array.isArray(value)) {
+    return 'an array';
+  }
+  return typeof value === 'object' ? 'an object' : `a ${typeof value}`;
+}
+
+/** Whether a value is one of the nine workflow ids. */
+function isWorkflowId(value: unknown): value is WorkflowId {
+  return typeof value === 'string' && (WORKFLOW_IDS as readonly string[]).includes(value);
+}
+
+/** Whether a value is one of the four statuses AAP 0.10.4 closes over. */
+function isWorkflowStatus(value: unknown): value is WorkflowStatus {
+  return typeof value === 'string' && (WORKFLOW_STATUSES as readonly string[]).includes(value);
+}
+
+/** Whether a value is one of the two Playwright projects. */
+function isUiProject(value: unknown): value is UiProject {
+  return typeof value === 'string' && (UI_PROJECTS as readonly string[]).includes(value);
+}
+
+/** Whether a status acknowledges a difference from legacy, and so must carry a reason. */
+function requiresReason(status: WorkflowStatus): boolean {
+  return status === 'legacy-broken' || status === 'intentional-diff';
+}
+
+/** Whether a value is a usable AAP 0.10.5 item number: a whole number from 1 to {@link MAX_INTENTIONAL_DIFF_ID}. */
+function isIntentionalDiffId(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= MAX_INTENTIONAL_DIFF_ID;
+}
+
+/** Whether an optional text field carries something; a blank or absent one does not. */
+function hasText(value: string | undefined): boolean {
+  return value !== undefined && value.trim().length > 0;
+}
+
+/** An optional text field of a parsed record, or `undefined` when absent, null or blank. */
+function optionalText(source: Record<string, unknown>, field: string): string | undefined {
+  const value = source[field];
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== 'string') {
+    throw new ParityRecordError(`a record's ${field} must be a string, not ${typeName(value)}`, source);
+  }
+  return hasText(value) ? value : undefined;
+}
+
+/** The `diffs` of a parsed record, each entry narrowed to {@link WorkflowDiff}. */
+function optionalDiffs(source: Record<string, unknown>): WorkflowDiff[] | undefined {
+  const value = source['diffs'];
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (!Array.isArray(value)) {
+    throw new ParityRecordError(`a record's diffs must be an array, not ${typeName(value)}`, source);
+  }
+  return value.map((entry: unknown): WorkflowDiff => {
+    if (!isRecord(entry)) {
+      throw new ParityRecordError(`every diffs entry must be an object, not ${typeName(entry)}`, source);
+    }
+    const { method, path, field } = entry;
+    if (typeof method !== 'string' || typeof path !== 'string' || typeof field !== 'string') {
+      throw new ParityRecordError('a diffs entry needs a string method, path and field', source);
+    }
+    // The two sides are whatever the normalised exchange or the reduced state held; they are compared
+    // as opaque JSON values and rendered as text, so they stay untyped on purpose (AAP 0.10.2).
+    return { method, path, field, legacy: entry['legacy'], next: entry['next'] };
+  });
+}
+
+/**
+ * Narrows a parsed document to a {@link WorkflowRecord}, throwing {@link ParityRecordError} on anything
+ * the report could not read back faithfully.
+ *
+ * This is the single gate both {@link validateRecord} and {@link readWorkflowRecords} pass through, so
+ * a record is held to the same standard whether a fixture hands it over in memory or a hand-written
+ * file carries it — which is what makes criterion 4 hold for records this module did not write.
+ */
+function narrowRecord(value: unknown): WorkflowRecord {
+  if (!isRecord(value)) {
+    throw new ParityRecordError(`a workflow record must be a JSON object, not ${typeName(value)}`, value);
+  }
+  const { workflow, project, status } = value;
+  if (!isWorkflowId(workflow)) {
+    throw new ParityRecordError(`a record's workflow must be one of ${WORKFLOW_IDS.join(', ')}`, value);
+  }
+  if (!isUiProject(project)) {
+    throw new ParityRecordError(`a record's project must be one of ${UI_PROJECTS.join(', ')}`, value);
+  }
+  if (!isWorkflowStatus(status)) {
+    throw new ParityRecordError(`a record's status must be one of ${WORKFLOW_STATUSES.join(', ')}`, value);
+  }
+  const reason = optionalText(value, 'reason');
+  const intentionalDiffId = value['intentionalDiffId'];
+  if (requiresReason(status) && !hasText(reason)) {
+    // Criterion 4: an acknowledged difference is only readable next to the reason it was accepted for.
+    throw new ParityRecordError(`a ${project}/${workflow} ${status} record needs a non-empty reason`, value);
+  }
+  if (intentionalDiffId !== undefined && !isIntentionalDiffId(intentionalDiffId)) {
+    throw new ParityRecordError(
+      `a record's intentionalDiffId must be a whole number from 1 to ${MAX_INTENTIONAL_DIFF_ID} (AAP 0.10.5)`,
+      value,
+    );
+  }
+  if (status === 'intentional-diff' && intentionalDiffId === undefined) {
+    // Rule 1 clause 3: a deliberate difference from legacy must name the AAP 0.10.5 item that justifies it.
+    throw new ParityRecordError(`a ${project}/${workflow} intentional-diff record needs its AAP 0.10.5 item number`, value);
+  }
+  const capturePath = optionalText(value, 'capturePath');
+  const statePath = optionalText(value, 'statePath');
+  const failingStep = optionalText(value, 'failingStep');
+  const recordedAt = optionalText(value, 'recordedAt');
+  const diffs = optionalDiffs(value);
+  return {
+    workflow,
+    project,
+    status,
+    ...(reason === undefined ? {} : { reason }),
+    ...(intentionalDiffId === undefined ? {} : { intentionalDiffId }),
+    ...(capturePath === undefined ? {} : { capturePath }),
+    ...(statePath === undefined ? {} : { statePath }),
+    ...(diffs === undefined ? {} : { diffs }),
+    ...(failingStep === undefined ? {} : { failingStep }),
+    ...(recordedAt === undefined ? {} : { recordedAt }),
+  };
+}
+
+/**
+ * Where one workflow's record lives: `<repoRoot>/web-ng/e2e/.captures/workflows/<project>__<workflow>.json`,
+ * resolved from this module's location rather than the working directory (AAP 0.8.1, 0.11.1). The name
+ * follows the `<project>__<workflow>` convention of the sibling capture folders, so the three artefact
+ * families of one run are found by the same rule.
+ *
+ * @param project Front end the record describes.
+ * @param workflow Workflow the record describes.
+ */
+export function workflowRecordPath(project: UiProject, workflow: WorkflowId): string {
+  return join(WORKFLOWS_DIR, `${project}__${workflow}.json`);
+}
+
+/**
+ * Refuses a record criterion 4 could not read back: an unknown workflow, project or status, an
+ * acknowledged difference without a reason, or one without its AAP 0.10.5 item number.
+ *
+ * Called by {@link writeWorkflowRecord} before anything reaches disk, so a spec that records a
+ * difference without justifying it fails in the same run that produced it instead of at report time.
+ *
+ * @param record Record a fixture built.
+ * @throws {@link ParityRecordError} naming the field and carrying the record.
+ */
+export function validateRecord(record: WorkflowRecord): void {
+  // The gate is `narrowRecord`, so a typed record and a hand-written one are held to one standard.
+  narrowRecord(record);
+}
+
+/**
+ * Writes one record atomically — a `<name>.tmp` beside it, then a rename — so a reader never sees half
+ * a record and a crashed run leaves no parseable half-file behind. Logs the project, workflow and
+ * status and nothing else about the record (Rule 1 clause 9).
+ *
+ * @param record Record to write; validated first.
+ * @returns Absolute path of the file.
+ * @throws {@link ParityRecordError} when the record fails {@link validateRecord}.
+ */
+export async function writeWorkflowRecord(record: WorkflowRecord): Promise<string> {
+  validateRecord(record);
+  const path = workflowRecordPath(record.project, record.workflow);
+  await mkdir(WORKFLOWS_DIR, { recursive: true });
+  const temporary = `${path}.tmp`;
+  await writeFile(temporary, `${JSON.stringify(record, null, 2)}\n`, 'utf8');
+  await rename(temporary, path);
+  console.log(`parity record: ${record.project}/${record.workflow} ${record.status}`);
+  return path;
+}
+
+/** Whether a filesystem error means the file or directory is simply not there. */
+function isMissingFileError(error: unknown): boolean {
+  return isRecord(error) && error['code'] === 'ENOENT';
+}
+
+/**
+ * Reads every record the fixtures left in `.captures/workflows/`.
+ *
+ * A file that does not parse or does not validate is reported in `unreadable` with its path and a
+ * reason — never dropped, and never allowed to become a row that looks like a pass. A directory that
+ * does not exist yet is not an error: a run in which no spec has recorded anything yet is a report of
+ * nine missing rows, which is a finding the command reports on its own.
+ */
+export async function readWorkflowRecords(): Promise<{ records: WorkflowRecord[]; unreadable: UnreadableRecord[] }> {
+  let entries: string[];
+  try {
+    entries = await readdir(WORKFLOWS_DIR);
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return { records: [], unreadable: [] };
+    }
+    throw new ParityReportError(`the record directory ${WORKFLOWS_DIR} could not be listed`);
+  }
+  const records: WorkflowRecord[] = [];
+  const unreadable: UnreadableRecord[] = [];
+  // `.tmp` files are skipped by the filter, so a write interrupted before its rename is not read back.
+  for (const name of entries.filter((entry) => entry.endsWith('.json')).sort()) {
+    const path = join(WORKFLOWS_DIR, name);
+    try {
+      const parsed: unknown = JSON.parse(await readFile(path, 'utf8'));
+      records.push(narrowRecord(parsed));
+    } catch (error) {
+      // The message is this module's own or a filesystem error code: a JSON parse error quotes the
+      // document it rejected, which could carry a credential into the report (Rule 1 clause 9).
+      const message = error instanceof ParityRecordError
+        ? error.message
+        : `${isMissingFileError(error) ? 'the file vanished' : 'the file is not valid JSON'}`;
+      unreadable.push({ path, message });
+    }
+  }
+  return { records, unreadable };
+}
+
+/**
+ * How one artefact of a run was found: read back, legitimately absent, or present but unusable. Each
+ * variant names the path it looked at, so an absent or rejected artefact reaches the report with the
+ * file a reader has to look at.
+ */
+type Artifact<T> =
+  | { readonly kind: 'loaded'; readonly value: T }
+  | { readonly kind: 'absent'; readonly path: string }
+  | { readonly kind: 'unreadable'; readonly path: string; readonly message: string };
+
+/**
+ * Reads one JSON artefact a record names, falling back to the path its writer uses when the record
+ * names none: `.captures/network/<project>__<workflow>.json` for a capture and
+ * `.captures/state/<project>__<workflow>.json` for an end state, the two conventions
+ * `capture/network-capture.ts` and `capture/state-snapshot.ts` write to. Neither is invented here —
+ * they are the siblings' own rules, and a record that names a path wins over them.
+ *
+ * Absence is only absence when nothing was declared: a path a record names but that cannot be read is
+ * an `unreadable` artefact, because a fixture that recorded one believes the file exists.
+ */
+async function readArtifact<T>(
+  label: string,
+  declaredPath: string | undefined,
+  fallbackPath: string,
+  parse: (value: unknown) => T | null,
+): Promise<Artifact<T>> {
+  const path = declaredPath ?? fallbackPath;
+  let text: string;
+  try {
+    text = await readFile(path, 'utf8');
+  } catch (error) {
+    if (declaredPath === undefined && isMissingFileError(error)) {
+      return { kind: 'absent', path };
+    }
+    return { kind: 'unreadable', path, message: `the ${label} could not be read` };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    // The parser's own message quotes the document it rejected, so only the shape is reported.
+    return { kind: 'unreadable', path, message: `the ${label} is not valid JSON` };
+  }
+  const value = parse(parsed);
+  return value === null
+    ? { kind: 'unreadable', path, message: `the ${label} does not hold the documented shape` }
+    : { kind: 'loaded', value };
+}
+
+/**
+ * The exchanges of one capture document, or `null` when the document is not the
+ * `{project, workflow, runDate, exchanges, roles}` shape `capture/network-capture.ts` writes.
+ *
+ * Every field is checked here because the document crossed a file boundary this module does not own:
+ * this guard is the documented end of that `unknown` (Rule 1 clause 4). The two bodies are JSON values
+ * by construction — the file came from `JSON.parse` — so they are re-attached as
+ * {@link NormalizedValue} rather than re-walked.
+ */
+function toExchanges(value: unknown): NormalizedExchange[] | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const raw = value['exchanges'];
+  if (!Array.isArray(raw)) {
+    return null;
+  }
+  const exchanges: NormalizedExchange[] = [];
+  for (const entry of raw) {
+    if (!isRecord(entry)) {
+      return null;
+    }
+    const { method, origin, path, query, status, hasTenantHeader, hasAuthorizationHeader } = entry;
+    if (
+      typeof method !== 'string' || typeof origin !== 'string' || typeof path !== 'string'
+      || typeof status !== 'number' || typeof hasTenantHeader !== 'boolean'
+      || typeof hasAuthorizationHeader !== 'boolean' || !isRecord(query)
+    ) {
+      return null;
+    }
+    const queryValues: Record<string, string> = {};
+    for (const [key, parameter] of Object.entries(query)) {
+      if (typeof parameter !== 'string') {
+        return null;
+      }
+      queryValues[key] = parameter;
+    }
+    const body = (raw: unknown): NormalizedValue | null => (raw === undefined ? null : raw as NormalizedValue);
+    exchanges.push({
+      method,
+      origin,
+      path,
+      query: queryValues,
+      status,
+      hasTenantHeader,
+      hasAuthorizationHeader,
+      requestBody: body(entry['requestBody']),
+      responseBody: body(entry['responseBody']),
+    });
+  }
+  return exchanges;
+}
+
+/**
+ * The reduced end state of one snapshot document, or `null` when it is not the
+ * `{project, workflow, runDate, client?, loan?, savings?}` shape `capture/state-snapshot.ts` writes.
+ *
+ * The sections themselves are the sibling's reducers' output, and `diffStates()` re-checks every field
+ * it compares, so the guard confirms the metadata and that each present section is an object.
+ */
+function toStateSnapshot(value: unknown): StateSnapshot | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const { project, workflow, runDate } = value;
+  if (!isUiProject(project) || typeof workflow !== 'string' || typeof runDate !== 'string') {
+    return null;
+  }
+  for (const section of ['client', 'loan', 'savings']) {
+    const present = value[section];
+    if (present !== undefined && !isRecord(present)) {
+      return null;
+    }
+  }
+  // The metadata is proven above and the sections are the reducers' shapes; the cast re-attaches what
+  // the top-level guard deliberately does not enumerate.
+  return value as unknown as StateSnapshot;
+}
+
+
+/** Key a row or record is indexed by; one workflow and one front end identify exactly one of each. */
+function rowKey(workflow: WorkflowId, project: UiProject): string {
+  return `${workflow}::${project}`;
+}
+
+/** The capture `capture/network-capture.ts` writes for one project and workflow, used when a record names none. */
+function capturePath(record: WorkflowRecord): string {
+  return join(CAPTURES_DIR, 'network', `${record.project}__${record.workflow}.json`);
+}
+
+/** The end state `capture/state-snapshot.ts` writes for one project and workflow, used when a record names none. */
+function statePath(record: WorkflowRecord): string {
+  return join(CAPTURES_DIR, 'state', `${record.project}__${record.workflow}.json`);
+}
+
+/** A row for one cell of the matrix — the record's own facts, or `missing` when no record was written. */
+function rowOf(workflow: WorkflowId, project: UiProject, record: WorkflowRecord | undefined): WorkflowRow {
+  if (record === undefined) {
+    return { workflow, project, status: 'missing', comparable: false };
+  }
+  const row: WorkflowRow = { workflow, project, status: record.status, comparable: false };
+  if (record.reason !== undefined) {
+    row.reason = record.reason;
+  }
+  if (record.intentionalDiffId !== undefined) {
+    row.intentionalDiffId = record.intentionalDiffId;
+  }
+  if (record.failingStep !== undefined) {
+    row.failingStep = record.failingStep;
+  }
+  if (record.diffs !== undefined) {
+    row.diffs = record.diffs;
+  }
+  return row;
+}
+
+/**
+ * The header: where the run happened, which backend backed it, the three addresses and the run date.
+ * Both backend facts come through the harness's own readers (Rule 2); the run date is the tenant's
+ * business date read over the API, left empty rather than guessed when it cannot be read, because the
+ * browser clock is never a substitute (Rule 1 clause 2).
+ */
+async function resolveHeader(): Promise<ReportHeader> {
+  const [backend, fixtures] = await Promise.all([import('../check-backend'), import('../seed/fixtures')]);
+  let info = backend.readBackendInfo();
+  if (info === null) {
+    // One fallback read: a run whose check:backend step was skipped still gets a verified header.
+    try {
+      info = await backend.resolveBackendInfo();
+    } catch {
+      info = null;
+    }
+  }
+  let runDate = '';
+  try {
+    runDate = fixtures.formatDateOnly(await fixtures.readBusinessDate());
+  } catch {
+    runDate = '';
+  }
+  return {
+    environment: backend.detectBackendEnvironment(),
+    backendRemote: info === null ? null : info.remote,
+    backendCommit: info === null ? null : info.commit,
+    fineractUrl: fixtures.FINERACT_URL,
+    legacyUrl: fixtures.LEGACY_URL,
+    nextUrl: fixtures.NEXT_URL,
+    runDate,
+    generatedAt: new Date().toISOString(),
+    backendVerified: info !== null,
+  };
+}
+
+/**
+ * The problem an absent or unusable artefact represents; a loaded one represents none. `absentIsProblem`
+ * is false for an end state: a workflow that targets no resource records none on either side, which is
+ * absence rather than a defect, while a capture is written for every workflow that made a call.
+ */
+function problemsOf(artifact: Artifact<unknown>, absentIsProblem = true): UnreadableRecord[] {
+  if (artifact.kind === 'loaded' || (artifact.kind === 'absent' && !absentIsProblem)) {
+    return [];
+  }
+  return [{ path: artifact.path, message: artifact.kind === 'absent' ? 'not written by the run' : artifact.message }];
+}
+
+/** Whether one side of a comparison recorded an end state, for the asymmetry a one-sided snapshot is. */
+function presenceOf(artifact: Artifact<unknown>): string {
+  return artifact.kind === 'loaded' ? 'recorded' : artifact.kind === 'absent' ? 'not recorded' : 'unreadable';
+}
+
+/** Whether two differences say the same thing, so a merged list holds each one once. */
+function sameDiff(left: WorkflowDiff, right: WorkflowDiff): boolean {
+  return left.method === right.method && left.path === right.path && left.field === right.field
+    && JSON.stringify(left.legacy) === JSON.stringify(right.legacy)
+    && JSON.stringify(left.next) === JSON.stringify(right.next);
+}
+
+/** The record's own differences first, then the ones computed here that it does not already hold. */
+function mergeDiffs(own: readonly WorkflowDiff[], computed: readonly WorkflowDiff[]): WorkflowDiff[] {
+  const merged = [...own];
+  for (const diff of computed) {
+    if (!merged.some((existing) => sameDiff(existing, diff))) {
+      merged.push(diff);
+    }
+  }
+  return merged;
+}
+
+/**
+ * Names the first place two sides that both passed differ, by call and field only — never by value,
+ * because a reason reaches both documents and a value there would bypass the credential guard, which
+ * inspects the diff fields (Rule 1 clause 9).
+ */
+function describeDiffs(diffs: readonly WorkflowDiff[]): string {
+  const first = diffs[0];
+  if (first === undefined) {
+    return 'an empty difference';
+  }
+  const anchor = first.method === STATE_DIFF_METHOD ? 'the backend end state' : `${first.method} ${first.path}`;
+  return `${anchor} at ${first.field}`;
+}
+
+/**
+ * Compares one workflow's two runs: the ordered API calls (AAP 0.10.1, 0.10.2) and the reduced end
+ * states. Both artefacts are read from the paths their records name, falling back to the writers' own
+ * conventions. Differences and unreadable artefacts are reported separately: a difference is parity
+ * evidence, an unreadable file is a defect in the run.
+ */
+async function compareSides(
+  legacy: WorkflowRecord,
+  next: WorkflowRecord,
+): Promise<{ diffs: WorkflowDiff[]; problems: UnreadableRecord[] }> {
+  const [capture, snapshot] = await Promise.all([
+    import('../capture/network-capture'),
+    import('../capture/state-snapshot'),
+  ]);
+  const [legacyCapture, nextCapture] = await Promise.all([
+    readArtifact('legacy capture', legacy.capturePath, capturePath(legacy), toExchanges),
+    readArtifact('next capture', next.capturePath, capturePath(next), toExchanges),
+  ]);
+  const [legacyState, nextState] = await Promise.all([
+    readArtifact('legacy end state', legacy.statePath, statePath(legacy), toStateSnapshot),
+    readArtifact('next end state', next.statePath, statePath(next), toStateSnapshot),
+  ]);
+  const diffs: WorkflowDiff[] = [];
+  if (legacyCapture.kind === 'loaded' && nextCapture.kind === 'loaded') {
+    for (const diff of capture.diffExchanges(legacyCapture.value, nextCapture.value)) {
+      diffs.push({ method: diff.method, path: diff.path, field: diff.field, legacy: diff.legacy, next: diff.next });
+    }
+  }
+  if (legacyState.kind === 'loaded' && nextState.kind === 'loaded') {
+    for (const diff of snapshot.diffStates(legacyState.value, nextState.value)) {
+      diffs.push({ method: STATE_DIFF_METHOD, path: '', field: diff.field, legacy: diff.legacy, next: diff.next });
+    }
+  } else if (legacyState.kind !== 'unreadable' && nextState.kind !== 'unreadable'
+    && legacyState.kind !== nextState.kind) {
+    // One side snapshotted an end state and the other did not. A workflow that targets no resource
+    // records none on either side, which is why only a one-sided snapshot is a difference.
+    diffs.push({
+      method: STATE_DIFF_METHOD,
+      path: '',
+      field: 'state',
+      legacy: presenceOf(legacyState),
+      next: presenceOf(nextState),
+    });
+  }
+  return {
+    diffs,
+    problems: [
+      ...problemsOf(legacyCapture),
+      ...problemsOf(nextCapture),
+      ...problemsOf(legacyState, false),
+      ...problemsOf(nextState, false),
+    ],
+  };
+}
+
+/**
+ * Fills in `comparable` for every row and computes the differences of every workflow both sides ran.
+ *
+ * A workflow whose legacy baseline is `legacy-broken` or was never recorded is not comparable: AAP
+ * 0.10.1 defines its expected behaviour from the Fineract API contract rather than from the broken
+ * screen. Two passes that nonetheless differ — in their calls, their end state, or because an artefact
+ * could not be read — escalate the new-app row to `fail`, which is criterion 4's "request and state
+ * diffs empty otherwise". Returned problems reach the report as unreadable artefacts.
+ */
+async function compareWorkflows(
+  records: Map<string, WorkflowRecord>,
+  rows: Map<string, WorkflowRow>,
+): Promise<UnreadableRecord[]> {
+  const problems: UnreadableRecord[] = [];
+  for (const workflow of WORKFLOW_IDS) {
+    const legacy = records.get(rowKey(workflow, 'legacy'));
+    const next = records.get(rowKey(workflow, 'next'));
+    const legacyRow = rows.get(rowKey(workflow, 'legacy'));
+    const nextRow = rows.get(rowKey(workflow, 'next'));
+    if (legacyRow === undefined || nextRow === undefined) {
+      continue;
+    }
+    const comparable = legacy !== undefined && legacy.status !== 'legacy-broken';
+    legacyRow.comparable = comparable;
+    nextRow.comparable = comparable;
+    if (!comparable || legacy === undefined || next === undefined) {
+      continue;
+    }
+    const comparison = await compareSides(legacy, next);
+    problems.push(...comparison.problems);
+    const diffs = mergeDiffs(next.diffs ?? [], comparison.diffs);
+    if (diffs.length > 0) {
+      nextRow.diffs = diffs;
+    }
+    if (legacy.status === 'pass' && next.status === 'pass'
+      && (diffs.length > 0 || comparison.problems.length > 0)) {
+      nextRow.status = 'fail';
+      nextRow.reason = diffs.length > 0
+        ? `both sides pass, but they differ — ${describeDiffs(diffs)}`
+        : `parity could not be established: ${comparison.problems[0]?.message ?? 'an artefact is missing'}`;
+    }
+  }
+  return problems;
+}
+
+/**
+ * Builds the whole report: header, the nine workflow rows for each front end, the comparison, and the
+ * artefacts that could not be read (AAP 0.10.3 criterion 4).
+ *
+ * Every sibling module is imported dynamically here and in the CLI, so importing this module — which
+ * `e2e/fixtures/parity-fixture.ts` does at Playwright collection time — touches no backend, reads no
+ * file and needs no environment (AAP 0.10.3 keeps `npx playwright test --list` exiting 0).
+ */
+export async function buildReport(): Promise<ParityReport> {
+  const [header, { records, unreadable }] = await Promise.all([resolveHeader(), readWorkflowRecords()]);
+  const byKey = new Map<string, WorkflowRecord>();
+  for (const record of records) {
+    byKey.set(rowKey(record.workflow, record.project), record);
+  }
+  const rows = new Map<string, WorkflowRow>();
+  for (const workflow of WORKFLOW_IDS) {
+    for (const project of UI_PROJECTS) {
+      rows.set(rowKey(workflow, project), rowOf(workflow, project, byKey.get(rowKey(workflow, project))));
+    }
+  }
+  const problems = await compareWorkflows(byKey, rows);
+  return { header, workflows: [...rows.values()], unreadable: [...unreadable, ...problems] };
+}
+
+
+/** Most diff rows one table shows; beyond it the table says how many it left out so the file stays readable. */
+const MAX_DIFF_ROWS = 25;
+
+/** A table cell: one line of text, pipes escaped, long values cut. */
+function cell(value: unknown, limit = 120): string {
+  const text = value === undefined || value === null
+    ? '—'
+    : typeof value === 'string' ? value : (JSON.stringify(value) ?? String(value));
+  const flat = text.replace(/\s+/g, ' ').replace(/\|/g, '\\|');
+  return flat.length > limit ? `${flat.slice(0, limit - 1)}…` : flat;
+}
+
+/** Appends one Markdown table, capped at {@link MAX_DIFF_ROWS} rows, or nothing when it has no rows. */
+function pushTable(
+  lines: string[],
+  title: string,
+  header: readonly string[],
+  rows: readonly (readonly string[])[],
+  showCount = false,
+): void {
+  if (rows.length === 0) {
+    return;
+  }
+  const caption = showCount ? `${title} (${rows.length})` : title;
+  lines.push('', caption, '', `| ${header.join(' | ')} |`, `| ${header.map(() => '---').join(' | ')} |`);
+  for (const row of rows.slice(0, MAX_DIFF_ROWS)) {
+    lines.push(`| ${row.join(' | ')} |`);
+  }
+  if (rows.length > MAX_DIFF_ROWS) {
+    lines.push('', `… ${rows.length - MAX_DIFF_ROWS} more`);
+  }
+}
+
+/** The row of one workflow on one front end; every matrix cell the report renders has one. */
+function rowAt(rows: readonly WorkflowRow[], workflow: WorkflowId, project: UiProject): WorkflowRow | undefined {
+  return rows.find((row) => row.workflow === workflow && row.project === project);
+}
+
+/**
+ * Renders the report a human reads (AAP 0.10.3 criterion 4), in the plan's order: verdict, header,
+ * workflow matrix, passing workflows, the legacy-broken baseline, intentional differences, failures,
+ * records not produced or unreadable, and the counts.
+ *
+ * The three outcome sections are deliberately separate: criterion 4 requires every `intentional-diff`
+ * and `legacy-broken` to be listed apart from the passes, with its reason visible. No screenshot is
+ * referenced anywhere — AAP 0.10.2 makes visual evidence a record, not a criterion.
+ */
+export function renderMarkdown(report: ParityReport): string {
+  const rows = report.workflows;
+  const nextRows = rows.filter((row) => row.project === 'next');
+  const failed = rows.filter((row) => row.status === 'fail');
+  const broken = rows.filter((row) => row.status === 'legacy-broken');
+  const intentional = rows.filter((row) => row.status === 'intentional-diff');
+  const missing = rows.filter((row) => row.status === 'missing');
+  const nextPassed = nextRows.filter((row) => row.status === 'pass').length;
+  const nextFailed = nextRows.filter((row) => row.status === 'fail').length;
+  const nextMissing = nextRows.filter((row) => row.status === 'missing').length;
+  const unreadable = report.unreadable ?? [];
+  const lines: string[] = [
+    '# Parity report — legacy versus new Mifos X UI',
+    '',
+    `**Verdict:** ${nextPassed} of ${WORKFLOW_IDS.length} new-app workflows pass; ${nextFailed} failed and `
+      + `${nextMissing} produced no record. ${broken.length} legacy row(s) are recorded \`legacy-broken\` and `
+      + `${intentional.length} difference(s) are intentional. `
+      + (nextFailed === 0 && nextMissing === 0 && failed.length === 0
+        ? 'No new-app workflow failed.'
+        : 'See Failures and the records not produced below.'),
+    '',
+    '## Header',
+  ];
+  pushTable(lines, 'Run', ['Field', 'Value'], [
+    ['Environment', cell(report.header.environment)],
+    ['Backend remote', cell(report.header.backendRemote ?? 'not verified')],
+    ['Backend commit', cell(report.header.backendCommit ?? 'not verified')],
+    ['Backend verified', cell(report.header.backendVerified)],
+    ['Backend URL (`FINERACT_URL`)', cell(report.header.fineractUrl)],
+    ['Legacy URL (`LEGACY_URL`)', cell(report.header.legacyUrl)],
+    ['New app URL (`NEXT_URL`)', cell(report.header.nextUrl)],
+    ['Run date — the tenant business date read from Fineract, never the browser clock', cell(report.header.runDate.length === 0 ? 'not established' : report.header.runDate)],
+    ['Generated at', cell(report.header.generatedAt)],
+  ]);
+  lines.push('', '## Workflow matrix');
+  pushTable(
+    lines,
+    'Status per workflow and front end',
+    ['Workflow', 'legacy', 'next'],
+    WORKFLOW_IDS.map((workflow) => [
+      `\`${workflow}\``,
+      rowAt(rows, workflow, 'legacy')?.status ?? 'missing',
+      rowAt(rows, workflow, 'next')?.status ?? 'missing',
+    ]),
+  );
+  const incomparable = WORKFLOW_IDS.filter((workflow) => rowAt(rows, workflow, 'next')?.comparable === false);
+  if (incomparable.length > 0) {
+    lines.push(
+      '',
+      `Not comparable: ${incomparable.map((workflow) => `\`${workflow}\``).join(', ')}. The legacy baseline is `
+        + '`legacy-broken` or was never recorded, so the expected behaviour is defined by the Fineract API '
+        + 'contract rather than by the broken screen (AAP 0.10.1).',
+    );
+  }
+  lines.push('', '## Passing workflows');
+  pushTable(lines, 'Passed', ['Workflow', 'Front end'], rows
+    .filter((row) => row.status === 'pass')
+    .map((row) => [`\`${row.workflow}\``, row.project]), true);
+  if (rows.every((row) => row.status !== 'pass')) {
+    lines.push('', 'No workflow passed.');
+  }
+  lines.push(
+    '',
+    '## Legacy-broken baseline',
+    '',
+    'These rows do not fail `npm run e2e`, and the same defect is never reproduced in the new app (AAP 0.10.1).',
+  );
+  pushTable(lines, 'Legacy-broken', ['Workflow', 'Front end', 'Reason'], broken
+    .map((row) => [`\`${row.workflow}\``, row.project, cell(row.reason)]), true);
+  if (broken.length === 0) {
+    lines.push('', 'No legacy row was recorded `legacy-broken`.');
+  }
+  lines.push('', '## Intentional differences');
+  pushTable(lines, 'Intentional', ['Workflow', 'Front end', 'Item', 'Reason'], intentional
+    .map((row) => [
+      `\`${row.workflow}\``,
+      row.project,
+      `AAP 0.10.5 item ${row.intentionalDiffId ?? 'missing'}`,
+      cell(row.reason),
+    ]), true);
+  if (intentional.length === 0) {
+    lines.push('', 'No difference from legacy was recorded as intentional.');
+  }
+  lines.push('', '## Failures');
+  if (failed.length === 0) {
+    lines.push('', 'No workflow failed.');
+  }
+  for (const row of failed) {
+    lines.push(
+      '',
+      `### \`${row.workflow}\` (${row.project}) — fail`,
+      '',
+      `- First failing step: ${row.failingStep === undefined ? 'not recorded' : `\`${cell(row.failingStep)}\``}`,
+      `- Reason: ${cell(row.reason ?? 'not recorded', 300)}`,
+    );
+    const diffs = row.diffs ?? [];
+    pushTable(
+      lines,
+      'Request diffs',
+      ['Method', 'Path', 'Field', 'legacy', 'next'],
+      diffs.filter((diff) => diff.method !== STATE_DIFF_METHOD)
+        .map((diff) => [cell(diff.method), cell(diff.path), cell(diff.field), cell(diff.legacy), cell(diff.next)]),
+      true,
+    );
+    pushTable(
+      lines,
+      'State diffs',
+      ['Field', 'legacy', 'next'],
+      diffs.filter((diff) => diff.method === STATE_DIFF_METHOD)
+        .map((diff) => [cell(diff.field), cell(diff.legacy), cell(diff.next)]),
+      true,
+    );
+  }
+  lines.push('', '## Records not produced or unreadable');
+  pushTable(lines, 'Not produced', ['Workflow', 'Front end', 'Record the run should have written'], missing
+    .map((row) => [`\`${row.workflow}\``, row.project, cell(workflowRecordPath(row.project, row.workflow))]), true);
+  pushTable(lines, 'Unreadable', ['Path', 'Reason'], unreadable
+    .map((entry) => [cell(entry.path), cell(entry.message)]), true);
+  if (missing.length === 0 && unreadable.length === 0) {
+    lines.push('', 'Every workflow recorded both front ends, and every record could be read.');
+  }
+  lines.push('', '## Counts');
+  pushTable(
+    lines,
+    'Workflow rows by status',
+    ['Status', 'legacy', 'next', 'total'],
+    [...WORKFLOW_STATUSES, 'missing' as const].map((status) => [
+      status,
+      String(rows.filter((row) => row.project === 'legacy' && row.status === status).length),
+      String(rows.filter((row) => row.project === 'next' && row.status === status).length),
+      String(rows.filter((row) => row.status === status).length),
+    ]),
+  );
+  lines.push(
+    '',
+    'Parity is behavioural: this report compares the ordered API calls and the backend end state of the two',
+    'front ends (AAP 0.10.1, 0.10.2), normalised by `e2e/capture/network-capture.ts`. Screenshots are evidence,',
+    'not a criterion, and none is referenced here.',
+  );
+  return `${lines.join('\n')}\n`;
+}
+
+/**
+ * Key names that say credential or session material, used only to re-check what is about to be written.
+ * It mirrors the masking pattern `capture/network-capture.ts` applies upstream (Rule 1 clause 9); this
+ * copy is a second, independent gate, so drift makes the guard stricter and never looser.
+ */
+const CREDENTIAL_NAME_PATTERN =
+  /password|passcode|^pass$|^pin$|token|secret|session|authorization|authenticationKey|apiKey|credential/i;
+
+/** Environment values a report must never carry, whatever produced them (Rule 1 clause 9). */
+const CREDENTIAL_ENV_NAMES: readonly string[] = ['E2E_PASSWORD', 'E2E_USER', 'FINERACT_PASSWORD'];
+
+/**
+ * A credential written as a pair anywhere in a document — `"authenticationKey": "abc"`, `password=abc` —
+ * but not one already masked: the mask marker itself must pass, and a field *named* for a credential
+ * with no value after it (`requestBody.password` in a diff table) is not a pair and must pass too.
+ */
+const UNMASKED_CREDENTIAL_PATTERN =
+  /(password|passcode|authorization|authenticationKey|base64EncodedAuthenticationKey|token|secret|apiKey)\s*["']?\s*[:=]\s*["']?(?!\*\*\*)[^\s"',}|]+/i;
+
+/**
+ * Refuses to write a report that carries a credential (Rule 1 clause 9): the value of a credential
+ * environment variable, a credential-shaped pair that is not the mask marker, or a diff whose field
+ * names a credential while its value is not masked.
+ *
+ * Masking is `capture/network-capture.ts`'s job; this is the last gate before two files a human and a
+ * machine read, so it fails loudly and names the field rather than serialising the value.
+ *
+ * @throws {@link ParityReportError} naming the document and the field, never the value.
+ */
+async function assertNoCredential(report: ParityReport, markdown: string, json: string): Promise<void> {
+  const documents: readonly { readonly document: string; readonly text: string }[] = [
+    { document: MARKDOWN_PATH, text: markdown },
+    { document: JSON_PATH, text: json },
+  ];
+  for (const { document, text } of documents) {
+    for (const name of CREDENTIAL_ENV_NAMES) {
+      const secret = (process.env[name] ?? '').trim();
+      if (secret.length > 0 && text.includes(secret)) {
+        throw new ParityReportError(`${document} would carry the value of ${name}; refusing to write it (Rule 1 clause 9)`);
+      }
+    }
+    if (UNMASKED_CREDENTIAL_PATTERN.test(text)) {
+      throw new ParityReportError(`${document} would carry an unmasked credential field; refusing to write it (Rule 1 clause 9)`);
+    }
+  }
+  for (const row of report.workflows) {
+    for (const diff of row.diffs ?? []) {
+      if (CREDENTIAL_NAME_PATTERN.test(diff.field)) {
+        throw new ParityReportError(
+          `${JSON_PATH} would carry the value of ${diff.field} for ${row.workflow}/${row.project}; `
+            + 'refusing to write it (Rule 1 clause 9)',
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Writes the two outputs AAP 0.10.4 names — `web-ng/parity-report.md` first, then
+ * `web-ng/parity-report.json` — after both have passed {@link assertNoCredential}, so a refused report
+ * leaves neither file behind. Both paths are resolved from this module's own location, so the outputs
+ * land at the package root however the suite is launched.
+ */
+export async function writeReport(report: ParityReport): Promise<{ markdownPath: string; jsonPath: string }> {
+  const markdown = renderMarkdown(report);
+  const json = `${JSON.stringify(report, null, 2)}\n`;
+  await assertNoCredential(report, markdown, json);
+  await writeFile(MARKDOWN_PATH, markdown, 'utf8');
+  await writeFile(JSON_PATH, json, 'utf8');
+  return { markdownPath: MARKDOWN_PATH, jsonPath: JSON_PATH };
+}
+
+/**
+ * Everything that must make the command exit non-zero, one precise line each: a new-app row that failed
+ * or produced no record, an acknowledged difference without its reason or AAP 0.10.5 item, two passes
+ * that differ, a record or artefact that could not be read, an unverified backend, and a run date that
+ * could not be read from Fineract.
+ *
+ * A `legacy-broken` legacy row is not on this list: AAP 0.10.1 and 0.10.4 keep it out of the exit code.
+ * No line ever carries a captured body, header value, key or password (Rule 1 clause 9).
+ */
+export function collectProblems(report: ParityReport): string[] {
+  const problems: string[] = [];
+  if (report.header.runDate.length === 0) {
+    problems.push('the run date could not be established: readBusinessDate() failed, and the browser clock is never a substitute (Rule 1 clause 2)');
+  }
+  if (!report.header.backendVerified) {
+    problems.push('backend provenance was not recorded: run `npm run check:backend` against the Blitzy-Sandbox/blitzy-fineract build (Rule 2)');
+  }
+  for (const row of report.workflows) {
+    const where = `${row.workflow} (${row.project})`;
+    if (row.project === 'next' && row.status === 'missing') {
+      problems.push(`${where}: produced no record, so the workflow is unverified`);
+    }
+    if (row.project === 'next' && row.status === 'fail') {
+      const step = row.failingStep === undefined ? '' : ` (first failing step: ${row.failingStep})`;
+      problems.push(`${where}: failed${step}${row.reason === undefined ? '' : ` — ${row.reason}`}`);
+    }
+    if (row.status === 'legacy-broken' || row.status === 'intentional-diff') {
+      if (!hasText(row.reason)) {
+        problems.push(`${where}: ${row.status} without a reason`);
+      }
+      if (row.status === 'intentional-diff' && !isIntentionalDiffId(row.intentionalDiffId)) {
+        problems.push(`${where}: intentional-diff without its AAP 0.10.5 item number`);
+      }
+    }
+    if (row.comparable && row.status === 'pass' && (row.diffs?.length ?? 0) > 0) {
+      problems.push(`${where}: both sides pass, but they differ — ${describeDiffs(row.diffs ?? [])}`);
+    }
+  }
+  for (const entry of report.unreadable ?? []) {
+    problems.push(`record or artefact ${entry.path} could not be read: ${entry.message}`);
+  }
+  return problems;
+}
+
+/**
+ * Builds the report, writes both files and reports the verdict (AAP 0.10.4's report row, criterion 4).
+ *
+ * @returns `0` when the report is clean; `1` for any problem {@link collectProblems} names, for a
+ * credential the guard refused, or for a report that could not be assembled.
+ */
+export async function main(): Promise<number> {
+  let report: ParityReport;
+  let paths: { markdownPath: string; jsonPath: string };
+  try {
+    report = await buildReport();
+    paths = await writeReport(report);
+  } catch (error) {
+    console.error(`parity report: ${error instanceof Error ? error.message : 'the report could not be produced'}`);
+    return 1;
+  }
+  const problems = collectProblems(report);
+  const nextRows = report.workflows.filter((row) => row.project === 'next');
+  const passed = nextRows.filter((row) => row.status === 'pass').length;
+  console.log('parity report');
+  console.log(`  verdict: ${problems.length === 0 ? 'pass' : 'fail'} — ${passed}/${WORKFLOW_IDS.length} new-app workflows pass`);
+  console.log(
+    `  environment: ${report.header.environment}; backend: ${report.header.backendRemote ?? 'not verified'}`
+      + `${report.header.backendCommit === null ? '' : ` @ ${report.header.backendCommit.slice(0, 7)}`}`,
+  );
+  console.log(`  run date (tenant business date): ${report.header.runDate.length === 0 ? 'not established' : report.header.runDate}`);
+  for (const status of WORKFLOW_STATUSES) {
+    const legacy = report.workflows.filter((row) => row.project === 'legacy' && row.status === status).length;
+    const next = nextRows.filter((row) => row.status === status).length;
+    console.log(`  ${status}: legacy ${legacy}, next ${next}`);
+  }
+  console.log(`  wrote ${paths.markdownPath}`);
+  console.log(`  wrote ${paths.jsonPath}`);
+  for (const problem of problems) {
+    console.error(`parity report: ${problem}`);
+  }
+  return problems.length === 0 ? 0 : 1;
+}
+
+/**
+ * Runs only as the entry point — `tsx e2e/report/parity-report.ts`, which `npm run e2e` calls — so
+ * importing this module writes nothing, calls nothing and throws nothing at import time (AAP 0.10.3).
+ */
+const entryPoint = process.argv[1];
+
+if (entryPoint !== undefined && pathToFileURL(entryPoint).href === import.meta.url) {
+  // The exit code is set rather than forced, so the summary lines already printed are never lost.
+  process.exitCode = await main();
+}
+

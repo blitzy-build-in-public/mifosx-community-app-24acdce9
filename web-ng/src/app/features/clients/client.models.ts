@@ -533,8 +533,10 @@ export interface ClientEditRequest {
  *
  * The commands the server accepts are exactly these five (`POST /clients/{id}?command=…`):
  * `activate` takes an activation date, `close`, `reject` and `withdraw` each take their own date and
- * a mandatory reason id (the fork validates each reason id with `notNull`), and `reactivate` takes
- * nothing.
+ * a mandatory reason id (the fork validates each reason id with `notNull`), and `reactivate` takes a
+ * reactivation date, which the fork requires just as strictly: `ClientDataValidator.validateReactivate`
+ * applies `notNull` to `reactivationDate` and rejects a blank body outright with `InvalidJsonException`,
+ * so the date is a member of the payload rather than an optional extra.
  */
 export type ClientActionRequest =
   | {
@@ -599,8 +601,21 @@ export type ClientActionRequest =
       locale: string;
     }
   | {
-      /** Reactivates a closed client; the server takes no body. */
+      /** Reactivates a closed client. */
       command: 'reactivate';
+
+      /**
+       * Reactivation date the action posts; required by the server. `ClientDataValidator.validateReactivate`
+       * validates this member with `notNull` and the request parameter set for the command is exactly
+       * `locale`, `dateFormat` and this date, so a reactivate without it is refused.
+       */
+      reactivationDate: Date | null;
+
+      /** Payload date format, filled by `client.service.ts` from `AppConfig.dateFormat`. */
+      dateFormat: AppDateFormat;
+
+      /** Payload locale, filled by `client.service.ts` from `AppConfigService.activeLocale`. */
+      locale: string;
     };
 
 /**
@@ -629,6 +644,26 @@ export interface ClientListParams {
 
   /** Free-text filter, when a caller filters server-side; the in-scope list does not. */
   searchText?: string;
+}
+
+/**
+ * The `GET /clients` response: the paged envelope the endpoint answers with rather than a bare array
+ * (AAP 0.7.3 row "Client list and edit"; the fork's `ClientsApiResourceSwagger.GetClientsResponse`,
+ * observed live as `{"totalFilteredRecords":5,"pageItems":[…]}`).
+ *
+ * Both members are modelled because the list screen needs both, and neither is optional: the legacy
+ * `clientResource.getAllClients({offset, limit})` callback reads `data.pageItems` for the table and
+ * `data.totalFilteredRecords` for the pager, and the endpoint sends `pageItems` as `[]` — never as a
+ * missing key — when nothing matches, which was also observed live. Flattening the envelope to its
+ * rows would therefore lose the record count the pager needs, and a row list alone cannot say how
+ * many rows the filter matched.
+ */
+export interface ClientListPage {
+  /** Rows the query matched across every page, ignoring `offset` and `limit`. */
+  totalFilteredRecords: number;
+
+  /** The rows of this page, in the server's order; empty when nothing matched. */
+  pageItems: readonly Client[];
 }
 
 /**

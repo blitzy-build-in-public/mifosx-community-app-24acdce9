@@ -13,7 +13,7 @@
  * Declaration only. This module carries no Angular decorator, no injected collaborator, no HTTP
  * call, no fixture and no `any` (Rule 1 clause 4): a payload member the plan does not model is
  * either a documented partial projection listing just the members a screen reads, or `unknown`.
- * The three functions at the end are pure — same input, same output, no clock read, no dependency
+ * The two functions at the end are pure — same input, same output, no clock read, no dependency
  * — so the types cost the loans feature's other files nothing to import.
  *
  * Dates never travel as formatted strings. A response date is the `FineractDate` declared once in
@@ -50,12 +50,23 @@ export interface OptionItem {
 }
 
 /**
- * The two shapes an option-valued template member takes: the `{id, name}` object the template
- * returns for the choice it seeds (`transactionProcessingStrategy`), and the bare numeric id a
- * payload that only carries the choice sends instead. Both occur for the same field, which is why
- * the field is typed as the union and read through `optionId()` rather than cast at each call.
+ * One row of `transactionProcessingStrategyOptions`: the fork's strategy pair, the `code` an
+ * application posts and the `name` its picker renders.
+ *
+ * The list is keyed by code and not by id — `POST /loans` answers HTTP 400 "The parameter
+ * transactionProcessingStrategyId is not supported" for the id form of the choice — which is why
+ * this row is not the `{id, name}` shape the other option lists use.
  */
-export type OptionRef = OptionItem | number;
+export interface TransactionProcessingStrategyOption {
+  /** Strategy code the application carries, e.g. `'mifos-standard-strategy'`. */
+  readonly code: string;
+
+  /** Label exactly as the template endpoint returned it. */
+  readonly name: string;
+
+  /** Numeric id, for a build that sends one beside the code. */
+  readonly id?: number;
+}
 
 /**
  * A loan's lifecycle status as Fineract sends it: the numeric `LoanStatus` id, its
@@ -233,8 +244,14 @@ export interface LoanTemplate {
   /** Interest calculation period the product prescribes. */
   readonly interestCalculationPeriodType?: number;
 
-  /** Selected transaction processing strategy, read through `optionId()` whichever shape it takes. */
-  readonly transactionProcessingStrategy?: OptionRef;
+  /**
+   * Strategy the template seeds for the selected product, as the code the application posts.
+   * Absent from the product-less template, like every other product-dependent default.
+   */
+  readonly transactionProcessingStrategyCode?: string;
+
+  /** Strategies the form's picker offers, in the received order. */
+  readonly transactionProcessingStrategyOptions?: readonly TransactionProcessingStrategyOption[];
 
   /**
    * Charges applicable to the application, under the key this endpoint uses. It is declared
@@ -678,8 +695,17 @@ export interface LoanApplicationRequest {
   /** Interest calculation period id from the template. */
   interestCalculationPeriodType: number;
 
-  /** Transaction processing strategy id, read from the template through `optionId()`. */
-  transactionProcessingStrategyId: number;
+  /**
+   * Transaction processing strategy the application is processed under, as the code the template
+   * seeded and the server accepts.
+   *
+   * A code, not an id: the fork answers `POST /loans` with HTTP 400 "The parameter
+   * transactionProcessingStrategyId is not supported" for the id form and accepts
+   * `transactionProcessingStrategyCode` (observed against the running fork, whose OpenAPI is the
+   * contract's source of truth; the seed script creates its product with the same member). The
+   * member name is the server's own, as a payload that has to match the Fineract contract requires.
+   */
+  transactionProcessingStrategyCode: string;
 
   /** Expected disbursement date the form holds; `null` when its field is empty. */
   expectedDisbursementDate: Date | null;
@@ -952,26 +978,6 @@ export interface LoanTransactionTemplate {
 /*
  * Pure helpers. Same input, same output: no clock read, no dependency, no side effect.
  */
-
-/**
- * The numeric id behind an option-valued template member, or `undefined` when the template seeded
- * none.
- *
- * `transactionProcessingStrategy` is the field this exists for: a template returns the seeded choice
- * as an `{id, name}` object, while a payload that carries only the choice sends the bare id. The
- * reader accepts both shapes, so a form seeds `transactionProcessingStrategyId` without a cast and
- * without branching on the shape at the call site.
- *
- * @param value The member as the payload sent it, or `undefined` when it is absent.
- * @returns Its id, or `undefined` when there is no choice to read.
- */
-export function optionId(value: OptionRef | undefined): number | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  return typeof value === 'number' ? value : value.id;
-}
 
 /**
  * Whether a body `GET /loans/{id}` returned is a loan record rather than a loan template.
