@@ -28,6 +28,16 @@ const OUT_OF_SCOPE_LABELS: readonly string[] = [
   'Credit Report',
 ];
 
+/**
+ * The keys the template's two `keydown` bindings listen for, as `KeyboardEvent.key` reports them:
+ * `keydown.enter` matches `Enter`, and `keydown.space` matches a single space because Angular's
+ * `KeyEventsPlugin` lower-cases the key before comparing and maps `' '` to `space`.
+ */
+const ACTIVATION_KEYS: readonly { readonly key: string; readonly binding: string }[] = [
+  { key: 'Enter', binding: 'keydown.enter' },
+  { key: ' ', binding: 'keydown.space' },
+];
+
 describe('TabStripComponent', () => {
   // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines
   // this spec's only cast to one line and keeps the assertions type-checked (Rule 1 clause 4).
@@ -110,6 +120,35 @@ describe('TabStripComponent', () => {
     expect(activeLabels(fixture)).toEqual(['Identities']);
   });
 
+  it('exposes each tab as a keyboard-reachable tab, selects the active one, and follows a changed id', () => {
+    const fixture = createStrip('general');
+    const selectedLabels = (): (string | undefined)[] =>
+      tabLinks(fixture)
+        .filter((link) => link.getAttribute('aria-selected') === 'true')
+        .map((link) => link.textContent?.trim());
+
+    for (const link of tabLinks(fixture)) {
+      expect(link.getAttribute('role')).toBe('tab');
+      expect(link.getAttribute('tabindex')).toBe('0');
+    }
+
+    expect(host(fixture).querySelectorAll('ul.nav-tabs[role="tablist"]')).toHaveLength(1);
+    expect(tabLinks(fixture).map((link) => link.getAttribute('aria-selected'))).toEqual([
+      'true',
+      'false',
+    ]);
+    expect(selectedLabels()).toEqual(['General']);
+
+    fixture.componentRef.setInput('activeId', 'identities');
+    fixture.detectChanges();
+
+    expect(tabLinks(fixture).map((link) => link.getAttribute('aria-selected'))).toEqual([
+      'false',
+      'true',
+    ]);
+    expect(selectedLabels()).toEqual(['Identities']);
+  });
+
   it('reports an inactive tab’s id once when it is clicked', () => {
     const fixture = createStrip('general');
     const emitted = recordChanges(fixture);
@@ -127,6 +166,20 @@ describe('TabStripComponent', () => {
 
     expect(emitted).toEqual([]);
   });
+
+  it.each(ACTIVATION_KEYS)(
+    'reports an inactive tab’s id once, and cancels the key’s default, when $binding fires on it',
+    ({ key }) => {
+      const fixture = createStrip('general');
+      const emitted = recordChanges(fixture);
+      const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+
+      tabLink(fixture, 'Identities').dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(emitted).toEqual(['identities']);
+    },
+  );
 
   it('renders both chevrons as inert decoration that cannot change the active tab', () => {
     const fixture = createStrip('general');
@@ -147,6 +200,19 @@ describe('TabStripComponent', () => {
 
     expect(emitted).toEqual([]);
     expect(activeLabels(fixture)).toEqual(['General']);
+  });
+
+  it('paints nothing at all when the parent supplies no tabs', () => {
+    const fixture = createStrip('');
+
+    fixture.componentRef.setInput('tabs', []);
+    fixture.detectChanges();
+
+    expect(host(fixture).querySelectorAll('ul.nav-tabs')).toHaveLength(0);
+    expect(host(fixture).querySelectorAll('a')).toHaveLength(0);
+    expect(tabLinks(fixture)).toHaveLength(0);
+    expect(chevronItems(fixture)).toHaveLength(0);
+    expect(host(fixture).childElementCount).toBe(0);
   });
 
   it('renders none of the out-of-scope tabs and adds no tab of its own', () => {
