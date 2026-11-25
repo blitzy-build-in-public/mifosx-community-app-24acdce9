@@ -1,0 +1,145 @@
+{
+  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+  "version": 1,
+  "newProjectRoot": "",
+  "cli": {
+    "analytics": false
+  },
+  "projects": {
+    "web-ng": {
+      "projectType": "application",
+      "root": "",
+      "sourceRoot": "src",
+      "prefix": "app",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "browser": "src/main.ts",
+            "index": "src/index.html",
+            "tsConfig": "tsconfig.app.json",
+            "polyfills": [],
+            "styles": [
+              "src/styles.scss"
+            ],
+            "stylePreprocessorOptions": {
+              "includePaths": [
+                "app/styles-dev"
+              ]
+            },
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "src/assets",
+                "output": "assets"
+              },
+              {
+                "glob": "**/*.json",
+                "input": "app/global-translations",
+                "output": "global-translations"
+              },
+              {
+                "glob": "**/*",
+                "input": "app/images",
+                "output": "images"
+              }
+            ],
+            "outputPath": "dist/web-ng"
+          },
+          "configurations": {
+            "production": {
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumError": "1.5mb"
+                }
+              ],
+              "outputHashing": "all",
+              "optimization": true,
+              "sourceMap": false,
+              "namedChunks": false,
+              "extractLicenses": true
+            },
+            "development": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true,
+              "namedChunks": true
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "test": {
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "buildTarget": "web-ng:build:development",
+            "tsConfig": "tsconfig.spec.json",
+            "runner": "vitest",
+            "coverageThresholds": {
+              "statements": 65,
+              "lines": 65
+            }
+          }
+        },
+        "lint": {
+          "builder": "@angular-eslint/builder:lint",
+          "options": {
+            "lintFilePatterns": [
+              "src/**/*.ts",
+              "src/**/*.html"
+            ]
+          }
+        },
+        "serve": {
+          "builder": "@angular/build:dev-server",
+          "defaultConfiguration": "development",
+          "configurations": {
+            "production": {
+              "buildTarget": "web-ng:build:production"
+            },
+            "development": {
+              "buildTarget": "web-ng:build:development"
+            }
+          }
+        }
+      }
+    },
+    "web-ng-services": {
+      "projectType": "application",
+      "root": "",
+      "sourceRoot": "src",
+      "architect": {
+        "test": {
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "buildTarget": "web-ng:build:development",
+            "tsConfig": "tsconfig.spec.json",
+            "runner": "vitest",
+            "coverageInclude": [
+              "src/app/core/http/**/*.ts",
+              "src/app/core/auth/auth.service.ts",
+              "src/app/core/api/search.service.ts",
+              "src/app/core/api/datatable-gate.service.ts",
+              "src/app/features/clients/client.service.ts",
+              "src/app/features/loans/loan.service.ts",
+              "src/app/features/savings/savings.service.ts"
+            ],
+            "coverageThresholds": {
+              "statements": 90,
+              "lines": 90
+            },
+            "include": [
+              "src/app/core/http/**/*.spec.ts",
+              "src/app/core/auth/auth.service.spec.ts",
+              "src/app/core/api/search.service.spec.ts",
+              "src/app/core/api/datatable-gate.service.spec.ts",
+              "src/app/features/clients/client.service.spec.ts",
+              "src/app/features/loans/loan.service.spec.ts",
+              "src/app/features/savings/savings.service.spec.ts"
+            ]
+          }
+        }
+      }
+    }
+  }
+}
