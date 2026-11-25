@@ -10,7 +10,8 @@ import {
   type TestRequest,
 } from '@angular/common/http/testing';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { By } from '@angular/platform-browser';
+import { Router, provideRouter } from '@angular/router';
 import { provideTranslateService, TranslateService } from '@ngx-translate/core';
 import { catchError, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -19,6 +20,10 @@ import { PermissionsService } from '../../../core/auth/permissions.service';
 import { DEFAULT_APP_CONFIG } from '../../../core/config/app-config.model';
 import { AppConfigService } from '../../../core/config/app-config.service';
 import { toApiError } from '../../../core/http/api-error';
+import {
+  NotificationService,
+  type NotificationKind,
+} from '../../../core/notifications/notification.service';
 import type { Client } from '../client.models';
 import { ClientListComponent } from './client-list.component';
 
@@ -29,8 +34,8 @@ import { ClientListComponent } from './client-list.component';
  * `clients`; AAP 0.7.4 "Clients list (`#/clients`)", Figma node `1:3`; AAP 0.11.1 "unit specs beside
  * every component and service"; Rule 1 clause 8).
  *
- * What it pins is the traffic the screen produces and the two signals its table reads, because those
- * are the parts a rewrite would silently change:
+ * What it pins is the traffic the screen produces, the state it holds and the few properties only the
+ * markup can express, because those are the parts a rewrite would silently change:
  *
  *  1. exactly one `GET /clients` on construction, carrying `offset=0` and `limit=15` and no
  *     `searchText` — the parameter set the legacy `getAllClients({offset, limit})` sends, and nothing
@@ -54,22 +59,32 @@ import { ClientListComponent } from './client-list.component';
  *  7. the find field's submit runs `GET /search` with `query`, `resource` and `exactMatch`, the flag
  *     derived from the field's surrounding double quotes exactly as legacy derives it
  *     (`ClientController.search()`, `app/scripts/controllers/client/ClientController.js:44-62`;
- *     Rule 1 clause 2; AAP 0.7.2 `GlobalSearchParams`), and the answer's rows replace the page's.
+ *     Rule 1 clause 2; AAP 0.7.2 `GlobalSearchParams`), and the answer's rows replace the page's;
+ *  8. the states the card must render: the explicit empty state with no error (AAP 0.7.4), no rows
+ *     and no "no clients" claim after a failure, and a pager that paints only for a match larger than
+ *     one page;
+ *  9. what the table and the toolbar actually paint: the card title, the six column headers, one row
+ *     per visible client, a status cell holding the swatch and no word (AAP 0.10.5 deliberate
+ *     difference 11), the row itself as the link to `#/viewclient/:id` with no nested control, and
+ *     the "Create Client" gate following `CREATE_CLIENT` — hidden, not removed, when it is absent.
  *
- * **The DOM is asserted in one place only, and that is deliberate.** Every other assertion above is
- * made on the component's own signals and on `HttpTestingController`, which is what this spec owns:
- * the traffic the screen sends and the state it holds. The rest of the markup renders those signals
- * and is covered by its own compilation and lint pass, so restating its wording here would make this
- * file move every time a heading is reworded without pinning anything the signals do not already
- * pin. The exception is the pager: it only paints for a match of more than one page, which no seeded
- * workflow reaches, so its rendered links are asserted here or nowhere.
+ * **Two levels of assertion, each for what the other cannot see.** The traffic the screen sends is
+ * asserted on `HttpTestingController` and the state it holds on the component's own signals, because
+ * those are what a rewrite would silently change and a signal assertion names a failure precisely.
+ * The markup is asserted separately, and only where a property exists in the DOM alone: the status
+ * cell that must carry no text, the row that is itself the link, the gate that hides its control
+ * rather than removing it, the empty state, and the pager's links. Wording that only restates a
+ * translated caption is not asserted, so re-keying the bundles cannot break this file.
  *
  * **Providers.** The configuration is loaded from a stubbed `fetch` before the component exists,
  * because every client URL is composed from it. The ngx-translate stack is registered for the
  * template's pipe. `PermissionsService` is a stub typed against the real class, because the
  * component imports the permission directive its toolbar gates "Create Client" with; no session is
- * ever assembled for a spec. `provideRouter([])` supplies the router the row and "Create Client"
- * links need in order to render; the empty route table is enough because no case navigates.
+ * ever assembled for a spec. `NotificationService` is stubbed for the same reason from the other
+ * side: `core/http/fineract.interceptor.ts` owns the single notification a 5xx raises, so a stub at
+ * the token is what proves the screen raises none of its own. `provideRouter([])` supplies the router
+ * the row and "Create Client" links need in order to render; the empty route table is enough because
+ * no case completes a navigation — the row's click is observed at the router it asks.
  *
  * The error mapping is the one production piece the TestBed supplies itself: `core/http` owns the
  * mapping of a Fineract failure to `ApiError`, and installing it as an interceptor means the
@@ -126,6 +141,13 @@ const QA008_ROW = 'Qa008 Client';
 const REFUSED_MESSAGE = 'The client list could not be read for this office.';
 
 /**
+ * The status label every fixture carries in its payload. The design paints a colour swatch with no
+ * word beside it (AAP 0.10.5 deliberate difference 11), so a value a test would notice if it leaked
+ * into the markup is exactly what the fixture stores.
+ */
+const SERVER_STATUS_LABEL = 'the server label, never rendered';
+
+/**
  * A client row as `GET /clients` returns it: the five members the model requires, with the name and
  * the status code a case is about. The first three names are the project's own fixed seed fixtures
  * (AAP 0.10.1); the rejected and withdrawn rows and the two case-ordering rows carry names invented
@@ -154,7 +176,7 @@ function clientRow(
     officeId: 1,
     officeName,
     staffName,
-    status: { id: 1, code: statusCode, value: 'the server label, never rendered' },
+    status: { id: 1, code: statusCode, value: SERVER_STATUS_LABEL },
     timeline: {},
   };
 }
@@ -231,22 +253,49 @@ function isFindRead(request: { readonly url: string }): boolean {
   return request.url === SEARCH_URL;
 }
 
+/** The legacy code the toolbar's "Create Client" control is gated on in the template. */
+const CREATE_CLIENT_CODE = 'CREATE_CLIENT';
+
+/**
+ * The permission codes the stubbed gate answers `true` for. It is reset before every case and set by
+ * the one case that needs the gate open, so the rest of the suite renders the toolbar as a user
+ * without the permission sees it.
+ */
+let grantedCodes: readonly string[] = [];
+
 /**
  * The half of `PermissionsService` the toolbar's permission gate reads. Typed against the real class
  * with `Pick`, so the stub cannot drift from the two questions the directive asks, and it needs no
  * session: the screen's traffic does not depend on a permission.
+ *
+ * The answers are read from {@link grantedCodes} when the directive's effect runs rather than being
+ * fixed at construction, which is what lets one case render the gate shut and another render it open
+ * with the same provider registration.
  */
 class PermissionsStub implements Pick<PermissionsService, 'can' | 'has'> {
-  /** Membership only: this suite grants nothing, so every gate the toolbar renders stays shut. */
-  can(): boolean {
-    return false;
+  /** Membership only; no case here asks a negated code through this member. */
+  can(key: string): boolean {
+    return grantedCodes.includes(key);
   }
 
   /** The directive-facing question, answered the same way. */
-  has(): boolean {
-    return false;
+  has(key: string): boolean {
+    return grantedCodes.includes(key);
   }
 }
+
+/**
+ * Stand-in for the application's notification surface. `core/http/fineract.interceptor.ts` is the one
+ * place that raises a failure notification (AAP 0.7.4), so this stub exists to prove the screen never
+ * raises a second one of its own — a regression guard rather than a collaborator the screen uses.
+ *
+ * `satisfies` rather than a `Pick` annotation, so the shape is still checked against the real class
+ * while `mockClear` and the call history stay visible to the cases that read them.
+ */
+const notificationStub = {
+  show: vi.fn<(kind: NotificationKind, message: string) => void>(),
+  clear: vi.fn<() => void>(),
+} satisfies Pick<NotificationService, 'show' | 'clear'>;
 
 describe('ClientListComponent', () => {
   let fixture: ComponentFixture<ClientListComponent>;
@@ -269,18 +318,35 @@ describe('ClientListComponent', () => {
   }
 
   /**
-   * The pager's page links as rendered, and the one DOM read this suite makes: the pager is the
-   * surface this screen adds, and it paints only for a match larger than one page, so nothing else
-   * observes it.
+   * The fixture's host element. `ComponentFixture.nativeElement` and `DebugElement.nativeElement`
+   * are typed loosely by the framework, so every cast to `HTMLElement` in this suite is the same DOM
+   * boundary, written `as HTMLElement` where it is used and explained here once (Rule 1 clause 4).
+   */
+  function host(): HTMLElement {
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  /**
+   * One typed lookup at the DOM boundary: the caller names the element type `querySelector` cannot
+   * infer, which is the documented boundary cast a DOM query needs and the only other one here.
+   */
+  function element<T extends Element>(selector: string): T | null {
+    return host().querySelector<T>(selector);
+  }
+
+  /**
+   * The pager's page links as rendered. The pager paints only for a match larger than one page, so
+   * nothing but the pager cases observes it.
    */
   function pageLinks(): readonly HTMLAnchorElement[] {
-    // The single boundary cast of the suite: the framework types the fixture's host element loosely.
-    const host = fixture.nativeElement as HTMLElement;
-
-    return Array.from(host.querySelectorAll<HTMLAnchorElement>('.pagination li a'));
+    return Array.from(host().querySelectorAll<HTMLAnchorElement>('.pagination li a'));
   }
 
   beforeEach(async () => {
+    grantedCodes = [];
+    notificationStub.show.mockClear();
+    notificationStub.clear.mockClear();
+
     vi.stubGlobal(
       'fetch',
       vi.fn<typeof fetch>(() => {
@@ -304,6 +370,9 @@ describe('ClientListComponent', () => {
         provideHttpClientTesting(),
         provideTranslateService(),
         { provide: PermissionsService, useValue: new PermissionsStub() },
+        // The screen must never notify: the interceptor owns the single failure notification, so a
+        // stub at the token is what makes "the screen raised none" an assertion rather than a guess.
+        { provide: NotificationService, useValue: notificationStub },
         // The screen links rows and the "Create Client" control through `RouterLink`, so the router
         // has to exist for the template to render at all; an empty route table is enough because no
         // case navigates (the same provider the search-results spec uses).
@@ -314,8 +383,9 @@ describe('ClientListComponent', () => {
     await TestBed.inject(AppConfigService).load();
 
     const translate = TestBed.inject(TranslateService);
-    // No key is served here: this spec asserts no rendered text, so the stack is registered only
-    // because the component imports the translate pipe.
+    // No key is served here: the only rendered strings this suite asserts are the card title, which
+    // the template hardcodes, and the fixture data itself, so the stack is registered only because
+    // the component imports the translate pipe.
     translate.setTranslation('en', {}, true);
     translate.use('en');
 
@@ -360,6 +430,122 @@ describe('ClientListComponent', () => {
     expect(component.errorMessage()).toBeNull();
     expect(component.rows().map((row) => row.clientId)).toEqual([2, 3, 4]);
     expect(component.rows().map((row) => row.name)).toEqual([ADA, MARCUS, JOSE]);
+  });
+
+  it('renders the card title, the six-column header and one row per visible client', () => {
+    mount();
+    initialRead.flush(FIRST_PAGE);
+    fixture.detectChanges();
+
+    const title = fixture.debugElement.query(By.css('.panel-title'));
+    expect(title.nativeElement.textContent?.trim()).toBe('List of Clients');
+
+    // The six columns in the legacy table's order (`app/views/clients/clients.html:53-60`), each
+    // headed by a column header rather than by a plain cell.
+    const headers = fixture.debugElement.queryAll(By.css('thead th'));
+    expect(headers).toHaveLength(6);
+    expect(headers.map((header) => header.attributes['scope'])).toEqual([
+      'col',
+      'col',
+      'col',
+      'col',
+      'col',
+      'col',
+    ]);
+
+    // One row per client the two display filters leave on screen, in legacy's ascending name order:
+    // the closed client is hidden until the checkbox is ticked, so two of the three render.
+    const rows = fixture.debugElement.queryAll(By.css('tbody tr'));
+    expect(rows).toHaveLength(2);
+    expect((rows[0].nativeElement as HTMLElement).textContent).toContain(ADA);
+    expect((rows[1].nativeElement as HTMLElement).textContent).toContain(JOSE);
+  });
+
+  it('paints the status cell as a swatch and never as a word', () => {
+    mount();
+    initialRead.flush(FIRST_PAGE);
+    fixture.detectChanges();
+
+    const statusCells = fixture.debugElement.queryAll(By.css('tbody tr td:nth-child(4)'));
+    expect(statusCells).toHaveLength(2);
+
+    for (const cell of statusCells) {
+      // The swatch is the cell's whole content: a colour, no word, no `title`, no label.
+      expect(cell.queryAll(By.css('app-status-swatch'))).toHaveLength(1);
+      expect((cell.nativeElement as HTMLElement).textContent?.trim()).toBe('');
+    }
+
+    // The payload's own status label reaches no cell of the rendered table: the design paints a
+    // colour and no textual status anywhere (AAP 0.10.5 deliberate difference 11).
+    const table = element<HTMLTableElement>('#client-list');
+    expect(table).not.toBeNull();
+    expect(table?.textContent ?? '').not.toContain(SERVER_STATUS_LABEL);
+  });
+
+  it('renders the explicit empty state and no error when the read matched nothing', () => {
+    mount();
+    initialRead.flush({ totalFilteredRecords: 0, pageItems: [] });
+    fixture.detectChanges();
+
+    // A completed read that matched nothing is an empty result, not a failure: the card shows the
+    // empty state, no error banner and no row (AAP 0.7.4 "States every list and record screen must
+    // implement").
+    expect(component.isEmpty()).toBe(true);
+    expect(fixture.debugElement.queryAll(By.css('app-empty-state'))).toHaveLength(1);
+    expect(fixture.debugElement.queryAll(By.css('.alert.alert-danger'))).toHaveLength(0);
+    expect(fixture.debugElement.queryAll(By.css('tbody tr'))).toHaveLength(0);
+  });
+
+  it('opens the record from the whole row and offers no other affordance inside it', () => {
+    mount();
+    initialRead.flush(FIRST_PAGE);
+    fixture.detectChanges();
+
+    const rows = fixture.debugElement.queryAll(By.css('tbody tr'));
+    expect(rows.length).toBeGreaterThan(0);
+
+    // The row itself is the link, exactly as legacy's per-cell `routeTo(client.id)` was, and the
+    // design paints no link styling, chevron or button of its own (Figma screen `1:3`; AAP 0.7.4).
+    // `RouterLink` exposes its destination through a write-only setter, so the destination is
+    // observed the way a user produces it: the row's own click, on the router the link asks.
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+    (rows[0].nativeElement as HTMLElement).click();
+
+    expect(navigate).toHaveBeenCalledTimes(1);
+    expect(String(navigate.mock.calls[0][0])).toBe(`/viewclient/${ACTIVE_CLIENT.id}`);
+    expect(rows[0].queryAll(By.css('button'))).toHaveLength(0);
+    expect(rows[0].queryAll(By.css('a'))).toHaveLength(0);
+  });
+
+  it('keeps Create Client hidden while the user lacks CREATE_CLIENT', async () => {
+    mount();
+    initialRead.flush(FIRST_PAGE);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const control = element<HTMLElement>('a.pull-right');
+    expect(control).not.toBeNull();
+    // The gate hides the control rather than removing it, so its place in the toolbar is kept and a
+    // user without the permission is not offered the route (AAP 0.1.1 "a permission gate that fails
+    // closed").
+    expect(control?.style.display).toBe('none');
+  });
+
+  it('shows Create Client once the user holds CREATE_CLIENT', async () => {
+    grantedCodes = [CREATE_CLIENT_CODE];
+
+    mount();
+    initialRead.flush(FIRST_PAGE);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const control = element<HTMLElement>('a.pull-right');
+    expect(control).not.toBeNull();
+    expect(control?.style.display).toBe('');
+
+    // The revealed control opens the create form, which is workflow W2's entry point.
+    const anchor = element<HTMLAnchorElement>('a.pull-right');
+    expect(anchor?.getAttribute('href')).toBe('/createclient');
   });
 
   it('renders the rows in legacy order — display name ascending — whatever order the server sent', () => {
@@ -626,8 +812,24 @@ describe('ClientListComponent', () => {
     expect(component.rows()).toEqual([]);
     expect(component.visibleRows()).toEqual([]);
     expect(component.loading()).toBe(false);
+
+    fixture.detectChanges();
+
+    // The banner carries that same text and nothing else, and the card shows no rows and no empty
+    // state: a failed read is not an empty result.
+    const banner = element<HTMLElement>('.alert.alert-danger');
+    expect(banner).not.toBeNull();
+    expect(banner?.textContent?.trim()).toBe(REFUSED_MESSAGE);
+    expect(fixture.debugElement.queryAll(By.css('tbody tr'))).toHaveLength(0);
+    expect(fixture.debugElement.queryAll(By.css('app-empty-state'))).toHaveLength(0);
+
+    // The interceptor raises the single notification a failure carries; the screen raises none of its
+    // own, so the same problem is never reported twice (AAP 0.7.4).
+    expect(notificationStub.show).not.toHaveBeenCalled();
+
     // The screen stays mounted and usable: its toolbar is not disabled and nothing was navigated.
     expect(component.toolbar.controls.filter.enabled).toBe(true);
+    expect(element<HTMLInputElement>('#filterText')?.disabled).toBe(false);
     expect(httpMock.match(isClientListRead)).toHaveLength(0);
   });
 
@@ -647,6 +849,13 @@ describe('ClientListComponent', () => {
     expect(component.errorMessage()).toBeNull();
     expect(component.rows()).toEqual([]);
     expect(component.loading()).toBe(false);
+
+    fixture.detectChanges();
+
+    // No second surface: no banner, and no "no clients" claim about a read that failed.
+    expect(fixture.debugElement.queryAll(By.css('.alert.alert-danger'))).toHaveLength(0);
+    expect(fixture.debugElement.queryAll(By.css('app-empty-state'))).toHaveLength(0);
+    expect(notificationStub.show).not.toHaveBeenCalled();
     expect(httpMock.match(isClientListRead)).toHaveLength(0);
   });
 
