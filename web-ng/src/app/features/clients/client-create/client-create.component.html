@@ -7,8 +7,8 @@
   Every visual value comes from the global Bootstrap 3 layer `web-ng/src/styles.scss` compiles, so
   this file carries no style, no colour and no pixel: `.container-fluid` and `.row`/`.col-md-*` are
   the page and its grid, `.panel`/`.panel-heading`/`.panel-body` the white card with its shadow and
-  no border stroke, `.form-horizontal`/`.form-group`/`.control-label` the form layout,
-  `.form-control` the 34px input, `.checkbox` the boxed choice, `.btn.btn-primary` the brand fill and
+  no border stroke, `.form-group`/`.control-label` the field layout,
+  `.form-control` the legacy fixed-height input, `.checkbox` the boxed choice, `.btn.btn-primary` the brand fill and
   `.alert.alert-danger` the failure banner (Rule 1 clause 6; AAP 0.5.2). `span.required` is the
   legacy marker rule in `app/styles-dev/main/components/_content.scss`, consumed in place.
 
@@ -22,7 +22,7 @@
   the `<label>`; on the fields `app-select-field` and `app-date-field` render, `[required]` carries
   the state to assistive technology because those components own their own label markup.
 -->
-<div class="container-fluid">
+<section class="container-fluid">
   <div class="row">
     <div class="col-md-12">
       <div class="panel">
@@ -125,13 +125,14 @@
                 <div class="col-md-6">
                   <div class="form-group">
                     <label class="control-label" for="mobileNo">{{ 'label.input.mobilenumber' | translate }}</label>
-                    <!-- No pattern: the legacy form's own numeric rule is deliberately not carried
-                         over, because Fineract alone decides what a number may look like and its
-                         message is what the user reads (Rule 1 clause 3). -->
+                    <!-- No pattern and no `type="tel"`: the legacy form's own numeric rule is
+                         deliberately not carried over, because Fineract alone decides what a number
+                         may look like and its message is what the user reads (Rule 1 clause 3), and
+                         the legacy control is a plain text input (Rule 1 clause 6). -->
                     <input
                       id="mobileNo"
                       name="mobileNo"
-                      type="tel"
+                      type="text"
                       class="form-control"
                       formControlName="mobileNo"
                       autocomplete="tel"
@@ -206,4 +207,4 @@
       </div>
     </div>
   </div>
-</div>
+</section>

@@ -1,0 +1,362 @@
+import { LOCALE_ID } from '@angular/core';
+import { TestBed, type ComponentFixture } from '@angular/core/testing';
+import { provideTranslateService, TranslateService } from '@ngx-translate/core';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import type { RepaymentPeriod, RepaymentSchedule } from '../../loan.models';
+import { RepaymentPreviewComponent } from './repayment-preview.component';
+
+/**
+ * Behavioural spec for the loan application's repayment schedule preview: the table the applicant
+ * reads after `POST /loans?command=calculateLoanSchedule` returns before anything is submitted
+ * (AAP 0.7.1 Features row `loans` — "`LoanNewComponent` (with `RepaymentPreviewComponent`)";
+ * AAP 0.7.4 "`#/newclientloanaccount/:clientId` presents the product and terms fields from the loan
+ * template with a 'Preview schedule' action that posts `calculateLoanSchedule` and renders the
+ * returned periods as a table").
+ *
+ * It serves AAP 0.11.1 (unit specs beside every component), AAP 0.14.1 ("each screen lands with at
+ * least one behavioural spec") and AAP 0.14.2 ("no spec without an `expect`"; Rule 1 clause 8: no
+ * empty or boilerplate spec file).
+ *
+ * The four behaviours pinned here are the folder contract, and each is a statement about the
+ * rendered DOM rather than about the component's `protected` members, because the DOM is what the
+ * applicant and the parity run observe (Rule 1 clause 8):
+ * - one row per period, under the eight columns the record page's schedule table uses;
+ * - the server's order is kept — the array is a sequence, and re-sorting it would describe a
+ *   schedule Fineract did not calculate (Rule 1 clause 3, match legacy rather than improve it);
+ * - a period date reads `dd MMMM yyyy`, the pattern `DISPLAY_DATE_FORMAT` declares, so a change to
+ *   that shared constant breaks this spec loudly instead of silently changing what users see
+ *   (AAP 0.7.2 "Date handling");
+ * - a `null` schedule and a schedule with no periods both render the shared explicit empty state
+ *   and no error, and the table and the empty state never appear together (AAP 0.7.4 "States every
+ *   list and record screen must implement").
+ *
+ * No endpoint is asserted here: the preview owns no request — `loan.service.ts` posts
+ * `calculateLoanSchedule` and `loan-new` calls it — so the contract test for that endpoint lives in
+ * `loan.service.spec.ts`, the file held to the 90% `web-ng-services` gate. This component is bound
+ * straight to a `schedule` input, which is why it is read through a fixture and not through a
+ * router navigation (AAP 0.14.2 "tests in proportion to the behaviour").
+ *
+ * Figma provenance: none. The design covers the login screen, the clients list and the client
+ * record only (AAP 0.2.1), so this folder matches no design node and no visual assertion belongs in
+ * this spec (AAP 0.2.4).
+ */
+
+/** Language the spec serves its labels in, matching `AppConfig.locale` for the fixture. */
+const SPEC_LANG = 'en';
+
+/**
+ * Locale `DatePipe` and `DecimalPipe` format with. Pinned so month names, thousands separators and
+ * the decimal point are the assertions below, on any host, under any default locale.
+ */
+const SPEC_LOCALE = 'en-US';
+
+/**
+ * The eight header keys the template translates, in render order, read from
+ * `repayment-preview.component.html`.
+ *
+ * They are the legacy bundle's own keys, matched column for column to the record page's schedule
+ * table (`loan-view/loan-schedule`): the period number, the period's start, its due date, and the
+ * five money columns.
+ */
+const COLUMN_KEYS: readonly string[] = [
+  'label.heading.no',
+  'label.heading.fromdate',
+  'label.heading.date',
+  'label.heading.principal',
+  'label.heading.interest',
+  'label.heading.fees',
+  'label.heading.total',
+  'label.heading.outstanding',
+];
+
+/** The label each header key resolves to in the in-memory bundle below. */
+const COLUMN_LABELS: Readonly<Record<string, string>> = {
+  'label.heading.no': 'No.',
+  'label.heading.fromdate': 'From Date',
+  'label.heading.date': 'Due Date',
+  'label.heading.principal': 'Principal',
+  'label.heading.interest': 'Interest',
+  'label.heading.fees': 'Fees',
+  'label.heading.total': 'Total',
+  'label.heading.outstanding': 'Outstanding',
+};
+
+/** Legacy no-data label the template passes to the shared empty state, from the same bundle. */
+const EMPTY_STATE_KEY = 'label.nodata';
+
+/** The message the empty state renders once that key resolves. */
+const EMPTY_STATE_TEXT = 'No repayment schedule has been calculated.';
+
+/**
+ * The in-memory translation bundle.
+ *
+ * It covers the nine keys the template uses — the eight headers and the no-data label — and nothing
+ * else, so serving it is what proves the template's keys are the ones the legacy bundle must hold:
+ * a renamed key would render as itself and fail every assertion that reads the label it feeds
+ * (AAP 0.10.2 "every label resolves").
+ */
+const TRANSLATIONS: Readonly<Record<string, string>> = {
+  ...COLUMN_LABELS,
+  [EMPTY_STATE_KEY]: EMPTY_STATE_TEXT,
+};
+
+/**
+ * A complete `RepaymentPeriod`, with every member the model declares supplied on purpose: a member
+ * the model gains later breaks this factory at compile time instead of passing silently, which is
+ * the point of filling it here rather than in each test (Rule 1 clause 4).
+ *
+ * The defaults are one plausible period of the fixed-data `Parity Loan` — principal 5,000 over 12
+ * monthly repayments at flat 12% per year — so a test states only the members it is about. Dates are
+ * the two wire shapes a Fineract response uses: the `'yyyy-MM-dd'` string and the
+ * `[year, month, day]` triple.
+ */
+function makePeriod(overrides: Partial<RepaymentPeriod> = {}): RepaymentPeriod {
+  return {
+    period: 1,
+    fromDate: '2026-11-21',
+    dueDate: [2026, 12, 21],
+    principalDue: 416.67,
+    principalOriginalDue: 416.67,
+    interestDue: 50,
+    feeChargesDue: 0,
+    penaltyChargesDue: 0,
+    totalDueForPeriod: 466.67,
+    totalOriginalDueForPeriod: 466.67,
+    principalOutstanding: 4583.33,
+    interestOutstanding: 550,
+    totalOutstandingForPeriod: 5133.33,
+    complete: false,
+    ...overrides,
+  };
+}
+
+/**
+ * A complete `RepaymentSchedule`: its ordered periods plus every total the model declares, supplied
+ * for the same reason as `makePeriod` — the totals are optional on the wire, and the preview renders
+ * none of them, so their presence here proves the table shows the periods and not a computed total.
+ */
+function makeSchedule(periods: readonly RepaymentPeriod[]): RepaymentSchedule {
+  return {
+    periods,
+    totalPrincipalDisbursed: 5000,
+    totalPrincipalExpected: 5000,
+    totalInterestCharged: 600,
+    totalFeeChargesCharged: 25,
+    totalRepaymentExpected: 5625,
+    loanTermInDays: 395,
+  };
+}
+
+/**
+ * An element's text with runs of whitespace collapsed to one space and the ends trimmed, so the
+ * template's own indentation cannot mislead an assertion.
+ */
+function textOf(element: Element | null): string {
+  return (element?.textContent ?? '').replace(/\s+/g, ' ').trim();
+}
+
+describe('RepaymentPreviewComponent', () => {
+  // The spec deliberately registers no HTTP provider, no HTTP testing controller and no routing: the
+  // preview is a pure projection of its input, so the injector below is the translate stack and the
+  // locale and nothing more. A component that reached the network would fail to construct here rather
+  // than the assertion being relaxed to accommodate it, and no backend is contacted by anything in
+  // this file (Rule 1 clause 5, Rule 1 clause 8, Rule 2).
+
+  /** The fixture's host element, the root the queries below start from. */
+  function hostOf(fixture: ComponentFixture<RepaymentPreviewComponent>): HTMLElement {
+    // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps every
+    // element the helpers return an `HTMLElement` and confines the cast to this single boundary
+    // (Rule 1 clause 4).
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  /** The preview table, or `null` while the component renders the empty state. */
+  function tableOf(host: HTMLElement): HTMLTableElement | null {
+    return host.querySelector<HTMLTableElement>('table#repayment-preview');
+  }
+
+  /** The table's header cells in render order. */
+  function headerCells(host: HTMLElement): HTMLElement[] {
+    return Array.from(host.querySelectorAll<HTMLElement>('table#repayment-preview thead tr th'));
+  }
+
+  /** The table's body rows in render order. */
+  function bodyRows(host: HTMLElement): HTMLElement[] {
+    return Array.from(host.querySelectorAll<HTMLElement>('table#repayment-preview tbody tr'));
+  }
+
+  /** One body row's cells in render order. */
+  function cellsOf(row: HTMLElement): HTMLElement[] {
+    return Array.from(row.querySelectorAll<HTMLElement>('td'));
+  }
+
+  /** Every body row's cell texts: `[row][column]`, in render order. */
+  function renderedCells(host: HTMLElement): string[][] {
+    return bodyRows(host).map((row) => cellsOf(row).map((cell) => textOf(cell)));
+  }
+
+  /** The shared empty-state element, or `null` when the table is rendered instead. */
+  function emptyStateOf(host: HTMLElement): HTMLElement | null {
+    return host.querySelector<HTMLElement>('app-empty-state#repayment-preview-empty');
+  }
+
+  /**
+   * Renders the component bound to `schedule`.
+   *
+   * The input is set before the first change detection, then the fixture is stabilised and checked
+   * again: `TranslatePipe` is impure, so a header label is read through the template on every change
+   * detection pass, and the assertions must follow the pass that resolves the bundle rather than the
+   * one that renders the markup.
+   */
+  async function render(
+    schedule: RepaymentSchedule | null,
+  ): Promise<ComponentFixture<RepaymentPreviewComponent>> {
+    const fixture = TestBed.createComponent(RepaymentPreviewComponent);
+
+    fixture.componentRef.setInput('schedule', schedule);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    return fixture;
+  }
+
+  beforeEach(async () => {
+    // `provideTranslateService()` registers the translate stack with its no-op loader, so nothing is
+    // fetched: the labels are the in-memory bundle served below (Rule 1 clause 5).
+    await TestBed.configureTestingModule({
+      imports: [RepaymentPreviewComponent],
+      providers: [
+        provideTranslateService({ lang: SPEC_LANG }),
+        { provide: LOCALE_ID, useValue: SPEC_LOCALE },
+      ],
+    }).compileComponents();
+
+    const translate = TestBed.inject(TranslateService);
+
+    translate.setTranslation(SPEC_LANG, TRANSLATIONS, true);
+    translate.use(SPEC_LANG);
+  });
+
+  afterEach(() => {
+    TestBed.resetTestingModule();
+  });
+
+  it('renders one table row per period, under the eight schedule columns', async () => {
+    const schedule = makeSchedule([
+      makePeriod({ period: 1 }),
+      makePeriod({ period: 2 }),
+      makePeriod({ period: 3 }),
+    ]);
+    const host = hostOf(await render(schedule));
+    const rows = bodyRows(host);
+    const labels = headerCells(host).map((cell) => textOf(cell));
+
+    expect(tableOf(host)).not.toBeNull();
+    expect(labels).toEqual(COLUMN_KEYS.map((key) => COLUMN_LABELS[key]));
+    expect(rows).toHaveLength(3);
+    expect(rows.map((row) => cellsOf(row).length)).toEqual([8, 8, 8]);
+
+    // Every header label resolved: no raw dotted key reaches the user (AAP 0.10.2).
+    for (const key of COLUMN_KEYS) {
+      expect(textOf(host)).not.toContain(key);
+    }
+  });
+
+  it('keeps the period order the server sent instead of sorting it', async () => {
+    // Out of numeric order on purpose: the array is the schedule's sequence, and the preview is not
+    // allowed to reorder what Fineract calculated (Rule 1 clause 3).
+    const fixture = await render(
+      makeSchedule([
+        makePeriod({ period: 3 }),
+        makePeriod({ period: 1 }),
+        makePeriod({ period: 2 }),
+      ]),
+    );
+
+    expect(renderedCells(hostOf(fixture)).map((cells) => cells[0])).toEqual(['3', '1', '2']);
+  });
+
+  it('renders a period date as dd MMMM yyyy', async () => {
+    // The two shapes a Fineract response sends a date in, both accepted by `fromFineractDate`: the
+    // `'yyyy-MM-dd'` string, and the `[year, month, day]` triple with a one-based month. The model
+    // types these members as `FineractDate`, so those are the shapes the preview has to parse.
+    const fixture = await render(
+      makeSchedule([makePeriod({ fromDate: [2026, 11, 21], dueDate: '2026-12-05' })]),
+    );
+    const [cells] = renderedCells(hostOf(fixture));
+
+    expect(cells[1]).toBe('21 November 2026');
+    expect(cells[2]).toBe('05 December 2026');
+  });
+
+  it('renders a period date the wire parser rejects as an empty cell, never an invalid date', async () => {
+    // A response value that names no calendar day — here a string with no `yyyy-MM-dd` date part,
+    // which `fromFineractDate` rejects — must leave the cell empty rather than print `Invalid Date`.
+    const fixture = await render(makeSchedule([makePeriod({ fromDate: 'not-a-date' })]));
+    const [cells] = renderedCells(hostOf(fixture));
+
+    expect(cells[1]).toBe('');
+    expect(cells[2]).toBe('21 December 2026');
+    expect(textOf(hostOf(fixture))).not.toContain('Invalid Date');
+  });
+
+  it('renders each amount as the payload sent it, and totals nothing itself', async () => {
+    const fixture = await render(
+      makeSchedule([
+        makePeriod({
+          principalDue: 1234.5,
+          interestDue: 65.5,
+          feeChargesDue: 25,
+          totalDueForPeriod: 5000,
+          totalOutstandingForPeriod: 8765.43,
+        }),
+      ]),
+    );
+    const [cells] = renderedCells(hostOf(fixture));
+
+    // Two decimals and grouping, from the payload's own numbers.
+    expect(cells[3]).toBe('1,234.50');
+    expect(cells[4]).toBe('65.50');
+    expect(cells[5]).toBe('25.00');
+    expect(cells[6]).toBe('5,000.00');
+
+    // The total is the server's figure, not the sum of its parts: 1,234.50 + 65.50 + 25 is 1,325.00,
+    // and the outstanding cell holds its own payload value rather than a running balance.
+    expect(cells[6]).not.toBe('1,325.00');
+    expect(cells[7]).toBe('8,765.43');
+  });
+
+  it('renders the explicit empty state before any schedule has been calculated', async () => {
+    const fixture = await render(null);
+    const host = hostOf(fixture);
+    const emptyState = emptyStateOf(host);
+
+    expect(emptyState).not.toBeNull();
+    expect(textOf(emptyState)).toBe(EMPTY_STATE_TEXT);
+    expect(tableOf(host)).toBeNull();
+    // An empty schedule is not a failure: no alert, no retry, no error text (AAP 0.7.4).
+    expect(host.querySelectorAll('.alert')).toHaveLength(0);
+    expect(textOf(host)).not.toContain(EMPTY_STATE_KEY);
+  });
+
+  it('renders the same empty state for a schedule that carries no periods', async () => {
+    const fixture = await render(makeSchedule([]));
+    const host = hostOf(fixture);
+    const emptyState = emptyStateOf(host);
+
+    expect(emptyState).not.toBeNull();
+    expect(textOf(emptyState)).toBe(EMPTY_STATE_TEXT);
+    expect(tableOf(host)).toBeNull();
+    expect(host.querySelectorAll('.alert')).toHaveLength(0);
+  });
+
+  it('never renders the table and the empty state together', async () => {
+    const host = hostOf(await render(makeSchedule([makePeriod()])));
+
+    expect(tableOf(host)).not.toBeNull();
+    expect(bodyRows(host)).toHaveLength(1);
+    expect(emptyStateOf(host)).toBeNull();
+  });
+});

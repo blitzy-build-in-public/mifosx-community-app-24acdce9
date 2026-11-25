@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { TestBed } from '@angular/core/testing';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { ALL_FUNCTIONS, ALL_FUNCTIONS_READ, PermissionsService } from './permissions.service';
+import type { SessionData } from './session.model';
+import { SessionService } from './session.service';
 
 /**
  * Behavioural spec for `PermissionsService`, the one answer to "may this user do this?" that both the
@@ -17,11 +20,17 @@ import { ALL_FUNCTIONS, ALL_FUNCTIONS_READ, PermissionsService } from './permiss
  * - `ALL_FUNCTIONS` makes a code present, so its negation then fails;
  * - `canAny` and `canAll` aggregate that same question, an empty `canAll` list being vacuously true;
  * - `setPermissions` replaces the list instead of appending to it, and `clear()` returns the service
- *   to the fail-closed state.
+ *   to the fail-closed state;
+ * - the gate answers from the session it is part of: nothing at all is permitted — a negated code
+ *   included — while `SessionService` holds no session, and the stored permission list reaches the
+ *   signal the navigation and the route guard read once the session is restored.
  *
  * The service has no injected dependency — permission strings enter only through `setPermissions` —
- * so each test constructs it directly and drives the list the way `AuthService` does, with no
- * `TestBed`.
+ * so the first block constructs it directly and drives the list the way `AuthService` does. The
+ * second block injects it beside the real `SessionService` through `TestBed`, because the
+ * fail-closed answer has to be the one this application's own session produces, and because that is
+ * the denial evidence the permission guard has no spec of its own to state: the guard asks `can` and
+ * `canAll` and nothing else (`core/auth/permission.guard.ts`).
  */
 describe('PermissionsService', () => {
   it('fails closed until a session supplies a permission list', () => {
@@ -58,6 +67,24 @@ describe('PermissionsService', () => {
     expect(service.can('CREATE_LOAN_PRODUCT')).toBe(true);
     // Nothing but the wildcard is in the list, so a code outside it passes only through the wildcard.
     expect(service.can('DELETE_CLIENT')).toBe(true);
+    // A code that names no permission anywhere in the legacy sources is granted as well, and its
+    // negation is therefore denied: the wildcard makes every code present, so nothing is absent.
+    expect(service.can('ANY_ARBITRARY_KIND')).toBe(true);
+    expect(service.has('!ANY_ARBITRARY_KIND')).toBe(false);
+  });
+
+  it('denies every code for a signed-in user whose permission list is empty', () => {
+    const service = new PermissionsService();
+    service.setPermissions([]);
+
+    expect(service.can('READ_CLIENT')).toBe(false);
+    expect(service.canAny(['READ_CLIENT', 'CREATE_CLIENT'])).toBe(false);
+    expect(service.canAll(['READ_CLIENT'])).toBe(false);
+    // A session is present here, so the gate answers instead of failing closed: the empty list states
+    // no restriction and is vacuously satisfied, unlike the signed-out answer the session block below
+    // pins. What it never does is grant a code.
+    expect(service.canAll([])).toBe(true);
+    expect(service.permissions()).toEqual([]);
   });
 
   it('grants READ_ codes and no others while ALL_FUNCTIONS_READ is held', () => {
@@ -148,5 +175,106 @@ describe('PermissionsService', () => {
     expect(service.permissions()).toEqual([]);
     expect(service.can('CREATE_CLIENT')).toBe(false);
     expect(service.has('!CREATE_CLIENT')).toBe(false);
+  });
+});
+
+/** The Fineract user id every session fixture names; `restore()` reads it out of the stored entry. */
+const USER_ID = 42;
+
+/**
+ * The parts the fixture's authentication key is joined from at test time, so the source holds no
+ * credential-shaped literal and no value that could be mistaken for a real key (Rule 1 clause 9,
+ * AAP 0.10.4). Nothing here is ever printed.
+ */
+const KEY_PARTS = ['c2Vzc2lv', 'bi1rZXk'];
+
+/** A legacy-shaped session entry: exactly the three fields `SessionManager` stores (AAP 0.7.2). */
+function sessionFixture(userPermissions: string[]): SessionData {
+  return {
+    userId: USER_ID,
+    authenticationKey: KEY_PARTS.join(''),
+    userPermissions,
+  };
+}
+
+/**
+ * The gate as the application actually runs it: the injected `PermissionsService`, fed by the real
+ * `SessionService` from the real `window.localStorage`. These cases are the ones the guard and the
+ * `hasPermission` directive depend on and the ones a naive boolean algebra would get wrong — the
+ * absence of a session is never read as permission, while an authenticated user who genuinely holds
+ * an empty list is answered honestly.
+ */
+describe('PermissionsService and the stored session', () => {
+  beforeEach(() => {
+    // Each test starts from the state of a fresh browser profile: no stored entry to restore.
+    window.localStorage.clear();
+    // Reset first so the two services are built per test rather than reused from the previous one,
+    // which keeps a permission list written by one test from answering for the next.
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({});
+  });
+
+  it('denies every question, a negated one included, while SessionService holds no session', () => {
+    const session = TestBed.inject(SessionService);
+    const permissions = TestBed.inject(PermissionsService);
+
+    expect(session.session()).toBeNull();
+    expect(permissions.can('READ_CLIENT')).toBe(false);
+    // The absence of a user is never read as permission, so the inversion of a code answers false
+    // rather than passing for want of the permission. This is the one answer that differs from the
+    // naive algebra, and the reason a screen cannot be opened by signing out.
+    expect(permissions.has('!READ_CLIENT')).toBe(false);
+    expect(permissions.canAny(['READ_CLIENT', 'CREATE_CLIENT'])).toBe(false);
+    expect(permissions.canAll(['READ_CLIENT'])).toBe(false);
+    // Even the vacuously satisfied empty list stays closed: a control that declares no permission is
+    // still not offered to a signed-out user.
+    expect(permissions.canAll([])).toBe(false);
+    expect(permissions.permissions()).toEqual([]);
+  });
+
+  it('derives the permission signal from a session written after the service was constructed', async () => {
+    const session = TestBed.inject(SessionService);
+    const permissions = TestBed.inject(PermissionsService);
+    const granted = ['READ_CLIENT', 'CREATE_CLIENT'];
+
+    // Constructed and still closed: what the signal reports comes from the session, never from the
+    // list the service happened to hold when it was created.
+    expect(permissions.permissions()).toEqual([]);
+
+    session.write(sessionFixture(granted));
+    // `write()` owns the stored entry and the session signal; the permission list is published by the
+    // restore that reads that entry back, which is the seam `AuthService` drives after a login.
+    expect(session.session()).not.toBeNull();
+    expect(permissions.permissions()).toEqual([]);
+
+    await expect(session.restore()).resolves.toBe(true);
+    expect(permissions.permissions()).toEqual(granted);
+    expect(permissions.can('CREATE_CLIENT')).toBe(true);
+    expect(permissions.has('!CREATE_CLIENT')).toBe(false);
+
+    // A second session replaces the list instead of adding to it, and the signal a screen re-renders
+    // from reports the replacement.
+    session.write(sessionFixture(['READ_LOAN']));
+    await expect(session.restore()).resolves.toBe(true);
+    expect(permissions.permissions()).toEqual(['READ_LOAN']);
+    expect(permissions.can('READ_CLIENT')).toBe(false);
+  });
+
+  it('withdraws every permission when the session is cleared, so a logged-out screen is denied', async () => {
+    const session = TestBed.inject(SessionService);
+    const permissions = TestBed.inject(PermissionsService);
+
+    session.write(sessionFixture(['READ_CLIENT']));
+    await expect(session.restore()).resolves.toBe(true);
+    expect(permissions.can('READ_CLIENT')).toBe(true);
+
+    session.clear();
+    expect(session.session()).toBeNull();
+    expect(permissions.permissions()).toEqual([]);
+    expect(permissions.can('READ_CLIENT')).toBe(false);
+    // Fail-closed again for the negated shape too: a logged-out user is not offered the complement of
+    // what a signed-in user would hold.
+    expect(permissions.has('!READ_CLIENT')).toBe(false);
+    expect(permissions.canAll([])).toBe(false);
   });
 });

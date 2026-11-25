@@ -1,9 +1,13 @@
-import { provideHttpClient, type HttpRequest } from '@angular/common/http';
+import { provideHttpClient, withInterceptors, type HttpRequest } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting, type TestRequest } from '@angular/common/http/testing';
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { Router } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { AppConfigService } from '../config/app-config.service';
+import { ApiError } from '../http/api-error';
+import { fineractInterceptor } from '../http/fineract.interceptor';
 import { AuthService, type AuthenticationRequest } from './auth.service';
 import { PermissionsService } from './permissions.service';
 import type { AuthResponse, SessionData, SessionUserResponse } from './session.model';
@@ -27,6 +31,9 @@ import { SessionService, sessionStorageKey } from './session.service';
  * - a restore that fails leaves the login successful and the gate closed — the path the prompt
  *   requires, because the entry is already written and the interceptor owns a 401;
  * - an authentication failure reaches the caller unchanged and writes no session;
+ * - driven through the application's own interceptor, the login is tagged with the tenant header and
+ *   no credential, the restore carries the key the login just stored, and a 401 reaches the caller as
+ *   the `ApiError` whose message is Fineract's `defaultUserMessage` verbatim (AAP 0.4.2; workflow W1);
  * - the password-renewal and two-factor flags are received and acted on by no branch (AAP 0.10.5
  *   item 13);
  * - `logout()` removes both stored spellings and empties every accessor without a request.
@@ -380,3 +387,171 @@ describe('AuthService', () => {
     httpMock.expectNone(() => true);
   });
 });
+
+/** The tenant identifier the resolved configuration reports: configuration, never tenant data. */
+const TENANT_ID = 'default';
+
+/** The two header names the Fineract contract fixes (AAP 0.4.3); the interceptor is their only writer. */
+const TENANT_HEADER = 'Fineract-Platform-TenantId';
+const AUTHORIZATION_HEADER = 'Authorization';
+
+/**
+ * The refusal Fineract answers a bad credential exchange with, as the server sends it. The login screen
+ * renders this text unchanged, so the case below compares it character for character — workflow W7's
+ * rule applied to W1's refusal (AAP 0.4.4 decision 6).
+ */
+const SERVER_MESSAGE = 'Invalid credentials';
+
+/**
+ * The resolved configuration's shape, taken from the accessor that publishes it rather than declared a
+ * second time here, so a member the interceptor starts reading fails the build in this spec as well.
+ */
+type ResolvedConfig = AppConfigService['config'];
+
+/** The configuration the interceptor reads: the tenant it stamps on every request, and the API root. */
+function resolvedConfig(): ResolvedConfig {
+  return {
+    apiBaseUrl: API_BASE_URL,
+    apiPath: API_PATH,
+    tenantId: TENANT_ID,
+    dateFormat: 'dd MMMM yyyy',
+    locale: 'en',
+    idleMinutes: 30,
+    warningSeconds: 10,
+    keepaliveMinutes: 15,
+  };
+}
+
+/**
+ * The router surface the interceptor reads. A refused authentication navigates nowhere — the user is
+ * already on the login screen — so this stand-in exists for the injection to resolve, and its `url`
+ * keeps the interceptor's own redirect branch out of the way.
+ */
+const routerStub = {
+  url: '/login',
+  navigate: (): Promise<boolean> => Promise.resolve(true),
+};
+
+/**
+ * The `AppConfigService` surface the interceptor uses: the configuration signal it reads the tenant
+ * from, and the composition every service shares. Resolving the real configuration is proved in
+ * `core/config/app-config.service.spec.ts`; this stand-in joins base, root and path exactly as
+ * `apiUrl()` documents, so the requests asserted here are the ones the application sends.
+ */
+function interceptorConfig(): Pick<AppConfigService, 'apiUrl' | 'changes'> {
+  const resolved = signal<ResolvedConfig | null>(resolvedConfig());
+
+  return {
+    changes: resolved.asReadonly(),
+    apiUrl: (path: string): string => `${API_ROOT}${SEPARATOR}${path}`,
+  };
+}
+
+/** The error a login rejected with, so a case asserts on the value a screen would receive. */
+async function rejectionOf(pending: Promise<void>): Promise<unknown> {
+  try {
+    await pending;
+  } catch (error: unknown) {
+    return error;
+  }
+
+  throw new Error('the login was expected to fail, but it resolved');
+}
+
+/**
+ * Asserts that a login rejected with the one error type every Fineract failure becomes, and narrows it
+ * so the cases below read its members without a cast (Rule 1 clause 4).
+ */
+function assertApiError(failure: unknown): asserts failure is ApiError {
+  expect(failure).toBeInstanceOf(ApiError);
+}
+
+/**
+ * Workflow W1 behind the application's own HTTP interceptor (AAP 0.4.2; AAP 0.10.1 W1 "Outcome that
+ * must match"; Rule 1 clauses 5 and 8).
+ *
+ * The block above runs without the interceptor on purpose: a request asserted there is
+ * `AuthService`'s own contribution to the exchange. Here the interceptor is part of the system under
+ * test, which is what makes the two headers and the mapped failure observable — the tenant header on
+ * the login, the session's Basic key on the restore that follows it, and the `ApiError` a 401 becomes.
+ */
+describe('AuthService through the application interceptor', () => {
+  let service: AuthService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    window.localStorage.clear();
+
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(withInterceptors([fineractInterceptor])),
+        provideHttpClientTesting(),
+        { provide: AppConfigService, useValue: interceptorConfig() },
+        { provide: Router, useValue: routerStub },
+      ],
+    });
+
+    service = TestBed.inject(AuthService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => {
+    // Proves the refused exchange was not followed by the restore read, and issues no third call.
+    httpMock.verify();
+    window.localStorage.clear();
+  });
+
+  it('stamps the tenant header on the login and sends the stored key on the restore', async () => {
+    const login = service.login(USERNAME, submittedPassword());
+
+    const authentication = httpMock.expectOne(byMethodAndUrl('POST', AUTHENTICATION_URL));
+    expect(authentication.request.headers.get(TENANT_HEADER)).toBe(TENANT_ID);
+    // The exchange is what asks for the credential, so it carries none (AAP 0.4.2).
+    expect(authentication.request.headers.has(AUTHORIZATION_HEADER)).toBe(false);
+
+    authentication.flush(authResponse());
+    await Promise.resolve();
+
+    const users = httpMock.expectOne(byMethodAndUrl('GET', usersUrl(USER_ID)));
+    // The key the login just stored is the one the restore is authorised with: the interceptor reads it
+    // from the session, which is why the entry is written before this read (AAP 0.4.2).
+    expect(users.request.headers.get(AUTHORIZATION_HEADER)).toBe(`Basic ${KEY_PARTS.join('')}`);
+    expect(users.request.headers.get(TENANT_HEADER)).toBe(TENANT_ID);
+
+    users.flush(projection());
+    await login;
+
+    expect(service.isAuthenticated()).toBe(true);
+    expect(service.username()).toBe(USERNAME);
+  });
+
+  it('rejects the login with the ApiError the interceptor maps a 401 into', async () => {
+    const login = service.login(USERNAME, submittedPassword());
+
+    httpMock
+      .expectOne(byMethodAndUrl('POST', AUTHENTICATION_URL))
+      .flush(
+        { defaultUserMessage: SERVER_MESSAGE, errors: [] },
+        { status: 401, statusText: 'Unauthorized' },
+      );
+
+    const failure = await rejectionOf(login);
+
+    assertApiError(failure);
+    // Character for character, with no prefix, trim or translation: the login screen shows the
+    // server's own words and keeps the typed username (AAP 0.4.4 decision 6).
+    expect(failure.message).toBe(SERVER_MESSAGE);
+    expect(failure.status).toBe(401);
+    expect(failure.validationErrors).toEqual([]);
+
+    // A refused exchange writes no session, leaves every accessor empty and is not followed by the
+    // restore read the interceptor would have attached a credential to.
+    expect(window.localStorage.getItem(COMPOSED_KEY)).toBeNull();
+    expect(service.isAuthenticated()).toBe(false);
+    expect(service.user()).toBeNull();
+    expect(service.permissions()).toEqual([]);
+    expect(service.username()).toBeNull();
+    httpMock.expectNone(byMethodAndUrl('GET', usersUrl(USER_ID)));
+  });
+});
+
