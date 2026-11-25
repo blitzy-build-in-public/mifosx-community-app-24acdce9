@@ -21,9 +21,9 @@ import { SavingsNewComponent } from './savings-new.component';
 /**
  * Behaviour of the new-application screen, the first step of workflow W8 (AAP 0.10.1 W8 row; AAP 0.7.1
  * `savings` row): the one template read it makes, the options it renders in the server's order, the
- * validators it applies, the single `POST` one click sends, the Fineract text it shows when the server
- * refuses, and the not-found state a route that names no client produces — no request at all, and the
- * message in place of the card (AAP 0.7.4 states).
+ * validators it applies, the product values it refuses to post, the single `POST` one click sends, the
+ * Fineract text it shows when the server refuses, and the not-found state a route that names no client
+ * produces — no request at all, and the message in place of the card (AAP 0.7.4 states).
  *
  * The endpoint-level contract — method, path, query parameters and the `dateFormat`/`locale` members of
  * the body — belongs to `savings.service.spec.ts`, so `SavingsService` is stubbed at its own token and
@@ -139,11 +139,6 @@ interface TranslateStub {
   readonly onTranslationChange: Observable<unknown>;
 }
 
-/** The route the screen is opened on, carrying the one segment it reads. */
-const ROUTE: ActivatedRouteStub = {
-  paramMap: new BehaviorSubject<ParamMap>(paramsFor(String(CLIENT_ID))),
-};
-
 /**
  * The `:clientId` segments that name no client, each described for the case's title: a non-numeric,
  * zero, negative, fractional and blank segment, plus the absent parameter a URL that carries none
@@ -206,7 +201,12 @@ describe('SavingsNewComponent', () => {
   let savings: SavingsServiceStub;
   let router: RouterStub;
   let notifications: NotificationStub;
-  let routeParams: BehaviorSubject<ParamMap>;
+
+  /**
+   * The route this test's screen is opened on, built fresh in `beforeEach` and provided to the
+   * TestBed, so no case can start from a segment an earlier one left behind.
+   */
+  let route: ActivatedRouteStub;
 
   /** The rendered host, narrowed once so every query below is type-checked. */
   const host = (): HTMLElement => {
@@ -258,13 +258,12 @@ describe('SavingsNewComponent', () => {
     fixture.detectChanges();
   }
 
-  /** Creates the screen on `route` and answers its template read with `template`. */
-  async function renderOn(
-    route: ActivatedRouteStub,
-    template: SavingsTemplate,
-  ): Promise<void> {
-    routeParams = route.paramMap;
-    TestBed.overrideProvider(ActivatedRoute, { useValue: route });
+  /**
+   * Creates the screen on this test's own route — positioned on `segment` before the screen mounts, so
+   * the constructor's subscription replays it — and answers its template read with `template`.
+   */
+  async function renderOn(segment: string | null, template: SavingsTemplate): Promise<void> {
+    route.paramMap.next(paramsFor(segment));
     savings.template.mockReturnValue(of(template));
     fixture = TestBed.createComponent(SavingsNewComponent);
     component = fixture.componentInstance;
@@ -276,13 +275,13 @@ describe('SavingsNewComponent', () => {
    * changes: the same component instance stays on screen and the parameter map emits again.
    */
   async function navigateTo(segment: string): Promise<void> {
-    routeParams.next(paramsFor(segment));
+    route.paramMap.next(paramsFor(segment));
     await settle();
   }
 
   /** Creates the screen on the routed client and answers its template read with `template`. */
   async function render(template: SavingsTemplate): Promise<void> {
-    await renderOn(ROUTE, template);
+    await renderOn(String(CLIENT_ID), template);
   }
 
   /** Fills the two fields a create the server would accept needs: the product and the date. */
@@ -295,12 +294,13 @@ describe('SavingsNewComponent', () => {
     savings = { template: vi.fn(), create: vi.fn() };
     router = { navigate: vi.fn(() => Promise.resolve(true)) };
     notifications = { show: vi.fn() };
+    route = clientIdRoute(String(CLIENT_ID));
 
     TestBed.configureTestingModule({
       imports: [SavingsNewComponent],
       providers: [
         { provide: SavingsService, useValue: savings },
-        { provide: ActivatedRoute, useValue: ROUTE },
+        { provide: ActivatedRoute, useValue: route },
         { provide: Router, useValue: router },
         { provide: TranslateService, useValue: translateStub() },
         { provide: NotificationService, useValue: notifications },
@@ -322,7 +322,7 @@ describe('SavingsNewComponent', () => {
     async (_description: string, segment: string | null) => {
       // The template payload below is a valid one, so the absence of a request is the screen's own
       // decision about the route rather than a stub that happened to answer nothing.
-      await renderOn(clientIdRoute(segment), OFFICERS_TEMPLATE);
+      await renderOn(segment, OFFICERS_TEMPLATE);
 
       expect(component.notFound()).toBe(true);
       expect(component.clientId()).toBeNull();
@@ -408,6 +408,36 @@ describe('SavingsNewComponent', () => {
     expect(savings.create).not.toHaveBeenCalled();
     expect(component.form.controls.productId.touched).toBe(true);
     expect(component.form.controls.submittedOnDate.touched).toBe(true);
+  });
+
+  it('refuses a product value that is not a product id, and the form still opens the account', async () => {
+    await render(OFFICERS_TEMPLATE);
+    savings.create.mockReturnValue(of({ resourceId: CREATED_RESOURCE_ID }));
+
+    component.form.controls.productId.setValue('abc');
+    component.form.controls.submittedOnDate.setValue(SUBMITTED_ON);
+
+    // `required` is satisfied by any non-empty value, so the refusal below is the screen's own and no
+    // validator was added to produce it (Rule 1 clause 3, AAP 0.4.4 decision 6).
+    expect(component.form.controls.productId.valid).toBe(true);
+
+    await component.submit();
+
+    // Nothing is posted for a value that cannot be a product id: coercing it would carry
+    // `productId: null`, the member `Number('abc')` serialises to, which no legacy screen sends
+    // (Rule 1 clause 2) — the shape `savings-action` refuses for a payment type that is not a number.
+    expect(savings.create).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(component.error()).toBeNull();
+    expect(component.form.controls.productId.touched).toBe(true);
+
+    // The refusal closed nothing off: the same form, filled out, still opens the account.
+    fillValidForm();
+    await component.submit();
+
+    expect(savings.create).toHaveBeenCalledTimes(1);
+    expect(savings.create.mock.calls[0][0].productId).toBe(CHOSEN_PRODUCT_ID);
+    expect(router.navigate).toHaveBeenCalledWith(['/viewsavingaccount', CREATED_RESOURCE_ID]);
   });
 
   it('posts the application once with values only, then opens the account it created', async () => {
@@ -563,10 +593,8 @@ describe('SavingsNewComponent', () => {
       clientId === SECOND_CLIENT_ID ? second.response : first.response,
     );
 
-    const route = clientIdRoute(String(CLIENT_ID));
-
-    routeParams = route.paramMap;
-    TestBed.overrideProvider(ActivatedRoute, { useValue: route });
+    // The screen mounts on this case's own route — the one `beforeEach` built for it — and is created
+    // directly rather than through `render`, because the two reads below are answered by hand.
     fixture = TestBed.createComponent(SavingsNewComponent);
     component = fixture.componentInstance;
     await settle();

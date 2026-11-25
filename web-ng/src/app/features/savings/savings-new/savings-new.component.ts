@@ -48,6 +48,25 @@ function parseClientId(segment: string | null): number | null {
 }
 
 /**
+ * Whether the product control's value is a product identifier the application may post, narrowing it to
+ * the `number` the request needs.
+ *
+ * The shared select field writes the chosen option's own id, typed `SelectValue` — the `number` a
+ * Fineract template sends, or the `string` a caller could hand it — while `SavingsService.create()` takes
+ * the `number` AAP 0.7.2 fixes for `SavingsApplicationRequest.productId`. A value that cannot be a
+ * product id is refused rather than coerced, for the reason `parseClientId` refuses a segment: `Number()`
+ * answers `NaN` for a text id and `typeof NaN` is `'number'`, so the body would carry `productId: null`,
+ * which no legacy screen sends (Rule 1 clause 2). Identifiers are numbers and are never coerced (AAP
+ * 0.7.2), and `savings-action` refuses a payment type that is not a number at the same boundary.
+ *
+ * @param value the value the product control holds, already known not to be the `null` of no choice.
+ * @returns `true` when `value` is a positive whole number, the only shape a product id takes.
+ */
+function isProductId(value: SelectValue): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0;
+}
+
+/**
  * First step of workflow W8 (AAP 0.10.1 W8 row): open a savings account for a client, at the route
  * `#/new_client_saving_application/:clientId` (AAP 0.8.2 `savings.routes.ts`), for the Stretch scope
  * group that ships per AAP 0.9.1 and AAP 0.9.3.
@@ -200,8 +219,8 @@ export class SavingsNewComponent {
     /**
      * The chosen product. Widened to `SelectValue | null` only so `app-select-field`, which declares
      * its `control` input as `FormControl<SelectValue | null>`, accepts the binding under
-     * `strictTemplates`; the value is converted to the `number` the request needs at the submit
-     * boundary.
+     * `strictTemplates`; {@link isProductId} narrows it to the `number` the request needs at the submit
+     * boundary, and a value that cannot be a product id is refused there rather than coerced.
      */
     productId: new FormControl<SelectValue | null>(null, { validators: [Validators.required] }),
 
@@ -288,7 +307,12 @@ export class SavingsNewComponent {
    * A route that names no client sends nothing: the screen is showing its not-found message, so there
    * is no form to touch and no application to post. Otherwise every control is touched first, so a
    * missing required field is reported in place, and the method returns without issuing any request
-   * while the form is invalid. The POST runs inside `guard.runOnce`, so one click sends exactly one
+   * while the form is invalid or while the product control holds a value that cannot be a product id —
+   * a text id, zero, a negative or fractional number, `NaN` or `Infinity` — which {@link isProductId}
+   * narrows and refuses, the way `savings-action` refuses a payment type that is not a number. Both
+   * refusals mark the controls touched and add nothing else: no message is written and the form stays
+   * as the operator left it, because the form's own rules stay at `required` (AAP 0.4.4 decision 6,
+   * Rule 1 clause 3). The POST runs inside `guard.runOnce`, so one click sends exactly one
    * `POST /savingsaccounts` even if the button is clicked again while the first request is
    * outstanding. A 4xx becomes the form's error text, verbatim, with every entered value intact; a
    * 5xx or a transport failure raises no inline text, because the interceptor's notification is
@@ -306,7 +330,12 @@ export class SavingsNewComponent {
     const productId = this.form.controls.productId.value;
     const submittedOnDate = this.form.controls.submittedOnDate.value;
 
-    if (this.form.invalid || productId === null || submittedOnDate === null) {
+    if (
+      this.form.invalid ||
+      productId === null ||
+      !isProductId(productId) ||
+      submittedOnDate === null
+    ) {
       return;
     }
 
@@ -317,7 +346,7 @@ export class SavingsNewComponent {
         const created = await firstValueFrom(
           this.savings.create({
             clientId,
-            productId: typeof productId === 'number' ? productId : Number(productId),
+            productId,
             submittedOnDate,
           }),
         );
