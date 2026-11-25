@@ -127,6 +127,20 @@ const BRANCH_TEMPLATE: ClientTemplate = {
 /** The message a rejected create answers with, quoted from a real Fineract validation failure. */
 const REJECTED_MESSAGE = 'The client name is already in use by another client.';
 
+/**
+ * The message a create the server itself failed to handle would answer with. The screen must not
+ * paint it: a 5xx has exactly one report, the notification `core/http/fineract.interceptor.ts` raises
+ * for it, so rendering it here too would show the same failure twice (AAP 0.7.4).
+ */
+const SERVER_FAILURE_MESSAGE = 'Internal server error, please contact your system administrator.';
+
+/**
+ * The message a refused navigation produces once the create itself has succeeded. No notification
+ * carries it — it is no HTTP answer — so the screen's own error region is the only place it can be
+ * reported (AAP 0.14.2 "no catch swallows an error silently").
+ */
+const NAVIGATION_FAILURE_MESSAGE = 'Navigation to the created record was refused.';
+
 /** Local midnight of today, the default the submission date starts from. */
 function startOfToday(): Date {
   const now = new Date();
@@ -531,6 +545,85 @@ describe('ClientCreateComponent', () => {
       mobileNo: '2025550101',
     });
     expect(navigate).not.toHaveBeenCalled();
+  });
+
+  // A 5xx is Fineract failing, not the submitted values: `core/http/fineract.interceptor.ts` raises
+  // the single notification that carries it (AAP 0.7.4), so a message painted here as well would show
+  // one failure twice. The screen stays mounted with what the operator typed.
+  it('leaves a 5xx create to the interceptor’s notification and keeps the entered values', async () => {
+    fillValidForm();
+
+    const submission = component.submit();
+    httpMock
+      .expectOne({ method: 'POST', url: `${API_ROOT}${CLIENTS_PATH}` })
+      .flush(
+        { defaultUserMessage: SERVER_FAILURE_MESSAGE },
+        { status: 500, statusText: 'Internal Server Error' },
+      );
+
+    await submission;
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(component.error()).toBeNull();
+    expect(host().querySelector('[role="alert"]')).toBeNull();
+    expect(component.form.getRawValue()).toMatchObject({
+      officeId: 1,
+      staffId: 7,
+      firstname: 'Parity',
+      lastname: 'Client',
+      externalId: 'EXT-1',
+      mobileNo: '2025550101',
+    });
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  // A request the transport never answered arrives as status 0, and the message Angular builds for it
+  // embeds the failed URL — the configured API host — so the screen must render neither the host nor
+  // Angular's own transport wording (finding S1; AAP 0.7.4 keeps a network failure to a notification).
+  it('renders neither the API host nor Angular’s transport wording when the create cannot be sent', async () => {
+    fillValidForm();
+
+    const submission = component.submit();
+    httpMock
+      .expectOne({ method: 'POST', url: `${API_ROOT}${CLIENTS_PATH}` })
+      .error(new ProgressEvent('error'));
+
+    await submission;
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(component.error()).toBeNull();
+    const rendered = host().textContent ?? '';
+    expect(rendered).not.toContain(SERVED_CONFIG.apiBaseUrl);
+    expect(rendered).not.toContain('Http failure response');
+    expect(host().querySelector('[role="alert"]')).toBeNull();
+  });
+
+  // The create succeeded but the router refused the navigation that followed it. That rejection is no
+  // HTTP answer, so no notification carries it: the screen publishes its own message rather than
+  // swallowing it (AAP 0.14.2 "every HTTP call path ends in either a rendered message or a
+  // notification; no catch swallows an error silently").
+  it('publishes the rejection a refused navigation produced after a successful create', async () => {
+    fillValidForm();
+    navigate.mockImplementationOnce(() =>
+      Promise.reject(new Error(NAVIGATION_FAILURE_MESSAGE)),
+    );
+
+    const submission = component.submit();
+    httpMock
+      .expectOne({ method: 'POST', url: `${API_ROOT}${CLIENTS_PATH}` })
+      .flush({ resourceId: 42, clientId: 43 });
+
+    await submission;
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(navigate).toHaveBeenCalledWith(['/viewclient', 43]);
+    expect(component.error()).toBe(NAVIGATION_FAILURE_MESSAGE);
+    expect(host().querySelector('[role="alert"]')?.textContent?.trim()).toBe(
+      NAVIGATION_FAILURE_MESSAGE,
+    );
   });
 
   it('returns to the list when the form is cancelled', () => {

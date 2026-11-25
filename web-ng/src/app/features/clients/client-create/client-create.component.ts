@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import type { AbstractControl } from '@angular/forms';
@@ -6,7 +7,7 @@ import { Router } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
 
-import { ApiError } from '../../../core/http/api-error';
+import { ApiError, screenFailure, toDisplayableFailure } from '../../../core/http/api-error';
 import { DateFieldComponent } from '../../../shared/date-field/date-field.component';
 import { fromFineractDate } from '../../../shared/date-format.util';
 import {
@@ -117,9 +118,10 @@ const LEGACY_MOBILE_PATTERN = /^[0-9]+$/;
  * injecting the route would be dead code (deviation from the folder record, which lists it).
  * The cancel control is a button calling `Router`, not a link directive, which keeps the import set to
  * the four entries the component needs. It raises no notice of its own: `core/http/fineract.interceptor.ts`
- * already raises the single one for a transport fault or a 5xx, and this screen shows the mapped
- * message inline instead of duplicating it (Rule 1 clause 9). It renders in the Bootstrap 3 classes
- * the global stylesheet compiles and declares no style of its own (Rule 1 clause 6).
+ * already raises the single one for a transport fault or a 5xx, so this screen paints a 4xx inline and
+ * leaves those to that notification instead of duplicating it (AAP 0.7.4). It renders
+ * in the Bootstrap 3 classes the global stylesheet compiles and declares no style of its own
+ * (Rule 1 clause 6).
  *
  * One deliberate difference from the legacy markup is recorded rather than silently introduced: the
  * legacy form gates its "Active" row on `ACTIVATE_CLIENT`. This screen is gated once, on
@@ -190,9 +192,11 @@ export class ClientCreateComponent {
   );
 
   /**
-   * The message shown above the form: Fineract's own text, verbatim, from an {@link ApiError}, or
-   * `null` while there is nothing to report. A failed read or submit keeps the screen mounted and
-   * every entered value in the form (AAP 0.7.4; AAP 0.14.1 "errors are values").
+   * The message shown above the form: Fineract's own text, verbatim, for a 4xx {@link ApiError}, or
+   * `null` while there is nothing to report — `null` as well for a 5xx or a transport failure, whose
+   * one report is the notification `core/http/fineract.interceptor.ts` raises (AAP 0.7.4). A failed
+   * read or submit keeps the screen mounted and every entered value in the form (AAP 0.14.1 "errors
+   * are values").
    */
   readonly error = signal<string | null>(null);
 
@@ -280,9 +284,10 @@ export class ClientCreateComponent {
    * and the post runs inside the submit guard so a second click while the first is in flight sends
    * nothing (AAP 0.1.1; AAP 0.14.1).
    *
-   * A rejection is rendered, never thrown away: the guard rethrows, so the mapped Fineract message
-   * is caught here and shown verbatim while every entered value stays in the form (AAP 0.7.4). The
-   * record the server created is opened on success, which is where W2's activation step runs.
+   * A rejection is reported, never thrown away: the guard rethrows, so a 4xx is caught here and shown
+   * verbatim while every entered value stays in the form, and a 5xx or a transport failure is left to
+   * the interceptor's one notification (AAP 0.7.4; AAP 0.14.2). The record the server created is
+   * opened on success, which is where W2's activation step runs.
    */
   async submit(): Promise<void> {
     this.form.markAllAsTouched();
@@ -464,22 +469,26 @@ export class ClientCreateComponent {
   }
 
   /**
-   * Shows a failed read or submit as the message above the form.
+   * Shows a failed read or submit as the message above the form, for the failures the screen owns.
    *
-   * The text is the mapped Fineract message verbatim, which is what the interceptor produces for
-   * every failed response (AAP 0.7.2 row `FineractError`; workflow W7). Anything else reaching here
-   * is not an API failure at all — a bug in the navigation that follows the post, for instance — so
-   * its own `message` is shown rather than invented copy; a value that is neither reports nothing,
-   * which still leaves the form usable.
+   * An HTTP answer is classified by its status rather than by its type. The shared `screenFailure`
+   * publishes Fineract's own `defaultUserMessage` verbatim for a 4xx, which is the text workflow W7
+   * compares character for character (AAP 0.7.2 row `FineractError`), and answers `null` for a 5xx or
+   * a status-0 transport failure: `core/http/fineract.interceptor.ts` has already raised the single
+   * notification for those, so painting them here too would report one failure twice, and Angular's
+   * own `HttpErrorResponse.message` — which embeds the request URL — never reaches the screen
+   * (AAP 0.7.4). A rejection that is no HTTP answer at all, such as a navigation the router refuses
+   * after a successful create, keeps its own message through the shared fallback instead of being
+   * swallowed (AAP 0.14.2 "no catch swallows an error silently").
    *
    * @param error the rejection the awaited call produced.
    */
   private reportFailure(error: unknown): void {
-    if (error instanceof ApiError) {
-      this.error.set(error.message);
+    if (error instanceof ApiError || error instanceof HttpErrorResponse) {
+      this.error.set(screenFailure(error)?.message ?? null);
       return;
     }
 
-    this.error.set(error instanceof Error ? error.message : '');
+    this.error.set(toDisplayableFailure(error).message);
   }
 }
