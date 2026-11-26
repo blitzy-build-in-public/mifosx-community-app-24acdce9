@@ -46,10 +46,12 @@ const EMPTY_STATE_KEY = 'label.nodata';
 /** The message that key resolves to in the in-memory bundle. */
 const EMPTY_STATE_TEXT = 'No repayment schedule is available.';
 
-/** The in-memory bundle: the ten keys the template uses and nothing else, so a key the legacy bundle would not hold renders as itself and fails the assertion reading the label it feeds (AAP 0.10.2). */
+/** The in-memory bundle: every key the template uses, the table's own accessible name included, and nothing else, so a key the legacy bundle would not hold renders as itself and fails the assertion reading the label it feeds (AAP 0.10.2; QA report F41). */
 const TRANSLATIONS: Readonly<Record<string, string>> = {
   ...COLUMN_LABELS,
   [EMPTY_STATE_KEY]: EMPTY_STATE_TEXT,
+  // The table's accessible name, from the legacy bundle's own schedule heading (QA report F41).
+  'label.heading.repaymentschedule': 'Repayment Schedule',
 };
 
 /** A complete `RepaymentPeriod`: every member the model declares is supplied, so a member it gains later breaks this factory at compile time instead of passing silently (Rule 1 clause 4). */

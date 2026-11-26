@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DOCUMENT,
   computed,
   inject,
   signal,
@@ -24,6 +25,9 @@ const GENERIC_FAILURE_KEY = 'error.connection.failed';
 /** The post-login landing screen (AAP 0.2.1 step 1, AAP 0.10.5 item 3). */
 const CLIENTS_ROUTE = '/clients';
 
+/** The id of the screen's content landmark, which the skip link names and {@link LoginComponent.skipToMain} focuses (QA report F14). */
+const MAIN_CONTENT_ID = 'main-content';
+
 /**
  * The login screen at `#/login` (AAP 0.7.1 `auth`, AAP 0.7.4 "Login", Figma flow step 1 / node `1:5`), routed as `AUTH_ROUTES` by its sibling `auth.routes.ts`; every visual value lives in the global
  * stylesheet, so this file declares no styles. **It composes the inventory's components rather than re-authoring them**: the form is `LoginFormComponent` (AAP 0.2.3's `LoginForm` row, `(submit: {username,
@@ -45,6 +49,9 @@ export class LoginComponent {
   private readonly route = inject(ActivatedRoute);
 
   private readonly translate = inject(TranslateService);
+
+  /** The document the skip link focuses its target in, injected rather than read off the global so a test dispatches to the same one (QA report F14). */
+  private readonly document = inject(DOCUMENT);
 
   /**
    * Binds the host page's `lang` attribute to the active language, so a screen-reader user is told the language the page
@@ -84,13 +91,22 @@ export class LoginComponent {
   );
 
   /**
-   * Authenticates with the credentials the form reported, then continues to the interrupted route or `#/clients` (AAP 0.7.4 "navigate to the attempted route or `#/clients`"; AAP 0.10.1 W1). The form has
-   * already refused an invalid submission, so what arrives here is a complete pair of typed values, which is the legacy screen's whole rule set (Rule 1 clause 3). The request runs under this screen's `runOnce`
-   * guard, so a re-entrant submit within one click reaches the service once (AAP 0.14.1). A refused exchange writes the failure's message into the one error region, asks the form to clear only the credential
-   * control and returns without navigating; a successful one navigates to {@link destination}. The pair is not stored, echoed or logged here (Rule 1 clause 9).
+   * Moves focus into the screen's content, which is what this page's skip link does (QA report F14; WCAG 2.4.1): the `main` landmark carries `tabindex="-1"`, so it accepts programmatic focus without becoming a tab stop of its own.
+   * The click's default is cancelled first and always, because the application routes on the hash (`withHashLocation`, Rule 1 clause 5) and an un-cancelled `#main-content` would be read as a navigation; nothing is navigated to here and no credential is touched (Rule 1 clause 9).
+   *
+   * @param event the anchor's click, whose default fragment navigation is suppressed.
+   */
+  skipToMain(event: MouseEvent): void {
+    event.preventDefault();
+    this.document.getElementById(MAIN_CONTENT_ID)?.focus();
+  }
+
+  /**
+   * Authenticates with the credentials the form reported, then continues to the interrupted route or `#/clients` (AAP 0.7.4 "navigate to the attempted route or `#/clients`"; AAP 0.10.1 W1). The form has already refused an invalid submission, so what arrives here is a complete pair of typed values, which is the legacy screen's whole rule set (Rule 1 clause 3).
+   * The request runs under this screen's `runOnce` guard, so a re-entrant submit within one click reaches the service once (AAP 0.14.1, "one request per click"). A refused exchange writes the failure's message into the one error region, asks the form to clear only the credential control and returns without navigating; a successful one navigates to {@link destination}.
+   * The pair goes straight to `AuthService.login` and is not stored, echoed or logged here (Rule 1 clause 9).
    *
    * @param credentials the two values the form's `(submit)` output carries.
-   *
    */
   async onSubmit(credentials: LoginCredentials): Promise<void> {
     await this.guard.runOnce(async (): Promise<void> => {

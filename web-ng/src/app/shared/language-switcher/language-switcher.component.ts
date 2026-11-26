@@ -10,15 +10,12 @@ import { LanguagePreferenceService } from '../../core/i18n/language-preference.s
  *
  * A change is a `TranslateService.use()` call — no reload and no navigation (AAP 0.7.4) — subscribed to exactly once, a second subscription loading the same bundle twice; a failed load arrives on the
  * observable's `error` channel, the loader being configured with `failOnError: true` (`core/i18n/translate.config.ts`), and a `next` emission is never read as success, because a switch that takes effect may
- * deliver no translations at all. The library restores `currentLang` on that error path but never re-applies the native `<select>`'s `[value]` binding, which only writes a value that changed, so {@link
- * onLangChange} writes the select back from {@link current} itself. The chosen code is remembered in the legacy `ls.Language` entry at the moment of the switch, before the bundle is asked for, as legacy's
- * `changeLang` does (`app/scripts/controllers/main/MainController.js:343-345`; Rule 1 clause 3).
- *
- * {@link langChange} reports a switch that took effect and {@link langChangeFailed} one that did not, so a screen with an error region renders the failure rather than swallowing it (AAP 0.14.2 "Error
- * handling"); neither output carries a credential, a session field or a URL (Rule 1 clause 9). It carries no CSS: the label's 13px `#666F74` treatment and the select's 24px height over Bootstrap's
- * `.btn.btn-default.btn-xs` look come from the `.language-switcher` rule of `web-ng/src/styles.scss` (AAP 0.2.3's `LanguageSwitcher` visual specification, Rule 1 clause 6), while the wrapper's layout classes
- * are the caller's.
- *
+ * deliver no translations at all. The library restores `currentLang` on that error path but never re-applies the native `<select>`'s `[value]` binding, which only writes a value that changed, so
+ * {@link onLangChange} writes the select back from {@link current} itself; the chosen code is remembered in the legacy `ls.Language` entry at the moment of the switch, before the bundle is asked for, as
+ * legacy's `changeLang` does (`app/scripts/controllers/main/MainController.js:343-345`; Rule 1 clause 3). {@link langChange} reports a switch that took effect and {@link langChangeFailed} one that did not, so
+ * a screen with an error region renders the failure rather than swallowing it (AAP 0.14.2 "Error handling"); neither output carries a credential, a session field or a URL (Rule 1 clause 9). It carries no
+ * CSS: the label's 13px `#666F74` treatment and the select's 24px height over Bootstrap's `.btn.btn-default.btn-xs` look come from the `.language-switcher` rule of `web-ng/src/styles.scss` (AAP 0.2.3's
+ * `LanguageSwitcher` visual specification, Rule 1 clause 6), while the wrapper's layout classes are the caller's.
  */
 @Component({
   selector: 'app-language-switcher',
@@ -77,19 +74,12 @@ export class LanguageSwitcherComponent {
   readonly langChangeFailed = output<void>();
 
   /**
-   * Switches the active translation to the selected code, and reconciles the control with the language actually in force afterwards.
-   *
-   * The `use()` observable is subscribed to once: its `next` is the moment the switch took effect, reported through {@link langChange}; its `error` is a bundle that could not be loaded, where the library keeps
-   * the language it had and this method writes the select back to it (the reason is in the class comment) before reporting {@link langChangeFailed}. A blank selection is nothing to switch to, so the select is
-   * put back and neither output fires. The selection is remembered before the bundle is asked for, and unconditionally, so a switch whose bundle then fails is still the language the next page load starts in —
-   * legacy stores it beside the `translate.use()` call that may fail (`MainController.js:343-345`).
-   *
-   * @param code the selected language code, one of {@link langs}.
-   *
-   * @param select the select that reported the change, whose value is reconciled with the language in force — the
-   *
+   * Switches the active translation to the selected code, and reconciles the control with the language actually in force afterwards. The `use()` observable is subscribed to once: its `next` is the moment the
+   * switch took effect, reported through {@link langChange}; its `error` is a bundle that could not be loaded, where the library keeps the language it had and this method writes the select back to it (the
+   * reason is in the class comment) before reporting {@link langChangeFailed}. A blank selection is nothing to switch to, so the select is put back and neither output fires. The selection is remembered before
+   * the bundle is asked for, and unconditionally, so a switch whose bundle then fails is still the language the next page load starts in — legacy stores it beside the `translate.use()` call that may fail
+   * (`MainController.js:343-345`). `@param code` the selected language code, one of {@link langs}; `@param select` the select that reported the change, whose value is reconciled with the language in force — the
    * element has to be handed over because a binding cannot express this write.
-   *
    */
   onLangChange(code: string, select: HTMLSelectElement): void {
     const language: string = code.trim();

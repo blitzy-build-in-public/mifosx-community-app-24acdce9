@@ -10,12 +10,13 @@ import { DataTableComponent, type ColumnDef } from './data-table.component';
  * boilerplate specs). It pins what only the rendered table can say: one `<th scope="col">` per column in the caller's order from the column's already-translated label, one `<tr>` and one `<td>` per row and
  * column, the caller's id and class list on the `<table>` inside Bootstrap's `.table-responsive` wrapper (Rule 1 clauses 3 and 6), a row opening the caller's destination as one link over the whole row with no
  * control inside it (AAP 0.7.4), no link at all for a table given no destination, a caller's cell template rendering instead of the column text with the row, the column and its value — how Status becomes an
- * `app-status-swatch` (AAP 0.2.3 row `StatusSwatch`; AAP 0.10.5 deliberate difference 11) — rows and order following the input tracked by the caller's key, and an empty row list rendering the header and no
- * body row (Rule 1 clause 3). The keyboard path is the ninth item it pins and the table's one deliberate difference from legacy: Enter or Space on a focused row opens that row's own destination exactly once,
- * through the same router call its click makes, cancels Space's default so the page cannot scroll behind it, and opens nothing — not even a default — for a row the caller gave no destination or for a key that
- * is neither of the two (Rule 1 clause 3, which matches legacy's pointer-only rows and allows a difference only where it is recorded). The two hosts are the only place the generic contract is exercised from a
- * template, which proves it composes with a feature's own row type while `shared/` names none of it (AAP 0.14.1 "`shared` never imports from `features`"). The router is provided empty because no case completes
- * a navigation: each asserts the destination the row asks the router for.
+ * `app-status-swatch` (AAP 0.2.3 row `StatusSwatch`; AAP 0.10.5 deliberate difference 11) — rows and order following the input tracked by the caller's key, an empty row list rendering the header and no body
+ * row (Rule 1 clause 3), and the caller's caption becoming the table's own invisible `<caption>`, with none rendered when the caller supplies none (QA report F41). The keyboard path is the last item it pins
+ * and the table's one deliberate difference from legacy: Enter or Space on a focused row opens that row's own destination exactly once, through the same router call its click makes, cancels Space's default so
+ * the page cannot scroll behind it, and opens nothing — not even a default — for a row the caller gave no destination or for a key that is neither of the two (Rule 1 clause 3, which matches legacy's
+ * pointer-only rows and allows a difference only where it is recorded). The two hosts are the only place the generic contract is exercised from a template, which proves it composes with a feature's own row
+ * type while `shared/` names none of it (AAP 0.14.1 "`shared` never imports from `features`"). The router is provided empty because no case completes a navigation: each asserts the destination the row asks the
+ * router for.
  *
  */
 
@@ -68,6 +69,7 @@ const PROBE_TABLE_ID = 'client-list';
       [tableClasses]="tableClasses()"
       [tableId]="tableId()"
       [rowClass]="rowClass()"
+      [caption]="caption()"
     />
   `,
 })
@@ -94,6 +96,9 @@ class DataTableHostComponent {
 
   /** The caller's own row class, or `null` for a row with none. */
   readonly rowClass = signal<string | null>(null);
+
+  /** The table's accessible name, or `null` — the component's default — for a table that carries none (QA report F41). */
+  readonly caption = signal<string | null>(null);
 }
 
 /**
@@ -234,6 +239,26 @@ describe('DataTableComponent', () => {
     for (const row of classed) {
       expect(Array.from(row.classList)).toEqual(['pointer-main']);
     }
+  });
+
+  it('names the table with the caller’s caption, invisibly, and renders none when none is supplied', async () => {
+    const host = await mount();
+
+    // No caption of the component's own: a table whose caller supplies no name stays the unnamed
+    // table it has always been, rather than one with an empty `<caption>` (QA report F41).
+    expect(tableOf(host).querySelector('caption')).toBeNull();
+
+    fixture.componentInstance.caption.set('Clients');
+    await fixture.whenStable();
+
+    const table = tableOf(host);
+    const caption = table.querySelector('caption');
+
+    // The `<caption>` is the table's own first child, which is where a screen reader reads the table's
+    // name from, and `sr-only` keeps it off the screen, so no row, column or pixel moves.
+    expect(table.firstElementChild).toBe(caption);
+    expect(caption?.textContent?.trim()).toBe('Clients');
+    expect(caption?.classList.contains('sr-only')).toBe(true);
   });
 
   it('renders no link at all when the caller supplies no destination', async () => {

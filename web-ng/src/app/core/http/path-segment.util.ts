@@ -29,18 +29,11 @@ export function resourceId(id: number | string, source: string): string {
 }
 
 /**
- * Whether a value is a Fineract resource identifier, for a caller that has to decide before it builds a path segment or issues a request at all (Rule 1 clause 2).
- *
- * The pattern is the same one {@link resourceId} refuses with, so this predicate accepts exactly the values that guard writes and refuses exactly the values it refuses: a caller can put the question to the
- * value it was handed — a route segment, an id from a link — and answer it without a request, a `try`/`catch` or a second reading of what an identifier looks like.
- *
- * Nothing is formatted, trimmed or coerced on the way in beyond the `String()` conversion `resourceId` itself performs, so a padded route segment such as `' 2 '` is refused here just as the guard refuses it,
- * rather than being quietly read as the client `2`.
- *
- * @param value the candidate identifier, as a route segment or a model id.
- *
- * @returns true when the value is one or more ASCII digits, the only shape a Fineract resource identifier takes.
- *
+ * Whether a value is a Fineract resource identifier, for a caller that has to decide before it builds a path segment or issues a request at all (Rule 1 clause 2). The pattern is the same one {@link resourceId}
+ * refuses with, so this predicate accepts exactly the values that guard writes and refuses exactly the values it refuses: a caller can put the question to the value it was handed — a route segment, an id from a
+ * link — and answer it without a request or a `try`/`catch`. Nothing is formatted, trimmed or coerced on the way in beyond the `String()` conversion `resourceId` itself performs, so a padded route segment such
+ * as `' 2 '` is refused here just as the guard refuses it. `@param value` the candidate identifier, as a route segment or a model id; `@returns` true when the value is one or more ASCII digits, the only shape a
+ * Fineract resource identifier takes.
  */
 export function isResourceId(value: number | string): boolean {
   return RESOURCE_ID_PATTERN.test(String(value));

@@ -350,6 +350,42 @@ describe('LoginComponent', () => {
     expect(host().querySelector('app-notification')).toBeNull();
   });
 
+  it('puts the skip link first, points it at the named main landmark, and moves focus there without navigating', () => {
+    // Bootstrap 3.4.3's own two classes: hidden until focused and visible on focus, so the screen
+    // paints exactly what it painted before (Rule 1 clause 6).
+    const skip = host().querySelector<HTMLAnchorElement>('a.sr-only.sr-only-focusable');
+    const focusable = Array.from(
+      host().querySelectorAll<HTMLElement>('a[href], button, input, select, textarea, [tabindex]'),
+    ).filter((element: HTMLElement): boolean => element.tabIndex >= 0);
+
+    // The first Tab stop on this screen, ahead of the language select and the form, which is what
+    // makes the page bypassable (QA report F14; WCAG 2.4.1).
+    expect(skip).not.toBeNull();
+    expect(focusable[0]).toBe(skip);
+    expect(skip?.textContent?.trim()).toBe('Skip to content');
+    expect(skip?.getAttribute('href')).toBe('#main-content');
+
+    const main = host().querySelector<HTMLElement>('#main-content');
+
+    expect(main?.tagName).toBe('MAIN');
+    expect(main?.getAttribute('tabindex')).toBe('-1');
+    expect(main?.getAttribute('aria-label')).toBe('Main content');
+
+    if (skip === null || main === null) {
+      throw new Error('the screen rendered no skip link or no main landmark');
+    }
+
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+    skip.dispatchEvent(click);
+    fixture.detectChanges();
+
+    // The default is cancelled, because the application routes on the hash: an un-cancelled
+    // `#main-content` would be read as a route and would take the screen away (Rule 1 clause 5).
+    expect(click.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(main);
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+  });
+
   it('resolves the legacy captions and shows the fallback language before a bundle is applied', () => {
     // `currentLang` is null until a bundle loads, which is the state the component's fallback covers.
     expect(translate.currentLang()).toBeNull();
@@ -628,19 +664,24 @@ describe('LoginComponent', () => {
     expect(newContext.every((anchor) => anchor.getAttribute('rel') === 'noopener noreferrer')).toBe(true);
   });
 
-  it('starts the heading outline at level 2 and keeps the design size on the class', () => {
+  it('starts the heading outline at level 1 and keeps the design size on the class', () => {
     const headings = Array.from(host().querySelectorAll<HTMLElement>('h1,h2,h3,h4,h5,h6'));
 
-    // `<h5>` was the only heading level on the screen, so the outline began at level 5; the level is now the element's and the design's size is the class's, which
-    // `styles.scss` maps to Bootstrap's own h5 box (AAP 0.2.3; Rule 1 clause 6).
-    expect(headings.map((heading) => heading.tagName)).toEqual(['H2', 'H2', 'H2']);
+    // The screen's own title is the invisible `<h1>` and the three footer columns are the `<h2>`s beneath it, because legacy's `<h5>`
+    // would leave the outline skipping from 1 to 5; the level is the element's and the design's size is the class's, which `styles.scss` maps to Bootstrap's h5 box (AAP 0.2.3; QA report F40; Rule 1 clause 6).
+    expect(headings.map((heading) => heading.tagName)).toEqual(['H1', 'H2', 'H2', 'H2']);
     expect(headings.map((heading) => heading.textContent?.trim())).toEqual([
+      TRANSLATIONS['label.button.signin'],
       TRANSLATIONS['label.heading.resources'],
       TRANSLATIONS['label.heading.community'],
       TRANSLATIONS['label.heading.contribute'],
     ]);
 
-    for (const heading of headings) {
+    const [title, ...columns] = headings;
+
+    expect(title.classList.contains('sr-only')).toBe(true);
+
+    for (const heading of columns) {
       expect(heading.classList.contains('text-uppercase')).toBe(true);
       expect(heading.classList.contains('footer-heading')).toBe(true);
     }

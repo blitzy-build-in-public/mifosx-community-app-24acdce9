@@ -32,10 +32,11 @@ export class PanelCardComponent {
   readonly title = input<string | null>(null);
 
   /**
-   * The heading element of the band: `h3` by default, which is the card title of the list, search, form and action cards, and `h4` for the record's profile card, whose
-   * title the delivered markup sets at that level (Figma node `1:4`). Bootstrap styles both as `.panel-title`.
+   * The heading element of the band: `h3` by default; `h1` where the card title is the page's own title (the clients list, the client and loan forms, the lifecycle action cards);
+   * `h2` for the record's profile card; `h4` for a caller that needs the fourth level. `.panel-title` carries the Bootstrap 3 box on every one of them, so the level moves the
+   * document outline and not a pixel (QA report F40; AAP 0.2.3 row `PanelCard`; Figma node `1:4`).
    */
-  readonly titleTag = input<'h3' | 'h4'>('h3');
+  readonly titleTag = input<'h1' | 'h2' | 'h3' | 'h4'>('h3');
 
   /**
    * Which of the three class variants of the delivered markup the card wears: `plain` for `.panel` alone, `default` for `.panel.panel-default`, `bordered` for

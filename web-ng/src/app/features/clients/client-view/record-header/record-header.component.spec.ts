@@ -112,7 +112,7 @@ function stripOf(host: HTMLElement): HTMLElement {
 }
 /** The header's title element, or a named failure when the header rendered none. */
 function titleOf(host: HTMLElement): HTMLElement {
-  const title = host.querySelector<HTMLElement>('h3');
+  const title = host.querySelector<HTMLElement>('h1');
   if (title === null) {
     throw new Error('RecordHeaderComponent rendered no record title');
   }
@@ -146,7 +146,7 @@ describe('RecordHeaderComponent', () => {
       const host = hostOf(render(makeClient({ status: makeStatus(code) })));
       const dot = dotOf(host);
       expect(host.querySelectorAll('app-status-swatch')).toHaveLength(1);
-      expect(host.querySelector('h3 > app-status-swatch')).not.toBeNull();
+      expect(host.querySelector('h1 > app-status-swatch')).not.toBeNull();
       expect(dot.classList.contains('status-swatch')).toBe(true);
       expect(dot.classList.contains('status-dot')).toBe(true);
       expect(dot.classList.contains(`status-${key}`)).toBe(true);
@@ -160,7 +160,11 @@ describe('RecordHeaderComponent', () => {
   it('prints the client name as the record’s single title line', () => {
     const host = hostOf(render());
     const title = titleOf(host);
-    expect(host.querySelectorAll('h3')).toHaveLength(1);
+    expect(host.querySelectorAll('h1')).toHaveLength(1);
+    expect(host.querySelector('h3')).toBeNull();
+    // The level is the heading's and the 24px/700 record-title box stays `.record-title`'s, so the
+    // promotion from `h3` moves the document outline and no pixel (QA report F40).
+    expect(title.classList.contains('record-title')).toBe(true);
     expect(textOf(title)).toBe('Ada Okafor');
     expect(textOf(title.querySelector('strong'))).toBe('Ada Okafor');
   });
@@ -233,6 +237,6 @@ describe('RecordHeaderComponent', () => {
     expect(rules).toHaveLength(1);
     expect(rules[0]?.classList.contains('section-rule')).toBe(true);
     expect(rules[0]?.previousElementSibling).toBe(stripOf(host));
-    expect(Array.from(host.children).map((child) => child.tagName)).toEqual(['H3', 'DIV', 'HR']);
+    expect(Array.from(host.children).map((child) => child.tagName)).toEqual(['H1', 'DIV', 'HR']);
   });
 });

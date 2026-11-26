@@ -19,11 +19,20 @@
 
     <span class="input-group-btn">
       <!-- A native `<select>`, the Angular-native replacement for the jQuery `chosen` plugin the request forbids (AAP 0.10.5 item 2), and the one control the design draws attached to the field. -->
+      <!--
+        BLITZY [A11Y]: the selector's accessible name is the literal "Search scope", and it is
+        invisible — no attribute is drawn and nothing on screen changes. It is a literal rather than a
+        translation key because no shipped bundle carries a key for the scope control itself: the
+        shipped scope keys name the individual options (`label.search.scope.all` and its siblings),
+        and a key invented here would reach the missing-translation handler on every render and be
+        reported in the console. The English text resolves without the translation stack, so the
+        control carries a name that describes its function on every screen and raises no warning.
+      -->
       <select
         id="search-scope"
         class="form-control"
         [formControl]="scopeControl"
-        [attr.aria-label]="'label.button.filter' | translate"
+        aria-label="Search scope"
       >
         @for (option of scopes; track option) {
           <option [value]="option">{{ labelKey(option) | translate }}</option>

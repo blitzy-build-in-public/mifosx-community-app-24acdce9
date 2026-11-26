@@ -1,45 +1,27 @@
 <!--
-  The edit-client screen (`#/editclient/:id`): the client's own name and contact fields and, for an
-  active client, its activation date, above the cancel and save controls (AAP 0.7.3 row "Client list
-  and edit"; AAP 0.7.4 screens; AAP 0.8.2 feature route `editclient/:id`).
+  The edit-client screen (`#/editclient/:id`): the client's own name and contact fields and, for an active client, its activation date, above the cancel and save controls (AAP 0.7.3 row "Client list
+  and edit"; AAP 0.7.4 screens; AAP 0.8.2 feature route `editclient/:id`). Every visual value comes from the global Bootstrap 3 layer `web-ng/src/styles.scss` compiles, so this file carries no style,
+  no colour and no pixel: `.container-fluid` and `.row`/`.col-md-*` are the page and its grid, the card and its heading band come from `app-panel-card` (AAP 0.2.3 row `PanelCard`), `.panel-body` its
+  13px body, `.form-group`/`.control-label` the field layout, `.form-control` the legacy fixed-height input, `.btn.btn-primary` the brand fill, `.btn.btn-default` the cancel control and
+  `.alert.alert-danger` the failure banner (Rule 1 clause 6; AAP 0.5.2), with `span.required` the legacy marker rule the global stylesheet carries.
 
-  Every visual value comes from the global Bootstrap 3 layer `web-ng/src/styles.scss` compiles, so
-  this file carries no style, no colour and no pixel: `.container-fluid` and `.row`/`.col-md-*` are
-  the page and its grid, the card and the heading band carrying its title come from `app-panel-card`
-  (AAP 0.2.3 row `PanelCard`), whose `.panel` host is the white square card with its shadow,
-  `.panel-body` its 13px body, `.form-group`/`.control-label` the field layout, `.form-control` the
-  legacy fixed-height input, `.btn.btn-primary` the brand fill, `.btn.btn-default`
-  the cancel control and `.alert.alert-danger` the failure banner (Rule 1 clause 6; AAP 0.5.2).
-  `span.required` is the legacy marker rule the global stylesheet carries.
+  Field ids and `name` attributes are the legacy form's own where the two screens share a field — `officeId`, `staffId`, `firstname`, `lastname`, `fullname`, `externalId`, `mobileNo`,
+  `activationDate`, `cancel`, `save` (`app/views/clients/editclient.html`) — so the parity harness addresses the same controls on both applications and a label's `for` points at the control it
+  names.
 
-  Field ids and `name` attributes are the legacy form's own where the two screens share a field —
-  `officeId`, `staffId`, `firstname`, `lastname`, `fullname`, `externalId`, `mobileNo`,
-  `activationDate`, `cancel`, `save` (`app/views/clients/editclient.html`) — so the parity harness
-  addresses the same controls on both applications and a label's `for` points at the control it names.
+  One name set renders at a time: an entity is named by `fullname` alone and a person by `firstname` and `lastname`, and the server rejects a body carrying both, so the branch keeps the posted set
+  and the rendered set one decision. The required markers are exactly the legacy form's — the person's two names, the entity's name and an active client's activation date — and no other control is
+  marked or validated, because Fineract alone decides what an entry may be (Rule 1 clause 3; AAP 0.4.4 decision 6).
 
-  One name set renders at a time: an entity is named by `fullname` alone and a person by `firstname`
-  and `lastname`, and the server rejects a body carrying both, so the branch is what keeps the posted
-  set and the rendered set one decision. The required markers are exactly the legacy form's — the
-  person's two names, the entity's name, and an active client's activation date — and no other
-  control is marked or validated, because Fineract alone decides what an entry may be (Rule 1
-  clause 3; AAP 0.4.4 decision 6).
+  Captions are the legacy bundle's own keys, translated here; the one untranslated string is Fineract's own failure message, rendered verbatim above the form (Rule 1 clause 9). The first row is
+  legacy's own: the record's office, rendered read-only exactly as the legacy `disabled` select shows it, because `PUT /clients/{id}` refuses an `officeId` and legacy never posts one either; and the
+  loan officer, whose id is posted as `staffId` because the fork declares it in `CLIENT_UPDATE_REQUEST_DATA_PARAMETERS` and validates it with `ignoreIfNull().longGreaterThanZero()`
+  (AAP 0.7.2 `ClientEditRequest`; Rule 1 clauses 2 and 3). The controls the legacy template also draws — account number, legal form, gender, client type, classification, date of birth,
+  incorporation details, submission date, middlename, isStaff — stay out because `ClientEditRequest` declares none of them, and rendering a control that cannot post would misrepresent what saving
+  does (AAP 0.7.2).
 
-  Captions are the legacy bundle's own keys, translated here; the one untranslated string is
-  Fineract's own failure message, rendered verbatim above the form (Rule 1 clause 9). The first row
-  is legacy's own: the record's office, rendered read-only exactly as the legacy `disabled` select
-  shows it, because `PUT /clients/{id}` refuses an `officeId` and legacy never posts one either; and
-  the loan officer, whose id is posted as `staffId` because the fork declares it in
-  `CLIENT_UPDATE_REQUEST_DATA_PARAMETERS` and validates it with `ignoreIfNull().longGreaterThanZero()`
-  (AAP 0.7.2 `ClientEditRequest`; Rule 1 clauses 2 and 3). The remaining controls the legacy template
-  also draws — account number, legal form, gender, client type, classification, date of birth,
-  incorporation details, submission date, middlename, isStaff — stay out because `ClientEditRequest`
-  declares none of them; rendering a control that cannot post would misrepresent what saving does
-  (AAP 0.7.2).
-
-  The Cancel href binds `clientId()`, the id the URL names now, because the router reuses this
-  component when the URL moves from one `#/editclient/{id}` to another: the component resets and
-  re-reads on each route emission, so the link can never point at the record the screen has moved
-  away from.
+  The Cancel href binds `clientId()`, the id the URL names now, because the router reuses this component when the URL moves from one `#/editclient/{id}` to another: the component resets and
+  re-reads on each route emission, so the link can never point at the record the screen has moved away from.
 -->
 <section class="container-fluid">
   <div class="row">
@@ -51,7 +33,8 @@
         <!-- No such client: `shared/record-not-found` replaces the form entirely, so no control is offered against a record that was never read and the same 404 reads the same way on every record screen (AAP 0.7.4). -->
         <app-record-not-found />
       } @else {
-        <div appPanelCard [title]="headingKey | translate">
+        <!-- The card's title is the screen's own title, so the band's heading is an `h1` and the page carries exactly one; `.panel-title` keeps the design's 18px/700 box, so no pixel moves (QA report F40). -->
+        <div appPanelCard [title]="headingKey | translate" titleTag="h1">
           <div class="panel-body">
             <!-- Fineract's own failure text, verbatim and unmoved by any prefix: a failed save leaves every entered value in the form below (AAP 0.7.4; AAP 0.14.1 "errors are values"). -->
             @if (error(); as message) {
@@ -230,7 +213,7 @@
                   }
 
                   <div class="row">
-                    <div class="col-md-offset-5 col-md-7">
+                    <div class="col-xs-12 text-right">
                       <!-- The way back to the record without posting anything: a router link, never a location change (AAP 0.14.1), bound to the id the URL names now, so an in-place move between two edit URLs cannot leave the previous client's record behind the link. -->
                       <a id="cancel" class="btn btn-default" [routerLink]="['/viewclient', clientId()]">
                         {{ 'label.button.cancel' | translate }}

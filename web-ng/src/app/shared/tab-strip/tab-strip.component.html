@@ -1,22 +1,12 @@
 <!--
-  The strip is one tab list over the record's sections, in the ARIA tab pattern: `role="tablist"` on the
-  list, `role="tab"` on each tab with `aria-selected` naming the one whose section is showing, and
-  `role="tabpanel"` on that section in the record's own template, which points back at the tab through
-  the id `tabDomId` mints. Assistive technology therefore tells a selected tab from an unselected one,
-  and every tab is a tab stop that Enter and the space bar activate through `select()`. A tab carries
-  no `href`: with its role, its tab stop and its key handler it needs no link to be reachable or to be
-  operated, and an empty `href` makes open-in-new-tab reload the current page instead of doing nothing
+  The strip is one tab list over the record's sections, in the ARIA tab pattern: `role="tablist"` on the list, `role="tab"` on each tab with `aria-selected` naming the one whose section is showing,
+  and `role="tabpanel"` on that section in the record's own template, which points back at the tab through the id `tabDomId` mints; every tab is a tab stop that Enter and the space bar activate
+  through `select()`, and a tab carries no `href`, because with its role, tab stop and key handler it needs no link to be reachable and an empty `href` makes open-in-new-tab reload the current page
   (Rule 1 clause 3).
 
-  The design's two scroll chevrons are not rendered. At most three tabs reach this strip in scope — the
-  client record's `General` and `Identities` (AAP 0.10.5 item 6) and the loan record's schedule,
-  transactions and charges — so the row never overflows and a chevron would have nothing to scroll.
-  Scrolling the strip would in any case be behaviour legacy has no control for, which the migration may
-  not add (Rule 1 clause 3), and painting a control that does nothing is the broken affordance AAP
-  0.10.5 item 8 refuses.
-
-  An empty tab list renders nothing at all: unguarded, `.nav-tabs` would still paint its 1px bottom
-  border around no tab, an empty shell where the record has no section to show.
+  The design's two scroll chevrons are not rendered: at most three tabs reach this strip in scope — the client record's `General` and `Identities` (AAP 0.10.5 item 6) and the loan record's
+  schedule, transactions and charges — so the row never overflows, and scrolling the strip would in any case be behaviour legacy has no control for (Rule 1 clause 3) while painting a control that does
+  nothing is the broken affordance AAP 0.10.5 item 8 refuses. An empty tab list renders nothing at all: unguarded, `.nav-tabs` would still paint its 1px bottom border around no tab.
 -->
 @if (tabs().length > 0) {
   <ul class="nav nav-tabs" role="tablist">

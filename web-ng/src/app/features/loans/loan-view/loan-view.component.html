@@ -1,122 +1,44 @@
 <!--
-  The individual-loan record — `#/viewloanaccount/:id` — the screen the loan route tree mounts for
-  its one record path (AAP 0.8.2; AAP 0.7.4's `#/viewloanaccount/:id` row; AAP 0.7.1 Features row
-  `loans`, which names `LoanViewComponent` and places `LoanScheduleComponent` and
-  `LoanTransactionsComponent` inside it).
+  The individual-loan record — `#/viewloanaccount/:id`, the one record path the loan route tree mounts (AAP 0.8.2; AAP 0.7.4's `#/viewloanaccount/:id` row; AAP 0.7.1 Features row `loans`,
+  which places `LoanScheduleComponent` and `LoanTransactionsComponent` inside `LoanViewComponent`). Everything on the page comes from the one read the component makes —
+  `GET /loans/{id}?associations=all` through `LoanService.get(id)` (AAP 0.7.3 row "W6 repayment") — so no section requests anything of its own and no Fineract path, host, tenant or credential is
+  named in this file (Rule 1 clauses 2 and 9). The card itself — the `.panel` surface with its shadow and no border stroke, worn with the `loan-view` id the page objects address — is the shared
+  `div[appPanelCard]` (AAP 0.2.3 row `PanelCard`), given no title because the record heads itself inside the card body rather than in a `.panel-heading` band, and every other visual value is a
+  global Bootstrap 3 class of `web-ng/src/styles.scss`, so this file carries no style element, no inline style, no colour and no pixel (Rule 1 clause 6; AAP 0.4.4 decision 4).
 
-  Everything on the page comes from the one read the component makes — `GET /loans/{id}?associations=all`
-  through `LoanService.get(id)` (AAP 0.7.3 row "W6 repayment"), which the summary, the schedule, the
-  transactions and the charge tab all render, the loan's `charges` rows included — so no section here
-  requests anything of its own, no charge-list call is issued, and no Fineract path, host, tenant or
-  credential is named in this file (Rule 1 clauses 2 and 9).
+  Four states, one at a time (AAP 0.7.4): `loading()` paints nothing, the design carrying no spinner, skeleton or placeholder; `notFound()` — a route with no id or Fineract's 404 — replaces the
+  record with the one message `loan-repayment.component.html` renders for the same case; a 4xx other than 404 renders `clientError()`, Fineract's own text verbatim and un-piped, the record still
+  beneath it when the response carried one (AAP 0.4.4 decision 6); the loaded record paints head, summary, tabs and the active section. A 5xx or transport failure paints neither the alert nor a
+  not-found message, the interceptor having raised exactly one notification (AAP 0.4.2; AAP 0.14.1 "errors are values").
 
-  The card itself — the `.panel` surface with its shadow and no border stroke, worn with the
-  `loan-view` id the page objects address — comes from the shared `div[appPanelCard]` component
-  (AAP 0.2.3 row `PanelCard`), which is the one place the card is defined. The record heads itself
-  inside the card body rather than in a `.panel-heading` band, so the card is given no title. Every
-  other visual value is a global Bootstrap 3 class of `web-ng/src/styles.scss`, so this file carries
-  no style element, no inline style, no colour and no pixel (Rule 1 clause 6; AAP 0.4.4 decision 4):
-  `.container-fluid` is the page container, `.row`/`.col-md-*` the grid, `.panel-body` the card's 13px
-  body, `.record-title` the record's 24px/700 heading, `.value-key` the bold key column of the
-  record's label/value rows,
-  `.text-small` the product's 12px secondary text, `.table` (inside the three section components) the
-  header band and row rules, `.nav-tabs` the strip, `.btn.btn-primary` the brand fill with its white
-  label inside `.btn-group`'s joined group, `.alert.alert-danger` the failure banner and `hr` the
-  hairline rule the stylesheet owns.
+  The status indicator is `app-status-swatch` in its record geometry — a colour and nothing else, no status word, label, title or tooltip, so the migration adds nothing legacy did not paint
+  (AAP 0.10.5 item 11; Rule 1 clause 3) — and the name beside it is the loan product's, as `viewloanaccountdetails.html` heads itself with `{{loandetails.loanProductName}}(#{{loandetails.accountNo}})`.
+  The three metadata runs are the account number, the client and the principal applied for; a member the payload omits renders its label and nothing after it (`?? ''`, never "undefined", a dash
+  or "N/A"), and spaces are written `{{ ' ' }}` because the compiler deletes a whitespace-only text node and the runs would render glued together — the technique `record-header.component.html` documents.
 
-  Four states, and only one of them paints at a time (AAP 0.7.4):
-  1. `loading()` — nothing at all. The design carries no spinner, skeleton or placeholder, so an
-     empty block is the faithful state rather than a missing one.
-  2. `notFound()` — a route with no id, or Fineract answering 404. The message replaces the record
-     entirely: no head, no tabs, no action. Its key is the one `loan-repayment.component.html`
-     already renders for the same case, so the two record-family screens cannot word it differently.
-  3. A 4xx other than 404 — `clientError()`, Fineract's own text verbatim and un-piped, with the
-     record still rendered beneath it when the response also carried one (AAP 0.4.4 decision 6).
-  4. The loaded record — head, summary, tabs and the active section.
+  The summary prints AAP 0.7.2's `LoanSummary` five figures — total, outstanding, principal, interest and fee balances — the two loan-wide ones from the schedule's `totalRepaymentExpected` and
+  `totalOutstanding` and the three balances from the sums of its periods' outstanding members, with the payload's own `summary` object unmodelled and unread; a figure the payload does not report
+  renders an EMPTY cell, never a zero, symbol, "Not Available" or dash (Rule 1 clause 3). Captions are the legacy bundles' own wording — `label.heading.total`, `label.heading.outstanding`,
+  `label.heading.principal.outstanding`, `label.heading.interest.outstanding` and `label.heading.fees`, no bundle declaring `label.heading.fees.outstanding` — and every key is present in
+  `app/global-translations/locale-*.json`, so no caption reaches the user as a humanised key (Rule 1 clause 6; AAP 0.10.2).
 
-  A 5xx or a transport failure paints neither the alert nor a not-found message: the single
-  interceptor has already raised exactly one notification for it, and a second copy here would
-  report the same failure twice (AAP 0.4.2, AAP 0.14.1 "errors are values").
+  The tabs are the shared `app-tab-strip` (AAP 0.2.3 row `TabStrip`): exactly three — the repayment schedule, the transactions and the charges, the sections AAP 0.7.4's row names after the
+  summary — each rendered by the committed read-only component that owns its table (`app-loan-schedule`, `app-loan-transactions`, `app-loan-charges`), with no column, sort control or pager added
+  beyond those components (Rule 1 clause 3); the charge tab renders the record's own `charges` rows and the explicit empty state for a loan carrying none (AAP 0.7.4).
 
-  The status indicator is `app-status-swatch` in its record geometry and is a colour and nothing
-  else — no status word, label, title or tooltip — because the design paints only a colour and
-  adding the server's status text would be an improvement the migration may not make (AAP 0.10.5
-  deliberate difference 11; Rule 1 clause 3). The name beside it is the loan product's, as the
-  legacy record heads itself (`viewloanaccountdetails.html` renders
-  `{{loandetails.loanProductName}}(#{{loandetails.accountNo}})`).
+  The action entry points come from the component's `LOAN_ACTIONS` table, the transcription of the legacy record's per-status button list: add-charge, approve, modify and reject on a submitted
+  application; add-charge, disburse and undo approval on an approved loan; add-charge, make repayment and undo disbursal on an active loan; none in any other state (Rule 1 clause 3). Add-charge
+  appears in all three because legacy carries it on the button row of a submitted or active loan and in the approved status's `options` list that `viewloanaccountdetails.html` renders as its "More"
+  dropdown (`ViewLoanDetailsController.js`), which this record shows as one joined group. Each link is a `routerLink` over the six routes `loans.routes.ts` declares and is gated by
+  `HasPermissionDirective` on its row's own Fineract code, so a user holding exactly the codes the legacy record asks for sees exactly its links: `LOAN_ACTION_PERMISSIONS` for the six action
+  segments and `LOAN_CHARGE_PERMISSION` for the charge form are the declarations `loans.routes.ts` reads as each route's `data.permission`, so the directive and the `permissionGuard` ask one
+  question (AAP 0.1.1; AAP 0.4.2; AAP 0.14.1), and the group is omitted, never rendered empty, for a state with no action.
 
-  The three metadata runs are the record's own identity, in the order the record reads them: the
-  account number, the client the loan belongs to and the principal applied for. A member the payload
-  omits renders its label and nothing after it — `?? ''`, never the text "undefined" and never a
-  dash or "N/A" the server did not send (Rule 1 clause 3). Spaces are written as `{{ ' ' }}` rather
-  than left as indentation between the elements, because the compiler's default whitespace handling
-  deletes a whitespace-only text node outright and the runs would otherwise render glued together —
-  the same technique `record-header.component.html` documents for the same strip.
-
-  The summary block prints the five figures AAP 0.7.2's `LoanSummary` row names — the loan's total,
-  its outstanding balance and the principal, interest and fee balances — each caption and value on
-  its own row. The component takes the two loan-wide figures from the repayment schedule's own
-  `totalRepaymentExpected` and `totalOutstanding` and the three balances from the sums of its periods'
-  outstanding members; the payload's separate `summary` object is unmodelled and unread, and the
-  component's `summaryRows` documents each mapping beside the member it reads. A figure the payload
-  does not report renders an
-  EMPTY cell: no zero, no currency symbol, no "Not Available" and no dash, because the figure was
-  never reported and inventing one would state a balance Fineract never sent (Rule 1 clause 3). The
-  captions are the bundles' own legacy wording: `label.heading.total` and `label.heading.outstanding`
-  are the total and outstanding column captions of the legacy record's summary,
-  `label.heading.principal.outstanding` and `label.heading.interest.outstanding` are the bundles'
-  precise balance captions, and `label.heading.fees` is the fee row's — no bundle declares a
-  `label.heading.fees.outstanding`, and every key written here is present in
-  `app/global-translations/locale-*.json` (Rule 1 clause 6; AAP 0.10.2), so no caption can reach the
-  user as a humanised key.
-
-  The tabs are the application's one tab component, the shared `app-tab-strip` (AAP 0.2.3 row `TabStrip`). There
-  are exactly three — the repayment schedule, the transactions and the charges, the three sections
-  AAP 0.7.4's `#/viewloanaccount/:id` row names after the summary — each rendered by the committed
-  read-only component that owns its table: `app-loan-schedule`, `app-loan-transactions` and
-  `app-loan-charges`. No table is re-implemented here, and no column, sort control or pager is added
-  beyond what those three components already declare (Rule 1 clause 3). The charge tab renders the rows
-  the record's `charges` member carried, and for a loan that carries none it renders the explicit empty
-  state (AAP 0.7.4).
-
-  The action entry points are rendered from the component's `LOAN_ACTIONS` table, the transcription
-  of the legacy record's per-status button list, so only the steps the loan's own state offers appear:
-  add-charge, approve, modify and reject on a submitted application; add-charge, disburse and undo
-  approval on an approved loan; add-charge, make repayment and undo disbursal on an active loan; none
-  on a loan in any other state (Rule 1 clause 3). Add-charge's provenance differs by state and is why
-  it appears in all three: legacy's button row carries it on a submitted application and on an active
-  loan, while for an approved loan `ViewLoanDetailsController.js` carries it in that status's `options`
-  list, which `viewloanaccountdetails.html` renders as its "More" dropdown — this record shows both
-  legacy lists as the one joined group. Each link is a `routerLink` to the screen that serves it — the
-  eight paths its eight rows open (six `loanaccount/:id/:action` segments, the charge form's path and
-  the edit form's) over the six routes `loans.routes.ts` declares, those six segments being matches of
-  the one parameterised route — and is gated by `HasPermissionDirective` on that row's own Fineract
-  code, so a user holding exactly the codes the legacy record asks for sees exactly the links it
-  showed. The captions are the legacy record's own button keys, the codes a link and the screen it
-  reaches come from one table: `LOAN_ACTION_PERMISSIONS` for the six action segments and
-  `LOAN_CHARGE_PERMISSION` for the charge form, the same two declarations `loans.routes.ts` reads as
-  each route's `data.permission`, so the directive and the route's `permissionGuard` ask one question
-  and a user who sees a link can act on the screen it opens (AAP 0.1.1, AAP 0.4.2, AAP 0.14.1). The
-  codes are the legacy record's own, and the group is omitted entirely for a state with no action
-  rather than rendered empty.
-
-  The block resolves once the record's one read has answered, and the sections are handed the
-  payload's own slices: `record.repaymentSchedule ?? null`, `record.transactions ?? []` and the
-  `charges` member that same answer carried. None of the three components requests anything, so the
-  record keeps making exactly the one call its typed service owns.
-
-  The ids on this page are hooks rather than styling, and each one is addressed from outside the
-  template: `loan-view` the record card, `loan-view-header` its head, `loan-view-error` and
-  `loan-view-not-found` its two failure states, `loan-summary` the figure block (also the block the
-  component's spec reads its figures from), `loan-actions` the joined action group, and
-  `loan-schedule-section`, `loan-transactions-section` and `loan-charges-section` the section each
-  tab shows. Each is what the end-to-end page objects address, and the compiler and the unit spec
-  would notice none of them: dropping one silently breaks a selector, so they stay where they are.
-
-  The three sections are tabs of one record page, not three blocks stacked at once: that arrangement
-  is what `app-tab-strip` with the component's `activeTab`, `showSchedule` and `showTransactions`
-  signals define, and what the spec asserts when it switches tabs and finds exactly one section
-  component mounted. Each section therefore carries its id only while its own tab is the active one.
+  The block resolves once the record's one read has answered and hands the sections the payload's own slices (`record.repaymentSchedule ?? null`, `record.transactions ?? []` and the `charges`
+  member), so none of the three components requests anything. The ids are hooks addressed from outside the template — `loan-view`, `loan-view-header`, `loan-view-error`,
+  `loan-view-not-found`, `loan-summary` (also the block the component's spec reads), `loan-actions` and the three section ids — and the end-to-end page objects address each, so dropping one
+  silently breaks a selector. The three sections are tabs of one record page rather than blocks stacked at once: the arrangement `app-tab-strip` with `activeTab`, `showSchedule` and
+  `showTransactions` defines, and each section carries its id only while its own tab is active.
 -->
 <div class="container-fluid">
   <div class="row">
@@ -135,10 +57,10 @@
 
             @if (loan(); as record) {
               <div id="loan-view-header">
-                <!-- The status colour, then the product the loan was written on. -->
-                <h3 class="record-title">
+                <!-- The status colour, then the product the loan was written on. The product is the record's `h1` — the screen's own title — and `.record-title` keeps the 24px/700 the design measures (QA report F40). -->
+                <h1 class="record-title">
                   <app-status-swatch [status]="statusKey()" variant="dot" />{{ ' ' }}<strong>{{ record.loanProductName ?? '' }}</strong>
-                </h3>
+                </h1>
 
                 <!-- The record's metadata line. Its principal is printed through the one money formatter with the loan's own currency, which is the symbol the legacy record puts in front of this loan's balance (`app/views/loans/viewloanaccountdetails.html:125`), and the figure keeps the `number` filter's digits (Rule 1 clause 3). -->
                 <div class="small text-small">
@@ -150,17 +72,24 @@
 
               <hr />
 
-              <!-- The joined primary-button group: right-aligned, one link per step the loan's own state allows, each gated on the Fineract code its LOAN_ACTIONS row carries. A state the legacy record offers no action in renders no group at all. -->
+              <!--
+                The joined primary-button group: right-aligned, one link per step the loan's own state allows, each gated on the Fineract code its `LOAN_ACTIONS` row carries, and no group at all
+                for a state the legacy record offers no action in. The group is floated, so it is wrapped in Bootstrap 3's own `.clearfix` — the job the legacy record's full-width `col-sm-12`
+                column does for the same group (`viewloanaccountdetails.html:70-71`): a float takes no height in the flow. Without the wrapper the rule below and the summary block start underneath
+                the group instead of after it, and the rule collapses once the group wraps (Rule 1 clauses 3 and 6).
+              -->
               @if (actions().length > 0) {
-                <div class="pull-right btn-group" id="loan-actions">
-                  @for (action of actions(); track action.id) {
-                    <a
-                      class="btn btn-primary"
-                      [id]="action.id"
-                      [routerLink]="action.commands"
-                      [hasPermission]="action.permission"
-                    >{{ action.labelKey | translate }}</a>
-                  }
+                <div class="clearfix">
+                  <div class="pull-right btn-group" id="loan-actions">
+                    @for (action of actions(); track action.id) {
+                      <a
+                        class="btn btn-primary"
+                        [id]="action.id"
+                        [routerLink]="action.commands"
+                        [hasPermission]="action.permission"
+                      >{{ action.labelKey | translate }}</a>
+                    }
+                  </div>
                 </div>
               }
 

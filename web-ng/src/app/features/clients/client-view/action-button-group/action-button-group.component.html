@@ -15,7 +15,9 @@
     client's state answers no menu command, so the record shows its row alone rather than a trigger
     that opens an empty list (AAP 0.7.4; Rule 1 clause 3). Bootstrap's own rule keeps the list hidden
     until the `open` class is set, so the menu needs no conditional of its own, and Escape inside the
-    group closes it without opening it.
+    group closes it without opening it. A click anywhere outside the group closes it as well, through
+    the document listener the component's `host` block installs, which is what legacy's Bootstrap
+    dropdown did (Rule 1 clause 3).
   -->
   @if (menuActions().length > 0) {
     <div class="btn-group dropdown" [class.open]="moreOpen()" (keydown.escape)="closeMore()">

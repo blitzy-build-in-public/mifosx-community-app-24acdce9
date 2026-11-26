@@ -1,57 +1,32 @@
 <!--
-  The individual-loan repayment form — workflow W6 of the Agent Action Plan, mounted at
-  `#/loanaccount/:id/repayment` by `LoanActionComponent` (AAP 0.7.3 row "W6 repayment", AAP 0.7.4
-  "the action screens … are single-purpose forms rendered in the same card, each with a primary
-  submit and a cancel that returns to the record"). The card below is the screen's own card:
-  `LoanActionComponent` renders this component directly in its `.col-md-12` grid column for this
-  mode, so the one `.panel` here is the one card the action screen shows and no card is nested
-  inside another (AAP 0.7.4).
+  The individual-loan repayment form — workflow W6, mounted at `#/loanaccount/:id/repayment` by `LoanActionComponent` (AAP 0.7.3 row "W6 repayment"; AAP 0.7.4 "the action screens … are
+  single-purpose forms rendered in the same card, each with a primary submit and a cancel that returns to the record"). `LoanActionComponent` renders this component directly in its `.col-md-12`
+  grid column for this mode, so the one `.panel` here is the one card the action screen shows and no card is nested inside another (AAP 0.7.4). The card is the shared `div[appPanelCard]`
+  (AAP 0.2.3 row `PanelCard`), and every other visual value is a global Bootstrap 3 class of `web-ng/src/styles.scss` — `.panel-body`/`.panel-footer`, `.form-horizontal`/`.form-group`/
+  `.control-label`/`.col-md-*`, `.form-control` at the 34px control, `.has-error`/`.help-block`, `.alert.alert-danger` and the two footer `.btn` controls (Rule 1 clause 6; AAP 0.5.2;
+  AAP 0.5.4). `.panel-default` is deliberately not applied, as `features/clients/client-view/profile-card` records for the whole family, because `styles.scss` clears Bootstrap's panel border
+  and keeps the heading band white. The two shared fields bring their own Bootstrap markup — `app-date-field` renders the native `input[type=date]` that replaces the legacy jQuery datepicker and
+  `app-select-field` the native `<select>` that replaces `chosen` (AAP 0.10.5 items 1 and 2) — so each sits in a `.col-md-4` column of the row's `.form-group`, as the fields beside it do.
 
-  The card itself — the `.panel` surface and the `.panel-heading`/`.panel-title` band carrying the
-  screen's title — comes from the shared `div[appPanelCard]` component (AAP 0.2.3 row `PanelCard`),
-  which is the one place the card is defined. Every other visual value comes from the global Bootstrap 3
-  layer `web-ng/src/styles.scss` compiles, so this file carries no style, no colour and no pixel of its
-  own: `.panel-body`/`.panel-footer` the card's body and footer bands, `.form-horizontal`/`.form-group`/
-  `.control-label`/`.col-md-*` the form layout, `.form-control` the 34px control, `.has-error` and
-  `.help-block` Bootstrap's invalid-field treatment, `.alert.alert-danger` the failure banner and
-  `.btn.btn-primary`/`.btn.btn-default` the two footer controls (Rule 1 clause 6; AAP 0.5.2,
-  AAP 0.5.4). `.panel-default` is deliberately not applied, as
-  `features/clients/client-view/profile-card` records for the whole family: `styles.scss` clears
-  Bootstrap's panel border and keeps the heading band white, so that class would only re-introduce
-  a colour the design does not show. The two shared fields bring their own Bootstrap markup:
-  `app-date-field` renders the native `input[type=date]` that replaces the legacy jQuery datepicker
-  and `app-select-field` the native `<select>` that replaces `chosen` (AAP 0.10.5 items 1 and 2),
-  which is why neither is wrapped in a `.form-group` here — each already renders one.
+  **What is rendered, and what is deliberately not.** The four fields are the legacy repayment form's own and nothing besides: transaction date, amount, payment type and an optional note
+  (`app/views/loans/loanaccountactions.html`, the repayment action). There is no confirmation step, no adjustment, no transaction reference and no disabled-by-default amount, and the amount input
+  carries no `min`, `max` or `pattern`: Fineract alone decides whether a figure is acceptable and its message is what the user reads (Rule 1 clause 3; AAP 0.4.4 decision 6). The amount is not
+  written into the markup either — the component seeds the control from the repayment transaction template's own `amount`, so there is one writer of that value.
 
-  **What is rendered, and what is deliberately not.** The four fields are the legacy repayment
-  form's own and nothing besides: transaction date, amount, payment type and an optional note
-  (`app/views/loans/loanaccountactions.html`, the repayment action). There is no confirmation step,
-  no adjustment, no transaction reference, no added explanatory copy and no disabled-by-default
-  amount, and the amount input carries no `min`, no `max` and no `pattern`: Fineract alone decides
-  whether a figure is acceptable, and its message is what the user reads (Rule 1 clause 3;
-  AAP 0.4.4 decision 6). The amount is not written into the markup either — the component seeds the
-  control from the repayment transaction template's own `amount`, so there is one writer of that value.
+  **Captions.** Every string is a key from the shipped legacy bundles, verified against `locale-en.json` of the reference clone, and none is written out here: the card title is
+  `label.heading.loanrepayments`, the key the legacy repayment screen heads itself with, where `label.heading.repayment` reads "Repayment Amount" and is a field label rather than this screen's
+  title; the payment-type select renders the template's own option names and no prompt row, opening on the first option the component preselects, exactly as legacy's `ng-options` does; and the
+  footer's primary control is `label.button.save`. No field prints an id, a body or session material (Rule 1 clause 9).
 
-  **Captions.** Every string is a key from the shipped legacy bundles, verified against
-  `locale-en.json` of the reference clone, and none is written out here. The card title is
-  `label.heading.loanrepayments` because that is the key the legacy repayment screen heads itself
-  with ("Loan Repayments"); `label.heading.repayment` exists but reads "Repayment Amount", which is a
-  field label rather than this screen's title. The payment-type select renders the template's own
-  option names and no prompt row, which is what legacy's `ng-options` select offers: it opens on the
-  first option the component preselects, exactly as legacy preselects it. The footer's primary control
-  is `label.button.save` — legacy's own submit caption ("Submit" in en). No field prints an id, a body
-  or session material (Rule 1 clause 9).
-
-  **Assistive technology.** The invalid amount field is announced through `aria-invalid` and a
-  `help-block` it is pointed at by `aria-describedby`, and it declares `aria-required` rather than the
-  native `required` attribute, so the browser never blocks a submission Fineract must see (the same
-  rule the two shared fields follow). The `*` marker is the legacy required marker the sibling forms
-  render.
+  **Assistive technology.** The invalid amount field is announced through `aria-invalid` and a `help-block` it is pointed at by `aria-describedby`, and it declares `aria-required` rather than
+  the native `required` attribute, so the browser never blocks a submission Fineract must see — the rule the two shared fields follow; the `*` marker is the legacy required marker the sibling
+  forms render.
 -->
 @let amount = form.controls.transactionAmount;
 @let amountInvalid = amount.invalid && (amount.touched || amount.dirty);
 
-<div appPanelCard [title]="'label.heading.loanrepayments' | translate">
+<!-- The card's title is the screen's own title, so the band's heading is an `h1` and the page carries exactly one; `.panel-title` keeps the design's 18px/700 box, so no pixel moves (QA report F40). -->
+<div appPanelCard [title]="'label.heading.loanrepayments' | translate" titleTag="h1">
   @if (notFound()) {
     <!-- A 404 replaces the form rather than joining the error region: the loan the screen was opened on does not exist or is not visible to this user, so there is nothing to repay and no field worth keeping. `shared/record-not-found` is the one presentation every record screen renders, so the application has one not-found message and not two (AAP 0.7.4). -->
     <div class="panel-body">
@@ -59,13 +34,9 @@
     </div>
   } @else {
     <div class="panel-body">
-      <!--
-        Fineract's own failure text, verbatim and unmoved by any prefix or capitalisation: a rejected
-        repayment posts back the server's `defaultUserMessage` unchanged, and the form beside it keeps
-        every entered value (AAP 0.7.4; AAP 0.14.1 "errors are values"). `role="alert"` announces it
-        without a focus change. This is the screen's only error region — the interceptor already raised
-        a notification for a 5xx or a network failure, so a failure produces one message and not two.
-      -->
+      <!-- Fineract's own failure text, verbatim and unmoved by any prefix or capitalisation: a rejected repayment posts back the server's `defaultUserMessage` unchanged and the form beside it keeps
+        every entered value (AAP 0.7.4; AAP 0.14.1 "errors are values"); `role="alert"` announces it without a focus change, and this is the screen's only error region, the interceptor having already
+        raised its notification for a 5xx or a network failure. -->
       @if (error(); as apiError) {
         <div class="alert alert-danger" role="alert">{{ apiError.message }}</div>
       }
@@ -78,20 +49,25 @@
           loan's own template answers: the component empties them before every read, so a figure typed
           or seeded for the loan the URL has left is gone by the time the new loan's seeds arrive.
         -->
-        <!-- The date field renders its own `.form-group`, `.control-label` and `input[type=date]`, and `inputId` is the id that input and its label share, so the harness addresses `#transactionDate` on both applications. `[required]` marks the label for assistive technology; it adds no validator, because the validator set is the component's (Rule 1 clause 3). -->
-        <app-date-field
-          inputId="transactionDate"
-          [control]="form.controls.transactionDate"
-          [label]="'label.input.transactiondate' | translate"
-          [required]="true"
-        />
+        <!-- The date field renders its own `.form-group`, `.control-label` and `input[type=date]`, and `inputId` is the id it shares with its label, so the harness finds `#transactionDate` on both applications; `[required]` marks the label for assistive technology and adds no validator (Rule 1 clause 3).
+          It sits in the same `.col-md-4` column as the fields below, so its control is their width and each label starts at its control's left edge — the `.form-horizontal` convention `web-ng/src/styles.scss` states, which this file's footer follows with Bootstrap's `text-right`. -->
+        <div class="form-group">
+          <div class="col-md-4">
+            <app-date-field
+              inputId="transactionDate"
+              [control]="form.controls.transactionDate"
+              [label]="'label.input.transactiondate' | translate"
+              [required]="true"
+            />
+          </div>
+        </div>
 
         <!-- The amount the repayment books, seeded by the component from the repayment transaction template's own `amount` and left editable exactly as legacy leaves it. `step="0.01"` is the browser's own increment for a money figure; `novalidate` on the form keeps it from ever blocking a submit. -->
         <div class="form-group" [class.has-error]="amountInvalid">
-          <label class="col-md-3 control-label" for="transactionAmount">
-            {{ 'label.input.transactionamount' | translate }}<span class="required">*</span>
-          </label>
           <div class="col-md-4">
+            <label class="control-label" for="transactionAmount">
+              {{ 'label.input.transactionamount' | translate }}<span class="required">*</span>
+            </label>
             <input
               id="transactionAmount"
               type="number"
@@ -118,12 +94,16 @@
           does not have — one that would also refuse a repayment Fineract accepts without a payment
           type. The `*` marker stays on the date and the amount, the two fields legacy does require.
         -->
-        <app-select-field
-          inputId="paymentTypeId"
-          [control]="form.controls.paymentTypeId"
-          [options]="paymentTypeOptions()"
-          [label]="'label.input.paymenttype' | translate"
-        />
+        <div class="form-group">
+          <div class="col-md-4">
+            <app-select-field
+              inputId="paymentTypeId"
+              [control]="form.controls.paymentTypeId"
+              [options]="paymentTypeOptions()"
+              [label]="'label.input.paymenttype' | translate"
+            />
+          </div>
+        </div>
 
         <!--
           Optional: the component sends `note` only when its trimmed value carries text, so an
@@ -133,15 +113,15 @@
           and no `not-required` class exists in the legacy tree to reintroduce one.
         -->
         <div class="form-group">
-          <label class="col-md-3 control-label" for="note">{{ 'label.input.note' | translate }}</label>
           <div class="col-md-4">
+            <label class="control-label" for="note">{{ 'label.input.note' | translate }}</label>
             <textarea id="note" class="form-control" formControlName="note" rows="2"></textarea>
           </div>
         </div>
       </form>
     </div>
 
-    <div class="panel-footer">
+    <div class="panel-footer text-right">
       <!-- Cancel posts nothing and returns to the record through the router, never `window.location` (Rule 1 clause 5). The primary control is associated with the form above through its `form` attribute, which is what lets it stay a real `type="submit"` inside the card's own footer instead of a click handler imitating one. -->
       <a class="btn btn-default" [routerLink]="['/viewloanaccount', loanId()]">{{ 'label.button.cancel' | translate }}</a>
       <button type="submit" class="btn btn-primary" form="loanRepaymentForm" [disabled]="guard.busy()">

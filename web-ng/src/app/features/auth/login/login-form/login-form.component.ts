@@ -17,21 +17,20 @@ export interface LoginCredentials {
 }
 
 /**
- * The login screen's form: the `LoginForm` row of the component inventory (AAP 0.2.3), the two labelled fields and the full-width primary button of Figma node `1:5` in the "Sign in and open a client record"
- * flow (AAP 0.7.4 "Login", AAP 0.10.1 W1).
+ * The login screen's form: the `LoginForm` row of the component inventory (AAP 0.2.3), the two labelled fields and the full-width primary button of Figma node `1:5` in the "Sign in and open a client
+ * record" flow (AAP 0.7.4 "Login", AAP 0.10.1 W1).
  *
  * **It owns the form, the screen owns the request.** The typed non-nullable reactive form lives here — `Validators.required` on both controls is the whole rule legacy states, and no client-side rule legacy
  * does not have is added (Rule 1 clause 3) — and submission is reported through {@link submit}, never performed: `AuthService.login`, the router and the error region belong to `LoginComponent`, so this
  * component injects no service other than `FormBuilder` and cannot issue a request (Rule 1 clause 5).
  *
- * **It renders the legacy markup unchanged.** Every id, `name`, class, placeholder, `aria-*` binding and `.help-block` the parity page objects address — `uid`, `pwd`, `name="username"`, `name="password"`,
- * `login-button` — is the legacy screen's own (`app/index.html`), so the harness drives the same controls on both applications. The button's `[disabled]` state is {@link busy}, driven from the screen's submit
- * guard: `POST /authentication` is not idempotent, so one click must send one request (AAP 0.14.1 "one request per click").
+ * **It renders the legacy markup unchanged.** Every id, `name`, class, placeholder, `aria-*` binding and `.help-block` the parity page objects address — `uid`, `pwd`, `name="username"`,
+ * `name="password"`, `login-button` — is the legacy screen's own (`app/index.html`); the button's `[disabled]` state is {@link busy}, driven from the screen's submit guard, because
+ * `POST /authentication` is not idempotent and one click must send one request (AAP 0.14.1 "one request per click").
  *
- * **It carries no CSS.** The uppercase 600 labels, the 34px `.form-control` fields with their 1px `#E0E0E0` border and 2px radius, the invalid treatment through `.has-error`/`.help-block` and the brand-blue
- * `.btn.btn-primary.btn-block` button are the global Bootstrap 3 layer compiled in `web-ng/src/styles.scss` (AAP 0.2.3's `LoginForm` visual specification, AAP 0.5.2, Rule 1 clause 6). **Nothing is logged**:
- * the credential is never written to the console, a log or the DOM, and the field stays `type="password"` (Rule 1 clause 9).
- *
+ * **It carries no CSS.** The uppercase 600 labels, the 34px `.form-control` fields with their 1px `#E0E0E0` border and 2px radius, the invalid treatment through `.has-error`/`.help-block` and the
+ * brand-blue `.btn.btn-primary.btn-block` button are the global Bootstrap 3 layer compiled in `web-ng/src/styles.scss` (AAP 0.2.3's `LoginForm` visual specification, AAP 0.5.2, Rule 1 clause 6).
+ * **Nothing is logged**: the credential is never written to the console, a log or the DOM, and the field stays `type="password"` (Rule 1 clause 9).
  */
 @Component({
   selector: 'app-login-form',

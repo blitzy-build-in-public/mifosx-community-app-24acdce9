@@ -251,7 +251,9 @@ describe('ClientCreateComponent', () => {
   });
   it('renders the legacy captions through the translation stack, never a raw key', () => {
     const rendered = host().textContent ?? '';
-    expect(host().querySelector('h3.panel-title')).not.toBeNull();
+    // The page's own heading is an `h1`, set through `PanelCard.titleTag` (QA report F40).
+    expect(host().querySelector('h1.panel-title')).not.toBeNull();
+    // No caption reached the user as the dotted key a bundle holds it under.
     expect(rendered).not.toContain('label.');
     expect(rendered).not.toContain('validation.');
     // Every control the workflow fills carries the id the legacy form gives it, so the parity harness addresses the same field on both applications.

@@ -1,17 +1,15 @@
 <!--
-  The client record's profile card (Figma screen `1:4`, step 3 of "Sign in and open a client
-  record"; AAP 0.2.3 component `ProfileCard`).
+  The client record's profile card (Figma screen `1:4`, step 3 of "Sign in and open a client record"; AAP 0.2.3 component `ProfileCard`). Every visual value comes from the global stylesheet, so this file
+  carries no styling of its own: the card and its heading band are `app-panel-card` (AAP 0.2.3 rows `ProfileCard` and `PanelCard`), whose `.panel` host supplies the white square surface, whose
+  `bordered` variant supplies the border that replaces the content cards' shadow (this is the one bordered card on the record), and whose `.panel-heading` with its `h2.panel-title`, printed from the
+  card's `title` input, is the card title; `.value-key` is the bold key column. `.panel-default` is deliberately not applied, which is why the card asks for the `bordered` variant alone: Bootstrap
+  colours a panel's heading through it, and that would override the colour the card-title token fixes.
 
-  Every visual value comes from the global stylesheet, so this file carries no styling of its own:
-  the card and its heading band are `app-panel-card` (AAP 0.2.3 rows `ProfileCard` and `PanelCard`),
-  whose `.panel` host supplies the white square surface and whose `bordered` variant supplies the
-  border that replaces the content cards' shadow (this is the one bordered card on the record), and
-  whose `.panel-heading` with its `h4.panel-title`, printed from the card's `title` input, is the
-  card title; `.value-key` is the bold key column. `.panel-default` is deliberately not applied,
-  which is why the card asks for the `bordered` variant alone: Bootstrap colours a panel's heading
-  through it, and that would override the colour the card-title token fixes.
+  The card title is an `h2` — one level under the record header's `h1` — and the performance-history sub-heading an `h3.h5`, so the record's outline runs h1 → h2 → h3 with no level skipped (QA report F40).
+  Bootstrap's own `.h5` alias carries the 14px size and the 10px/10px margins the `h5` element carried, and `.panel-title` keeps the card title's 18px/700 box, so neither level moves a pixel (Rule 1
+  clause 6).
 -->
-<div appPanelCard variant="bordered" [title]="displayName()" titleTag="h4">
+<div appPanelCard variant="bordered" [title]="displayName()" titleTag="h2">
   <div class="panel-body">
     <!-- Decorative illustration: the record's identity is carried by the heading above it, so the image has an empty alt, and `.img-responsive` is the only sizing it takes. The source is the legacy image tree served in place; no asset file is created for it. -->
     <img [src]="AVATAR_SRC" alt="" class="img-responsive" />
@@ -26,7 +24,7 @@
 
     <hr />
 
-    <h5>{{ 'label.heading.performancehistory' | translate }}</h5>
+    <h3 class="h5">{{ 'label.heading.performancehistory' | translate }}</h3>
 
     <!-- The history rows the parent supplies, in its order and under the sub-heading legacy paints them beneath. A row whose value the payload does not carry renders its label beside an empty value cell rather than a stand-in figure (AAP 0.7.4). -->
     @for (field of historyFields(); track $index) {

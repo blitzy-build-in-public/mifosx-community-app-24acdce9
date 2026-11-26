@@ -51,16 +51,14 @@ export interface DataTableCellContext<TRow> {
  * AAP 0.2.2 `color-table-head`, `color-rule`; Rule 1 clause 6), the `.table-responsive` wrapper is Bootstrap's own, and the caller's {@link tableClasses} carries the screen's class. This component declares no
  * stylesheet, colour or dimension.
  *
- * The caller decides the columns and their order, the row key, the destination a row opens, the id and classes of the `<table>` and whether a cell is a component; this component adds no sort affordance, row
- * action, selection, paging or empty state, because inventing one would be behaviour the legacy screens do not have (Rule 1 clause 3). When {@link rowLink} is set every `<tr>` carries it — the affordance the
- * legacy tables give each cell (`data-ng-click="routeTo(client.id)"`), painted with no link styling of its own (AAP 0.7.4; Figma node `1:3`) — and when it is `null` the rows carry no link at all: `RouterLink`
- * bound `null` navigates nothing, writes no `href`, adds no tab stop and leaves Enter and Space untouched, so a read-only table is not a table of dead links.
- *
- * The keyboard reaches that link, and that is this component's one deliberate departure from legacy: `RouterLink` gives a non-anchor host a tab stop but binds no activation of its own, so {@link activateRow}
- * hands Enter and Space to the row's own click — one navigation, through the same `RouterLink`, so the same URL, request and error handling rather than a second routing path that could drift. Legacy's rows
- * were pointer-only (`app/views/clients/clients.html:64-73`: no `tabindex`, no key handler), so this departs from Rule 1 clause 3, which allows an improvement only where the difference and its reason are
- * recorded: the row already offers pointer users the record, so a tab stop a keyboard cannot activate withholds a control the row visibly offers. The departure is invisible — no pixel, no request, no route, no
- * `role` and no `aria-*` attribute changes; the row keeps the `<tr>` role a `role="link"` would destroy.
+ * The caller decides the columns and their order, the row key, the destination a row opens, the id and classes of the `<table>`, its accessible name and whether a cell is a component; this component adds no
+ * sort affordance, row action, selection, paging or empty state, because inventing one would be behaviour the legacy screens do not have (Rule 1 clause 3). When {@link rowLink} is set every `<tr>` carries it
+ * — the affordance the legacy tables give each cell (`data-ng-click="routeTo(client.id)"`), painted with no link styling of its own (AAP 0.7.4; Figma node `1:3`) — and when it is `null` the rows carry no
+ * link at all: `RouterLink` bound `null` navigates nothing, writes no `href`, adds no tab stop and leaves both keys untouched, so a read-only table is not a table of dead links. The keyboard reaches that
+ * link, and that is this component's one deliberate departure from legacy: `RouterLink` gives a non-anchor host a tab stop but binds no activation of its own, so {@link activateRow} hands Enter and Space to
+ * the row's own click — one navigation, through the same `RouterLink`, so the same URL, request and error handling. Legacy's rows were pointer-only (`app/views/clients/clients.html:64-73`: no `tabindex`, no
+ * key handler), so this departs from Rule 1 clause 3, which allows a recorded difference: the row already offers pointer users the record, so a tab stop a keyboard cannot activate withholds a control it
+ * visibly offers. The departure is invisible — no pixel, no request, no route, no `role` and no `aria-*` attribute changes; the row keeps the `<tr>` role a `role="link"` would destroy.
  *
  */
 @Component({
@@ -87,6 +85,9 @@ export class DataTableComponent<TRow> {
 
   /** The id of the `<table>`, or `null` for none. The clients list passes `client-list`, the id the legacy table carried and the one the parity harness addresses the table by (Rule 1 clause 3; AAP 0.7.4). */
   readonly tableId = input<string | null>(null);
+
+  /** The table's accessible name, or `null` for a table that carries none: a visually hidden `<caption>`, the `<table>`'s own first child, so a screen reader announces the table by it. The clients list passes the legacy bundle's own `label.heading.clients`, already translated, and Bootstrap's `.sr-only` keeps it off the screen (QA report F41; Rule 1 clause 6). */
+  readonly caption = input<string | null>(null);
 
   /** The class the rendered `<tr>` carries, or `null` for none — the caller's own row treatment, as {@link tableClasses} is its table treatment. The clients list passes `pointer-main`, the class the legacy table puts on a row that opens a record and the one the global layer paints with the pointer cursor, the brand-blue fill and white text on hover (`app/views/clients/clients.html:64`; `app/styles-dev/main/components/_content.scss:413-417`; AAP 0.7.4; Figma node `1:3`). */
   readonly rowClass = input<string | null>(null);

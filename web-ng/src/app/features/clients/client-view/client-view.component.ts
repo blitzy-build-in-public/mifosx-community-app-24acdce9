@@ -70,40 +70,30 @@ export const CLIENT_HISTORY_LABEL_KEYS: readonly string[] = [
 ];
 
 /**
- * The individual client record — `#/viewclient/:id`, the last screen of the "Sign in and open a client record" flow and the entry point of W3's record read and of the actions and edits it links to (AAP 0.7.1
- * Features row `clients`; AAP 0.7.4 "Client view (`#/viewclient/:id`)"; AAP 0.8.2 route `viewclient/:id`). One read, owned by the family's service: `ClientService.get(id)` — `GET /clients/{id}` (AAP 0.7.3 row
- * "W3 search and view client") — whose record the presentational blocks render, while the `General` tab's accounts table and the `Identities` tab issue their own reads through that service. This file holds no
- * URL, host, API path, query parameter, request body or HTTP client (Rule 1 clauses 2 and 5; AAP 0.14.1 "Every URL literal lives in a service").
+ * The individual client record — `#/viewclient/:id`, the last screen of the "Sign in and open a client record" flow and the entry point of W3's record read and of the actions and edits it links to
+ * (AAP 0.7.1 Features row `clients`; AAP 0.7.4 "Client view"; AAP 0.8.2 route `viewclient/:id`). One read, owned by the family's service: `ClientService.get(id)` — `GET /clients/{id}` (AAP 0.7.3
+ * row "W3 search and view client") — whose record the presentational blocks render, while the `General` accounts table and the `Identities` list issue their own reads through it; this file holds no
+ * URL, host, API path, query parameter, body or HTTP client (Rule 1 clauses 2 and 5; AAP 0.14.1).
  *
- * One id, one load per navigation: the `:id` comes from `route.paramMap`, never the snapshot, because the router reuses this component between `#/viewclient/{id}` URLs as `client-actions` and `loan-edit` do,
- * so each emission clears the previous client's record, message and selected tab and re-reads the client the URL names; a response arriving after the URL moved on is discarded rather than painted (see {@link
- * loadSequence}).
+ * One id, one load per navigation: the `:id` comes from `route.paramMap`, never the snapshot, because the router reuses this component between records as `client-actions` and `loan-edit` do, so each
+ * emission clears the previous client's record, message and tab and re-reads the client the URL names, a late response being discarded rather than painted.
  *
- * Four states (AAP 0.7.4 "States every list and record screen must implement"): `loading` paints nothing, the design carrying no spinner or placeholder (AAP 0.2.4); a 404, or a route carrying no client id at
- * all — no id, or one that is not a Fineract identifier, which `isResourceId` answers before any request is issued — drives `notFound`, rendered in place of the record with the shell left usable; any other 4xx
- * drives `clientError`, whose Fineract message renders verbatim; a 5xx or transport failure leaves both computeds null, the single interceptor having already raised exactly one notification (AAP 0.4.2).
- * Nothing here notifies, logs or rethrows.
+ * Four states (AAP 0.7.4 "States every list and record screen must implement"): `loading` paints nothing, the design carrying no spinner (AAP 0.2.4); a 404, or a route carrying no Fineract id —
+ * `isResourceId` answers before any request is issued — drives `notFound` in place of the record with the shell usable; any other 4xx drives `clientError`, rendering Fineract's message verbatim; a 5xx
+ * or transport failure leaves both computeds null, the single interceptor having already raised exactly one notification (AAP 0.4.2).
  *
- * Two tabs and nothing more, painted by `TabStripComponent` from the descriptors it is given (AAP 0.10.5 item 6). Every action is permission-gated on legacy's own code: `Edit`, `New Loan`, `Close` and the
- * `More` menu's `Activate`, `Reject`, `Withdraw` and `Reactivate`, the last only in the states that allow it (AAP 0.7.4), carrying `UPDATE_CLIENT`, `CREATE_LOAN`, `CLOSE_CLIENT`, `ACTIVATE_CLIENT`,
- * `REJECT_CLIENT`, `WITHDRAW_CLIENT` and `REACTIVATE_CLIENT` from `app/scripts/models/clientStatus.js` on the descriptors {@link actionButtons} builds, which `ActionButtonGroupComponent` gates through
- * `HasPermissionDirective` — the service `permissionGuard` asks — so a button cannot outlive its route (AAP 0.1.1). The action faces are posted by `client-actions.component.ts` at `#/client/:id/:action`;
- * client charges, transfer, staff assignment, signature, avatar upload and camera are not rendered (AAP 0.10.5).
+ * Two tabs and nothing more (AAP 0.10.5 item 6), every action permission-gated on legacy's own codes carried from `app/scripts/models/clientStatus.js` on the descriptors {@link actionButtons} builds,
+ * which `ActionButtonGroupComponent` gates through `HasPermissionDirective` — the service `permissionGuard` asks — so a button cannot outlive its route (AAP 0.1.1); the action faces are posted by
+ * `client-actions.component.ts` at `#/client/:id/:action`, while client charges, transfer, staff assignment, signature, avatar upload and camera are not rendered (AAP 0.10.5).
  *
- * Which of them a record offers is its own status's set, exactly as legacy builds the list per state in `app/scripts/models/clientStatus.js`: pending offers `Edit` and `Close` with `Activate`, `Reject` and
- * `Withdraw` in the menu; active `Edit`, `New Loan` and `Close` and no menu entry; closed `Reactivate` alone; and a rejected, withdrawn or transferred record — or an invalid, unrecognised or absent code —
- * nothing, because the commands legacy answers those states with (`undoReject`, `undoWithdrawn`, the transfer commands) are outside this build's action set and `Reactivate`, which the lifecycle machine accepts
- * from a closed record only, would be refused there (Rule 1 clause 3). {@link clientLifecycleState} reads the state from the status code through `normaliseStatusCode`, never from the swatch's colour key, which
- * paints `closed` apart from the `rejected` and `withdraw` records it keeps on screen beside it (AAP 0.2.3). Every `routerLink` is built from {@link clientId} rather than a snapshot, so the row follows the URL
- * when the router reuses this component for another client's record (AAP 0.7.4).
+ * Which actions a record offers is its status's set, exactly as legacy builds the list per state in `app/scripts/models/clientStatus.js` (Rule 1 clause 3); {@link clientLifecycleState} reads that
+ * state from the status code through `normaliseStatusCode`, never from the swatch's colour key, which paints `closed` apart from the `rejected` and `withdraw` records it keeps on screen (AAP 0.2.3);
+ * every `routerLink` is built from {@link clientId} rather than a snapshot (AAP 0.7.4).
  *
- * The profile card's activation date is the only date formatted here, through `DISPLAY_DATE_FORMAT` and `fromFineractDate`/`toFineractDate`, in the locale `AppConfigService.activeLocale` reports, and nothing
- * reads the clock; every other date on the record belongs to the block that displays it (AAP 0.7.2 "Date handling"). The status is the design's colour indicator and never its word — `RecordHeaderComponent`
- * paints it through `toClientStatusKey`, the family's delegate to the one mapping the whole application shares in `web-ng/src/app/shared/status-key.util.ts` (AAP 0.10.5 item 11) — and the same normalisation
- * decides which actions the record's state allows ({@link clientLifecycleState}). Presentation belongs to the template and the global Bootstrap 3 layer in `web-ng/src/styles.scss`, so this component declares
- * no stylesheet, inline style or colour (Rule 1 clause 6; AAP 0.4.4 decision 4): the action row is `ActionButtonGroupComponent`'s `.btn-group > .btn` with Bootstrap's own `.dropdown-menu` `More` menu in
- * Angular state, the plugin needing jQuery (AAP 0.5.2 row "Dropdown menu"), and the record's card is `.panel`. Nothing is logged: no client id, record body or credential reaches the console (Rule 1 clause 9).
- *
+ * The profile card's activation date is the only date formatted here, through `DISPLAY_DATE_FORMAT` and `fromFineractDate`/`toFineractDate`, in `AppConfigService.activeLocale`, and nothing reads the
+ * clock (AAP 0.7.2 "Date handling"); the status is the design's colour indicator and never its word, painted by `RecordHeaderComponent` through `toClientStatusKey` (AAP 0.10.5 item 11). Presentation
+ * belongs to the template and the global Bootstrap 3 layer in `web-ng/src/styles.scss` (Rule 1 clause 6; AAP 0.4.4 decision 4): the action row is `.btn-group > .btn` with Bootstrap's `.dropdown-menu`
+ * `More` menu in Angular state, the plugin needing jQuery (AAP 0.5.2 row "Dropdown menu"), and nothing is logged (Rule 1 clause 9).
  */
 @Component({
   selector: 'app-client-view',

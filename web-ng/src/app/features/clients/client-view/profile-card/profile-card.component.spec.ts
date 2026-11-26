@@ -59,7 +59,13 @@ describe('ProfileCardComponent', () => {
   }
   it('renders the supplied display name as the card heading', () => {
     const fixture = createCard();
-    expect(host(fixture).querySelector('h4.panel-title')?.textContent?.trim()).toBe(DISPLAY_NAME);
+
+    // The card title is an `h2`, one level under the record header's `h1`, with `.panel-title` still
+    // carrying the 18px/700 card-title box (QA report F40).
+    const heading = host(fixture).querySelector('h2.panel-title');
+
+    expect(heading?.textContent?.trim()).toBe(DISPLAY_NAME);
+    expect(host(fixture).querySelector('h4.panel-title')).toBeNull();
   });
   it('renders one row per field, in the order received, with its label and value', () => {
     const fixture = createCard();
@@ -91,9 +97,14 @@ describe('ProfileCardComponent', () => {
   });
   it('renders the performance-history sub-heading as its label, never as a raw translation key', () => {
     const fixture = createCard();
-    const subheading = host(fixture).querySelector('h5');
+
+    // An `h3` one level under the card title, with Bootstrap's own `.h5` alias keeping the 14px box
+    // the `h5` element carried, so the outline never skips a level and no pixel moves (QA report F40).
+    const subheading = host(fixture).querySelector('h3.h5');
+
     const text = subheading?.textContent?.trim() ?? '';
     expect(subheading).not.toBeNull();
+    expect(host(fixture).querySelector('h5')).toBeNull();
     expect(text).toBe(SUBHEADING_LABEL);
     expect(text).not.toContain(SUBHEADING_KEY);
   });
@@ -130,7 +141,7 @@ describe('ProfileCardComponent', () => {
   });
   it('renders the heading and no rows at all when there are no fields', () => {
     const fixture = createCard(DISPLAY_NAME, []);
-    expect(host(fixture).querySelector('h4.panel-title')?.textContent?.trim()).toBe(DISPLAY_NAME);
+    expect(host(fixture).querySelector('h2.panel-title')?.textContent?.trim()).toBe(DISPLAY_NAME);
     expect(rows(fixture)).toHaveLength(0);
   });
   it('renders the history rows under the sub-heading, each beside an empty value cell', () => {
@@ -146,7 +157,7 @@ describe('ProfileCardComponent', () => {
     ).map((row) => [cellText(row, 'profile-history-field-label'), cellText(row, 'profile-history-field-value'),]);
     expect(rendered).toEqual([['No. of Loan Cycle', ''], ['No. of Active Loans', ''],]);
     // They belong beneath the sub-heading, which is where legacy's record paints them.
-    const subheading = host(fixture).querySelector('h5');
+    const subheading = host(fixture).querySelector('h3.h5');
     const firstHistory = host(fixture).querySelector('[data-testid="profile-history-field"]');
     const followsSubheading =
       subheading !== null && firstHistory !== null &&

@@ -399,16 +399,10 @@ export interface ChargeTemplate {
 /*
  * Request bodies.
  *
- * `POST`/`PUT` bodies are assembled by the forms, so, unlike the response models above, they are
- * not `readonly`: a screen builds one member at a time from its form values.
- *
- * One convention holds for every one of them, and it is the one AAP 0.7.2 "Date handling" sets: a
- * request body holds the values the form holds — each date a `Date | null`, `dateFormat` and
- * `locale` required — and `loan.service.ts` converts each date with `toFineractDate(date, locale)`
- * and fills `dateFormat` from `AppConfig` and `locale` from
- * `AppConfigService.activeLocale` at the boundary. No model stores a formatted
- * date (AAP 0.7.2 "Date handling"; AAP 0.14.1 "Dates never travel as strings built in a
- * template"), and a body that omitted `dateFormat` or `locale` would not compile (Rule 1 clause 2).
+ * `POST`/`PUT` bodies are assembled by the forms, so, unlike the response models above, they are not `readonly`: a screen builds one member at a time from its form values. One convention holds for every one of
+ * them, and it is the one AAP 0.7.2 "Date handling" sets: a request body holds the values the form holds — each date a `Date | null`, `dateFormat` and `locale` required — and `loan.service.ts` converts each date
+ * with `toFineractDate(date, locale)` and fills `dateFormat` from `AppConfig` and `locale` from `AppConfigService.activeLocale` at the boundary. No model stores a formatted date (AAP 0.14.1 "Dates never travel
+ * as strings built in a template"), and a body that omitted `dateFormat` or `locale` would not compile (Rule 1 clause 2).
  */
 
 /** The body `POST /loans` submits, and the same body `POST /loans?command=calculateLoanSchedule` previews (AAP 0.7.3, "W4 loan application") (Rule 1 clause 3). */

@@ -1,38 +1,24 @@
 <!--
-  The create-client screen (`#/createclient`): the office and staff pickers the template fills, the
-  individual client's name fields, the two optional codes, the active/activation-date pair and the
-  submission date, above the cancel and submit controls (AAP 0.7.3 row "W2 create and activate
-  client"; AAP 0.7.4 screens; AAP 0.8.2 route `createclient`).
+  The create-client screen (`#/createclient`): the office and staff pickers the template fills, the individual client's name fields, the two optional codes, the active/activation-date pair and the
+  submission date, above the cancel and submit controls (AAP 0.7.3 row "W2 create and activate client"; AAP 0.7.4 screens; AAP 0.8.2 route `createclient`). Every visual value comes from the global
+  Bootstrap 3 layer `web-ng/src/styles.scss` compiles, so this file carries no style, no colour and no pixel: `.container-fluid` and `.row`/`.col-md-*` are the page and its grid, the card and its
+  heading band come from `app-panel-card` (AAP 0.2.3 row `PanelCard`), `.panel-body` its 13px body, `.form-group`/`.control-label` the field layout, `.form-control` the legacy fixed-height input,
+  `.checkbox` the boxed choice, `.btn.btn-primary` the brand fill and `.alert.alert-danger` the failure banner (Rule 1 clause 6; AAP 0.5.2), with `span.required` the legacy marker rule in
+  `app/styles-dev/main/components/_content.scss`, consumed in place.
 
-  Every visual value comes from the global Bootstrap 3 layer `web-ng/src/styles.scss` compiles, so
-  this file carries no style, no colour and no pixel: `.container-fluid` and `.row`/`.col-md-*` are
-  the page and its grid, the card and the heading band carrying its title come from `app-panel-card`
-  (AAP 0.2.3 row `PanelCard`), whose `.panel` host is the white card with its shadow and no border
-  stroke, `.panel-body` its 13px body, `.form-group`/`.control-label` the field layout,
-  `.form-control` the legacy fixed-height input, `.checkbox` the boxed choice, `.btn.btn-primary` the brand fill and
-  `.alert.alert-danger` the failure banner (Rule 1 clause 6; AAP 0.5.2). `span.required` is the
-  legacy marker rule in `app/styles-dev/main/components/_content.scss`, consumed in place.
+  Field ids and `name` attributes are the legacy form's own (`officeId`, `staffId`, `firstname`, `lastname`, `externalId`, `mobileNo`, `activeCheckbox`, `activationDate`, `submittedon`,
+  `save2`, `cancel2` — `app/views/clients/createclient.html`), so the parity harness addresses the same controls on both applications and a label's `for` points at the control it names.
 
-  Field ids and `name` attributes are the legacy form's own (`officeId`, `staffId`, `firstname`,
-  `lastname`, `externalId`, `mobileNo`, `activeCheckbox`, `activationDate`, `submittedon`,
-  `save2`, `cancel2` — `app/views/clients/createclient.html`), so the parity harness addresses the
-  same controls on both applications and a label's `for` points at the control it names.
-
-  Captions and options are the legacy bundle's keys and the Fineract template's own lists: no label
-  and no option is written into this file. The required marker is rendered where this template owns
-  the `<label>`; on the fields `app-select-field` and `app-date-field` render, `[required]` carries
-  the state to assistive technology because those components own their own label markup.
-
-  The two validation messages are bundle keys as well — the name rule's
-  `validation.msg.client.name.cannot.start.specialchar.ornumber` and the mobile rule's
-  `label.mustbenumeric` — each in the `.help-block` the field's `.has-error` state opens, and only one
-  of a field's messages is on screen at a time, so each input's `aria-describedby` names the one
-  showing and nothing else.
+  Captions and options are the legacy bundle's keys and the Fineract template's own lists: no label and no option is written into this file. The required marker is rendered where this template owns
+  the `<label>`; on the fields `app-select-field` and `app-date-field` render, `[required]` carries the state to assistive technology because those components own their own label markup. The two
+  validation messages are bundle keys as well — the name rule's `validation.msg.client.name.cannot.start.specialchar.ornumber` and the mobile rule's `label.mustbenumeric` — each in the
+  `.help-block` the field's `.has-error` state opens, and only one of a field's messages is on screen at a time, so each input's `aria-describedby` names the one showing and nothing else.
 -->
 <section class="container-fluid">
   <div class="row">
     <div class="col-md-12">
-      <div appPanelCard [title]="'label.heading.createclient' | translate">
+      <!-- The card's title is the screen's own title, so the band's heading is an `h1` and the page carries exactly one; `.panel-title` keeps the design's 18px/700 box, so no pixel moves (QA report F40). -->
+      <div appPanelCard [title]="'label.heading.createclient' | translate" titleTag="h1">
         <div class="panel-body">
           <!-- Fineract's own failure text, verbatim and unmoved by any prefix: a failed template read or a rejected create. `role="alert"` announces it without a focus change, and the form below keeps every entered value (AAP 0.7.4; AAP 0.14.1 "errors are values"). -->
           @if (error(); as message) {
@@ -188,7 +174,7 @@
               </div>
 
               <div class="row">
-                <div class="col-md-offset-5 col-md-7">
+                <div class="col-xs-12 text-right">
                   <!-- Cancel navigates rather than acts, so it is an anchor bound to the router — never a `location` change — which is the one element type every cancel control in the application carries, and the one this form's own legacy original renders (`<a id="cancel2" ng-href="{{cancel}}" class="btn btn-default">`, `app/views/clients/createclient.html`; Rule 1 clause 3). -->
                   <a id="cancel2" class="btn btn-default" routerLink="/clients">
                     {{ 'label.button.cancel' | translate }}

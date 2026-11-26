@@ -20,6 +20,8 @@ import { NavbarComponent } from './navbar.component';
  * typed against the real classes, so no session is assembled and no storage read. No HTTP provider exists: the component injects no Fineract service, so reaching the backend from it would fail with NG0201
  * rather than passing silently (Rule 1 clause 5, Rule 2). The router is the real one, its route table empty and its `navigate` spied.
  *
+ * The bar's groups are authored in the order the design reads them — brand, Clients, search, scope, language, user menu — which is the
+ * order Tab visits them (QA finding F13), and the user menu closes on a click anywhere outside it through the same Angular state (Rule 1 clause 3).
  */
 
 /** The permission the clients route group declares, spelled out rather than imported from routes. */
@@ -132,6 +134,14 @@ describe('NavbarComponent', () => {
     return element as T;
   }
 
+  /**
+   * Whether `first` precedes `second` in the document, which is the order the Tab key walks the
+   * focusable stops they belong to.
+   */
+  function precedes(first: Element, second: Element): boolean {
+    return (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+  }
+
   /** The "Clients" destination's list item, which is the element the permission gate hides. */
   const clientsItem = (): HTMLElement => find<HTMLElement>('#main-menu-left li');
 
@@ -187,6 +197,23 @@ describe('NavbarComponent', () => {
     expect(host().querySelector('app-global-search')).not.toBeNull();
     expect(languageSelector().value).toBe('en');
     expect(userMenuTrigger().textContent).toContain(ACCOUNT_NAME);
+  });
+
+  it('renders the navbar groups in the order they are read, so the Tab order follows the row', () => {
+    // The row is a flex row (web-ng/src/styles.scss, `.navbar-collapse`), so the source order is the
+    // visual order the design shows and the order Tab visits the controls: the search field, the
+    // scope selector attached to it, the language selector, then the user menu. Bootstrap's floats
+    // put the first-authored group at the right-hand end, which ran the Tab order backwards through
+    // the design (QA finding F13).
+    expect(
+      Array.from(host().querySelectorAll('#search, #search-scope, #navbar-language, #user-dropdown'))
+        .map((element) => element.id),
+    ).toEqual(['search', 'search-scope', 'navbar-language', 'user-dropdown']);
+
+    // The two stops before them are the brand lockup and the "Clients" destination, in that order,
+    // so the whole row reads brand, Clients, search, scope, language, user menu.
+    expect(precedes(find('a.navbar-brand'), find('#main-menu-left a'))).toBe(true);
+    expect(precedes(find('#main-menu-left a'), find('#search'))).toBe(true);
   });
 
   it('labels the user menu with the name the shell hands in, and with the session projection when it hands none', () => {
@@ -441,5 +468,60 @@ describe('NavbarComponent', () => {
     expect(userMenuTrigger().getAttribute('aria-expanded')).toBe('false');
 
     expect(document.activeElement).toBe(userMenuTrigger());
+  });
+
+  it('closes the user menu when a click lands outside the dropdown, without taking focus back to the trigger', () => {
+    const dropdown = find<HTMLElement>('#main-menu-right li.dropdown');
+
+    userMenuTrigger().click();
+    fixture.detectChanges();
+    expect(dropdown.classList).toContain('open');
+
+    // Legacy's user menu was Bootstrap's dropdown, which closed on a click anywhere else on the page;
+    // the document listener the component's host block installs is what reproduces it without the
+    // plugin (Rule 1 clause 3, QA finding F11).
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+
+    expect(dropdown.classList).not.toContain('open');
+    expect(userMenuTrigger().getAttribute('aria-expanded')).toBe('false');
+    // An outside click leaves the focus where the user put it: only `Escape`, which the user pressed
+    // from inside the menu, hands focus back to the trigger.
+    expect(document.activeElement).not.toBe(userMenuTrigger());
+  });
+
+  it('keeps the user menu open when the click lands inside the dropdown', () => {
+    const dropdown = find<HTMLElement>('#main-menu-right li.dropdown');
+
+    // The trigger's own click bubbles to the document as well, so a dismissal that did not test where
+    // the click landed would close the menu on the very click that opened it.
+    userMenuTrigger().click();
+    fixture.detectChanges();
+    expect(dropdown.classList).toContain('open');
+
+    dropdown.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+
+    expect(dropdown.classList).toContain('open');
+    expect(userMenuTrigger().getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('closes the user menu when the click lands on another control of the bar', () => {
+    const dropdown = find<HTMLElement>('#main-menu-right li.dropdown');
+
+    // The dismissal's boundary is the dropdown, not the whole bar — the element Bootstrap's plugin was
+    // attached to — so moving to another control of the bar with the mouse closes it, which is what
+    // legacy did (QA finding F11). The target is the search field rather than the "Clients" link: that
+    // link is a `routerLink`, and a synthesised click on it would ask the router to navigate from a
+    // test that is tearing its injector down.
+    userMenuTrigger().click();
+    fixture.detectChanges();
+    expect(dropdown.classList).toContain('open');
+
+    find<HTMLElement>('#search').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+
+    expect(dropdown.classList).not.toContain('open');
+    expect(userMenuTrigger().getAttribute('aria-expanded')).toBe('false');
   });
 });

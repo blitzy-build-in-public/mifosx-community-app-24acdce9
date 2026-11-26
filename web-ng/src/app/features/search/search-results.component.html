@@ -4,6 +4,15 @@
     <div class="col-md-12">
       <div appPanelCard variant="default">
         <div class="panel-body">
+          <!--
+            BLITZY [A11Y]: the screen's own title, painted for assistive technology and not on screen
+            (Bootstrap 3.4.3's own `sr-only`), so the page carries exactly one `h1` and the results sit
+            under it rather than under no heading at all (QA report F40). The caption is the legacy
+            bundle's own search heading, so it is a real entry and never a raw key, and the card's
+            appearance does not change.
+          -->
+          <h1 class="sr-only">{{ 'label.heading.search' | translate }}</h1>
+
           <!-- Fineract's own failure text for a 4xx, verbatim and untranslated, above whatever is already rendered: a failed search leaves the screen mounted and the previous results standing, while a 5xx or a transport failure is (AAP 0.7.4). -->
           @if (error(); as message) {
             <div class="alert alert-danger" id="search-results-error" role="alert">{{ message }}</div>

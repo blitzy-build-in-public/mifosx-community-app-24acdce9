@@ -1,27 +1,14 @@
 <!--
-  The unknown-path screen: the counterpart of the legacy application's `.otherwise` route, which
-  renders `views/errors/404.html`, and the message a 404 from a single record endpoint puts in
-  place of the record.
+  The unknown-path screen: the counterpart of the legacy application's `.otherwise` route, which renders `views/errors/404.html`, and the message a 404 from a single record endpoint puts in place of
+  the record. Every visual value comes from the global Bootstrap 3 layer compiled in `styles.scss`, so this file carries no styling of its own: `.container-fluid` is the page container, the card is
+  `shared/panel-card` (AAP 0.2.3 row `PanelCard`), whose host contributes the `.panel` class the global rule paints white, square and shadowed with no border stroke, `.panel-body` the card's 13px
+  body, `.panel-title` the 18px/700 card-title treatment and `.btn.btn-primary` the brand-blue fill with its 1px border and white label.
 
-  Every visual value comes from the global Bootstrap 3 layer compiled in `styles.scss`, so this
-  file carries no styling of its own: `.container-fluid` is the page container, the card is
-  `shared/panel-card` (AAP 0.2.3 row `PanelCard`), whose host contributes the `.panel` class the
-  global rule paints white, square and shadowed with no border stroke and whose rendered markup is
-  the legacy one, `.panel-body` the card's 13px body, `.panel-title` the 18px/700 card-title
-  treatment and `.btn.btn-primary` the brand-blue fill with its 1px border and white label.
-
-  The three strings resolve through `TranslatePipe` from keys the shipped legacy bundles already carry:
-  `label.heading.notavailable` ("Not Available" in en), `error.msg.resource.not.found` ("The requested
-  resource is not available." in en) and `label.button.clients` ("Clients" in en), so every label
-  resolves in English and in a non-English locale (AAP 0.10.2) with no string inlined here.
-
-  No not-found key exists in those bundles: the legacy 404 named above hard-codes its English wording,
-  so the copy cannot come from the bundles while keeping that page's own sentences. Adding a locale
-  file or editing a bundle is forbidden (Rule 1 clauses 1 and 6), so reusing the shipped keys is the
-  settlement. The wording therefore departs from the legacy 404's own text, which AAP 0.9.1's and
-  0.10.2's requirement that every label resolve outranks Rule 1 clause 3's requirement that a
-  difference from legacy be listed in the plan. The recorded missing-translation handler still stands
-  behind these keys, so no raw dotted key can reach the user.
+  The three strings resolve through `TranslatePipe` from keys the shipped legacy bundles already carry: `label.heading.notavailable`, `error.msg.resource.not.found` and `label.button.clients`, so
+  every label resolves in English and in a non-English locale (AAP 0.10.2) with no string inlined here. No not-found key exists in those bundles — the legacy 404 hard-codes its English wording — so
+  the copy cannot come from the bundles while keeping that page's own sentences; adding a locale file or editing a bundle is forbidden (Rule 1 clauses 1 and 6), so reusing the shipped keys is the
+  settlement. The wording therefore departs from the legacy 404's own text, which AAP 0.9.1's and 0.10.2's requirement that every label resolve outranks Rule 1 clause 3's requirement that a
+  difference from legacy be listed in the plan, and the recorded missing-translation handler still stands behind these keys, so no raw dotted key can reach the user.
 -->
 <div class="container-fluid">
   <div class="row">

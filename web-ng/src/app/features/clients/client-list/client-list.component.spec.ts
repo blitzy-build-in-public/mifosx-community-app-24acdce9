@@ -30,27 +30,20 @@ import type { SearchResult } from '../../../core/api/search.service';
 import { FilterToolbarComponent } from './filter-toolbar/filter-toolbar.component';
 
 /**
- * Behaviour of the clients list at `#/clients` — the post-authentication landing screen, step 2 of 3 of the design flow "Sign in and open a client record", and the entry point of workflow W2 (its "Create
- * Client" control) and W3 (a row opened onto the record) (AAP 0.7.1 Features row `clients`; AAP 0.7.4 "Clients list (`#/clients`)", Figma node `1:3`; AAP 0.11.1 "unit specs beside every component and service";
- * Rule 1 clause 8).
+ * Behaviour of the clients list at `#/clients` — the post-authentication landing screen, step 2 of the design flow "Sign in and open a client record", and the entry point of workflow W2 (its "Create Client"
+ * control) and W3 (a row opened onto the record) (AAP 0.7.1 Features row `clients`; AAP 0.7.4 "Clients list (`#/clients`)", Figma node `1:3`; AAP 0.11.1; Rule 1 clause 8). It pins the traffic the screen
+ * produces, the state it holds and the few properties only the markup can express, because those are the parts a rewrite would silently change: one `GET /clients` on construction carrying `offset=0`,
+ * `limit=15` and no `searchText`, the set the legacy `getAllClients({offset, limit})` sends (Rule 1 clauses 2 and 3; AAP 0.7.3 row "Client list and edit"); the envelope's `pageItems` becoming the rows
+ * held, in display-name order as AngularJS 1.7.9's default comparator orders them (`app/views/clients/clients.html:63`); the two display filters costing no request; a 4xx rendering Fineract's own message
+ * while a 5xx leaves it empty and only flags the failure (AAP 0.7.4; workflow W7); the find running `GET /search` with `query`, `resource` and the `exactMatch` flag legacy derives from the surrounding
+ * double quotes (`app/scripts/controllers/client/ClientController.js:44-62`; Rule 1 clause 2; AAP 0.7.2 `GlobalSearchParams`); and the "Create Client" gate following `CREATE_CLIENT`, hidden rather than
+ * removed when it is absent.
  *
- * It pins the traffic the screen produces, the state it holds and the few properties only the markup can express, because those are the parts a rewrite would silently change: one `GET /clients` on construction
- * carrying `offset=0`, `limit=15` and no `searchText`, the parameter set the legacy `getAllClients({offset, limit})` sends (Rule 1 clauses 2 and 3; AAP 0.7.3 row "Client list and edit"); the envelope's
- * `pageItems` becoming the rows held, in display-name order as AngularJS 1.7.9's default comparator orders them (`app/views/clients/clients.html:63`); the two display filters costing no request, "Show Closed"
- * hiding the `closed` code alone and the filter field comparing every text cell case-insensitively; a 4xx rendering Fineract's own message on `errorMessage` and emptying the rows while a 5xx leaves it empty
- * and only flags the failure (AAP 0.7.4; workflow W7); the find field's submit running `GET /search` with `query`, `resource` and the `exactMatch` flag legacy derives from the surrounding double quotes
- * (`app/scripts/controllers/client/ClientController.js:44-62`; Rule 1 clause 2; AAP 0.7.2 `GlobalSearchParams`); and what the table and toolbar paint — the six column headers, a status cell holding the swatch
- * and no word (AAP 0.10.5 item 11), the row itself as the link to `#/viewclient/:id` with no nested control, and the "Create Client" gate following `CREATE_CLIENT`, hidden rather than removed when it is
- * absent.
- *
- * **Two levels of assertion**, each for what the other cannot see: the traffic on `HttpTestingController` and the state on the component's own signals, then the markup only where a property exists in the DOM
- * alone (the text-free status cell, the row that is itself the link, the gate that hides rather than removes, the empty state, the pager's links). Wording that only restates a translated caption is not
- * asserted, so re-keying the bundles cannot break this file.
- *
- * **Providers**: the configuration from a stubbed `fetch` before the component exists, the ngx-translate stack for the template's pipe, `PermissionsService` and `NotificationService` stubs — the interceptor
- * owns the single notification a 5xx raises, so a stub at the token proves the screen raises none of its own — `provideRouter([])` for the row and "Create Client" links, and `core/http`'s own error mapping
- * installed as an interceptor so the rejection the component narrows is the type it narrows in the application (AAP 0.4.2).
- *
+ * **Two levels of assertion**: the traffic on `HttpTestingController` and the state on the component's own signals, then the markup only where a property exists in the DOM alone (the text-free status
+ * cell, the row that is itself the link, the gate that hides rather than removes, the empty state, the pager's links); wording that only restates a translated caption is not asserted, so re-keying the
+ * bundles cannot break this file. **Providers**: the configuration from a stubbed `fetch`, the ngx-translate stack, `PermissionsService` and `NotificationService` stubs — the interceptor owns the single
+ * notification a 5xx raises, so a stub proves the screen raises none of its own — `provideRouter([])` for the links, and `core/http`'s own error mapping so the rejection the component narrows is the type
+ * it narrows in the application (AAP 0.4.2).
  */
 
 /** The configuration the stubbed transport serves: the application's own documented default shape. */
@@ -1021,6 +1014,35 @@ describe('ClientListComponent', () => {
     const spaceRead = httpMock.match(isClientListRead);
     expect(spaceRead).toHaveLength(1);
     spaceRead[0].flush(LARGE_MATCH_SECOND_PAGE);
+  });
+
+  it('wraps the pager in a labelled landmark and marks the page in view with aria-current', () => {
+    mount();
+    initialRead.flush(LARGE_MATCH_FIRST_PAGE);
+    fixture.detectChanges();
+
+    const pagers = host().querySelectorAll('nav[aria-label="Pagination"]');
+
+    // One named landmark around the pager, so a screen reader can tell this navigation from the
+    // breadcrumb's, with the page list as its content (QA report F41).
+    expect(pagers).toHaveLength(1);
+    expect(pagers[0].querySelector('ul.pagination')).not.toBeNull();
+    expect(pageLinks().map((link) => link.getAttribute('aria-current'))).toEqual([
+      'page',
+      null,
+      null,
+    ]);
+
+    component.goToPage(new MouseEvent('click', { cancelable: true }), 2);
+    httpMock.match(isClientListRead)[0].flush(LARGE_MATCH_SECOND_PAGE);
+    fixture.detectChanges();
+
+    // Exactly one page is current after paging, and it is the one on screen.
+    expect(pageLinks().map((link) => link.getAttribute('aria-current'))).toEqual([
+      null,
+      'page',
+      null,
+    ]);
   });
 
   it('paints no pager for a single page', () => {

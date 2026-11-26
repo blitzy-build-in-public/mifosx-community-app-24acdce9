@@ -447,7 +447,7 @@ describe('ClientViewComponent', () => {
     expect(clients.get).toHaveBeenCalledWith(CLIENT_ID);
 
     expect(recordHeaderOf(harness).client()).toEqual(CLIENT);
-    expect(host.querySelector('app-record-header h3 strong')?.textContent?.trim()).toBe(
+    expect(host.querySelector('app-record-header h1 strong')?.textContent?.trim()).toBe(
       CLIENT.displayName,
     );
     expect(renderedText(host)).toContain(`Client Number: ${CLIENT.accountNo}`);
@@ -783,7 +783,7 @@ describe('ClientViewComponent', () => {
     const harness = await render(`/viewclient/${CLIENT_ID}`);
     const instance = componentOf(harness);
 
-    expect(hostOf(harness).querySelector('app-record-header h3 strong')?.textContent?.trim()).toBe(
+    expect(hostOf(harness).querySelector('app-record-header h1 strong')?.textContent?.trim()).toBe(
       CLIENT.displayName,
     );
 
@@ -798,7 +798,8 @@ describe('ClientViewComponent', () => {
     expect(clients.get).toHaveBeenNthCalledWith(1, CLIENT_ID);
     expect(clients.get).toHaveBeenNthCalledWith(2, SECOND_CLIENT_ID);
 
-    expect(moved.querySelector('app-record-header h3 strong')?.textContent?.trim()).toBe(
+    // The record header's name is an `h1` (QA report F40), so the second client's own values are on screen from it through the profile card.
+    expect(moved.querySelector('app-record-header h1 strong')?.textContent?.trim()).toBe(
       SECOND_CLIENT.displayName,
     );
     expect(profileRows(moved)).toEqual([
@@ -831,7 +832,7 @@ describe('ClientViewComponent', () => {
     second.complete();
     await settle(harness);
 
-    expect(hostOf(harness).querySelector('app-record-header h3 strong')?.textContent?.trim()).toBe(
+    expect(hostOf(harness).querySelector('app-record-header h1 strong')?.textContent?.trim()).toBe(
       SECOND_CLIENT.displayName,
     );
 
@@ -841,7 +842,7 @@ describe('ClientViewComponent', () => {
 
     const after = hostOf(harness);
 
-    expect(after.querySelector('app-record-header h3 strong')?.textContent?.trim()).toBe(
+    expect(after.querySelector('app-record-header h1 strong')?.textContent?.trim()).toBe(
       SECOND_CLIENT.displayName,
     );
     expect(profileRows(after)[0]).toEqual(['Client Number', SECOND_CLIENT.accountNo]);
@@ -865,7 +866,7 @@ describe('ClientViewComponent', () => {
     const moved = hostOf(harness);
 
     expect(renderedText(moved)).not.toContain('Not Available');
-    expect(moved.querySelector('app-record-header h3 strong')?.textContent?.trim()).toBe(
+    expect(moved.querySelector('app-record-header h1 strong')?.textContent?.trim()).toBe(
       SECOND_CLIENT.displayName,
     );
   });

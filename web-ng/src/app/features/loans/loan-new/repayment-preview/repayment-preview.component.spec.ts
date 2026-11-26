@@ -50,6 +50,8 @@ const EMPTY_STATE_TEXT = 'No repayment schedule has been calculated.';
 const TRANSLATIONS: Readonly<Record<string, string>> = {
   ...COLUMN_LABELS,
   [EMPTY_STATE_KEY]: EMPTY_STATE_TEXT,
+  // The table's accessible name, from the legacy bundle's own schedule heading (QA report F41).
+  'label.heading.repaymentschedule': 'Repayment Schedule',
 };
 
 /** A complete `RepaymentPeriod`, with every member the model declares supplied on purpose: a member the model gains later breaks this factory at compile time instead of passing silently, which is the point of filling it (Rule 1 clause 4). */
@@ -279,6 +281,17 @@ describe('RepaymentPreviewComponent', () => {
 
     expect(cells[7]).not.toBe('1,325');
     expect(cells[8]).toBe('8,765.43');
+  });
+
+  it('names the table with the schedule heading through a visually hidden caption', async () => {
+    const host = hostOf(await render(makeSchedule([makePeriod()])));
+    const caption = tableOf(host)?.querySelector('caption');
+
+    // The caption is the table's own naming element and Bootstrap's `.sr-only` keeps it off the screen, so the
+    // preview is announced by the legacy bundle's schedule heading without a pixel moving (QA report F41).
+    expect(textOf(caption ?? null)).toBe(TRANSLATIONS['label.heading.repaymentschedule']);
+    expect(caption?.classList.contains('sr-only')).toBe(true);
+    expect(tableOf(host)?.firstElementChild).toBe(caption);
   });
 
   it('renders the explicit empty state before any schedule has been calculated', async () => {

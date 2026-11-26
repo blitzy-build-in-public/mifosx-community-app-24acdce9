@@ -13,8 +13,9 @@ import {
  * an `expect`, nothing boilerplate). It proves the contract its parent depends on: one trimmed query, the scope the user selected and legacy's exact-match flag derived from the quotes legacy stripped on
  * submit; nothing reported when there is nothing to search for; never a search while the user is still typing; and no text the user typed changed. It also proves the inventory's props (AAP 0.2.3
  * `GlobalSearch`: `query: string, scope, (search)`): the two inputs seed the field and the selector, typing is not written back into them, and a host that changes one re-seeds the control. The translate stack
- * is provided because the placeholder, the scope labels and the two accessible names resolve through `TranslatePipe`, and `provideTranslateService()` installs the no-op loader so no bundle is requested. There
+ * is provided because the placeholder, the field's accessible name and the scope labels resolve through `TranslatePipe`, and `provideTranslateService()` installs the no-op loader so no bundle is requested. There
  * is deliberately no HTTP provider: the component injects no service at all, so reaching Fineract from it would fail with NG0201 instead of silently passing (Rule 1 clause 5).
+ * The scope selector's accessible name is the control's own literal "Search scope", not the clients list's `label.button.filter` key, so it needs no bundle entry.
  *
  */
 
@@ -27,12 +28,13 @@ const FIELD_LABEL_KEY = 'label.heading.search';
 const FIELD_LABEL_TEXT = 'Search';
 
 /**
- * Key of the selector's accessible name. The selector narrows the search to one resource family,
- * and it is named with the legacy bundle's own "Filter" label rather than a key the bundles do not
- * carry, so nothing in this control can reach the user — or the developer console — unresolved.
+ * The selector's accessible name. It is the control's own literal — the scope selector chooses what
+ * the search covers — rather than a translation key: no shipped bundle carries a key for the control
+ * itself (the shipped scope keys name the individual options), so a key written here would raise a
+ * missing-translation warning on every render. A literal cannot reach the user or the developer
+ * console unresolved.
  */
-const SCOPE_FILTER_KEY = 'label.button.filter';
-const SCOPE_FILTER_TEXT = 'Filter';
+const SCOPE_LABEL_TEXT = 'Search scope';
 
 /** The three scopes, in the order the selector renders them: its value, its legacy label key, and
  * the label this spec serves for that key. */
@@ -54,7 +56,6 @@ const SCOPES: readonly { readonly scope: string; readonly key: string; readonly 
 const SPEC_BUNDLE: Record<string, string> = {
   [PLACEHOLDER_KEY]: PLACEHOLDER_TEXT,
   [FIELD_LABEL_KEY]: FIELD_LABEL_TEXT,
-  [SCOPE_FILTER_KEY]: SCOPE_FILTER_TEXT,
   ...Object.fromEntries(SCOPES.map(({ key, label }) => [key, label])),
 };
 
@@ -176,16 +177,25 @@ describe('GlobalSearchComponent', () => {
     expect(host().textContent).not.toContain('label.');
   });
 
-  it('resolves its placeholder and its accessible names through the translation stack', () => {
+  it('resolves the placeholder and the field name through the translation stack and shows no raw key', () => {
     expect(field().getAttribute('placeholder')).toBe(PLACEHOLDER_TEXT);
     expect(field().getAttribute('aria-label')).toBe(FIELD_LABEL_TEXT);
-    // The selector is named from the legacy bundle's own "Filter" label: a key that exists in every shipped bundle, so nothing here can fall through to the missing-translation handler.
-    expect(selector().getAttribute('aria-label')).toBe(SCOPE_FILTER_TEXT);
-    // Every piece of text this control shows or announces is translated: no dotted key survives in the rendered copy or in either accessible name (AAP 0.10.2 "every label resolves").
+    // The selector's name is the control's own literal rather than a bundle lookup, so it holds with no translation behind it; no dotted key survives in the rendered copy or in either accessible name (AAP 0.10.2 "every label resolves").
+    expect(selector().getAttribute('aria-label')).toBe(SCOPE_LABEL_TEXT);
     expect(host().textContent).not.toContain('.');
     expect(field().getAttribute('placeholder')).not.toContain('.');
     expect(field().getAttribute('aria-label')).not.toContain('.');
     expect(selector().getAttribute('aria-label')).not.toContain('.');
+  });
+
+  it('names the selector for the search scope it chooses, not for the client list filter', () => {
+    // QA finding F42: the selector narrows a search, so the client list's own "Filter" label named the
+    // wrong control. The name now says what the control does, and it is a literal because no shipped
+    // bundle carries a key for the scope control itself — the shipped scope keys name the individual
+    // options — while a key invented here would raise a missing-translation warning on every render.
+    expect(selector().getAttribute('aria-label')).toBe(SCOPE_LABEL_TEXT);
+    expect(selector().getAttribute('aria-label')).not.toBe('Filter');
+    expect(SCOPE_LABEL_TEXT).toBe('Search scope');
   });
 
   it('defaults the scope to "all" and emits nothing until the form is submitted', () => {

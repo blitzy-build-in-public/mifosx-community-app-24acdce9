@@ -258,6 +258,39 @@ describe('ShellComponent', () => {
     );
   });
 
+  it('puts the skip link first, points it at the named main landmark, and moves focus there without navigating', () => {
+    createShell();
+
+    // Bootstrap 3.4.3's own two classes: hidden until focused, visible on focus, so the shell paints
+    // exactly what it painted before (Rule 1 clause 6).
+    const skip = find<HTMLAnchorElement>('a.sr-only.sr-only-focusable');
+    const focusable = Array.from(
+      host().querySelectorAll<HTMLElement>('a[href], button, input, select, textarea, [tabindex]'),
+    ).filter((element: HTMLElement): boolean => element.tabIndex >= 0);
+
+    // The first Tab stop on every signed-in screen, which is what makes the whole page bypassable
+    // (QA report F14; WCAG 2.4.1).
+    expect(focusable[0]).toBe(skip);
+    expect(skip.textContent?.trim()).toBe('Skip to content');
+    expect(skip.getAttribute('href')).toBe('#main-content');
+
+    const main = find<HTMLElement>('#main-content');
+
+    expect(main.tagName).toBe('MAIN');
+    expect(main.getAttribute('tabindex')).toBe('-1');
+    expect(main.getAttribute('aria-label')).toBe('Main content');
+
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+    skip.dispatchEvent(click);
+    fixture.detectChanges();
+
+    // The default is cancelled, because the application routes on the hash: an un-cancelled
+    // `#main-content` would be read as a route and would take the screen away (Rule 1 clause 5).
+    expect(click.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(main);
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
   it('renders none of the out-of-scope chrome, the way the legacy shell was cut down', () => {
     createShell();
 

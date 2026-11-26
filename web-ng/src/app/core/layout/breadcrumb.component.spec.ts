@@ -53,8 +53,14 @@ describe('BreadcrumbComponent', () => {
     expect(crumbs[0].classList.contains('active')).toBe(false);
     expect(crumbs[1].classList.contains('active')).toBe(true);
     expect(host().querySelector('ol.breadcrumb')).not.toBeNull();
-    // The list is the whole markup: legacy writes a bare `<ul class="breadcrumb">`, and AAP 0.10.5 registers no accessibility difference for this component, so neither a landmark nor an ARIA state may be added on top of it (Rule 1 clause 3).
-    expect(host().querySelector('nav')).toBeNull();
+    // The trail is a navigation landmark named "Breadcrumb", with the list as its only child: the
+    // record screen's own treatment, extended to every screen the shell's breadcrumb serves (QA
+    // report F41). No crumb claims `aria-current` here, because the record marks its own trail.
+    const nav = host().querySelector('nav');
+
+    expect(nav?.getAttribute('aria-label')).toBe('Breadcrumb');
+    expect(nav?.querySelector('ol.breadcrumb')).not.toBeNull();
+    expect(nav?.childElementCount).toBe(1);
     expect(Array.from(crumbs, (crumb) => crumb.getAttribute('aria-current'))).toEqual([null, null]);
   });
 });

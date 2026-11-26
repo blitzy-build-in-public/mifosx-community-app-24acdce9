@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   computed,
   effect,
   inject,
@@ -33,8 +34,16 @@ export interface ClientActionButton {
   imports: [RouterLink, HasPermissionDirective, TranslatePipe],
   templateUrl: './action-button-group.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: {
+    // A click anywhere outside the group closes the `More` menu, which is what legacy's Bootstrap
+    // dropdown did (Rule 1 clause 3). The binding reaches the document only while this component
+    // does, so it is not a global handler the record screen has to unbind.
+    '(document:click)': 'dismissMoreOnOutsideClick($event)',
+  },
 })
 export class ActionButtonGroupComponent {
+  /** This component's host element, the joined group itself, used to tell a click inside it — the trigger, an entry of the menu — from one anywhere else on the page. */
+  private readonly elementRef = inject<ElementRef<HTMLElement>>(ElementRef);
   /** The entries to render, in the parent's order. Defaults to none, so the group renders nothing before the record's descriptors arrive. */
   readonly actions = input<readonly ClientActionButton[]>([]);
   /** Answers whether the signed-in user may use an entry, the one question the published computeds ask; every element's own visibility is decided by `HasPermissionDirective` (AAP 0.1.1). */
@@ -73,6 +82,25 @@ export class ActionButtonGroupComponent {
 
   /** Closes the `More` dropdown without opening it, which is what the Escape key inside the menu does. */
   closeMore(): void {
+    this.moreOpen.set(false);
+  }
+
+  /**
+   * Closes the `More` menu when a click that reached the document landed outside this group. Legacy's `More` menu was Bootstrap's dropdown, and Bootstrap closed it on a click anywhere else on the page (Rule 1
+   * clause 3); with no Bootstrap JavaScript in this build the same dismissal is Angular state, driven by the document listener the component's `host` block installs. It sets the open signal itself instead of
+   * going through {@link closeMore}, so this path does exactly one thing: nothing is restored, focused or navigated, and the focus the user's click placed stays where it is. A click on the trigger is inside the
+   * group, so the containment test leaves the toggle to the trigger's own binding. `@param event` the click Angular reports for the document, whose target decides the outcome.
+   */
+  dismissMoreOnOutsideClick(event: Event): void {
+    if (!this.moreOpen()) {
+      return;
+    }
+
+    const target: EventTarget | null = event.target;
+    if (target instanceof Node && this.elementRef.nativeElement.contains(target)) {
+      return;
+    }
+
     this.moreOpen.set(false);
   }
 }

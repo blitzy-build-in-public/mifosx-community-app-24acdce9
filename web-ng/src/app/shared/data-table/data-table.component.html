@@ -1,51 +1,36 @@
 <!--
-  The table of a list screen (AAP 0.2.3 component inventory row `ClientList / DataTable`, Figma node
-  `1:3`). Three regions, each decided by an input:
+  The table of a list screen (AAP 0.2.3 component inventory row `ClientList / DataTable`, Figma node `1:3`). Four regions, each decided by an input:
 
-  1. `.table-responsive` — Bootstrap 3's own wrapper for a wide table. It is inert at 768px and above
-     and below that keeps the columns from pushing the page into horizontal scroll; it authors no
-     colour, size or spacing. Inside it, the `<table>`'s class list and id are the caller's, because
-     the screen's own class is what sizes its columns in the global layer and the legacy markup's id
-     is what the harness addresses the table by (Rule 1 clauses 3 and 6).
+  1. `.table-responsive` — Bootstrap 3's own wrapper for a wide table: inert at 768px and above, below it keeps the columns from pushing the page into horizontal scroll, authoring no colour, size
+     or spacing. The `<table>`'s class list and id are the caller's, because the screen's own class sizes its columns in the global layer and the legacy markup's id is what the harness addresses
+     the table by (Rule 1 clauses 3 and 6).
+  2. The accessible name — an optional `<caption class="sr-only">`, the `<table>`'s first child, when the caller supplies the `caption` input: a screen reader announces it as the table's title and
+     `.sr-only` (Bootstrap 3.4.3's own class) keeps it off the screen, so no row, column or pixel moves (QA report F41; Rule 1 clause 6); no caption is rendered when the caller supplies none.
+  3. The header — one `<th scope="col">` per column, in the caller's order, printing the column's already-translated label; `scope="col"` is Bootstrap 3's own table idiom and the one the legacy
+     table carried (Rule 1 clause 3).
+  4. The body — one `<tr>` per row, tracked by the caller's row key rather than the index, so a re-render reconciles rows instead of rebuilding them. The row carries the caller's destination as its
+     own `RouterLink`, the affordance the legacy tables give every cell; a caller supplying none binds `null`, and `RouterLink` then navigates nothing, writes no `href` and adds no tab stop. The
+     row's class is the caller's (`[rowClass]`): the clients list passes `pointer-main`, the class the legacy table puts on a row that opens a record and the one the global layer paints with the
+     pointer cursor, the brand-blue fill and white text on hover (Rule 1 clause 3; app/views/clients/clients.html:64).
 
-  2. The header — one `<th scope="col">` per column, in the caller's order, printing the column's
-     already-translated label. `scope="col"` is Bootstrap 3's own table idiom and the one the legacy
-     table carried, so no assistive relationship is invented here (Rule 1 clause 3).
+  Enter and Space on a focused row open its own destination by way of the click the row already carries, so the keyboard reaches the same URL a pointer reaches and one key press navigates once;
+  Space's default is cancelled there so the page does not scroll behind the row, and Enter has no default action on a row. This is the table's one deliberate difference from legacy — whose rows
+  were pointer-only, with no `tabindex` and no key handler (`app/views/clients/clients.html:64-73`) — and it departs from Rule 1 clause 3's "match legacy behaviour; don't improve it" for one
+  reason: a row that can be focused but not opened offers a keyboard user the record it offers a pointer user and then withholds it. The difference is invisible — no pixel, no request, no route —
+  and the row keeps its `<tr>` role and every `aria-*` attribute it had, because a row claiming `role="link"` would lose the table's own row semantics.
 
-  3. The body — one `<tr>` per row, tracked by the caller's row key rather than by the index, so a
-     re-render reconciles rows instead of rebuilding them. The row carries the caller's destination
-     as its own `RouterLink`, which is the affordance the legacy tables give every cell; a caller that
-     supplies no destination binds `null`, and `RouterLink` then navigates nothing, writes no `href`
-     and adds no tab stop, so the row is a plain row rather than a dead link. The row's class is
-     the caller's (`[rowClass]`): the clients list passes `pointer-main`, the class the legacy
-     table puts on a row that opens a record and the one the global layer paints with the
-     pointer cursor, the brand-blue fill and white text on hover (Rule 1 clause 3;
-     app/views/clients/clients.html:64).
+  Each `<td>` renders the caller's cell template when one is supplied, with the row, the column and the column's text as its context, and the column's own text otherwise: the template is how one
+  cell of a table becomes a component — the clients list's Status column is a bare colour swatch and no word (AAP 0.2.3 row `StatusSwatch`; AAP 0.10.5 deliberate difference 11) — so a caller
+  supplying one renders the text of the columns it does not componentise itself, from the context's `value`.
 
-     Enter and Space on a focused row open the row's own destination, by way of the click the row
-     already carries, so the keyboard reaches the same URL a pointer reaches and one key press
-     navigates once; Space's default is cancelled there so the page does not scroll behind the row,
-     and Enter has no default action on a row. This is the table's one deliberate difference from
-     legacy — whose rows were pointer-only, with no `tabindex` and no key handler
-     (`app/views/clients/clients.html:64-73`) — and it departs from Rule 1 clause 3's "match legacy
-     behaviour; don't improve it" for one reason: a row that can be focused but not opened offers a
-     keyboard user the record it offers a pointer user and then withholds it. The difference is
-     invisible — no pixel, no request, no route — and the row keeps its `<tr>` role and every `aria-*`
-     attribute it had, because a row claiming `role="link"` would lose the table's own row semantics.
-
-  Each `<td>` renders the caller's cell template when one is supplied, with the row, the column and
-  the column's text as its context, and the column's own text otherwise. The template is how one cell
-  of a table becomes a component — the clients list's Status column is a bare colour swatch and no
-  word (AAP 0.2.3 row `StatusSwatch`; AAP 0.10.5 deliberate difference 11) — so a caller that
-  supplies one renders the text of the columns it does not componentise itself, from the context's
-  `value`.
-
-  Deliberately absent: no sort affordance, no row action, no selection, no paging and no empty state.
-  Each belongs to the screen that owns the read, and adding one here would be behaviour the legacy
-  screens do not have (Rule 1 clause 3).
+  Deliberately absent: no sort affordance, no row action, no selection, no paging and no empty state; each belongs to the screen that owns the read, and adding one here would be behaviour the
+  legacy screens do not have (Rule 1 clause 3).
 -->
 <div class="table-responsive">
   <table [id]="tableId()" [class]="tableClasses()">
+    @if (caption(); as name) {
+      <caption class="sr-only">{{ name }}</caption>
+    }
     <thead>
       <tr>
         @for (column of columns(); track column.key) {

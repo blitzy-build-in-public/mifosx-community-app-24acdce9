@@ -1,19 +1,12 @@
 <!--
-  The list toolbar (AAP 0.2.3 component inventory row `FilterToolbar`, Figma node `1:3`): the
-  client-side filter, the find field with its search button, the "Show Closed" checkbox and the
-  permission-gated "Create Client" control, in the legacy screen's own two-column row
-  (`app/views/clients/clients.html:20-40`; Rule 1 clause 3).
+  The list toolbar (AAP 0.2.3 component inventory row `FilterToolbar`, Figma node `1:3`): the client-side filter, the find field with its search button, the "Show Closed" checkbox and the permission-gated
+  "Create Client" control, in the legacy screen's own two-column row (`app/views/clients/clients.html:20-40`; Rule 1 clause 3). The markup is the legacy layout verbatim: `.form-horizontal` >
+  `.form-group` > two columns for the fields, `.input-group` with `.input-group-btn` for the find field and its button, `.checkbox .form-control` for the boxed choice, and
+  `a.btn.btn-primary.pull-right` for the primary action. Nothing here paints a colour, a size or a spacing of its own: every one of them is the global Bootstrap 3 layer's, which is what keeps the toolbar
+  looking like the legacy one (Rule 1 clause 6).
 
-  The markup is the legacy layout verbatim: `.form-horizontal` > `.form-group` > two columns for the
-  fields, `.input-group` with `.input-group-btn` for the find field and its button, `.checkbox
-  .form-control` for the boxed choice, and `a.btn.btn-primary.pull-right` for the primary action.
-  Nothing here paints a colour, a size or a spacing of its own: every one of them is the global
-  Bootstrap 3 layer's, which is what keeps the toolbar looking like the legacy one (Rule 1 clause 6).
-
-  The three controls are the toolbar's own typed form. Submitting it publishes the find text; the
-  filter field and the checkbox publish as they change; the create control publishes its activation
-  while its `routerLink` and its `hasPermission` gate stay declarative. The screen that owns the rows
-  decides what each publication does (AAP 0.2.3 row `FilterToolbar`).
+  The three controls are the toolbar's own typed form: submitting it publishes the find text, the filter field and the checkbox publish as they change, and the create control publishes its activation while
+  its `routerLink` and its `hasPermission` gate stay declarative. The screen that owns the rows decides what each publication does (AAP 0.2.3 row `FilterToolbar`).
 -->
 <div class="row">
   <div class="col-sm-8">

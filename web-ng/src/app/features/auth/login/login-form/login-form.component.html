@@ -1,35 +1,20 @@
 <!--
-  The login form itself: two labelled fields and one full-width primary submit, exactly as the legacy
-  screen renders them (AAP 0.2.3 `LoginForm`; Figma node `1:5`; AAP 0.7.4 "Login"). It is the form
-  region only — the language switcher, the lockup, the error region and the footer belong to
-  `LoginComponent`, which owns the request this form reports.
+  The login form itself: two labelled fields and one full-width primary submit, exactly as the legacy screen renders them (AAP 0.2.3 `LoginForm`; Figma node `1:5`; AAP 0.7.4 "Login"). It is the form
+  region only — the language switcher, the lockup, the error region and the footer belong to `LoginComponent`, which owns the request this form reports. Ids, names and classes are the legacy screen's
+  own (`app/index.html`: `uid`, `pwd`, `name="username"`, `name="password"`, `form.form`, `login-button`), so the parity harness addresses the same controls on both applications
+  (`web-ng/e2e/pages/next/login.page.ts`) and every `<label for>` points at the control it names.
 
-  Ids, names and classes are the legacy screen's own (`app/index.html`: `uid`, `pwd`,
-  `name="username"`, `name="password"`, `form.form`, `login-button`), so the parity harness addresses
-  the same controls on both applications (`web-ng/e2e/pages/next/login.page.ts`) and every
-  `<label for>` points at the control it names.
+  `novalidate` because the typed reactive form owns validation: the controls carry no `required` attribute, so the browser never blocks submission on its own, and `form` is the legacy form's class
+  that keeps the submit discoverable exactly as it is on the legacy screen. The form's own `submit` is handled here rather than left to bubble: the component's output is named `submit` because
+  AAP 0.2.3 fixes that name and the caller binds it on the element that hosts this component, so an escaping native `submit` event would arrive at the same binding as an `Event` where the caller
+  expects `{username, password}`; `onNativeSubmit` cancels the browser's own submission and keeps the event inside this component, which makes the output the only way a submission leaves the form.
 
-  `novalidate` because the typed reactive form owns validation: the controls carry no `required`
-  attribute, so the browser never blocks submission on its own. `form` is the legacy form's class and
-  keeps the submit discoverable exactly as it is on the legacy screen.
+  Every visual value — the uppercase 600 labels, the 34px field with its 1px input border and 2px radius, the brand-blue full-width button and Bootstrap's own `.has-error`/`.help-block` invalid
+  treatment — is the global layer compiled in `web-ng/src/styles.scss`, so this template carries no stylesheet, no style attribute, no colour and no pixel (Rule 1 clause 6).
 
-  The form's own `submit` is handled here rather than left to bubble: the component's output is named
-  `submit` because AAP 0.2.3 fixes that name, and the caller binds it on the element that hosts this
-  component, so an escaping native `submit` event would arrive at the same binding as an `Event`
-  where the caller expects `{username, password}`. `onNativeSubmit` cancels the browser's own
-  submission and keeps the event inside this component, which is what makes the output the only way a
-  submission leaves the form.
-
-  Every visual value — the uppercase 600 labels, the 34px field with its 1px input border and 2px
-  radius, the brand-blue full-width button and Bootstrap's own `.has-error`/`.help-block` invalid
-  treatment — is the global layer compiled in `web-ng/src/styles.scss`, so this template carries no
-  stylesheet, no style attribute, no colour and no pixel (Rule 1 clause 6).
-
-  BLITZY [COPY]: each placeholder is the field's own translation key, so it renders in the active
-  language exactly as the label does, but in sentence case where the design prints "username" and
-  "password" in lower case — the legacy screen lower-cased the same key with AngularJS's
-  `| lowercase` filter, and the alternatives here are worse: the component imports no lower-case pipe,
-  and Bootstrap's `.text-lowercase` on the field would also lower-case what the user types.
+  BLITZY [COPY]: each placeholder is the field's own translation key, so it renders in the active language exactly as the label does, but in sentence case where the design prints "username" and
+  "password" in lower case — the legacy screen lower-cased the same key with AngularJS's `| lowercase` filter, and the alternatives here are worse: the component imports no lower-case pipe, and
+  Bootstrap's `.text-lowercase` on the field would also lower-case what the user types.
 -->
 <form class="form" [formGroup]="form" (submit)="onNativeSubmit($event)" novalidate>
   <div

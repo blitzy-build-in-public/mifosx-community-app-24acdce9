@@ -26,6 +26,7 @@ const ACTION_PERMISSION = 'UPDATE_LOAN';
 
 /** The captions this section resolves, keyed exactly as the shipped flat legacy bundles key them (`app/global-translations/`). */
 const TRANSLATIONS = {
+  'label.heading.charges': 'Charges',
   'label.heading.name': 'Name',
   'label.heading.dueasof': 'Due as of',
   'label.heading.amount': 'Amount',
@@ -312,6 +313,19 @@ describe('LoanChargesComponent', () => {
     expect(cellsOf(rows[0]).slice(2, 6)).toEqual(['$25', '$0', '$0', '$25']);
     expect(cellsOf(rows[0])[1]).toBe('14 March 2026');
     expect(cellsOf(rows[0])[0]).toBe(CHARGE_DUE.name);
+  });
+
+  it('names the table with the charges heading through a visually hidden caption', () => {
+    mount(CHARGES);
+
+    const table = byId('loan-charges');
+    const caption = table?.querySelector('caption');
+
+    // The caption is the table's own naming element and Bootstrap's `.sr-only` keeps it off the screen, so the
+    // table is announced by the legacy bundle's charges heading without a pixel moving (QA report F41).
+    expect(caption?.textContent?.trim()).toBe(TRANSLATIONS['label.heading.charges']);
+    expect(caption?.classList.contains('sr-only')).toBe(true);
+    expect(table?.firstElementChild).toBe(caption);
   });
 
   /** The waived-write-off case: a charge written off at 25 carries that figure in its own column, so its 0 Paid and 0 Outstanding cannot read as a paid charge whose amount went nowhere. The column is legacy's own `label.heading.waived` treatment and no state word, badge, class or aria-label is added beside it (Rule 1 clause 3). */

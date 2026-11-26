@@ -11,6 +11,8 @@
     <app-empty-state id="client-accounts-empty" [message]="emptyMessageKey | translate" />
   } @else {
     <table class="table table-striped" id="client-accounts">
+      <!-- The table's accessible name, from the legacy bundle's own accounts heading, kept off the screen by Bootstrap's `.sr-only` (QA report F41). -->
+      <caption class="sr-only">{{ 'label.heading.accountdetail' | translate }}</caption>
       <thead>
         <tr>
           <!-- `label.heading.accnum` is the key the legacy client record heads this column with ("Account Number" in `app/global-translations/locale-en.json`); no locale bundle defines a `label.heading.accountno`, so the. -->

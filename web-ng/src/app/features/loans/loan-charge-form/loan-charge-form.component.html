@@ -1,73 +1,43 @@
 <!--
-  The loan-charge screen of the individual-loan family — `#/addloancharge/:id`, which adds a charge to
-  a loan, and `#/loanaccountcharge/:id/:action/:chargeId`, which pays or waives one the loan already
-  carries (AAP 0.7.1 row `loans` → `LoanChargeFormComponent`; AAP 0.7.4: "the action screens … are
-  single-purpose forms rendered in the same card, each with a primary submit and a cancel that returns
-  to the record"; AAP 0.8.2 feature routes).
+  The loan-charge screen of the individual-loan family — `#/addloancharge/:id`, which adds a charge to a loan, and `#/loanaccountcharge/:id/:action/:chargeId`, which pays or
+  waives one the loan already carries (AAP 0.7.1 row `loans` → `LoanChargeFormComponent`; AAP 0.7.4: "the action screens … are single-purpose forms rendered in the same card,
+  each with a primary submit and a cancel that returns to the record"; AAP 0.8.2 feature routes).
 
-  The card holds exactly three things: the heading, the form and the footer. Each is chosen by the
-  mode the class resolved from the route's current parameters, before that emission's request —
-  `isAddMode()`, `isPayMode()`, `isWaiveMode()` and `formVisible()`, which in add mode is the legacy
-  `isCollapsed` toggle (the amount and due date stay hidden until a charge is picked) and is always
-  true on the action routes, whose single field is the command's own.
+  The card holds exactly three things — the heading, the form and the footer — each chosen by the mode the class resolved from the route's parameters (`isAddMode()`,
+  `isPayMode()`, `isWaiveMode()`, `formVisible()`; in add mode the legacy `isCollapsed` toggle hides the amount and due date until a charge is picked, while the action routes
+  always show their single field). Two fields, one per operation that has any: the add form carries the amount (and the due date of a charge that falls due on a specified date),
+  the pay form the payment date, and waiving carries neither, because the endpoint waives the whole outstanding portion and refuses an amount, date or payment type beside
+  `?command=waive`. Nothing renders a control that posts nothing.
 
-  Two fields, one per operation that has any: the add form carries the amount the charge is added for
-  (and the due date of a charge that falls due on a specified date), and the pay form carries the date
-  the payment is recorded on. Waiving carries neither — the endpoint waives the charge's whole
-  outstanding portion and refuses an amount, a date and a payment type beside `?command=waive` — and
-  the add form's picker is the amount's only companion. Nothing renders a control that posts nothing.
+  The `.panel` surface, its `.panel-heading` band and `.panel-title` come from the shared `div[appPanelCard]` (AAP 0.2.3 row `PanelCard`), which is the one place the card is
+  defined; the heading text is projected from the mode's `@if`/`@else if` chain rather than the component's `title`. Every other visual value comes from the global Bootstrap 3
+  layer `web-ng/src/styles.scss` (Rule 1 clause 6), `span.required` included — the legacy asterisk marker (`app/styles-dev/main/components/_content.scss:148`) the legacy forms
+  and `client-create` render. This file carries no stylesheet, no inline style, no colour and no class of its own, and loads no DOM scripting plugin and no UI-widget script:
+  AAP 0.5.1 records that the design system has no JavaScript behaviour, so every interaction here is Angular state. `.panel-default` is deliberately not applied, as
+  `features/clients/client-view/profile-card` records for the whole family.
 
-  The card itself — the `.panel` surface, the `.panel-heading` band and the `.panel-title` it carries —
-  comes from the shared `div[appPanelCard]` component (AAP 0.2.3 row `PanelCard`), which is the one
-  place the card is defined. Its heading text is the mode-dependent block projected below rather than
-  the component's `title`: one card heads itself from an `@if`/`@else if` chain, not from a single
-  string, so the band is projected with the content it belongs to and paints identically. Every other
-  visual value comes from the global Bootstrap 3 layer `web-ng/src/styles.scss` compiles:
-  `.container-fluid` / `.row` / `.col-md-*` for the page and its grid, `.panel-body` / `.panel-footer`
-  for the card's body and footer bands, `.form-horizontal` / `.form-group` / `.control-label` /
-  `.col-md-*` for the legacy form layout, `.form-control` for the 34px control,
-  `.alert.alert-danger` for the failure banner and `.btn.btn-primary` / `.btn.btn-default` for the
-  footer controls. `span.required` is the legacy
-  asterisk marker (`app/styles-dev/main/components/_content.scss:148`), kept because it is the markup
-  the legacy forms and `client-create` render; the global layer carries no rule for it yet, so it
-  paints a plain asterisk, and a rule there — not a style in this file — is where that is settled.
-  This file therefore carries no stylesheet, no inline style, no colour and no class of its own
-  (Rule 1 clause 6), and it loads no DOM scripting plugin and no UI-widget script: AAP 0.5.1 records
-  that the design system has no JavaScript behaviour, so every interaction here is Angular state.
+  The form follows the application's one convention, stated for `.form-horizontal` in `styles.scss`: a field's label sits above its control at the control's left edge, inside the
+  `.col-md-6` column that holds it, and the footer's two actions end at the card's right edge at every width through Bootstrap's own `text-right`.
 
-  `.panel-default` is deliberately not applied, as `features/clients/client-view/profile-card` records
-  for the whole family: `styles.scss` clears Bootstrap's panel border and keeps the heading band
-  white, so that class would only re-introduce a colour the design does not show.
+  The ids are the ones the parity harness and the legacy forms already address — `chargeId`, `amount`, `dueDate`, `transactionDate`, and `cancel` / `save` in the footer
+  (`app/views/loans/addloancharge.html`; `app/views/loans/loanaccountactions.html`) — and each renders only in the mode whose body carries its value. Every caption is a key the
+  shipped legacy bundles already carry, read in `app/global-translations/locale-en.json`: `label.heading.addloancharge`, `label.heading.payloancharge` and
+  `label.heading.waiveloancharge`; `label.input.charge`, `label.input.amount`, `label.input.dueon`, `label.input.paymentdate` and `label.requiredfield`;
+  `label.selectcharge`; and `label.button.cancel` and `label.button.submit`. The state this screen does not serve is `shared/record-not-found`, which carries its own two keys,
+  so no user-facing copy is written into this file, and the registered missing-translation handler humanises any key a locale lacks (AAP 0.3.1).
 
-  The ids are the ones the parity harness and the legacy forms already address — `chargeId`, `amount`,
-  `dueDate`, `transactionDate`, and `cancel` / `save` in the footer
-  (`app/views/loans/addloancharge.html`; `app/views/loans/loanaccountactions.html`) — so both
-  applications offer the same controls and every label's `for` names the control it belongs to. Each
-  id renders only in the mode whose body carries its value.
-
-  Every caption is a key the shipped legacy bundles already carry, read in
-  `app/global-translations/locale-en.json`: `label.heading.addloancharge`, `label.heading.payloancharge`
-  and `label.heading.waiveloancharge` for the heading of the three operations this screen serves;
-  `label.input.charge`, `label.input.amount`, `label.input.dueon`, `label.input.paymentdate` and
-  `label.requiredfield` for the fields; `label.selectcharge` for the charge picker's prompt; and
-  `label.button.cancel` and `label.button.submit` for the footer. The state this screen does not serve
-  is `shared/record-not-found`, which carries its own two keys and is the one presentation every
-  record screen renders for a record it does not have, so no user-facing copy is written into this
-  file, and the registered missing-translation handler humanises any key a locale lacks, so a raw
-  dotted key never reaches the screen (AAP 0.3.1).
-
-  No host, URL, endpoint, credential, authentication key or session field appears here: every path in
-  this file is a router path, and the payloads are assembled and serialised by `LoanService` (Rule 2;
-  Rule 1 clauses 2 and 9; AAP 0.14.1).
+  No host, URL, endpoint, credential, authentication key or session field appears here: every path in this file is a router path, and the payloads are assembled and serialised
+  by `LoanService` (Rule 2; Rule 1 clauses 2 and 9; AAP 0.14.1).
 -->
 <div class="container-fluid">
   <div class="row">
     <div class="col-md-12">
       <div appPanelCard>
-        <!-- One heading per operation, from the key family the legacy controller itself switches on (`scope.title` in `LoanAccountActionsController`). The state this screen does not serve renders `shared/record-not-found`, which carries the heading and the sentence itself, so the band is omitted there rather than printing the same heading twice. -->
+        <!-- One heading per operation, from the key family the legacy controller itself switches on (`scope.title` in `LoanAccountActionsController`). The state this screen does not serve renders `shared/record-not-found`, which
+          carries the message itself, so the band is omitted rather than printing the same heading twice. It is an `h1` because it is the screen's own title where it renders, with `.panel-title` keeping the 18px/700 box the legacy heading band paints (QA report F40). -->
         @if (!notFound()) {
           <div class="panel-heading">
-            <h3 class="panel-title">
+            <h1 class="panel-title">
               @if (isAddMode()) {
                 {{ 'label.heading.addloancharge' | translate }}
               } @else if (isPayMode()) {
@@ -75,7 +45,7 @@
               } @else if (isWaiveMode()) {
                 {{ 'label.heading.waiveloancharge' | translate }}
               }
-            </h3>
+            </h1>
           </div>
         }
 
@@ -107,10 +77,10 @@
                 <!-- The picker is add mode's alone, and it renders the template's own option list in the server's order — nothing sorted, filtered or relabelled. Its prompt is the legacy `label.selectcharge` row, which is what lets the field start empty: the class seeds no charge, so a select that auto-picked its first row would show a charge the form would not post. -->
                 @if (isAddMode()) {
                   <div class="form-group">
-                    <label class="control-label col-md-3" for="chargeId">
-                      {{ 'label.input.charge' | translate }}<span class="required">*</span>
-                    </label>
                     <div class="col-md-6">
+                      <label class="control-label" for="chargeId">
+                        {{ 'label.input.charge' | translate }}<span class="required">*</span>
+                      </label>
                       <app-select-field
                         inputId="chargeId"
                         [control]="form.controls.chargeId"
@@ -135,10 +105,10 @@
                     cannot block a submission the server should answer.
                   -->
                   <div class="form-group" [class.has-error]="amountInvalid">
-                    <label class="control-label col-md-3" for="amount">
-                      {{ 'label.input.amount' | translate }}<span class="required">*</span>
-                    </label>
                     <div class="col-md-6">
+                      <label class="control-label" for="amount">
+                        {{ 'label.input.amount' | translate }}<span class="required">*</span>
+                      </label>
                       <input
                         id="amount"
                         name="amount"
@@ -168,10 +138,10 @@
                   -->
                   @if (dueDateRequired()) {
                     <div class="form-group">
-                      <label class="control-label col-md-3" for="dueDate">
-                        {{ 'label.input.dueon' | translate }}<span class="required">*</span>
-                      </label>
                       <div class="col-md-6">
+                        <label class="control-label" for="dueDate">
+                          {{ 'label.input.dueon' | translate }}<span class="required">*</span>
+                        </label>
                         <app-date-field
                           inputId="dueDate"
                           [control]="form.controls.dueDate"
@@ -201,10 +171,10 @@
                 -->
                 @if (isPayMode()) {
                   <div class="form-group">
-                    <label class="control-label col-md-3" for="transactionDate">
-                      {{ 'label.input.paymentdate' | translate }}<span class="required">*</span>
-                    </label>
                     <div class="col-md-6">
+                      <label class="control-label" for="transactionDate">
+                        {{ 'label.input.paymentdate' | translate }}<span class="required">*</span>
+                      </label>
                       <app-date-field
                         inputId="transactionDate"
                         [control]="form.controls.transactionDate"
@@ -229,7 +199,7 @@
           and the class's guard makes the two paths one request.
         -->
         @if (!notFound()) {
-          <div class="panel-footer">
+          <div class="panel-footer text-right">
             <a id="cancel" class="btn btn-default" [routerLink]="['/viewloanaccount', loanId()]">
               {{ 'label.button.cancel' | translate }}
             </a>

@@ -265,7 +265,7 @@ describe('LoanActionComponent', () => {
     expect(component.mode()).toBe('reject');
     expect(component.command()).toBe('reject');
     expect(component.loading()).toBe(false);
-    expect(host().querySelector('h3.panel-title')?.textContent?.trim()).toBe('Reject Loan Account');
+    expect(host().querySelector('h1.panel-title')?.textContent?.trim()).toBe('Reject Loan Account');
     expect(host().querySelector('#rejectedOnDate')).not.toBeNull();
     const rejectedOnDate = component.rejectForm.controls.rejectedOnDate;
     expect(isLocalMidnightToday(rejectedOnDate.value)).toBe(true);
@@ -355,7 +355,7 @@ describe('LoanActionComponent', () => {
     await show('approve');
     await settle(APPROVAL_TEMPLATE);
     const rendered = host().textContent ?? '';
-    expect(host().querySelector('h3.panel-title')?.textContent?.trim()).toBe('Approve Loan Account');
+    expect(host().querySelector('h1.panel-title')?.textContent?.trim()).toBe('Approve Loan Account');
     expect(host().querySelector('button[type="submit"]')?.textContent?.trim()).toBe('Approve');
     expect(rendered).toContain('Principal');
     expect(rendered).toContain('Note');
@@ -533,7 +533,7 @@ describe('LoanActionComponent', () => {
     await show('undoapproval');
     httpMock.expectNone(() => true);
     fixture.detectChanges();
-    expect(host().querySelector('h3.panel-title')?.textContent?.trim()).toBe('Undo Approve Loan Account');
+    expect(host().querySelector('h1.panel-title')?.textContent?.trim()).toBe('Undo Approve Loan Account');
     component.undoapprovalForm.controls.note.setValue('  approval entered twice  ');
     const submission = component.submit();
     const post = httpMock.expectOne(isActionPost('undoapproval'));
@@ -547,7 +547,7 @@ describe('LoanActionComponent', () => {
     await show('undodisbursal');
     httpMock.expectNone(() => true);
     fixture.detectChanges();
-    expect(host().querySelector('h3.panel-title')?.textContent?.trim()).toBe('Undo Disburse Loan Account');
+    expect(host().querySelector('h1.panel-title')?.textContent?.trim()).toBe('Undo Disburse Loan Account');
     expect(host().querySelector('app-empty-state')).toBeNull();
     expect(host().querySelector('.panel-body')).toBeNull();
     expect(host().textContent ?? '').not.toContain('Are you sure');

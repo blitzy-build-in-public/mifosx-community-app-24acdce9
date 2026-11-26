@@ -278,6 +278,28 @@ describe('ActionButtonGroupComponent', () => {
     expect(dropdownGroup(fixture).classList.contains('open')).toBe(false);
     expect(trigger(fixture).getAttribute('aria-expanded')).toBe('false');
   });
+  it('closes the More menu when a click lands outside the group', async () => {
+    const fixture = await render(EVERY_CODE);
+    trigger(fixture).click();
+    await settle(fixture);
+    expect(dropdownGroup(fixture).classList.contains('open')).toBe(true);
+    // Legacy's `More` menu was Bootstrap's dropdown, which closed on a click anywhere else on the page; the document listener the component's host block installs reproduces it without the plugin (Rule 1 clause 3, QA finding F11).
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await settle(fixture);
+    expect(dropdownGroup(fixture).classList.contains('open')).toBe(false);
+    expect(trigger(fixture).getAttribute('aria-expanded')).toBe('false');
+  });
+  it('keeps the More menu open when the click lands inside the group', async () => {
+    const fixture = await render(EVERY_CODE);
+    // The trigger's own click bubbles to the document as well, so a dismissal that did not test where the click landed would close the menu on the very click that opened it.
+    trigger(fixture).click();
+    await settle(fixture);
+    expect(dropdownGroup(fixture).classList.contains('open')).toBe(true);
+    dropdownGroup(fixture).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await settle(fixture);
+    expect(dropdownGroup(fixture).classList.contains('open')).toBe(true);
+    expect(trigger(fixture).getAttribute('aria-expanded')).toBe('true');
+  });
   it('renders the descriptor’s Font Awesome glyph, and no glyph for an entry that names none', async () => {
     const fixture = await render(EVERY_CODE);
     const glyph = entryByHref(fixture, '/editclient/1').querySelector('i');

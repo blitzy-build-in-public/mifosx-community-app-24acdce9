@@ -85,8 +85,9 @@ const SILENT_FAILURES: readonly { readonly label: string; readonly failure: () =
     failure: () => 'nothing an Error carries',
   },
 ];
-/** Only the keys the rendered markup resolves: the empty state's message, the entity and parent labels of the blocks' second line, and legacy's truncation notice. */
+/** Only the keys the rendered markup resolves: the screen's own title, the empty state's message, the entity and parent labels of the blocks' second line, and legacy's truncation notice. */
 const LABELS = {
+  'label.heading.search': 'Search',
   'label.nodatafound': NO_DATA_TEXT,
   'label.heading.entity': 'Entity',
   'label.heading.client': 'Client',
@@ -281,6 +282,18 @@ describe('SearchResultsComponent', () => {
       host().querySelector('.container-fluid > .row > .col-md-12 > .panel.panel-default'),
     ).not.toBeNull();
     expect(host().querySelector('.panel > .panel-body')).not.toBeNull();
+  });
+
+  it('carries the screen’s own title as one invisible h1, from the bundle’s own heading', () => {
+    const body = host().querySelector('.panel-body');
+    const heading = body?.firstElementChild;
+
+    // Exactly one level-1 heading, and it opens the card, so the results sit under a page title
+    // instead of under no heading at all; `sr-only` keeps it off the screen (QA report F40).
+    expect(host().querySelectorAll('h1')).toHaveLength(1);
+    expect(heading?.tagName).toBe('H1');
+    expect(heading?.classList.contains('sr-only')).toBe(true);
+    expect(heading?.textContent?.trim()).toBe(LABELS['label.heading.search']);
   });
 
   it('names the parent by the label each family uses and prints no account number on an identifier match', async () => {

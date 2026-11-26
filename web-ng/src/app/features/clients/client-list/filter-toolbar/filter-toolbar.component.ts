@@ -27,17 +27,12 @@ export interface FilterToolbarValues {
  * The list toolbar every list screen wears: the client-side filter field, the find field with its blue search button, the "Show Closed" checkbox and the permission-gated "Create Client" control (AAP 0.2.3 row
  * `FilterToolbar`, whose props are the four outputs below; Figma node `1:3`, step 2 of "Sign in and open a client record").
  *
- * **It owns the toolbar's state, not its screen's data.** The three controls live here as one typed, non-nullable reactive form, so a screen holding the rows never holds a form beside them: it binds {@link
- * filterChange} and {@link showClosedChange} to its own display-filter state, and {@link search} to its read.
- *
- * **Every visual value comes from the global layer.** `.form-horizontal`, `.form-group`, `.form-control`, `.input-group`, `.input-group-btn`, `.checkbox`, `.btn.btn-primary.pull-right` and the `fa
- * fa-search`/`fa fa-plus` glyphs are the legacy Bootstrap 3 markup and look the stylesheet carries (Rule 1 clause 6; AAP 0.2.3); this component declares no stylesheet, colour or dimension. **The markup is the
- * legacy screen's own** (`app/views/clients/clients.html:20-40`), down to the element ids `filterText`, `find` and `showAll`, which are what the parity page objects and the screen's spec address the controls
- * by, and renaming one would be an unregistered difference from legacy (Rule 1 clause 3).
- *
- * **It issues no request and holds no data.** Nothing here reads Fineract, injects a service or touches `HttpClient`: the screen that owns the rows decides what a filter change or a submitted find does (Rule 1
- * clause 5; AAP 0.14.1).
- *
+ * **It owns the toolbar's state, not its screen's data.** The three controls live here as one typed, non-nullable reactive form, so a screen holding the rows never holds a form beside them: it binds
+ * {@link filterChange} and {@link showClosedChange} to its own display-filter state, and {@link search} to its read. **Every visual value comes from the global layer.** `.form-horizontal`, `.form-group`,
+ * `.form-control`, `.input-group`, `.input-group-btn`, `.checkbox`, `.btn.btn-primary.pull-right` and the `fa fa-search`/`fa fa-plus` glyphs are the legacy Bootstrap 3 markup and look the stylesheet carries
+ * (Rule 1 clause 6; AAP 0.2.3). **The markup is the legacy screen's own** (`app/views/clients/clients.html:20-40`), down to the element ids `filterText`, `find` and `showAll`, which are what the parity page
+ * objects and the screen's spec address the controls by (Rule 1 clause 3). **It issues no request and holds no data**: nothing here reads Fineract, injects a service or touches `HttpClient` (Rule 1 clause 5;
+ * AAP 0.14.1).
  */
 @Component({
   selector: 'app-filter-toolbar',

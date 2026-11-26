@@ -5,26 +5,24 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { PanelCardComponent } from './panel-card.component';
 
 /**
- * Behavioural spec for `PanelCardComponent`, the card every list, record and form surface is drawn on (AAP 0.2.3 component inventory row `PanelCard`, Figma nodes `1:3`
- * and `1:4`; AAP 0.5.2 row "Card / panel"). It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with at least one behavioural
- * spec") and Rule 1 clause 8 (no spec without an `expect`, nothing boilerplate). It pins the host as a `div` carrying exactly `panel` by default with no heading band
- * (Rule 1 clause 6); a title rendering `div.panel-heading > h3.panel-title` with the caller's own text, and `titleTag="h4"` moving it to `h4` as the record's profile
- * card does (AAP 0.2.3, AAP 0.10.2); `variant` adding the one modifier class asked for and no other, over the bare `.panel`, `.panel.panel-default` and
- * `.panel.panel-bordered` cards of the delivered markup (AAP 0.5.2, AAP 0.5.3); an empty title rendering no band; and projected content arriving as the host's own
- * children, after the band and in the caller's order. The card declares no stylesheet, no colour and no dimension (Rule 1 clause 6, AAP 0.5.5), so nothing here asserts
- * a computed value: every visual value belongs to `web-ng/src/styles.scss` and is checked there.
+ * Behavioural spec for `PanelCardComponent`, the card every list, record and form surface is drawn on (AAP 0.2.3 component inventory row `PanelCard`, Figma nodes `1:3` and `1:4`; AAP 0.5.2 row "Card /
+ * panel"). It discharges AAP 0.11.1, AAP 0.14.1 and Rule 1 clause 8 (no spec without an `expect`, nothing boilerplate). It pins the host as a `div` carrying exactly `panel` by default with no heading
+ * band (Rule 1 clause 6); a title rendering `div.panel-heading > h3.panel-title` with the caller's own text, and `titleTag` moving it to the level it names — `h1` where the card title is the page's
+ * own title, `h2` on the record's profile card, `h4` for a caller needing a fourth level — with `.panel-title` keeping the design's box on every one of them (AAP 0.2.3, AAP 0.10.2; QA report F40);
+ * `variant` adding the one modifier class asked for and no other, over the bare `.panel`, `.panel.panel-default` and `.panel.panel-bordered` cards of the delivered markup (AAP 0.5.2, AAP 0.5.3); an
+ * empty title rendering no band; and projected content arriving as the host's own children, after the band and in the caller's order. The card declares no stylesheet, no colour and no dimension (Rule
+ * 1 clause 6, AAP 0.5.5), so nothing here asserts a computed value: every visual value belongs to `web-ng/src/styles.scss` and is checked there.
  */
 
 /**
- * A caller of the card: the record's profile card shape — a bordered card whose heading is an `h4`, holding two bodies and a footer. It is the projection case no direct assertion covers, and its static
+ * A caller of the card: the record's profile card shape — a bordered card whose heading is an `h2`, holding two bodies and a footer. It is the projection case no direct assertion covers, and its static
  * attributes also pin that the three inputs accept the plain attribute syntax a caller writes. Test input only; it reproduces no shipped screen's copy.
- *
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [PanelCardComponent],
   template: `
-    <div appPanelCard title="Profile" titleTag="h4" variant="bordered">
+    <div appPanelCard title="Profile" titleTag="h2" variant="bordered">
       <div class="panel-body">Summary</div>
       <div class="panel-body">Performance History</div>
       <div class="panel-footer">Footer</div>
@@ -47,7 +45,7 @@ function hostOf(target: ComponentFixture<unknown>): HTMLElement {
  */
 function createCard(
   title?: string | null,
-  titleTag?: 'h3' | 'h4',
+  titleTag?: 'h1' | 'h2' | 'h3' | 'h4',
   variant?: 'plain' | 'default' | 'bordered',
 ): ComponentFixture<PanelCardComponent> {
   const created = TestBed.createComponent(PanelCardComponent);
@@ -112,6 +110,25 @@ describe('PanelCardComponent', () => {
     expect(host.querySelector('h3')).toBeNull();
   });
 
+  it.each([
+    ['h1', 'H1'],
+    ['h2', 'H2'],
+  ] as const)(
+    'renders an %s.panel-title when titleTag is "%s", with the class carrying the design values',
+    (titleTag, expected) => {
+      const host = hostOf(createCard('Clients', titleTag));
+      const heading = bandOf(host).firstElementChild as HTMLElement | null;
+
+      // The level is the element's; the 18px/700 card-title box stays `.panel-title`'s, so promoting a
+      // screen title to `h1` or moving the record's card to `h2` moves no pixel (QA report F40).
+      expect(heading?.tagName).toBe(expected);
+      expect(heading?.classList.contains('panel-title')).toBe(true);
+      expect(heading?.textContent?.trim()).toBe('Clients');
+      expect(heading?.childElementCount).toBe(0);
+      expect(host.querySelector('h3')).toBeNull();
+    },
+  );
+
   it('renders no heading band for an empty title', () => {
     const host = hostOf(createCard(''));
 
@@ -156,7 +173,7 @@ describe('PanelCardComponent', () => {
       'panel-body',
       'panel-footer',
     ]);
-    expect(card.querySelector('.panel-heading > h4.panel-title')?.textContent?.trim()).toBe(
+    expect(card.querySelector('.panel-heading > h2.panel-title')?.textContent?.trim()).toBe(
       'Profile',
     );
 

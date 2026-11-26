@@ -131,6 +131,15 @@ describe('parity-report line budget', () => {
     // The third trim: the ten fix sets that landed after the second cut, the crossing they caused and the fixed order's exhaustion.
     expect(markdown).toContain('ten fix sets landed at this checkpoint and added 2,636 net lines across 91 files');
     expect(markdown).toContain('taking the tree from 59,784 to 62,420 and over AAP 0.9.3\'s ceiling again');
+    // The fourth trim: the ar-shell-a11y landing merged over the reconciler's repair, the crossing it caused and the fixed order's exhaustion.
+    expect(markdown).toContain('the ar-shell-a11y landing was merged over the reconciler\'s size-ceiling repair and added 665 net lines');
+    expect(markdown).toContain('the skip link, the heading-level remap, the named landmarks and table captions');
+    expect(markdown).toContain('taking the tree from 59,818 to 60,483 and over AAP 0.9.3\'s ceiling again');
+    // The fifth trim: the batch of landed work merged over the tree the fourth trim left, the crossing it caused and the fixed order's exhaustion.
+    expect(markdown).toContain('a batch of landed work was merged over the tree the fourth trim left at 59,877 and added 242 net lines');
+    expect(markdown).toContain('the narrow-viewport navbar flexbox layer with its shared link-wrap rule');
+    expect(markdown).toContain('taking the tree from 59,877 to 60,119 and over AAP 0.9.3\'s ceiling again');
+    expect(markdown).toContain('every `BLITZY [A11Y]` rule-override note with the Rule clause and QA finding it names');
     expect(markdown).toContain('the delivered tree plus them measures 63,857');
     expect(markdown).toContain('no Must scope was dropped');
     expect(markdown).toContain('1,479 lines against AAP 0.9.3\'s share of about 600');

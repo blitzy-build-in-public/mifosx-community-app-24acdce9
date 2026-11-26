@@ -26,9 +26,14 @@ const NO_DATA_KEY = 'label.nodata';
 /** The same key's English wording in the shipped legacy bundle. */
 const NO_DATA_TEXT = 'No Data';
 /** The one key the tab's empty state resolves. */
-/** The wording the shipped `app/global-translations/locale-en.json` bundle carries for the two keys the tab resolves: the empty state's message and the identifier-status code the Status cell passes through `TranslatePipe`, exactly as legacy's tab does (Rule 1 clauses 3 and 6). */
+/** The table's accessible name, from the legacy bundle's own identities heading (QA report F41). */
+const IDENTITIES_HEADING_KEY = 'label.heading.identities';
+/** The message that key resolves to in the in-memory bundle. */
+const IDENTITIES_HEADING_TEXT = 'Identities';
+/** The wording the shipped `app/global-translations/locale-en.json` bundle carries for the keys the tab resolves: the empty state's message, the table's accessible name, and the identifier-status code the Status cell passes through `TranslatePipe`, exactly as legacy's tab does (Rule 1 clauses 3 and 6). */
 const EN_BUNDLE: Readonly<Record<string, string>> = {
   [NO_DATA_KEY]: NO_DATA_TEXT,
+  [IDENTITIES_HEADING_KEY]: IDENTITIES_HEADING_TEXT,
   'clientIdentifierStatusType.active': 'Active',
 };
 /** Fineract's own text for a rejected identifier read, synthetic but shaped like the server's `defaultUserMessage`: the tab renders it character for character (Rule 1 clause 3). */
@@ -151,6 +156,19 @@ describe('ClientIdentifiersComponent', () => {
     expect(component.rows().map((row) => row.id)).toEqual([PASSPORT.id, NATIONAL_ID.id]);
     expect(component.failed()).toBe(false);
     expect(component.loading()).toBe(false);
+  });
+  it('names the table with the identities heading through a visually hidden caption', async () => {
+    identifiers.mockReturnValue(of([PASSPORT, NATIONAL_ID]));
+    await mount(CLIENT_ID);
+
+    const table = host().querySelector('table');
+    const caption = table?.querySelector('caption');
+
+    // The caption is the table's own naming element and Bootstrap's `.sr-only` keeps it off the screen, so the
+    // tab's table is announced by the legacy bundle's identities heading without a pixel moving (QA report F41).
+    expect(caption?.textContent?.trim()).toBe(IDENTITIES_HEADING_TEXT);
+    expect(caption?.classList.contains('sr-only')).toBe(true);
+    expect(table?.firstElementChild).toBe(caption);
   });
 
   it('renders the populated state a live read answers with, cell for cell', async () => {
