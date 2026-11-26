@@ -1,40 +1,4 @@
-/**
- * Behaviour of the global search results screen: the destination of the signed-in navbar's search
- * control (AAP 0.7.1 Features row `search`; AAP 0.7.3 row "Shell: global search"; AAP 0.8.2 route
- * `search/:query`; AAP 0.7.4 states; AAP 0.11.1 row for this folder).
- *
- * It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with
- * at least one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`, nothing
- * boilerplate). What it proves is the contract the screen advertises: exactly one search per
- * parameter set with exactly the three parameters the service takes, a trimmed query that is never
- * sent empty, a scope validated against the three the control offers with every out-of-scope value
- * answered by `all`, the exact-match flag the URL carries together with legacy's `false` when it
- * carries none, legacy's own block list — one `.blockquoteresult` per result, carrying the name
- * link, the account segment and the entity and parent line the family uses, with no table, no card
- * title and no status indicator anywhere — legacy's 200-record bound and the bundle's notice above
- * it, the client and loan records the blocks open, the explicit empty state, a 4xx rendered verbatim
- * with the previous results and the card kept, a parameter change that replaces the results, and a
- * result listed to a user who may not open it, with the link withheld in both families while the
- * result itself stays on screen.
- *
- * Providers, and what each one proves. `provideRouter([])` because the rows link through `RouterLink`
- * and the component builds their destinations with `Router`; an empty route table is enough, because
- * the assertions read the hrefs the router serialises rather than where a click would land. The
- * translate stack because every label resolves through `TranslatePipe`, and `provideTranslateService()`
- * is the library's own registration of `TranslateService` (declared without `providedIn` in
- * ngx-translate 18.1.0, so the pipe's non-optional injection would fail without it); its omitted
- * loader slot defaults to the no-op loader, so no bundle is requested. The `ActivatedRoute` stand-in
- * hands the component the two observables it reads, which is what lets a test push a second parameter
- * set the way the navbar does. `SearchService` is replaced by a recorder, so the assertions are about
- * the request this screen makes rather than about a request the real service would build. No HTTP
- * provider is installed at all: the component reaches Fineract through the service alone, and any
- * attempt to do otherwise would fail with NG0201 instead of passing silently (Rule 1 clause 5).
- *
- * The fixtures are shaped like the answers the running fork produces: a client row naming the client,
- * a loan row whose `entityName` is the loan product's name with the owning client in `parentName`,
- * and a client matched by one of its identifiers. They are test input only and reproduce no shipped
- * data (Rule 1 clauses 6 and 9).
- */
+/** Behaviour of the global search results screen: the destination of the signed-in navbar's search control (AAP 0.7.1 Features row `search`; AAP 0.7.3 row "Shell: global search"; AAP 0.8.2 route `search/:query`; AAP 0.7.4 (AAP 0.11.1, AAP 0.14.1, Rule 1 clause 8, Rule 1 clause 5). */
 
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
@@ -84,19 +48,10 @@ const IDENTIFIER: SearchResult = {
 
 const NO_DATA_TEXT = 'Nothing matched from the spec bundle';
 
-/**
- * The legacy bundle's own truncation message, `label.search.query.matched.results.exceeds.max.length`
- * (`app/global-translations/locale-en.json:678`), served here so the case below asserts that the
- * screen renders that key rather than a sentence of its own invention.
- */
+/** The legacy bundle's own truncation message, `label.search.query.matched.results.exceeds.max.length` (`app/global-translations/locale-en.json:678`), served here so the case below asserts that the screen renders that key. */
 const TRUNCATED_TEXT = 'This query shows only the first 200 records.';
 
-/**
- * A search answer carrying `count` client results, each named by its ordinal so a case can see which
- * results survived legacy's cut: an answer of more than 200 is rendered as its first 201.
- *
- * @param count how many results the stubbed service answers with.
- */
+/** A search answer carrying `count` client results, each named by its ordinal so a case can see which results survived legacy's cut: an answer of more than 200 is rendered as its first 201. @param count how many results. */
 function clientResults(count: number): SearchResult[] {
   return Array.from({ length: count }, (_, index): SearchResult => {
     const ordinal: string = `${index + 1}`;
@@ -111,13 +66,7 @@ function clientResults(count: number): SearchResult[] {
   });
 }
 
-/**
- * The rejections that carry no text for this screen, each for a reason the screen must honour: a 5xx
- * and a transport failure (status `0`) have already raised the interceptor's single notification, and
- * a rejection that is not an `ApiError` never came from Fineract at all — its message is Angular's
- * or the application's own text, which can embed the request URL (AAP 0.7.4). The fourth row is a
- * rejection that is not even an `Error`, which carries nothing to show by definition.
- */
+/** The rejections that carry no text for this screen, each for a reason the screen must honour: a 5xx and a transport failure (status `0`) have already raised the interceptor's single notification, and a rejection that is (AAP 0.7.4). */
 const SILENT_FAILURES: readonly { readonly label: string; readonly failure: () => unknown }[] = [
   {
     label: 'a 5xx',
@@ -136,12 +85,7 @@ const SILENT_FAILURES: readonly { readonly label: string; readonly failure: () =
     failure: () => 'nothing an Error carries',
   },
 ];
-/**
- * Only the keys the rendered markup resolves: the empty state's message, the entity and parent
- * labels of the blocks' second line, and legacy's truncation notice. Nothing else is served, so a
- * template that reached for another key would render the missing-translation text and the cases
- * below would see it.
- */
+/** Only the keys the rendered markup resolves: the empty state's message, the entity and parent labels of the blocks' second line, and legacy's truncation notice. */
 const LABELS = {
   'label.nodatafound': NO_DATA_TEXT,
   'label.heading.entity': 'Entity',
@@ -161,18 +105,11 @@ describe('SearchResultsComponent', () => {
 
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
 
-  /**
-   * The rendered results: legacy's own blocks, one per result, inside the container that marks the
-   * answer (`app/views/search/glresults.html:9-66`).
-   */
+  /** The rendered results: legacy's own blocks, one per result, inside the container that marks the answer (`app/views/search/glresults.html:9-66`). */
   const blocks = (): HTMLDivElement[] =>
     Array.from(host().querySelectorAll<HTMLDivElement>('#search-results .blockquoteresult'));
 
-  /**
-   * A block's rendered text with every run of whitespace — the `&nbsp;` entities among the separators
-   * included — collapsed to one space, so a case can name what a reader sees without depending on
-   * the markup's own line breaks.
-   */
+  /** A block's rendered text with every run of whitespace — the `&nbsp;` entities among the separators included — collapsed to one space, so a case can name what a reader sees without depending on the markup's own line. */
   const text = (element: Element | null | undefined): string =>
     (element?.textContent ?? '').replace(/[\s\u00A0]+/g, ' ').trim();
 
@@ -228,8 +165,7 @@ describe('SearchResultsComponent', () => {
 
   it('issues exactly one search for the initial navigation, with exactly three parameters', () => {
     expect(calls).toHaveLength(1);
-    // The three parameters legacy's controller forwards, the flag included: an absent `exactMatch`
-    // in the URL is legacy's unquoted `false`, so it is sent rather than dropped.
+    // The three parameters legacy's controller forwards, the flag included: an absent `exactMatch` in the URL is legacy's unquoted `false`, so it is sent rather than dropped.
     expect(calls[0]).toEqual({ query: 'Parity', resource: 'all', exactMatch: false });
     expect(Object.keys(calls[0]).sort()).toEqual(['exactMatch', 'query', 'resource']);
     expect(component.query()).toBe('Parity');
@@ -268,10 +204,7 @@ describe('SearchResultsComponent', () => {
   });
 
   it('accepts only the three scopes and answers anything else with all', async () => {
-    // Every value outside the control's three: the legacy scopes this migration leaves to the legacy
-    // application (groups, savings, shares), a differently cased spelling and an empty one. None of
-    // them may reach the service as a search of its own, and none is repaired into a scope the caller
-    // did not name (AAP 0.10.5 item 9; Rule 1 clause 3).
+    // Every value outside the control's three: the legacy scopes this migration leaves to the legacy application (groups, savings, shares), a differently cased spelling and an empty one (AAP 0.10.5, Rule 1 clause 3).
     for (const raw of ['groups', 'savings', 'shares', 'CLIENTS', '']) {
       queryParams.next(convertToParamMap({ scope: raw }));
       fixture.detectChanges();
@@ -308,8 +241,7 @@ describe('SearchResultsComponent', () => {
 
     expect(rendered).toHaveLength(2);
     expect(component.rows()).toHaveLength(2);
-    // A client result names the client, its account number and the office it is filed under, which is
-    // what legacy prints on that family's line (`app/views/search/glresults.html:32-34,57-59`).
+    // A client result names the client, its account number and the office it is filed under, which is what legacy prints on that family's line (`app/views/search/glresults.html:32-34,57-59`).
     expect(component.rows()[0]).toMatchObject({
       kind: 'client',
       name: 'Ada Okafor',
@@ -319,8 +251,7 @@ describe('SearchResultsComponent', () => {
       parentLabelKey: 'label.heading.office',
       permission: 'READ_CLIENT',
     });
-    // A loan result names the loan product, its account number and the client that owns it, which the
-    // same line labels `Client` (`app/views/search/glresults.html:63-64`).
+    // A loan result names the loan product, its account number and the client that owns it, which the same line labels `Client` (`app/views/search/glresults.html:63-64`).
     expect(component.rows()[1]).toMatchObject({
       kind: 'loan',
       name: 'Parity Loan',
@@ -331,8 +262,7 @@ describe('SearchResultsComponent', () => {
       permission: 'READ_LOAN',
     });
 
-    // Each block carries the name, the account segment and the entity and parent line, in that order:
-    // the account number is unprefixed by any column heading and the family is the legacy word.
+    // Each block carries the name, the account segment and the entity and parent line, in that order: the account number is unprefixed by any column heading and the family is the legacy word.
     expect(text(rendered[0])).toContain('| #000000002');
     expect(text(rendered[0])).toContain('Entity:Client');
     expect(text(rendered[0])).toContain('| Office:Head Office');
@@ -340,9 +270,7 @@ describe('SearchResultsComponent', () => {
     expect(text(rendered[1])).toContain('Entity:Loan');
     expect(text(rendered[1])).toContain('| Client:Ada Okafor');
 
-    // Nothing the legacy results list does not render is added: no table, no column headers, no
-    // status indicator and no card title (Rule 1 clause 3; AAP 0.10.5's register holds no entry for
-    // any of them).
+    // Nothing the legacy results list does not render is added: no table, no column headers, no status indicator and no card title (Rule 1 clause 3; AAP 0.10.5's register holds no entry for any of them).
     expect(host().querySelector('table')).toBeNull();
     expect(host().querySelector('thead')).toBeNull();
     expect(host().querySelector('app-status-swatch')).toBeNull();
@@ -351,11 +279,7 @@ describe('SearchResultsComponent', () => {
   });
 
   it('opens the screen’s own page container around its card', () => {
-    // The shell leaves the page container to the screen: it wraps only the breadcrumb in a
-    // `.container-fluid` of its own and renders the routed view bare
-    // (`core/layout/shell.component.html:50-59`), so this screen opens the same
-    // `.container-fluid > .row > .col-md-12` wrapper every sibling screen opens, with the card inside
-    // it.
+    // The shell leaves the page container to the screen: it wraps only the breadcrumb in a `.container-fluid` of its own and renders the routed view bare (`core/layout/shell.component.html:50-59`), so this screen opens the.
     expect(
       host().querySelector('.container-fluid > .row > .col-md-12 > .panel.panel-default'),
     ).not.toBeNull();
@@ -369,9 +293,7 @@ describe('SearchResultsComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    // Legacy's three lines: a client's parent is its office, a loan's and an identifier match's is the
-    // client, and only the first two carry an account number
-    // (`app/views/search/glresults.html:11-64`).
+    // Legacy's three lines: a client's parent is its office, a loan's and an identifier match's is the client, and only the first two carry an account number (`app/views/search/glresults.html:11-64`).
     expect(component.rows().map((row) => row.parentLabelKey)).toEqual([
       'label.heading.office',
       'label.heading.client',
@@ -397,9 +319,7 @@ describe('SearchResultsComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    // Legacy's controller slices the answer to its first 201 and raises its flag
-    // (`app/scripts/controllers/main/SearchController.js:10-18`), and the results list prints the
-    // bundle's own message above the rows it kept (`app/views/search/glresults.html:5`).
+    // Legacy's controller slices the answer to its first 201 and raises its flag (`app/scripts/controllers/main/SearchController.js:10-18`), and the results list prints the bundle's own message above the rows it kept.
     expect(component.exceedsMaxLength()).toBe(true);
     expect(blocks()).toHaveLength(201);
     expect(text(blocks()[200])).toContain('Client 201');
@@ -416,8 +336,7 @@ describe('SearchResultsComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    // Legacy's own boundary: `data.length > 200` is the test, so an answer of exactly 200 is neither
-    // cut nor announced (`SearchController.js:10-11`).
+    // Legacy's own boundary: `data.length > 200` is the test, so an answer of exactly 200 is neither cut nor announced (`SearchController.js:10-11`).
     expect(component.exceedsMaxLength()).toBe(false);
     expect(blocks()).toHaveLength(200);
     expect(host().querySelector('#search-results-truncated')).toBeNull();
@@ -430,9 +349,7 @@ describe('SearchResultsComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    // Legacy tests `data.length > 200` BEFORE it slices, so 201 results are both all rendered —
-    // `data.slice(0, 201)` keeps every one of them — and announced by the bundle's notice
-    // (`SearchController.js:10-12`; Rule 1 clause 3).
+    // Legacy tests `data.length > 200` BEFORE it slices, so 201 results are both all rendered — `data.slice(0, 201)` keeps every one of them — and announced by the bundle's notice (`SearchController.js:10-12`; Rule 1 clause (Rule 1 clause 3).
     expect(component.exceedsMaxLength()).toBe(true);
     expect(blocks()).toHaveLength(201);
     expect(text(blocks()[200])).toContain('Client 201');
@@ -501,8 +418,7 @@ describe('SearchResultsComponent', () => {
       await fixture.whenStable();
       fixture.detectChanges();
 
-      // No message and no alert region — the interceptor has already raised the one notification —
-      // and nothing on screen that could pass the failure off as a search that matched nothing.
+      // No message and no alert region — the interceptor has already raised the one notification — and nothing on screen that could pass the failure off as a search that matched nothing.
       expect(calls).toHaveLength(2);
       expect(component.error()).toBeNull();
       expect(host().querySelector('#search-results-error')).toBeNull();

@@ -1,41 +1,4 @@
-/**
- * Baseline page object for the individual-loan screens of the legacy AngularJS application — the
- * unchanged Mifos X community-app served on port 9090, which the parity run measures before the new
- * Angular application is judged (AAP 0.10.1, "Baseline first"; AAP 0.9.3, "Baseline").
- *
- * Four hash routes of the legacy route table are driven here (AAP 0.8.2, mirrored by
- * `web-ng/tools/parity/in-scope-routes.json`):
- *
- * - `#/newclientloanaccount/:clientId` — the application wizard (newloanaccount.html)
- * - `#/editloanaccount/:id` — the application form in edit mode
- * - `#/viewloanaccount/:id` — the loan record (viewloanaccountdetails.html)
- * - `#/loanaccount/:id/:action` — the action forms (loanaccountactions.html)
- *
- * Workflows served (AAP 0.10.1): **W4** the application submitted after a repayment-schedule
- * preview, **W5** approve and disburse with exactly one request per action, **W6** the repayment of
- * the first period's total due, and **W7** the server's validation error for a principal above the
- * product maximum.
- *
- * Two rules shape the whole file:
- *
- * - **Rule 2 (the backend).** Every `open*()` method loads the legacy application through this page
- *   object's own `entryUrl` composition, which always carries `baseApiUrl` and `tenantIdentifier` in
- *   the query. Without those two parameters the legacy app targets its public demo host instead of
- *   the locally built Fineract, so they are part of the contract, never an optional extra.
- * - **Rule 1 clause 3 (match legacy, do not improve it).** W7 depends on the server rejecting a
- *   principal of 50,000 above the product's 10,000 maximum. Nothing in this file reads, bounds,
- *   rounds, blocks or warns about the principal, and no field is given a `min`, `max` or length
- *   limit: the value the spec supplies is the value the form receives, and the server's answer is
- *   the one the workflow asserts.
- *
- * This is a page object, not a test: it locates and reads, and it raises a message naming what it
- * looked for when the page does not offer it. It asserts nothing (no `expect`), writes nothing,
- * prints nothing, and imports no credential (Rule 1 clause 9).
- *
- * The legacy source tree is not part of this checkout. Every selector below is grounded in the
- * read-only reference clone of `openMF/community-app` at commit `45ec7b8` — the template or
- * controller named beside it — and must be confirmed against the running legacy application.
- */
+/** Baseline page object for the individual-loan screens of the legacy AngularJS application — the unchanged Mifos X community-app served on port 9090, which the parity run measures before the new Angular application is (AAP 0.10.1, AAP 0.9.3, AAP 0.8.2, Rule 2). */
 import type { ElementHandle, Locator, Page } from '@playwright/test';
 import { FINERACT_URL, LEGACY_URL, TENANT_ID, formatFineractDate } from '../../seed/fixtures';
 import { chooseOption } from './chosen';
@@ -164,18 +127,11 @@ export interface LoanActionValues {
   note?: string;
   /** Visible label of `select#paymentTypeId`, the payment type the transaction template fills. */
   paymentType?: string;
-  /**
-   * Reason, for a form that renders a reason control — the `select#reasonId` /
-   * `select[ng-model*="eason"]` probe of `fillActionForm`. No in-scope legacy loan screen renders
-   * one today, so no workflow depends on it.
-   */
+  /** Reason, for a form that renders a reason control — the `select#reasonId` / `select[ng-model*="eason"]` probe of `fillActionForm`. */
   reasonName?: string;
 }
 
-/**
- * The loan actions `#/loanaccount/:id/:action` accepts (AAP 0.8.2, AAP 0.10.1 W5). The union is the
- * whole allowed set, so any other string fails to compile.
- */
+/** The loan actions `#/loanaccount/:id/:action` accepts (AAP 0.8.2, AAP 0.10.1 W5). */
 export type LoanAccountAction =
   | 'approve'
   | 'undoapproval'
@@ -187,11 +143,7 @@ export type LoanAccountAction =
 /** Positions a period column of the application form's preview table (newloanaccount.html). */
 const PREVIEW_TABLE_HEADERS = ['principal due', 'interest due', 'due'] as const;
 
-/**
- * Positions the record's Repayment Schedule table. It is the only one of the three schedule tables
- * that carries both a `Due` and a `Paid` column (viewloanaccountdetails.html), which is what
- * separates it from the Original and Future schedules.
- */
+/** Positions the record's Repayment Schedule table. It is the only one of the three schedule tables that carries both a `Due` and a `Paid` column (viewloanaccountdetails.html), which is what separates it from the Original. */
 const SCHEDULE_TABLE_HEADERS = ['principal due', 'interest', 'fees', 'due', 'paid'] as const;
 
 /** Positions the record's transaction list, whose second header row carries `Principal`. */
@@ -257,11 +209,7 @@ interface FieldSpec {
   readonly labels: readonly string[];
 }
 
-/**
- * The four fields `fillApplication` types into, by the model's own key, plus the two the action and
- * repayment forms carry. `fillFieldByLabel` resolves one of these by its label text first, then by
- * the element id the legacy template fixes, then by `formControlName`, then by placeholder.
- */
+/** The four fields `fillApplication` types into, by the model's own key, plus the two the action and repayment forms carry. */
 const FILLABLE_FIELDS: ReadonlyMap<string, FieldSpec> = new Map<string, FieldSpec>([
   ['principal', { key: 'principal', id: 'principal', labels: ['Principal'] }],
   [
@@ -281,11 +229,7 @@ const FILLABLE_FIELDS: ReadonlyMap<string, FieldSpec> = new Map<string, FieldSpe
   ['note', { key: 'note', id: 'note', labels: ['Note'] }],
 ]);
 
-/**
- * The dropdown of the application form each `LoanApplicationValues` field selects from
- * (newloanaccount.html). Whether a given control is a `chosen` widget or a plain `<select>` depends
- * on the legacy template, and `chooseOption` handles both.
- */
+/** The dropdown of the application form each `LoanApplicationValues` field selects from (newloanaccount.html). */
 const APPLICATION_SELECTS = {
   productName: 'select#productId',
   loanOfficerName: 'select#loanOfficerId',
@@ -313,16 +257,7 @@ type WizardStep = 'Details' | 'Terms' | 'Charges' | 'review';
 /** How long a route is given to render its own root locator before the hash fallback is used. */
 const ROUTE_READY_TIMEOUT_MS = 15_000;
 
-/**
- * Runs inside the legacy page, so it references nothing from module scope — Playwright serialises
- * the function and evaluates it in the document.
- *
- * Resolves the form control a field names: by its label text first (the legacy templates put the
- * label in a table cell or a Bootstrap `.form-group` beside the control), then by the element id the
- * template fixes, then by `formControlName`, and finally by placeholder text. It answers the control
- * itself — including a disabled or read-only one — so the caller can report that state precisely
- * instead of pretending the field was filled.
- */
+/** Runs inside the legacy page, so it references nothing from module scope — Playwright serialises the function and evaluates it in the document. */
 function resolveFieldElement(spec: FieldSpec): Element | null {
   const squish = (text: string | null | undefined): string =>
     (text ?? '').replace(/\s+/g, ' ').trim();
@@ -357,8 +292,7 @@ function resolveFieldElement(spec: FieldSpec): Element | null {
         text.indexOf(target + '*') === 0,
     );
     if (!matches) continue;
-    // The shortest matching label wins, so "Principal *" is not confused with a longer label that
-    // merely begins with the same word.
+    // The shortest matching label wins, so "Principal *" is not confused with a longer label that merely begins with the same word.
     if (bestLabel === null || text.length < bestLength) {
       bestLabel = label;
       bestLength = text.length;
@@ -385,8 +319,7 @@ function resolveFieldElement(spec: FieldSpec): Element | null {
   const byId = document.getElementById(spec.id);
   if (isWritable(byId)) return byId;
 
-  // Angular reactive forms do not keep the attribute in the DOM, so this fallback answers only where
-  // a form renders it; it is documented rather than relied on.
+  // Angular reactive forms do not keep the attribute in the DOM, so this fallback answers only where a form renders it; it is documented rather than relied on.
   const byFormControl = document.querySelector(`[formcontrolname="${spec.key.toLowerCase()}"]`);
   if (isWritable(byFormControl)) return byFormControl;
 
@@ -401,11 +334,7 @@ function resolveFieldElement(spec: FieldSpec): Element | null {
   return null;
 }
 
-/**
- * Runs inside the legacy page: writes a value into a control and tells AngularJS and the jQuery
- * plugins about it. This is the path a read-only datepicker input needs, because the browser refuses
- * to type into it.
- */
+/** Runs inside the legacy page: writes a value into a control and tells AngularJS and the jQuery plugins about it. */
 function applyNativeValue(element: Element, value: string): void {
   if (!(element instanceof HTMLInputElement) && !(element instanceof HTMLTextAreaElement)) return;
   element.value = value;
@@ -413,18 +342,7 @@ function applyNativeValue(element: Element, value: string): void {
   element.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-/**
- * Runs inside the legacy page: the header texts of the first table carrying every required column
- * label, with the table's data rows positioned by column.
- *
- * Column positions are accumulated across the cells that precede each one, so a grouped header row
- * that spans several columns still lines up with the specific labels the row beneath it carries —
- * `cellIndex` alone would count each spanning cell once and shift every label after it. Header rows
- * are the rows of `<thead>`, plus — for the legacy preview table, which renders its labels as the
- * first row of its body — the first body row when it repeats at least two required labels. Rows of
- * `<tfoot>` (the schedule's totals) are not data. `rowspan` is not honoured: no in-scope legacy table
- * uses it.
- */
+/** Runs inside the legacy page: the header texts of the first table carrying every required column label, with the table's data rows positioned by column. */
 function readTableGrid(required: readonly string[]): TableGrid | null {
   const squish = (text: string | null | undefined): string =>
     (text ?? '').replace(/\s+/g, ' ').trim();
@@ -441,17 +359,14 @@ function readTableGrid(required: readonly string[]): TableGrid | null {
       const first = body.rows[0];
       const labels = Array.from(first.cells).map((cell) => normalize(cell.textContent));
       const repeated = wanted.filter((alias) => labels.indexOf(alias) >= 0).length;
-      // Two matching labels are enough to tell a label row from a data row. The legacy preview table
-      // renders its column labels at the top of the body, under a grouped header row in `<thead>`, so
-      // the body is inspected even when header rows exist.
+      // Two matching labels are enough to tell a label row from a data row.
       if (repeated >= 2) rows.push(first);
     }
     return rows;
   };
 
   const gridOf = (table: HTMLTableElement, headerRows: HTMLTableRowElement[]): TableGrid | null => {
-    // Column positions are accumulated across the cells before them: `cellIndex` counts cells, so a
-    // cell spanning four columns would otherwise shift every label after it by three.
+    // Column positions are accumulated across the cells before them: `cellIndex` counts cells, so a cell spanning four columns would otherwise shift every label after it by three.
     let width = 0;
     const labelled: { readonly column: number; readonly text: string }[] = [];
     for (const row of headerRows) {
@@ -513,11 +428,7 @@ function readTableGrid(required: readonly string[]): TableGrid | null {
   return null;
 }
 
-/**
- * Runs inside the legacy page: the position of the first tab whose heading matches one of `wanted`,
- * or `-1` when the page carries no such tab. The record's sections are `uib-tab` panes, and each
- * pane sits at its tab's position.
- */
+/** Runs inside the legacy page: the position of the first tab whose heading matches one of `wanted`, or `-1` when the page carries no such tab. */
 function findTabIndex(wanted: readonly string[]): number {
   const normalize = (text: string | null | undefined): string =>
     (text ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -535,14 +446,7 @@ function setWindowHash(hash: string): void {
   window.location.hash = hash;
 }
 
-/**
- * Runs inside the legacy page: the class of the record's rendered status indicator.
- *
- * The legacy header draws the status as a Font Awesome `fa-stop` glyph, so the `<i>` carries no text
- * and no box of its own — `:visible` would report it as hidden. `offsetParent` is the rendering test
- * that still answers for such an element, and it is also what separates the icon the record shows
- * from the copy the header hides when the loan is in arrears. Confirm against the running legacy app.
- */
+/** Runs inside the legacy page: the class of the record's rendered status indicator. */
 function readStatusIndicatorClass(): string {
   for (const icon of Array.from(document.querySelectorAll('i.fa-stop'))) {
     if (icon instanceof HTMLElement && icon.offsetParent !== null) {
@@ -584,17 +488,7 @@ function cellAt(cells: readonly string[], index: number): string {
   return (cells[index] ?? '').trim();
 }
 
-/**
- * Sets a legacy date control, which is a jQuery datepicker input rather than a native date field
- * (AAP 0.10.5 item 1: the new application replaces it with `input[type=date]`, so only this side
- * needs the plugin's behaviour).
- *
- * The text is the `dd MMMM yyyy` form every date-bearing Fineract payload carries
- * (Rule 1 clause 2), which is also the format the legacy `datepicker-pop` attribute declares. The
- * modified plugin parses the field on blur and may rewrite it, so the value is read back and, when
- * it did not stick — or when the field the template renders is read-only — written
- * through native events before being checked once more. Confirm against the running legacy app.
- */
+/** Sets a legacy date control, which is a jQuery datepicker input rather than a native date field (AAP 0.10.5 item 1: the new application replaces it with `input[type=date]`, so only this side needs the plugin's behaviour) (Rule 1 clause 2). */
 async function setLegacyDate(input: Locator, date: Date): Promise<void> {
   const field = input.first();
   await field.waitFor({ state: 'visible' });
@@ -620,14 +514,7 @@ async function setLegacyDate(input: Locator, date: Date): Promise<void> {
 }
 
 
-/**
- * The legacy application's individual-loan screens: the application wizard, the loan record and the
- * action forms.
- *
- * Every method takes and answers plain values. Nothing here asserts, retries or reports: a method
- * that cannot do what it was asked raises an `Error` naming the control or the value it looked for,
- * so a failure carries the page's own answer instead of a silent difference.
- */
+/** The legacy application's individual-loan screens: the application wizard, the loan record and the action forms. */
 export class LoansPage {
   private readonly page: Page;
 
@@ -635,17 +522,9 @@ export class LoansPage {
     this.page = page;
   }
 
-  // ---------------------------------------------------------------------------------------------
-  // Application form — W4 and W7 (AAP 0.10.1)
-  // ---------------------------------------------------------------------------------------------
+  // --------------------------------------------------------------------------------------------- Application form — W4 and W7 (AAP 0.10.1).
 
-  /**
-   * Selects the loan product by its visible name (AAP 0.10.1 W4, AAP 0.3.4 row 14).
-   *
-   * The legacy controller re-requests the loan template when the product changes, and the template's
-   * own defaults would overwrite anything typed before it arrives, so this waits for the fields the
-   * template fills — a locator wait on the controls being present and enabled, not a pause.
-   */
+  /** Selects the loan product by its visible name (AAP 0.10.1 W4, AAP 0.3.4 row 14). */
   async selectProduct(name: string): Promise<void> {
     const select = this.page.locator(APPLICATION_SELECTS.productName);
     await select.waitFor({ state: 'visible' });
@@ -654,16 +533,7 @@ export class LoansPage {
     await this.page.locator('#numberOfRepayments:enabled').waitFor({ state: 'visible' });
   }
 
-  /**
-   * Fills the application form with the values supplied, walking the wizard's own steps to reach the
-   * control each one carries (AAP 0.10.1 W4; AAP 0.3.4 row 14).
-   *
-   * **No product bound is read, applied or reported.** W7 (AAP 0.10.1) requires a principal of 50,000
-   * — above the product's 10,000 maximum — to leave this method untouched and reach the server, so
-   * that the server's own `errors[].defaultUserMessage` is what the workflow asserts. Rule 1 clause 3
-   * forbids adding a client-side validation the legacy form does not have, so do not add a limit, a
-   * floor or ceiling, a rounding or a pre-submit check here.
-   */
+  /** Fills the application form with the values supplied, walking the wizard's own steps to reach the control each one carries (AAP 0.10.1 W4; AAP 0.3.4 row 14). **No product bound is read, applied or reported.** W7 (AAP (Rule 1 clause 3). */
   async fillApplication(values: LoanApplicationValues): Promise<void> {
     if (values.productName !== undefined) {
       await this.selectProduct(values.productName);
@@ -730,14 +600,7 @@ export class LoansPage {
     }
   }
 
-  /**
-   * Clicks the application form's repayment-schedule preview and waits for the schedule it renders
-   * (AAP 0.10.1 W4; AAP 0.3.4 row 14: `POST /loans` with `command=calculateLoanSchedule`).
-   *
-   * The control lives in the wizard's Charges step, so the wizard is walked forward to it first when
-   * the caller previews before filling anything. The preview request itself is observed in the
-   * capture, not made here.
-   */
+  /** Clicks the application form's repayment-schedule preview and waits for the schedule it renders (AAP 0.10.1 W4; AAP 0.3.4 row 14: `POST /loans` with `command=calculateLoanSchedule`). */
   async previewSchedule(): Promise<void> {
     await this.reachChargesStep();
     const control = this.previewControl();
@@ -746,14 +609,7 @@ export class LoansPage {
     await this.previewShown().waitFor({ state: 'visible' });
   }
 
-  /**
-   * Reads the previewed schedule, one entry per period (AAP 0.10.1 W4).
-   *
-   * Columns are read by their headers, so the legacy preview's own column set is what is reported and
-   * a column it does not render — it carries neither a period start date nor a total outstanding —
-   * answers `''`. The record's schedule table is not a substitute here: it does not exist until the
-   * application has been submitted.
-   */
+  /** Reads the previewed schedule, one entry per period (AAP 0.10.1 W4). */
   async readPreviewRows(): Promise<RepaymentPreviewRow[]> {
     const grid = await this.readTable(PREVIEW_TABLE_HEADERS);
     const period = columnIndex(grid, PREVIEW_COLUMNS.period);
@@ -776,11 +632,7 @@ export class LoansPage {
     }));
   }
 
-  /**
-   * Submits the application (AAP 0.10.1 W4): the wizard is walked to its Review step and the form's
-   * primary submit is clicked exactly once. There is no assertion, no retry and no second click,
-   * because the workflow's own capture is what proves the request.
-   */
+  /** Submits the application (AAP 0.10.1 W4): the wizard is walked to its Review step and the form's primary submit is clicked exactly once. */
   async submitApplication(): Promise<void> {
     await this.reachReviewStep();
     const save = this.page.locator('button#save.btn.btn-primary:visible').first();
@@ -788,27 +640,14 @@ export class LoansPage {
     await save.click();
   }
 
-  // ---------------------------------------------------------------------------------------------
-  // Loan record — reads for W5 and W6 (AAP 0.10.1)
-  // ---------------------------------------------------------------------------------------------
+  // --------------------------------------------------------------------------------------------- Loan record — reads for W5 and W6 (AAP 0.10.1).
 
-  /**
-   * Opens the loan record — `#/viewloanaccount/:id` (AAP 0.8.2) — and waits for the record header
-   * the actions and repayment workflows read their preconditions from (AAP 0.10.1 W5, W6).
-   */
+  /** Opens the loan record — `#/viewloanaccount/:id` (AAP 0.8.2) — and waits for the record header the actions and repayment workflows read their preconditions from (AAP 0.10.1 W5, W6). */
   async openView(loanId: number): Promise<void> {
     await this.gotoHash(`/viewloanaccount/${loanId}`, this.page.locator('.gray-head'));
   }
 
-  /**
-   * Reads the record's status and summary (AAP 0.10.2, "Fineract end state"; AAP 0.10.5 item 11).
-   *
-   * The status is reported as the class the record's indicator carries — the legacy header shows a
-   * colour and no text, and adding a textual status would be the improvement the migration forbids.
-   * The summary is the matrix the record renders, with each cell reported as `"<row> <column>"` —
-   * `"Principal Original"`, `"Total Outstanding"` — so the principal and the outstanding balance a
-   * workflow compares are both addressable, and a cell the record leaves blank answers `''`.
-   */
+  /** Reads the record's status and summary (AAP 0.10.2, "Fineract end state"; AAP 0.10.5 item 11). */
   async readSummary(): Promise<LoanSummary> {
     const statusClass = await this.readStatusClass();
     const grid = await this.readTable(SUMMARY_TABLE_HEADERS);
@@ -826,11 +665,7 @@ export class LoansPage {
     return { statusClass, fields };
   }
 
-  /**
-   * Reads the record's repayment schedule, one entry per period (AAP 0.10.1 W6 — the first period's
-   * total due is the repayment W6 submits). The Repayment Schedule is picked out of the three
-   * schedule tables by the columns only it carries; `[]` when the record shows none.
-   */
+  /** Reads the record's repayment schedule, one entry per period (AAP 0.10.1 W6 — the first period's total due is the repayment W6 submits). */
   async readScheduleRows(): Promise<ScheduleRow[]> {
     await this.sectionPane(SECTION_TABS.schedule);
     const grid = await this.readTable(SCHEDULE_TABLE_HEADERS);
@@ -856,11 +691,7 @@ export class LoansPage {
     }));
   }
 
-  /**
-   * Reads the record's transactions (AAP 0.10.1 W6: the repayment must appear as a row). `reversed`
-   * carries the indicator the legacy row renders for a manually reversed transaction — its
-   * `strikeoff` class — and `''` when the row is not reversed.
-   */
+  /** Reads the record's transactions (AAP 0.10.1 W6: the repayment must appear as a row). */
   async readTransactions(): Promise<TransactionRow[]> {
     await this.sectionPane(SECTION_TABS.transactions);
     const grid = await this.readTable(TRANSACTION_TABLE_HEADERS);
@@ -888,15 +719,7 @@ export class LoansPage {
     });
   }
 
-  /**
-   * Reads the empty-state block of each of the three sections the request requires one on — the
-   * repayment schedule, the transactions and the charges (AAP 0.11.1, AAP 0.7.4) — answering `''`
-   * for a section that shows data.
-   *
-   * The legacy record renders no such block: a section with nothing to list is simply not shown. So
-   * on this side the method answers `''` in both states, and the empty state the new application adds
-   * is one of the deliberate differences AAP 0.10.5 registers.
-   */
+  /** Reads the empty-state block of each of the three sections the request requires one on — the repayment schedule, the transactions and the charges (AAP 0.11.1, AAP 0.7.4) — answering `''` for a section that shows data (AAP 0.10.5). */
   async readEmptyStates(): Promise<{ schedule: string; transactions: string; charges: string }> {
     const schedule = await this.readSectionEmptyState(SECTION_TABS.schedule, SCHEDULE_TABLE_HEADERS);
     const transactions = await this.readSectionEmptyState(
@@ -907,29 +730,15 @@ export class LoansPage {
     return { schedule, transactions, charges };
   }
 
-  // ---------------------------------------------------------------------------------------------
-  // Loan actions — W5 (AAP 0.10.1)
-  // ---------------------------------------------------------------------------------------------
+  // --------------------------------------------------------------------------------------------- Loan actions — W5 (AAP 0.10.1) ---------------------------------------------------------------------------------------------
 
-  /**
-   * Opens one loan action form — `#/loanaccount/:id/:action` (AAP 0.8.2) — and waits for the form
-   * the action renders (AAP 0.10.1 W5). The union is the whole allowed set of action names.
-   */
+  /** Opens one loan action form — `#/loanaccount/:id/:action` (AAP 0.8.2) — and waits for the form the action renders (AAP 0.10.1 W5). */
   async openAction(loanId: number, action: LoanAccountAction): Promise<void> {
     await this.gotoHash(`/loanaccount/${loanId}/${action}`, this.actionForm());
     await this.waitForActionForm();
   }
 
-  /**
-   * Fills the action form with the values it offers (AAP 0.10.1 W5).
-   *
-   * The legacy action form renders one date control, an amount, a payment type and a note, and which
-   * of them it offers depends on the action — undo approval and undo disbursal carry no date, reject
-   * carries no amount, and no loan action carries a reason. A supplied value the form does not offer is
-   * therefore not entered, and the capture of the request the action sends is what reports the result;
-   * a value the form does offer but cannot take — an option absent from the list, a read-only control
-   * — raises instead of passing silently.
-   */
+  /** Fills the action form with the values it offers (AAP 0.10.1 W5). */
   async fillActionForm(values: LoanActionValues): Promise<void> {
     if (values.date !== undefined) {
       const date = this.actionDateField();
@@ -961,32 +770,20 @@ export class LoansPage {
     }
   }
 
-  /**
-   * Submits the action exactly once (AAP 0.10.1 W5: one POST per action). Nothing is bounded,
-   * nothing is retried and the submit is not clicked twice.
-   */
+  /** Submits the action exactly once (AAP 0.10.1 W5: one POST per action). */
   async submitAction(): Promise<void> {
     await this.clickPrimarySubmit('The loan action form');
   }
 
-  // ---------------------------------------------------------------------------------------------
-  // Repayment — W6 (AAP 0.10.1)
-  // ---------------------------------------------------------------------------------------------
+  // --------------------------------------------------------------------------------------------- Repayment — W6 (AAP 0.10.1) ---------------------------------------------------------------------------------------------
 
-  /**
-   * Opens the repayment form — `#/loanaccount/:id/repayment` (AAP 0.8.2) — and waits for it
-   * (AAP 0.10.1 W6).
-   */
+  /** Opens the repayment form — `#/loanaccount/:id/repayment` (AAP 0.8.2) — and waits for it (AAP 0.10.1 W6). */
   async openRepayment(loanId: number): Promise<void> {
     await this.gotoHash(`/loanaccount/${loanId}/repayment`, this.actionForm());
     await this.waitForActionForm();
   }
 
-  /**
-   * Fills the repayment form: the transaction date, the transaction amount, the payment type and the
-   * note (AAP 0.10.1 W6). The amount is the first schedule period's total due, which the caller reads
-   * from {@link LoansPage.readScheduleRows}; this page object never invents it.
-   */
+  /** Fills the repayment form: the transaction date, the transaction amount, the payment type and the note (AAP 0.10.1 W6). */
   async fillRepayment(values: LoanActionValues): Promise<void> {
     if (values.date !== undefined) {
       await setLegacyDate(this.actionDateField(), values.date);
@@ -1007,14 +804,9 @@ export class LoansPage {
     await this.clickPrimarySubmit('The repayment form');
   }
 
-  // ---------------------------------------------------------------------------------------------
-  // Private helpers — navigation, wizard steps, control lookups and table reads
-  // ---------------------------------------------------------------------------------------------
+  // --------------------------------------------------------------------------------------------- Private helpers — navigation, wizard steps, control lookups and table reads.
 
-  /**
-   * The legacy application's entry URL carrying the two query parameters Rule 2 requires. Without
-   * them the legacy app falls back to its public demo host instead of the locally built Fineract.
-   */
+  /** The legacy application's entry URL carrying the two query parameters Rule 2 requires. */
   private entryUrl(hash?: string): string {
     const base =
       `${LEGACY_URL}/?baseApiUrl=${encodeURIComponent(FINERACT_URL)}` +
@@ -1022,19 +814,11 @@ export class LoansPage {
     return hash === undefined ? base : `${base}#${hash}`;
   }
 
-  /**
-   * Opens one legacy hash route and waits for the locator that proves the destination rendered.
-   *
-   * A hash-only change keeps the application loaded, so the query string survives. When the AngularJS
-   * router does not react to it — a build that only follows its own `$location` transitions — the
-   * hash is set directly, which drives the router through `hashchange`.
-   */
+  /** Opens one legacy hash route and waits for the locator that proves the destination rendered. */
   private async gotoHash(hash: string, ready: Locator): Promise<void> {
     await this.page.goto(this.entryUrl(hash));
     if (await this.settles(ready)) return;
-    // The routers of some legacy builds follow only their own `$location` transitions. Setting the
-    // hash drives the `hashchange` they do listen for; a build that still does not react gets one
-    // reload of the hash route, which renders the destination from scratch.
+    // The routers of some legacy builds follow only their own `$location` transitions.
     await this.page.evaluate(setWindowHash, hash);
     if (await this.settles(ready)) return;
     await this.page.reload();
@@ -1057,11 +841,7 @@ export class LoansPage {
     return this.page.locator(`form[name="${step}"]:visible`);
   }
 
-  /**
-   * Walks the application wizard one step forward. The transition is proved by the step left behind
-   * going away and the step awaited appearing, so a click that the form rejected cannot be mistaken
-   * for progress.
-   */
+  /** Walks the application wizard one step forward. The transition is proved by the step left behind going away and the step awaited appearing, so a click that the form rejected cannot be mistaken for progress. */
   private async stepForward(from: Locator, to: Locator): Promise<void> {
     const next = this.page.locator('button.btn.btn-default.pull-right:visible').first();
     if ((await next.count()) === 0) {
@@ -1095,11 +875,7 @@ export class LoansPage {
     await this.stepForward(this.stepMarker('Charges'), this.stepMarker('review'));
   }
 
-  /**
-   * The control that previews the repayment schedule. It is anchored on the handler the legacy
-   * template binds rather than on its translated label, which is the reason it survives a language
-   * switch. Confirm against the running legacy app.
-   */
+  /** The control that previews the repayment schedule. It is anchored on the handler the legacy template binds rather than on its translated label, which is the reason it survives a language switch. */
   private previewControl(): Locator {
     return this.page.locator('[ng-click="previewRepayments()"]').first();
   }
@@ -1119,12 +895,7 @@ export class LoansPage {
     await chooseOption(this.page, select, optionText);
   }
 
-  /**
-   * Fills one field by its label. The control is resolved by label text first, then by the element id
-   * the legacy template gives it, then by `formControlName`, then by placeholder — all inside one
-   * page-side helper, so the field mapping stays in a single place. A control the browser will not
-   * accept typing into is written through native events, which is what a read-only date field needs.
-   */
+  /** Fills one field by its label. The control is resolved by label text first, then by the element id the legacy template gives it, then by `formControlName`, then by placeholder — all inside one page-side helper, so the. */
   private async fillFieldByLabel(label: string, value: string): Promise<void> {
     const spec = FILLABLE_FIELDS.get(label);
     if (spec === undefined) {
@@ -1162,20 +933,12 @@ export class LoansPage {
     return element;
   }
 
-  /**
-   * The amount control of each charge row the Charges step shows. Each row is anchored on its own
-   * amount control, which the legacy template gives the `Amount` placeholder: the row input's id is
-   * built from the row's own value, so the placeholder is the stable anchor. Confirm against the
-   * running legacy app.
-   */
+  /** The amount control of each charge row the Charges step shows. */
   private chargeAmountFields(): Locator {
     return this.page.locator('input.form-control[placeholder="Amount"]:visible');
   }
 
-  /**
-   * Fills the charge rows the Charges step already shows, in order. This page object never chooses a
-   * charge to apply on the application form, so a row that is missing is reported rather than invented.
-   */
+  /** Fills the charge rows the Charges step already shows, in order. */
   private async fillChargeAmounts(amounts: readonly string[]): Promise<void> {
     const fields = this.chargeAmountFields();
     const count = await fields.count();
@@ -1196,21 +959,14 @@ export class LoansPage {
     return this.page.locator('form[name="loanactionform"]');
   }
 
-  /**
-   * Waits for an action form to be shown and for its first control to be on screen, so a read that
-   * follows cannot see the previous route's markup.
-   */
+  /** Waits for an action form to be shown and for its first control to be on screen, so a read that follows cannot see the previous route's markup. */
   private async waitForActionForm(): Promise<void> {
     const form = this.actionForm().first();
     await form.waitFor({ state: 'visible' });
     await form.locator('.form-control:visible').first().waitFor({ state: 'visible' });
   }
 
-  /**
-   * The action's own date control. The legacy controller names it per action — `approvedOnDate`,
-   * `rejectedOnDate`, `actualDisbursementDate`, `transactionDate` — so every name it can use is
-   * listed and the visible one answers. Confirm against the running legacy app.
-   */
+  /** The action's own date control. The legacy controller names it per action — `approvedOnDate`, `rejectedOnDate`, `actualDisbursementDate`, `transactionDate` — so every name it can use is listed and the visible one answers. */
   private actionDateField(): Locator {
     const ids = [
       '#approvedOnDate',
@@ -1239,19 +995,12 @@ export class LoansPage {
     return this.page.locator('#note:visible');
   }
 
-  /**
-   * A reason select, where the action screen offers one. The legacy loan actions carry no reason
-   * control, so this answers nothing here; it is the lookup a client-side reason form would satisfy.
-   * Confirm against the running legacy app.
-   */
+  /** A reason select, where the action screen offers one. The legacy loan actions carry no reason control, so this answers nothing here; it is the lookup a client-side reason form would satisfy. */
   private reasonSelect(): Locator {
     return this.page.locator('select#reasonId:visible, select[ng-model*="eason"]:visible');
   }
 
-  /**
-   * Clicks the form's own primary submit once. A screen showing the entity-datatable step instead is
-   * reported rather than walked through, because a second click is what W5 forbids.
-   */
+  /** Clicks the form's own primary submit once. A screen showing the entity-datatable step instead is reported rather than walked through, because a second click is what W5 forbids. */
   private async clickPrimarySubmit(subject: string): Promise<void> {
     const save = this.page.locator('button#save.btn.btn-primary:visible').first();
     if ((await save.count()) === 0) {
@@ -1279,12 +1028,7 @@ export class LoansPage {
     return this.page.evaluate(readStatusIndicatorClass);
   }
 
-  /**
-   * The pane of one record section, activating its tab when the tab strip does not already show it.
-   * The record renders its sections as `uib-tab` panes, and activating the tab is what guarantees a
-   * build that creates panes lazily has rendered the section before it is read. Confirm against the
-   * running legacy app.
-   */
+  /** The pane of one record section, activating its tab when the tab strip does not already show it. */
   private async sectionPane(headings: readonly string[]): Promise<Locator | null> {
     const index = await this.page.evaluate(findTabIndex, headings);
     if (index < 0) return null;
@@ -1301,11 +1045,7 @@ export class LoansPage {
     return pane;
   }
 
-  /**
-   * One section's empty-state text: `''` when the section shows data, otherwise the block it renders
-   * in place of the data (`.text-center.text-muted`, the composition AAP 0.7.4 settles on), or `''`
-   * when it renders none — which is what the legacy record does.
-   */
+  /** One section's empty-state text: `''` when the section shows data, otherwise the block it renders in place of the data (`.text-center.text-muted`, the composition AAP 0.7.4 settles on), or `''` when it renders none. */
   private async readSectionEmptyState(
     headings: readonly string[],
     required: readonly string[],

@@ -10,51 +10,12 @@ import { PermissionsService } from '../auth/permissions.service';
 import { NotificationService } from '../notifications/notification.service';
 import { NavbarComponent } from './navbar.component';
 
-/**
- * Behavioural spec for `NavbarComponent` — the `Navbar` row of the component inventory (AAP 0.2.3)
- * and the signed-in chrome of the clients list screen in the "Sign in and open a client record"
- * flow (Figma node `1:3`, file `DKm5TBFbXypfqyx4xUdhBw`; AAP 0.7.1 `core/layout`, AAP 0.7.4).
- *
- * It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with
- * at least one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`). Each test
- * states one contract the component owns:
- *
- * - it renders the five in-scope things — the brand lockup, the "Clients" destination, the global
- *   search, the language switcher and the user menu labelled with the authenticated account name —
- *   and renders none of the out-of-scope chrome (the hamburger, the notification bell, the
- *   Accounting / Reports / Admin items and the left icon rail), which AAP 0.10.5 items 4 and 8 fix;
- * - the "Clients" destination follows the permission the clients route declares, appearing only once
- *   that permission is held and for a super user holding `ALL_FUNCTIONS` as it does in legacy;
- * - the user menu's label is the account name the signed-in shell hands in through its `userName`
- *   input, and the session's own `GET /users/{id}` projection when it hands none;
- * - a search reported by the search control becomes a navigation to `/search/:query` carrying the
- *   scope the user picked and the exact-match flag, and searches nothing itself;
- * - the language switcher changes the active translation without navigating, and the selector shows
- *   the language the service actually has active, including a switch made by another switcher;
- * - sign-out clears the session **before** it navigates, which is the order AAP 0.7.1 and the W1
- *   sequence require, and the user menu closes with it;
- * - a navigation the router refuses is settled rather than dropped: the user is told once, in one
- *   fixed sentence naming the screen that did not open rather than in the router's own wording, and
- *   no unhandled rejection is left behind (AAP 0.14.2);
- * - the menu opens and closes on the trigger and on `Escape`, driven by Angular state rather than
- *   the Bootstrap dropdown plugin, which needs the jQuery this build does not have.
- *
- * Providers, and what their absence proves. `AuthService` and `PermissionsService` are replaced by
- * stubs typed against the real classes, so the two cannot drift and the suite never assembles a
- * session or reads storage. No HTTP provider exists anywhere in the suite: the component injects no
- * Fineract service, so an attempt to reach the backend from it would fail with NG0201 rather than
- * passing silently (Rule 1 clause 5, Rule 2). The router is the real one with an empty route table
- * and its `navigate` spied, so the assertion is what the component asked for rather than a fake.
- */
+/** Behavioural spec for `NavbarComponent` — the `Navbar` row of the component inventory (AAP 0.2.3) and the signed-in chrome of the clients list screen in the "Sign in and open a client record" flow (Figma node `1:3`, file (AAP 0.7.1, AAP 0.7.4, AAP 0.11.1, AAP 0.14.1). */
 
 /** The permission the clients route group declares, spelled out rather than imported from routes. */
 const READ_CLIENT = 'READ_CLIENT';
 
-/**
- * The permission Fineract returns to a user who may do everything, spelled out rather than imported:
- * the wildcard the legacy gate answers before it considers any other code
- * (`app/scripts/controllers/main/MainController.js:104-127`; AAP 0.3.4 claim 12).
- */
+/** The permission Fineract returns to a user who may do everything, spelled out rather than imported: the wildcard the legacy gate answers before it considers any other code (AAP 0.3.4). */
 const ALL_FUNCTIONS = 'ALL_FUNCTIONS';
 
 /** The account name a restore resolves, which is what the user menu must show. */
@@ -72,11 +33,7 @@ const LOGIN_SCREEN_MESSAGE = 'The login screen did not open. Reload the page and
 /** The sentence a refused search navigation is reported with: it names the screen that did not open. */
 const SEARCH_RESULTS_MESSAGE = 'The search results did not open. Reload the page and try again.';
 
-/**
- * Stand-in for the shipped bundles: one distinct value per key, so an assertion can tell which key
- * produced which text and can never pass on a raw dotted key. Test input only — it adds no locale
- * file and reproduces no shipped translation text (Rule 1 clause 6).
- */
+/** Stand-in for the shipped bundles: one distinct value per key, so an assertion can tell which key produced which text and can never pass on a raw dotted key (Rule 1 clause 6). */
 const SPEC_BUNDLE: Record<string, string> = {
   'label.anchor.clients': 'Clients',
   'label.anchor.logout': 'Logout',
@@ -89,11 +46,7 @@ const SPEC_BUNDLE: Record<string, string> = {
   'label.input.adhoc.search.loans': 'Loans',
 };
 
-/**
- * The half of `AuthService` the navbar reads: the account name it labels the user menu with and the
- * logout it performs. `logout` records its call so a test can prove the session is cleared before
- * the navigation runs.
- */
+/** The half of `AuthService` the navbar reads: the account name it labels the user menu with and the logout it performs. */
 class AuthStub implements Pick<AuthService, 'username' | 'logout'> {
   private readonly account: WritableSignal<string | null> = signal<string | null>(ACCOUNT_NAME);
 
@@ -106,11 +59,7 @@ class AuthStub implements Pick<AuthService, 'username' | 'logout'> {
   });
 }
 
-/**
- * The half of `PermissionsService` the `hasPermission` directive asks, with the legacy algebra for
- * `ALL_FUNCTIONS` and a leading `!`. The real service reads the session, which a unit test has no
- * business assembling.
- */
+/** The half of `PermissionsService` the `hasPermission` directive asks, with the legacy algebra for `ALL_FUNCTIONS` and a leading `!`. */
 class PermissionsStub implements Pick<PermissionsService, 'has'> {
   private readonly granted: WritableSignal<readonly string[]> = signal<readonly string[]>([]);
 
@@ -137,8 +86,7 @@ describe('NavbarComponent', () => {
   let translate: TranslateService;
   let navigate: MockInstance;
 
-  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps the
-  // assertions below type-checked and confines the boundary to this line (Rule 1 clause 4).
+  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps the assertions below type-checked and confines the boundary to this line (Rule 1 clause 4).
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
 
   /** The rendered element with the given selector, or a named failure when nothing matches it. */
@@ -160,9 +108,7 @@ describe('NavbarComponent', () => {
   const languageSelector = (): HTMLSelectElement => find<HTMLSelectElement>('#navbar-language');
 
   beforeEach(() => {
-    // Reset first so each test starts on a fresh root injector: a permission granted by one test
-    // must never reach the next, and a second `configureTestingModule` on an instantiated module
-    // throws.
+    // Reset first so each test starts on a fresh root injector: a permission granted by one test must never reach the next, and a second `configureTestingModule` on an instantiated module throws.
     TestBed.resetTestingModule();
     auth = new AuthStub();
     permissions = new PermissionsStub();
@@ -204,9 +150,7 @@ describe('NavbarComponent', () => {
   });
 
   it('labels the user menu with the name the shell hands in, and with the session projection when it hands none', () => {
-    // AAP 0.7.1's `ShellComponent` input chain: the signed-in shell passes its own `userName` down,
-    // and the navbar falls back to `AuthService.username` — the `GET /users/{id}` projection — when
-    // nothing above it supplies a name. The menu shows one value, never both.
+    // AAP 0.7.1's `ShellComponent` input chain: the signed-in shell passes its own `userName` down, and the navbar falls back to `AuthService.username` — the `GET /users/{id}` projection — when nothing above it supplies a.
     expect(userMenuTrigger().textContent).toContain(ACCOUNT_NAME);
 
     fixture.componentRef.setInput('userName', SUPPLIED_NAME);
@@ -224,12 +168,10 @@ describe('NavbarComponent', () => {
   it('renders none of the out-of-scope chrome the legacy navbar carried', () => {
     const text = host().textContent ?? '';
 
-    // AAP 0.10.5 item 8: no hamburger, no notification bell and no Accounting / Reports / Admin
-    // destination, because every screen behind them stays on the legacy application.
+    // AAP 0.10.5 item 8: no hamburger, no notification bell and no Accounting / Reports / Admin destination, because every screen behind them stays on the legacy application.
     expect(host().querySelector('.navbar-toggle')).toBeNull();
     expect(host().querySelector('.fa-bell')).toBeNull();
-    // The three destinations themselves, addressed the way a link would address them: text absence
-    // alone would miss a link whose label resolved to an empty string.
+    // The three destinations themselves, addressed the way a link would address them: text absence alone would miss a link whose label resolved to an empty string.
     expect(
       host().querySelectorAll('a[href*="accounting"], a[href*="reports"], a[href*="admin"]'),
     ).toHaveLength(0);
@@ -249,10 +191,7 @@ describe('NavbarComponent', () => {
   });
 
   it('shows the Clients destination to a super user holding ALL_FUNCTIONS', () => {
-    // The wildcard the legacy gate answers before it considers any other code, so a user who holds it
-    // reaches the one in-scope destination with `READ_CLIENT` absent from the list entirely (AAP 0.3.4
-    // claim 12). The item is hidden first, so what this measures is the wildcard's effect and not a
-    // gate that was open all along.
+    // The wildcard the legacy gate answers before it considers any other code, so a user who holds it reaches the one in-scope destination with `READ_CLIENT` absent from the list entirely (AAP 0.3.4 claim 12).
     permissions.grant([]);
     fixture.detectChanges();
     expect(clientsItem().style.display).toBe('none');
@@ -270,18 +209,14 @@ describe('NavbarComponent', () => {
     find<HTMLFormElement>('app-global-search form').dispatchEvent(new Event('submit'));
     fixture.detectChanges();
 
-    // The pair legacy put in its own URL, and the pair the results screen forwards to the search
-    // request: the scope beside the flag, which is `false` for text the user did not quote
-    // (`app/scripts/controllers/main/MainController.js:208-217`).
+    // The pair legacy put in its own URL, and the pair the results screen forwards to the search request: the scope beside the flag, which is `false` for text the user did not quote.
     expect(navigate).toHaveBeenCalledWith(['/search', 'ada okafor'], {
       queryParams: { scope: 'all', exactMatch: false },
     });
   });
 
   it('carries the scope the user picked in the selector beside the search text', () => {
-    // The scope travels from the control's own selector rather than from its default: the results
-    // screen turns it into legacy's `resource` parameter, so a navigation that lost it would search a
-    // wider scope than the user asked for (AAP 0.7.3 row "Shell: global search").
+    // The scope travels from the control's own selector rather than from its default: the results screen turns it into legacy's `resource` parameter, so a navigation that lost it would search a wider scope than the user asked (AAP 0.7.3).
     const scope = find<HTMLSelectElement>('#search-scope');
     scope.value = 'clients';
     scope.dispatchEvent(new Event('change'));
@@ -303,16 +238,14 @@ describe('NavbarComponent', () => {
     find<HTMLFormElement>('app-global-search form').dispatchEvent(new Event('submit'));
     fixture.detectChanges();
 
-    // The path segment is the unquoted text legacy searched for; the quotes survive only as the
-    // flag that asks Fineract for the literal string.
+    // The path segment is the unquoted text legacy searched for; the quotes survive only as the flag that asks Fineract for the literal string.
     expect(navigate).toHaveBeenCalledWith(['/search', 'ada okafor'], {
       queryParams: { scope: 'all', exactMatch: true },
     });
   });
 
   it('reports a refused search navigation once, in the sentence naming the results screen', async () => {
-    // The two texts a refused navigation used to leave the operator with: Angular's own sentence
-    // about navigation ids, and the request-flavoured fallback for a navigation that made no request.
+    // The two texts a refused navigation used to leave the operator with: Angular's own sentence about navigation ids, and the request-flavoured fallback for a navigation that made no request.
     const routerWording = 'Navigation ID 3 is not equal to the current navigation id 2';
     const requestSentence = 'The request could not be completed.';
     const notifications = TestBed.inject(NotificationService);
@@ -322,8 +255,7 @@ describe('NavbarComponent', () => {
     field.value = 'ada okafor';
     field.dispatchEvent(new Event('input'));
     find<HTMLFormElement>('app-global-search form').dispatchEvent(new Event('submit'));
-    // Crosses a macrotask, so the handler the component attached has run and the notification it
-    // raises is queued: that handler is what keeps the rejection from surfacing unhandled.
+    // Crosses a macrotask, so the handler the component attached has run and the notification it raises is queued: that handler is what keeps the rejection from surfacing unhandled.
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 0);
     });
@@ -349,8 +281,7 @@ describe('NavbarComponent', () => {
   });
 
   it('keeps the selector on the language actually in force when a switch does not take effect', () => {
-    // A bundle that fails to load moves nothing: the service keeps the language it had and emits no
-    // change, so the control must not go on advertising the one that was asked for.
+    // A bundle that fails to load moves nothing: the service keeps the language it had and emits no change, so the control must not go on advertising the one that was asked for.
     vi.spyOn(translate, 'use').mockReturnValue(of({}));
     const selector = languageSelector();
     selector.value = 'fr';
@@ -361,8 +292,7 @@ describe('NavbarComponent', () => {
   });
 
   it('shows a language switched by another switcher', () => {
-    // The selector reads the library's own active language, so a switch made elsewhere — the login
-    // screen's switcher — is reflected here without a second copy of that state.
+    // The selector reads the library's own active language, so a switch made elsewhere — the login screen's switcher — is reflected here without a second copy of that state.
     translate.use('fr');
     fixture.detectChanges();
 
@@ -386,8 +316,7 @@ describe('NavbarComponent', () => {
     navigate.mockImplementation(() => Promise.reject(new Error(SIGN_OUT_NAVIGATION_FAILURE)));
 
     find<HTMLElement>('#logout').click();
-    // Crosses a macrotask, so the handler the component attached has run and the notification it
-    // raises is queued: that handler is what keeps the rejection from surfacing unhandled.
+    // Crosses a macrotask, so the handler the component attached has run and the notification it raises is queued: that handler is what keeps the rejection from surfacing unhandled.
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 0);
     });
@@ -418,8 +347,7 @@ describe('NavbarComponent', () => {
     expect(dropdown.classList).not.toContain('open');
     expect(userMenuTrigger().getAttribute('aria-expanded')).toBe('false');
 
-    // The panel is hidden by the state change alone, so focus is handed back rather than being left
-    // on a hidden entry.
+    // The panel is hidden by the state change alone, so focus is handed back rather than being left on a hidden entry.
     expect(document.activeElement).toBe(userMenuTrigger());
   });
 });

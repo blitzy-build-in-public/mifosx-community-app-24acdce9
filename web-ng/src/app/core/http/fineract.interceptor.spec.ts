@@ -1,43 +1,4 @@
-/**
- * Behavioural spec for `fineractInterceptor`, the application's single HTTP interceptor (AAP 0.4.2,
- * 0.7.1, 0.7.4; Rule 1 clauses 5 and 8). Each test pins one contract of the file:
- *
- * - the tenant header and the session's Basic key are attached, and the URL, method and query
- *   parameters reach the handler exactly as the calling service composed them (no rewriting);
- * - the authentication request carries the tenant header but no credential, because the credential is
- *   what it is asking for;
- * - no credential header is sent while no session is in effect;
- * - a request issued before the configuration resolves passes through untouched, so bootstrap cannot be
- *   handed a throw from the configuration surface it is resolving;
- * - a 401 on a normal request ends the session and returns to the login screen carrying the attempted
- *   route, while a 401 on the authentication request and a 401 while the login screen is showing leave
- *   both alone;
- * - that return to the login screen is settled rather than dropped: when the router refuses it, the user
- *   is told once — an `ApiError` and a Fineract response in the text they carry, and every other
- *   refusal, a plain `Error` and a non-error rejection included, in one fixed sentence naming the login
- *   screen instead of the router's own wording — and no unhandled rejection is left behind (AAP 0.14.2);
- * - exactly one notification is raised for a transport failure or a 5xx, and none for a 4xx, which
- *   reaches the caller alone;
- * - every `HttpErrorResponse` becomes the `ApiError` the caller renders: the message is the envelope's
- *   first field-level `defaultUserMessage`, else its top-level one, else the shared sentence — never
- *   Angular's own `message`, which names the API host and the request's path — with the field-level
- *   failures kept in the server's order, and a body of another shape costs the caller only the
- *   message it did not carry;
- * - an error that is not an HTTP response is rethrown unchanged, and nothing about a failed exchange
- *   reaches the console (Rule 1 clause 9).
- *
- * The interceptor is exercised through `runInInjectionContext` with the four collaborators it injects
- * supplied as values, rather than through `TestBed`: it has no template, and the run's house pattern for
- * a class with no template is the runtime injector (see `session.service.spec.ts`). A
- * `provideHttpClient(withInterceptors([...]))` pipeline would need this file to import `HttpClient`,
- * which `eslint.config.js` restricts to the seven files that own the Fineract API surface; feeding the
- * interceptor through the injector exercises the same code — the header composition and the
- * `catchError` chain — without weakening that gate.
- *
- * Security (Rule 1 clause 9, AAP 0.10.4): the session fixture's credential is assembled at run time from
- * parts, so no credential-shaped literal reaches the source, and it is compared by equality rather than
- * printed.
- */
+/** Behavioural spec for `fineractInterceptor`, the application's single HTTP interceptor (AAP 0.4.2, 0.7.1, 0.7.4; Rule 1 clauses 5 and 8) (AAP 0.14.2, Rule 1 clause 9, AAP 0.10.4). */
 import {
   HttpErrorResponse,
   HttpParams,
@@ -84,10 +45,7 @@ const KEY_PARTS = ['Zm9v', 'YmFy', 'OnNlY3JldA'];
 /** The server's own validation text, which a screen must render verbatim (workflow W7). */
 const SERVER_MESSAGE = 'The maximum allowed principal is 10,000';
 
-/**
- * The generic sentence Fineract puts in the envelope's top-level `defaultUserMessage` beside a
- * validation failure's own field-level text; it must never displace that text (AAP 0.4.4 decision 6).
- */
+/** The generic sentence Fineract puts in the envelope's top-level `defaultUserMessage` beside a validation failure's own field-level text; it must never displace that text (AAP 0.4.4 decision 6). */
 const GENERIC_MESSAGE = 'Validation errors exist.';
 
 /** The sentence `api-error.ts` shows for a failure whose body carries no message of its own. */
@@ -147,8 +105,7 @@ function harnessFor(): Harness {
         provide: AppConfigService,
         useValue: {
           changes: config.asReadonly(),
-          // The composition is the real service's job; this stand-in only has to answer for the one
-          // endpoint the interceptor names, exactly as `apiUrl()` would.
+          // The composition is the real service's job; this stand-in only has to answer for the one endpoint the interceptor names, exactly as `apiUrl()` would.
           apiUrl: (path: string) => `${API_ROOT}/${path}`,
         },
       },
@@ -169,8 +126,7 @@ function harnessFor(): Harness {
 
 /** The request the handler received, read back off the body `echo` answered with. */
 function sentRequest(response: HttpEvent<unknown>): HttpRequest<unknown> {
-  // The one cast in this spec: `echo` answers with the request itself as its body, which the response
-  // type states only as `unknown`.
+  // The one cast in this spec: `echo` answers with the request itself as its body, which the response type states only as `unknown`.
   return (response as HttpResponse<unknown>).body as HttpRequest<unknown>;
 }
 
@@ -191,16 +147,7 @@ const NAVIGATION_FAILURE = 'Navigation cancelled because a guard returned false'
 /** The sentence a refused return to the login screen is reported with: it names the screen. */
 const LOGIN_SCREEN_MESSAGE = 'The login screen did not open. Reload the page and try again.';
 
-/**
- * The promise a refusing router rejects its navigation with, counting the rejection handlers the
- * code under test attaches to it.
- *
- * A rejection nobody handles is exactly what an unhandled rejection is, so a count of one is the
- * direct evidence that the interceptor settled the navigation instead of dropping it, and this spec
- * asserts on it rather than depending on how the runner reports a rejection left floating. Only
- * handlers attached by the code under test are counted: this spec adds none of its own, so a
- * navigation the interceptor dropped stays unhandled here.
- */
+/** The promise a refusing router rejects its navigation with, counting the rejection handlers the code under test attaches to it. */
 class RefusedNavigation extends Promise<boolean> {
   /** How many rejection handlers have been attached to this navigation so far. */
   rejectionHandlers = 0;
@@ -223,12 +170,7 @@ function refusedNavigation(failure: Error): RefusedNavigation {
   });
 }
 
-/**
- * Waits until the handler the interceptor attached to a refused navigation has run.
- *
- * The attachment is synchronous but its handler is queued, so a macrotask boundary is what turns
- * "the notification is raised eventually" into an assertion a test can make.
- */
+/** Waits until the handler the interceptor attached to a refused navigation has run. */
 async function navigationSettled(): Promise<void> {
   await new Promise<void>((resolve) => {
     setTimeout(resolve, 0);
@@ -241,8 +183,7 @@ describe('fineractInterceptor', () => {
   });
 
   afterEach(() => {
-    // Uninstall the console spies a case installs, so no later case runs against a stubbed console;
-    // the `clearAllMocks()` above empties their call history but leaves them patched in place.
+    // Uninstall the console spies a case installs, so no later case runs against a stubbed console; the `clearAllMocks()` above empties their call history but leaves them patched in place.
     vi.restoreAllMocks();
   });
 
@@ -258,8 +199,7 @@ describe('fineractInterceptor', () => {
 
     expect(sent.headers.get(TENANT_HEADER)).toBe(TENANT);
     expect(sent.headers.get(AUTHORIZATION_HEADER)).toBe(`Basic ${fixture.authenticationKey}`);
-    // The composed URL the calling service owns reaches the handler unchanged, query included, so
-    // `check:endpoints` stays a true statement about what the application requests (AAP 0.4.2).
+    // The composed URL the calling service owns reaches the handler unchanged, query included, so `check:endpoints` stays a true statement about what the application requests (AAP 0.4.2).
     expect(sent.url).toBe(CLIENTS_URL);
     expect(sent.urlWithParams).toBe(`${CLIENTS_URL}?offset=0&limit=15`);
     expect(sent.urlWithParams).toBe(request.urlWithParams);
@@ -375,8 +315,7 @@ describe('fineractInterceptor', () => {
         ),
       );
 
-      // Angular's own text is what used to reach the screen, and it names the request's URL, so the
-      // assertions below fail if that text ever comes back (Rule 1 clause 3).
+      // Angular's own text is what used to reach the screen, and it names the request's URL, so the assertions below fail if that text ever comes back (Rule 1 clause 3).
       expect(response.message).toContain(CLIENTS_URL);
 
       expect(error).toBeInstanceOf(ApiError);
@@ -437,8 +376,7 @@ describe('fineractInterceptor', () => {
     router.navigate.mockImplementation(() => navigation);
 
     const propagated = await rejectionOf(run(new HttpRequest('GET', CLIENTS_URL), failing(401)));
-    // Crosses a macrotask, so the handler the interceptor attached has run and the notification it
-    // raises is queued before the assertions below read it.
+    // Crosses a macrotask, so the handler the interceptor attached has run and the notification it raises is queued before the assertions below read it.
     await navigationSettled();
 
     // The navigation's promise is settled — one rejection handler, attached by the interceptor...
@@ -447,8 +385,7 @@ describe('fineractInterceptor', () => {
     expect(notifications.messages()).toHaveLength(1);
     expect(notifications.messages()[0]?.kind).toBe('error');
     expect(notifications.messages()[0]?.message).toBe(LOGIN_SCREEN_MESSAGE);
-    // ...and not in the router's own wording, which names navigation ids and guards and leaves an
-    // operator nothing to act on...
+    // ...and not in the router's own wording, which names navigation ids and guards and leaves an operator nothing to act on...
     expect(notifications.messages()[0]?.message).not.toContain(NAVIGATION_FAILURE);
     // ...and nothing from the request or the session reaches that text (Rule 1 clause 9).
     expect(notifications.messages()[0]?.message).not.toContain(fixture.authenticationKey);
@@ -548,8 +485,7 @@ describe('fineractInterceptor', () => {
 
   it('writes nothing to the console while a session ends and a failure is notified', async () => {
     const { run, session, router } = harnessFor();
-    // Spied on rather than intercepted: the assertion is that the interceptor calls none of them
-    // (Rule 1 clause 9 — no credential, header or exchange detail in a log or a console output).
+    // Spied on rather than intercepted: the assertion is that the interceptor calls none of them (Rule 1 clause 9 — no credential, header or exchange detail in a log or a console output).
     const logged = vi.spyOn(console, 'log');
     const errored = vi.spyOn(console, 'error');
     const warned = vi.spyOn(console, 'warn');

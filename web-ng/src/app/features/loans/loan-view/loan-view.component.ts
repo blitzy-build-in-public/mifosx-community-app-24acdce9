@@ -12,7 +12,6 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink, type ParamMap } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
-
 import { ApiError } from '../../../core/http/api-error';
 import { HasPermissionDirective } from '../../../shared/has-permission.directive';
 import type { StatusKey } from '../../../shared/status-key.util';
@@ -31,11 +30,7 @@ import { LoanService } from '../loan.service';
 import { LoanChargesComponent } from './loan-charges/loan-charges.component';
 import { LoanScheduleComponent } from './loan-schedule/loan-schedule.component';
 import { LoanTransactionsComponent } from './loan-transactions/loan-transactions.component';
-
-/**
- * The id of the record's repayment-schedule tab: the first tab and the one the record opens on,
- * because the schedule is what a loan officer reads first on a disbursed loan (AAP 0.7.4).
- */
+/** The id of the record's repayment-schedule tab: the first tab and the one the record opens on, because the schedule is what a loan officer reads first on a disbursed loan (AAP 0.7.4). */
 const SCHEDULE_TAB = 'schedule';
 
 /** The id of the record's transactions tab (AAP 0.7.4; AAP 0.7.3 row "W6 repayment"). */
@@ -44,28 +39,13 @@ const TRANSACTIONS_TAB = 'transactions';
 /** The id of the record's charges tab (AAP 0.7.4; AAP 0.7.3 row "Loan charges"). */
 const CHARGES_TAB = 'charges';
 
-/**
- * The three tabs this record serves, as the union their ids form.
- *
- * `TabStripComponent` deals in opaque ids, so the record's own ids are kept here as a union: the
- * active-tab signal can then hold only one of the three, and a fourth id cannot be introduced without
- * a compile error at the signal and at the tab list.
- */
+/** The three tabs this record serves, as the union their ids form: `TabStripComponent` deals in opaque ids, so the record's own ids are kept here as a union and the active-tab signal can then hold only one of the three, with a fourth id a compile error at the signal and at the tab list. */
 export type LoanViewTab = typeof SCHEDULE_TAB | typeof TRANSACTIONS_TAB | typeof CHARGES_TAB;
 
-/**
- * One rendered row of the record's summary block: a legacy caption key and the figure the payload
- * reported beneath it.
- *
- * Exported so the paired spec types its expectations against this declaration instead of restating
- * the members. `value` is `number | null` rather than `number`, because a figure the record's
- * payload does not report must render an empty cell — never a zero the server never sent, and never
- * a placeholder word (Rule 1 clause 3; AAP 0.7.4).
- */
+/** One rendered row of the record's summary block: a legacy caption key and the figure the payload reported beneath it. `value` is `number | null` rather than `number`, because a figure the record's payload does not report must render an empty cell — never a zero the server never sent, and never a placeholder word (Rule 1 clause 3; AAP 0.7.4). */
 export interface LoanSummaryRow {
   /** Legacy translation key of the figure's caption, resolved by the template's `TranslatePipe`. */
   readonly labelKey: string;
-
   /** The figure as the payload reported it, or `null` when the payload reported none. */
   readonly value: number | null;
 }
@@ -77,103 +57,46 @@ type PeriodBalance =
   | 'feeChargesOutstanding'
   | 'penaltyChargesOutstanding';
 
-/**
- * The loan-wide balance a set of per-period outstanding members adds up to, or `null` when the
- * schedule reports none of them.
- *
- * This is where the record's three balances come from. `GET /loans/{id}?associations=all` carries a
- * `summary` object for some states only — an active loan answers one, a submitted or approved
- * application does not — so the record reads the repayment schedule, which every state carries, and
- * the schedule's own periods hold the server's per-period outstanding amounts:
- * `principalOutstanding`, `interestOutstanding`,
- * `feeChargesOutstanding` and `penaltyChargesOutstanding`, already net of everything repaid, waived
- * and written off against that period. Adding them up is the reading the fork itself applies — its
- * `CommonLoanSummaryDataProvider` totals `interestOutstanding` over the schedule the same way — and
- * the four sums together equal the schedule's `totalOutstanding` on every loan.
- *
- * A period that carries nothing outstanding for a member omits the member, the disbursement row
- * above all, so an absent member counts as zero. A schedule whose periods omit the member
- * everywhere reports no figure for it, and this function then answers `null`, which the template
- * renders as an empty value rather than as a zero (Rule 1 clause 3).
- *
- * @param periods The schedule's periods, in the server's order.
- * @param members The per-period members the balance is the sum of.
- * @returns The balance, or `null` when the payload reported no member of the set.
- */
+/** The loan-wide balance a set of per-period outstanding members adds up to, or `null` when the schedule reports none of them — the source of the record's three balances, because the payload's `summary` object exists only (Rule 1 clause 3). */
 function sumPeriodBalances(
   periods: readonly RepaymentPeriod[],
   members: readonly PeriodBalance[],
 ): number | null {
   let balance = 0;
   let reported = false;
-
   for (const period of periods) {
     for (const member of members) {
       const value = period[member];
-
       if (typeof value === 'number') {
         reported = true;
         balance += value;
       }
     }
   }
-
   return reported ? balance : null;
 }
 
-/**
- * One action the record links to, as the template renders it: a stable id, the legacy bundle's
- * caption key, the permission code the link is gated on, and the router commands it opens.
- *
- * Exported beside {@link LOAN_ACTIONS} so the paired spec asserts the record's entry points against
- * the declaration the template renders rather than restating them.
- */
+/** One action the record links to, as the template renders it: a stable id, the legacy bundle's caption key, the permission code the link is gated on, and the router commands it opens — exported beside {@link LOAN_ACTIONS} so the paired spec asserts the record's entry points against the declaration the template renders. */
 export interface LoanActionLink {
   /** Stable DOM id of the link, which the end-to-end page objects also address. */
   readonly id: string;
-
   /** Legacy translation key of the link's caption, resolved by the template's `TranslatePipe`. */
   readonly labelKey: string;
-
   /** Fineract permission code the link is gated on, as the legacy record gates it. */
   readonly permission: string;
-
   /** Router commands of the screen the link opens. */
   readonly commands: readonly string[];
 }
 
-/**
- * A row of {@link LOAN_ACTIONS}: a link, the loan states the legacy record offers it in, and the
- * router commands it builds for the record being shown.
- */
+/** A row of {@link LOAN_ACTIONS}: a link, the loan states the legacy record offers it in, and the router commands it builds for the record being shown. */
 export interface LoanActionDefinition extends Omit<LoanActionLink, 'commands'> {
   /** Fineract loan status ids — the numeric `LoanStatus.id` — the legacy record shows it under. */
   readonly statuses: readonly number[];
-
   /** Builds the link's router commands for the id of the loan the record shows. */
   readonly route: (id: string) => readonly string[];
 }
 
-/**
- * The actions the legacy loan record offers, and the states it offers each one in.
- *
- * Transcribed from `app/scripts/controllers/loanAccount/ViewLoanDetailsController.js`, whose
- * `scope.buttons.singlebuttons` is built per loan status: "Submitted and pending approval" (100)
- * carries add-charge, approve, modify-application and reject; "Approved" (200) carries disburse and
- * undo-approval; "Active" (300) carries add-charge, make-repayment and undo-disbursal. Each row's
- * permission is that table's own `taskPermissionName`, which is why undo approval is
- * `APPROVALUNDO_LOAN`, the repayment form is `REPAYMENT_LOAN` and undo disbursal is
- * `DISBURSALUNDO_LOAN` — the tenant's real codes, so a user holding exactly the codes the legacy
- * record asks for sees exactly the links it showed (Rule 1 clause 3).
- *
- * Every `route` addresses a path `loans.routes.ts` declares: the six lifecycle and repayment
- * commands of `loanaccount/:id/:action`, the charge form, and the edit form. The legacy record's
- * other entries — foreclosure, waive interest, reschedule, write-off, close, guarantor, collateral,
- * transfer and officer assignment — belong to migration units this application does not serve, so
- * none of them is listed and no link can lead to a screen that does not exist. A loan in any other
- * state (rejected, withdrawn, closed, overpaid) shows no action, exactly as the legacy record shows
- * none, so a button can never open a form the server refuses (AAP 0.7.4; Rule 1 clause 3).
- */
+/** The actions the legacy loan record offers, and the states it offers each one in, transcribed from `ViewLoanDetailsController.js`, whose `scope.buttons.singlebuttons` is built per loan status: submitted and pending (Rule 1 clause 3, AAP 0.7.4). */
 export const LOAN_ACTIONS: readonly LoanActionDefinition[] = [
   {
     id: 'loan-action-addcharge',
@@ -233,92 +156,7 @@ export const LOAN_ACTIONS: readonly LoanActionDefinition[] = [
   },
 ];
 
-/**
- * The individual-loan record — `#/viewloanaccount/:id`, the screen the loan route tree mounts for
- * its one record path (AAP 0.8.2 "Feature routes, matching legacy paths exactly"; AAP 0.7.1 Features
- * row `loans`, which names this component `LoanViewComponent`; AAP 0.7.4's `#/viewloanaccount/:id`
- * row).
- *
- * **One request, owned by the family's service.** The page reads the loan once,
- * `LoanService.get(id)` — `GET /loans/{id}?associations=all` (AAP 0.7.3 row "W6 repayment") — which
- * carries the repayment schedule and with it every figure the summary block prints, the transactions,
- * and the loan's `charges`, the rows the charge section lists (AAP 0.7.3's W6 row names all three
- * among what this answer carries, and the legacy record read the same members from the same call).
- * That is the whole read of the screen: no section issues a request of its own and no charge-list call
- * is made (Rule 1 clauses 2 and 3). This file holds no URL, host, port,
- * API path, HTTP method, query parameter or body, and it injects no `HttpClient`: `LoanService`
- * composes the requests through `AppConfigService.apiUrl()` and is the only HTTP holder in this
- * feature (Rule 1 clause 5, Rule 1 clause 2, Rule 2; AAP 0.14.1). It reads no business date either —
- * that belongs to the harness (AAP 0.10.5 item 15).
- *
- * **Four states, and who owns each** (AAP 0.7.4, "States every list and record screen must
- * implement"). While the read is outstanding `loading` is true and nothing is painted, because the
- * design carries no spinner, skeleton or placeholder. A 404 — or a route that names no id, in which
- * case no request is issued at all — drives `notFound`, whose message the template renders **in
- * place of the record**, leaving the shell usable. Any other 4xx drives `clientError`: Fineract's own
- * message, shown verbatim, with the screen still usable. A 5xx or transport failure leaves both
- * computeds empty, because the single interceptor has already raised exactly one notification for
- * it and a second copy here would report the same problem twice (AAP 0.4.2, AAP 0.14.1 "errors are
- * values"). This component therefore never calls `NotificationService`, never logs and never
- * rethrows.
- *
- * **What the record renders.** The head carries the status indicator, the loan product's name and
- * the three inline runs the record identifies itself by — account number, client name and principal.
- * The status is the design's colour and never its word, so it goes through `StatusSwatchComponent`
- * with `toLoanStatusKey(status?.code)` and the server's own status label is never read (AAP 0.10.5
- * deliberate difference 11; Rule 1 clause 3). The summary block prints the five figures AAP 0.7.2's
- * `LoanSummary` row names — total expected repayment, total outstanding, and the principal, interest
- * and fee balances — taken from the loan's `repaymentSchedule` (see
- * {@link LoanViewComponent.summaryRows}), which every loan state carries; the payload's separate
- * `summary` object is not modelled and no screen reads it, and a figure the payload omits renders
- * an empty cell rather than a zero or a word this
- * screen would have invented (Rule 1 clause 3). Below them the record shows three tabs through the
- * application's one tab component, `app-tab-strip`: the repayment schedule in `app-loan-schedule`,
- * the transactions in `app-loan-transactions` and the charges in `app-loan-charges`, each the
- * committed, read-only section component that owns its table and none of them re-implemented here.
- *
- * **Charges arrive with the record.** `GET /loans/{id}?associations=all` carries the loan's `charges`
- * rows besides the schedule and the transactions (AAP 0.7.3's W6 row names all three), so the screen
- * hands the payload's own rows to the charges section and issues no second request — the same single
- * call the legacy record made, and no charge-list endpoint is used (Rule 1 clauses 2 and 3).
- *
- * **Action entry points.** The links are rendered from {@link LOAN_ACTIONS}, the table transcribed
- * from the legacy record's own per-status button list, so only the steps the legacy record offers for
- * the loan's current state appear: a submitted application shows add-charge, approve, modify and
- * reject; an approved loan shows add-charge, disburse and undo approval; an active loan shows
- * add-charge, make repayment and undo disbursal; any other state shows none (Rule 1 clause 3). Each
- * link is a `routerLink` to the screen that serves it and is gated by `HasPermissionDirective` on the
- * action's own Fineract code from that table, so a user holding exactly the codes the legacy record
- * asks for sees exactly the links it showed.
- *
- * **One id, one load per navigation.** `:id` is read from `route.paramMap`, never from the snapshot:
- * the router reuses this component when the URL moves from one `#/viewloanaccount/{id}` to another,
- * so a single read would leave the first loan's record, figures and action links on screen under the
- * second loan's URL and would issue no request at all. Every emission therefore clears the previous
- * record and re-reads the loan the URL now names, exactly as `loan-edit` and `client-actions` handle
- * the same reuse. Because two reads can then be in flight, an answer that arrives after the URL moved
- * on is discarded rather than applied, so one loan's record and hrefs can never appear under another
- * loan's URL (see {@link LoanViewComponent.load}). Leaving the screen cancels the read it left
- * outstanding, because both reads are tied to this component's lifetime.
- *
- * The look comes entirely from the global Bootstrap 3 classes of `web-ng/src/styles.scss` — this
- * component declares no stylesheet, no `styles` array, no inline style and no colour (Rule 1
- * clause 6; AAP 0.4.4 decision 4). Every visible string is a legacy bundle key resolved by
- * `TranslatePipe`, or — for the two tab captions, which the tab strip takes as plain text — by
- * {@link LoanViewComponent.translated}, exactly as `savings-new.component.ts` resolves the labels its
- * shared fields take; no copy is inlined here (AAP 0.10.2; Rule 1 clause 3).
- *
- * **Rules that bind this file.** Rule 1 clause 2 — preserve the Fineract API contract: the one
- * request is `LoanService.get(id)`, an endpoint the allowlist already holds, and this file composes
- * no URL, sends no body and reads no clock. Rule 1 clause 3 — match legacy rather than improve it:
- * the payload's figures are printed as reported and the entry points are the legacy record's own
- * per-status list. Rule 1 clause 4 — strict TypeScript, with no `any` outside the one documented
- * library boundary in {@link LoanViewComponent.translated}. Rule 1 clause 5 — standalone component,
- * signals, `inject()`, and no `HttpClient`. Rule 1 clause 6 — the Bootstrap 3 layer of
- * `web-ng/src/styles.scss` owns every visual value, so no stylesheet, `<style>` or `style=` is
- * declared here. Rule 1 clause 9 and Rule 2 — nothing credential-shaped is logged or written, and the
- * backend is reached only through the family's service, never a host literal.
- */
+/** The individual-loan record — `#/viewloanaccount/:id`, the screen the loan route tree mounts for its one record path (AAP 0.8.2 "Feature routes, matching legacy paths exactly"; AAP 0.7.1 row `loans`; AAP 0.7.4) (AAP 0.7.3, Rule 2, AAP 0.10.5, AAP 0.4.2). */
 @Component({
   selector: 'app-loan-view',
   imports: [
@@ -338,137 +176,54 @@ export const LOAN_ACTIONS: readonly LoanActionDefinition[] = [
 export class LoanViewComponent {
   /** The loans family's one typed Fineract service; this component's only HTTP path (Rule 1 clause 5). */
   private readonly loans = inject(LoanService);
-
-  /**
-   * The activated route, subscribed to for the `:id` of `#/viewloanaccount/:id`: the router reuses
-   * this component across records, so the id is followed rather than sampled once.
-   */
+  /** The activated route, subscribed to for the `:id` of `#/viewloanaccount/:id`: the router reuses this component across records, so the id is followed rather than sampled once. */
   private readonly route = inject(ActivatedRoute);
-
   /** Ties the single outstanding read to this component's lifetime, so leaving cancels it. */
   private readonly destroyRef = inject(DestroyRef);
-
-  /**
-   * The one owner of the active language, used only to resolve the two tab captions: the tab strip
-   * takes plain display text rather than keys, so those two strings cannot go through
-   * `TranslatePipe` (see {@link LoanViewComponent.translated}).
-   */
+  /** The one owner of the active language, used only to resolve the two tab captions: the tab strip takes plain display text rather than keys, so those two strings cannot go through `TranslatePipe`. */
   private readonly translate = inject(TranslateService);
-
-  /**
-   * The loan id from the route, as text: the `:id` of `#/viewloanaccount/:id`. Empty when the route
-   * carried none, which is the only case in which the read is not issued.
-   *
-   * A signal, not a snapshot value: the router reuses this component when the URL moves from one
-   * record to another, so the id has to follow every emission of `route.paramMap` and the read of
-   * each emission has to address the loan the URL now names.
-   */
+  /** The loan id from the route, as text — the `:id` of `#/viewloanaccount/:id`, empty when the route carried none, which is the only case in which the read is not issued; a signal rather than a snapshot value because the router reuses this component when the URL moves from one record to another. */
   readonly loanId = signal('');
-
-  /**
-   * Which read is the current one, incremented by every run of {@link LoanViewComponent.load}.
-   *
-   * The router reuses this component across records, so moving in place starts a second read while
-   * the first is still in flight and the earlier one can answer last. A superseded run compares its
-   * own number with this one after each await and returns instead of writing, so a late response can
-   * neither paint the earlier loan under the later loan's URL nor clear the loading state of the run
-   * that replaced it — the guard `loan-edit` and `client-actions` keep over their own load sequence.
-   */
+  /** Which read is the current one, incremented by every run of {@link LoanViewComponent.load}: the router reuses this component across records, so a superseded run compares its own number after each await and returns instead of writing, and a late response can neither paint the earlier loan under the later loan's URL nor clear the loading state of the run that replaced it. */
   private loadSequence = 0;
-
-  /**
-   * Whether the last read is still outstanding. Starts `true` so no half-built record can paint
-   * before the first response is read, and is cleared in the subscription's `finalize`.
-   */
+  /** Whether the last read is still outstanding; starts `true` so no half-built record can paint before the first response is read, and is cleared in the subscription's `finalize`. */
   readonly loading = signal(true);
-
   /** The loan the record renders, or `null` until a response arrives and after a failed read. */
   readonly loan = signal<LoanAccount | null>(null);
-
-  /**
-   * The loan's charges, as the record's `charges` member reported them — `[]` for a loan that carries
-   * none, and `null` until the read answers, which is what keeps the charges tab's empty state off the
-   * screen before the rows are known.
-   */
+  /** The loan's charges, as the record's `charges` member reported them — `[]` for a loan that carries none, and `null` until the read answers, which keeps the charges tab's empty state off the screen before the rows are known. */
   readonly charges = signal<readonly LoanCharge[] | null>(null);
-
   /** The failure the read ended in, or `null`; the template derives its error branches from this. */
   readonly error = signal<ApiError | null>(null);
-
   /** Whether the route carried no loan id at all; set by the load of the emission that named none. */
   private readonly missingId = signal(false);
-
-  /**
-   * Counts the moments at which a tab caption must be resolved again: a language switch and a
-   * bundle arriving. Read inside every caption signal below, so a caption resolved before its
-   * bundle had loaded is replaced by the real legacy wording instead of staying at the fallback for
-   * the life of the screen — the same mechanism `savings-new.component.ts` uses for the labels its
-   * shared fields take.
-   */
+  /** Counts the moments at which a tab caption must be resolved again — a language switch and a bundle arriving — and is read inside every caption signal, so a caption resolved before its bundle had loaded is replaced by the real legacy wording instead of staying at the fallback for the life of the screen. */
   private readonly labelsRevision = signal(0);
-
   /** Already-translated caption of the repayment-schedule tab (legacy `label.heading.repaymentschedule`). */
   private readonly scheduleTabLabel = this.translated('label.heading.repaymentschedule');
-
   /** Already-translated caption of the transactions tab (legacy `label.heading.transactions`). */
   private readonly transactionsTabLabel = this.translated('label.heading.transactions');
-
   /** Already-translated caption of the charges tab (legacy `label.heading.charges`). */
   private readonly chargesTabLabel = this.translated('label.heading.charges');
-
-  /**
-   * Whether the record does not exist — the route named no id, or Fineract answered 404 — in which
-   * case the template renders the not-found message in place of the record (AAP 0.7.4).
-   */
+  /** Whether the record does not exist — the route named no id, or Fineract answered 404 — in which case the template renders the not-found message in place of the record (AAP 0.7.4). */
   readonly notFound = computed<boolean>(() => this.missingId() || this.error()?.status === 404);
-
-  /**
-   * The failure this screen must render itself: a 4xx other than 404, whose Fineract message is
-   * shown verbatim with the screen still usable (AAP 0.7.4).
-   *
-   * The discriminator is deliberate. A 5xx or a transport failure (`status` 0) has already produced
-   * exactly one notification in the interceptor, so it answers `null` here and the message is never
-   * shown twice; a 404 answers `null` because `notFound` owns that state.
-   */
+  /** The failure this screen must render itself: a 4xx other than 404, whose Fineract message is shown verbatim with the screen still usable (AAP 0.7.4). The discriminator is deliberate: a 5xx or a transport failure (`status` 0) has already produced exactly one notification in the interceptor, so it answers `null` here and the message is never shown twice, and a 404 answers `null` because `notFound` owns that state. */
   readonly clientError = computed<ApiError | null>(() => {
     const failure = this.error();
-
     if (failure === null || failure.status < 400 || failure.status >= 500) {
       return null;
     }
-
     return failure.status === 404 ? null : failure;
   });
-
-  /**
-   * The status indicator's key for the loan, reduced by the family's single mapping,
-   * `toLoanStatusKey`. The Fineract status code never reaches the swatch component, and a loan that
-   * is not loaded yet paints the neutral key rather than claiming a state.
-   */
+  /** The status indicator's key for the loan, reduced by the family's single mapping `toLoanStatusKey`: the Fineract status code never reaches the swatch component, and a loan that is not loaded yet paints the neutral key rather than claiming a state. */
   readonly statusKey = computed<StatusKey>(() => {
     const loaded = this.loan();
-
-    // The mapper accepts an absent code, so a payload that omits the status paints the neutral key
-    // instead of throwing inside a computed and taking the whole record down with it.
+    // The mapper accepts an absent code, so a payload that omits the status paints the neutral key instead of throwing inside a computed and taking the whole record down with it.
     return loaded === null ? 'other' : toLoanStatusKey(loaded.status?.code);
   });
-
-  /**
-   * The five figures the summary block prints, in the order the block reads them: the loan-wide
-   * total and outstanding balance first, then the three balances.
-   *
-   * Both loan-wide figures are the schedule's own, passed through untouched — `totalRepaymentExpected`
-   * is what the borrower repays over the loan's life and `totalOutstanding` is the balance still
-   * owed — and the three balances are the sums {@link sumPeriodBalances} takes over the schedule's
-   * periods. Nothing is rounded, recalculated from other members, or defaulted: a figure the payload
-   * does not report becomes `null`, which the template renders as an empty cell (Rule 1 clause 3;
-   * AAP 0.7.2's `LoanSummary` row, whose figures this record reads from the schedule the fork carries
-   * for every loan state).
-   */
+  /** The five figures the summary block prints, in the order the block reads them: the loan-wide total and outstanding balance first, passed through from the schedule untouched, then the three balances {@link sumPeriodBalances} sums over the schedule's periods. Nothing is rounded, recalculated from other members or defaulted — a figure the payload does not report becomes `null`, which the template renders as an empty cell (Rule 1 clause 3; AAP 0.7.2 row `LoanSummary`). */
   readonly summaryRows = computed<readonly LoanSummaryRow[]>(() => {
     const schedule = this.loan()?.repaymentSchedule;
     const periods = schedule?.periods ?? [];
-
     return [
       { labelKey: 'label.heading.total', value: schedule?.totalRepaymentExpected ?? null },
       { labelKey: 'label.heading.outstanding', value: schedule?.totalOutstanding ?? null },
@@ -486,24 +241,12 @@ export class LoanViewComponent {
       },
     ];
   });
-
-  /**
-   * The links the record renders: the rows of {@link LOAN_ACTIONS} the loan's current state offers,
-   * each carrying the router commands for the id on screen.
-   *
-   * The only derivation is that filter — the loan's numeric status id against each row's `statuses`
-   * — so the entry points are the legacy record's own, in its order, with its permission codes. A
-   * loan that has not loaded, or whose payload reported no status, offers no action at all: the
-   * conservative reading, and the same one the legacy record takes when its status matches none of
-   * its button lists (Rule 1 clause 3).
-   */
+  /** The links the record renders: the rows of {@link LOAN_ACTIONS} the loan's current state offers, each carrying the router commands for the id on screen. The only derivation is that filter — the loan's numeric status id against each row's `statuses` — so the entry points are the legacy record's own, in its order, with its permission codes; a loan that has not loaded, or whose payload reported no status, offers no action at all, the reading the legacy record itself takes (Rule 1 clause 3). */
   readonly actions = computed<readonly LoanActionLink[]>(() => {
     const status = this.loan()?.status;
-
     if (status === undefined) {
       return [];
     }
-
     return LOAN_ACTIONS.filter((action) => action.statuses.includes(status.id)).map(
       (action): LoanActionLink => ({
         id: action.id,
@@ -513,53 +256,27 @@ export class LoanViewComponent {
       }),
     );
   });
-
-  /**
-   * The permission the charge section's own pay and waive links are gated on — `UPDATE_LOAN`, the
-   * code `loans.routes.ts` declares for the charge screens those links reach. It is handed to
-   * `app-loan-charges` unchanged, while the record's own entry points each carry their code in
-   * {@link LOAN_ACTIONS} (AAP 0.14.1, "Permissions are declared once per route and once per action").
-   */
+  /** The permission the charge section's own pay and waive links are gated on — `UPDATE_LOAN`, the code `loans.routes.ts` declares for the charge screens those links reach — handed to `app-loan-charges` unchanged, while the record's own entry points each carry their code in {@link LOAN_ACTIONS} (AAP 0.14.1). */
   readonly actionPermission = 'UPDATE_LOAN';
-
-  /**
-   * The record's tabs, in the order they are shown: the repayment schedule first, the transactions
-   * second, the charges third (AAP 0.7.4's "summary, repayment schedule, transactions and charges").
-   * Every caption is the legacy bundle's own tab heading — the same three headings
-   * `app/views/loans/viewloanaccountdetails.html` gives its tabs — resolved to display text here
-   * because the tab strip renders its labels verbatim.
-   */
+  /** The record's tabs, in the order they are shown: the repayment schedule first, the transactions second, the charges third (AAP 0.7.4). Every caption is the legacy bundle's own tab heading — the same three headings `app/views/loans/viewloanaccountdetails.html` gives its tabs — resolved to display text here because the tab strip renders its labels verbatim. */
   readonly tabs = computed<readonly TabDescriptor[]>(() => [
     { id: SCHEDULE_TAB, label: this.scheduleTabLabel() },
     { id: TRANSACTIONS_TAB, label: this.transactionsTabLabel() },
     { id: CHARGES_TAB, label: this.chargesTabLabel() },
   ]);
-
   /** The tab currently shown; the record opens on the repayment schedule. */
   readonly activeTab = signal<LoanViewTab>(SCHEDULE_TAB);
-
-  /**
-   * Whether the repayment-schedule section is the one on screen. The template branches on this
-   * rather than comparing the active id to a literal, so the three tab ids keep one home in this file.
-   */
+  /** Whether the repayment-schedule section is the one on screen; the template branches on this rather than comparing the active id to a literal, so the three tab ids keep one home in this file. */
   readonly showSchedule = computed<boolean>(() => this.activeTab() === SCHEDULE_TAB);
-
   /** Whether the transactions section is the one on screen. */
   readonly showTransactions = computed<boolean>(() => this.activeTab() === TRANSACTIONS_TAB);
-
   /** Whether the charges section is the one on screen. */
   readonly showCharges = computed<boolean>(() => this.activeTab() === CHARGES_TAB);
-
   constructor() {
     const refreshLabels = (): void => this.labelsRevision.update((revision) => revision + 1);
     this.translate.onLangChange.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(refreshLabels);
     this.translate.onTranslationChange.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(refreshLabels);
-
-    // One subscription, never a `snapshot` read beside it: the router reuses this component when the
-    // URL moves from one record to another, and a single read would leave the first loan's record,
-    // figures and action links on screen under the second loan's URL. Each emission therefore resets
-    // the screen and re-runs the read for the loan the URL now names, the way `loan-edit` and
-    // `client-actions` handle the same reuse.
+    // One subscription, never a `snapshot` read beside it: the router reuses this component when the URL moves from one record to another, and a single read would leave the first loan's record, figures and action links on screen under the second loan's URL. Each emission therefore resets the screen and re-runs the read for the loan the URL now names, the way `loan-edit` and `client-actions` handle the same reuse.
     this.route.paramMap
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((params: ParamMap) => {
@@ -568,15 +285,7 @@ export class LoanViewComponent {
         void this.load();
       });
   }
-
-  /**
-   * Clears everything the previous loan put on the screen, so an emission for another record never
-   * shows the earlier one's figures, charges, failure or action links.
-   *
-   * `loading` goes back to `true` until the new read settles, the record reopens on its first tab, and
-   * the not-found outcome of the previous route is dropped: every one of them describes the loan the
-   * URL has left.
-   */
+  /** Clears everything the previous loan put on the screen, so an emission for another record never shows the earlier one's figures, charges, failure or action links: `loading` goes back to `true` until the new read settles, the record reopens on its first tab, and the not-found outcome of the previous route is dropped. */
   private reset(): void {
     this.loan.set(null);
     this.charges.set(null);
@@ -585,131 +294,62 @@ export class LoanViewComponent {
     this.activeTab.set(SCHEDULE_TAB);
     this.loading.set(true);
   }
-
-  /**
-   * Reads the loan for the emission that is current, then paints the record and its charges together.
-   *
-   * One read: the record carries the schedule, the transactions and the loan's charges. A failed read
-   * becomes {@link LoanViewComponent.error}: it is not rethrown and not notified here, because the
-   * interceptor has already raised the single message a 5xx or transport failure gets, and a 4xx
-   * reaches the template through `clientError` or `notFound` (AAP 0.14.2).
-   *
-   * Every run takes the next {@link LoanViewComponent.loadSequence} number, and the read is tied to
-   * this component's lifetime, so a run the route has since superseded — or that the screen outlived —
-   * writes nothing at all: not the record, charges, failure or not-found state, and not `loading`,
-   * which belongs to the run that replaced it.
-   */
+  /** Reads the loan for the emission that is current, then paints the record and its charges together — one read, because the record carries the schedule, the transactions and the loan's charges (AAP 0.14.2). */
   private async load(): Promise<void> {
     const load = ++this.loadSequence;
     const loanId = this.loanId();
-
     if (loanId.length === 0) {
-      // No request is issued for a route that names no loan, so this is the one path on which
-      // `loading` is cleared without a read settling it: leaving it `true` would keep the screen on
-      // its loading state for ever and the not-found branch could never paint.
+      // No request is issued for a route that names no loan, so this is the one path on which `loading` is cleared without a read settling it: leaving it `true` would keep the screen on its loading state for ever and the not-found branch could never paint.
       this.missingId.set(true);
       this.loading.set(false);
-
       return;
     }
-
     try {
       const loaded = await firstValueFrom(
         this.loans.get(loanId).pipe(takeUntilDestroyed(this.destroyRef)),
       );
-
       if (!this.isCurrent(load)) {
         return;
       }
-
       this.loan.set(loaded);
       this.charges.set(loaded.charges ?? []);
     } catch (cause: unknown) {
       if (!this.isCurrent(load)) {
         return;
       }
-
       this.error.set(this.asApiError(cause));
     } finally {
-      // Only the current run owns the loading state: the superseded one must not clear the flag the
-      // newer read set, or the card would stop reporting that it is still filling.
+      // Only the current run owns the loading state: the superseded one must not clear the flag the newer read set, or the card would stop reporting that it is still filling.
       if (this.isCurrent(load)) {
         this.loading.set(false);
       }
     }
   }
-
-  /**
-   * Whether a run still speaks for the screen: it is the newest run, and the screen it belongs to has
-   * not been destroyed, so a read the route or the teardown cancelled can neither paint nor clear the
-   * loading state of whatever replaced it.
-   *
-   * @param load the run's sequence number.
-   */
+  /** Whether a run still speaks for the screen — it is the newest run, and the screen it belongs to has not been destroyed — so a read the route or the teardown cancelled can neither paint nor clear the loading state of. */
   private isCurrent(load: number): boolean {
     return !this.destroyRef.destroyed && load === this.loadSequence;
   }
-
-  /**
-   * Shows the tab the user picked in the strip.
-   *
-   * The tab strip reports an opaque id, so an id this record does not serve is ignored rather than
-   * stored: `activeTab` can then only ever hold one of the three tabs, and an unknown id cannot leave
-   * the record showing nothing.
-   *
-   * @param id the id `TabStripComponent` emitted.
-   */
+  /** Shows the tab the user picked in the strip: the strip reports an opaque id, so an id this record does not serve is ignored rather than stored, and `activeTab` can only ever hold one of the three tabs. @param id the id. */
   activateTab(id: string): void {
     if (id === SCHEDULE_TAB || id === TRANSACTIONS_TAB || id === CHARGES_TAB) {
       this.activeTab.set(id);
     }
   }
-
-  /**
-   * Builds one caption signal from a legacy translation key.
-   *
-   * The key is resolved with `instant()`, because `TabStripComponent` takes its labels as plain
-   * display text rather than as keys the `TranslatePipe` could re-resolve. `instant()` answers from
-   * whatever bundle is loaded at that moment, so the computed also reads `labelsRevision`, which the
-   * constructor bumps on a language switch and on a bundle arriving: the first paint shows the
-   * missing-translation handler's wording, and the real legacy text replaces it as soon as the
-   * bundle lands.
-   *
-   * @param key legacy key from `app/global-translations/`, served in place (Rule 1 clause 6).
-   * @returns the signal the tab descriptor list reads for that caption.
-   */
+  /** Builds one caption signal from a legacy translation key, resolved with `instant()` because `TabStripComponent` takes its labels as plain display text rather than as keys `TranslatePipe` could re-resolve; `instant()` (Rule 1 clause 6). */
   private translated(key: string): Signal<string> {
     return computed((): string => {
       this.labelsRevision();
       this.translate.currentLang();
-
-      // `TranslateService.instant` is typed `Translation`, which ngx-translate declares as
-      // `StrictTranslation | any` because a bundle may hold a nested object. Every caption this
-      // screen reads is a flat string in the legacy bundles, so the value is narrowed to `string`
-      // here once, at the one boundary where the library's type stops being exact (Rule 1 clause 4).
+      // `TranslateService.instant` is typed `Translation`, which ngx-translate declares as `StrictTranslation | any` because a bundle may hold a nested object. Every caption this screen reads is a flat string in the legacy bundles, so the value is narrowed to `string` here once, at the one boundary where the library's type stops being exact (Rule 1 clause 4).
       return this.translate.instant(key) as string;
     });
   }
-
-  /**
-   * The `ApiError` a failed read is reported as.
-   *
-   * The interceptor maps every `HttpErrorResponse` into an `ApiError` before rethrowing it, so the
-   * defensive branch is unreachable through the application and exists only so that a future
-   * failure shape degrades into the same type instead of escaping as an unhandled value: status `0`
-   * (the transport-failure status the mapper uses) carries no `clientError`, and the interceptor's
-   * transport-failure notification is the message the user sees.
-   *
-   * @param cause whatever the read rejected with.
-   * @returns the failure as the one error type a component renders.
-   */
+  /** The `ApiError` a failed read is reported as: the interceptor maps every `HttpErrorResponse` into an `ApiError` before rethrowing it, so the defensive branch is unreachable through the application and exists only so a. */
   private asApiError(cause: unknown): ApiError {
     if (cause instanceof ApiError) {
       return cause;
     }
-
     const message = cause instanceof Error && cause.message.length > 0 ? cause.message : 'HTTP 0';
-
     return new ApiError(message, 0);
   }
 }

@@ -21,41 +21,9 @@ import {
   type SavingsTransactionInput,
 } from './savings.service';
 
-/**
- * Contract spec for `SavingsService`: the one place the savings family composes a Fineract URL and
- * turns a model into a payload (Rule 1 clause 8; AAP 0.7.3 row "W8 savings (Stretch)"; AAP 0.7.1
- * `savings` row; AAP 0.11.1 row for this path).
- *
- * Every public method is pinned against the real `HttpTestingController` transport, so the
- * assertions are on the request the application actually sends — method, path, the whole parameter
- * set and the whole body — and never on a stand-in for `HttpClient`. Four properties are asserted
- * for each call beyond its shape:
- *
- *   - the date-format pair. Every date-bearing body carries `dateFormat: 'dd MMMM yyyy'` and the
- *     active `locale`, and every date member is the string `toFineractDate` produced, never a `Date`
- *     (AAP 0.7.2 "Date handling"; Rule 1 clause 2). A field that held no date travels as `null`, so
- *     the server's own required-field rule reports the absence (Rule 1 clause 3).
- *   - the two command spellings. The account endpoint takes `approve`/`activate` and the
- *     transactions endpoint takes `deposit`/`withdrawal`, and neither is normalised into the other;
- *     the command travels in the query string and never in the body (AAP 0.7.3; AAP 0.8.2).
- *   - the host. Each URL is composed by `AppConfigService.apiUrl()`, which this spec stubs and spies
- *     on, so a service that built its own host would fail here (AAP 0.4.2; Rule 2).
- *   - the absent header. Neither the authorization nor the tenant header is set here; both belong to
- *     `core/http/fineract.interceptor.ts` (AAP 0.4.2).
- *
- * The transport is registered without the application's interceptor, because the interceptor is
- * what adds those headers: a request asserted here is the service's own contribution to it.
- *
- * The `AppConfigService` stub is a fixed, non-secret configuration whose `apiUrl()` composes exactly
- * as the real one documents, so an expected URL and a requested URL are built the same way. The
- * resolution of `apiBaseUrl` and `apiPath` is proved in `core/config/app-config.service.spec.ts`.
- */
+/** Contract spec for `SavingsService`: the one place the savings family composes a Fineract URL and turns a model into a payload (Rule 1 clause 8; AAP 0.7.3 row "W8 savings (Stretch)"; AAP 0.7.1 `savings` row; AAP 0.11.1 (AAP 0.7.2, Rule 1 clause 2, Rule 1 clause 3, AAP 0.8.2). */
 
-/**
- * The served API host and root, written as `web-ng/src/assets/config.json` ships them, so the URLs
- * this spec expects are the URLs the deployed application produces (AAP 0.4.4 decision 5(a)). No
- * demo host appears here or anywhere else in this tree (Rule 2).
- */
+/** The served API host and root, written as `web-ng/src/assets/config.json` ships them, so the URLs this spec expects are the URLs the deployed application produces (AAP 0.4.4 decision 5(a)) (Rule 2). */
 const API_BASE_URL = 'https://localhost:8443';
 const API_PATH = '/fineract-provider/api/v1';
 const API_ROOT = API_BASE_URL + API_PATH;
@@ -80,10 +48,7 @@ const PRODUCT_ID = 1;
 /** The payment type the deposit and withdrawal forms post, from the transaction template. */
 const PAYMENT_TYPE_ID = 1;
 
-/**
- * The submitted-on date the new-application screen holds as a `Date`, built from its local calendar
- * parts so the expected string below cannot shift with the machine's time zone (AAP 0.7.2).
- */
+/** The submitted-on date the new-application screen holds as a `Date`, built from its local calendar parts so the expected string below cannot shift with the machine's time zone (AAP 0.7.2). */
 const SUBMITTED_DATE = new Date(2026, 10, 21);
 
 /** That date as every date-bearing payload must carry it: `dd MMMM yyyy` in the active locale. */
@@ -96,12 +61,7 @@ const SUBMITTED_TEXT_FR = '21 novembre 2026';
 const ACTION_DATE = new Date(2026, 10, 24);
 const ACTION_TEXT = '24 November 2026';
 
-/**
- * The URL the service must request for the given path segments: the API root the configuration
- * supplies and the resource segments the service owns, joined with one separator.
- *
- * @param segments Resource segments, exactly as `savings.service.ts` names them.
- */
+/** The URL the service must request for the given path segments: the API root the configuration supplies and the resource segments the service owns, joined with one separator. @param segments Resource segments, exactly as. */
 function savingsUrl(...segments: readonly (string | number)[]): string {
   return [API_ROOT, ...segments].join(SEPARATOR);
 }
@@ -122,20 +82,10 @@ function bodyKeys(request: HttpRequest<unknown>): string[] {
   return typeof body === 'object' && body !== null ? Object.keys(body) : [];
 }
 
-/**
- * The `AppConfigService` surface `SavingsService` uses: the resolved configuration, the URL
- * composition every service shares, and the live active locale.
- */
+/** The `AppConfigService` surface `SavingsService` uses: the resolved configuration, the URL composition every service shares, and the live active locale. */
 type ConfigSurface = Pick<AppConfigService, 'config' | 'apiUrl' | 'activeLocale'>;
 
-/**
- * Builds the stub from the two live members the cases below need to change: the `apiUrl` spy the
- * host assertions read, and the active-locale signal the language case moves. A fresh pair per test
- * keeps one case's calls and language out of the next.
- *
- * @param apiUrl The spy standing in for `AppConfigService.apiUrl`.
- * @param activeLocale The signal standing in for `AppConfigService.activeLocale`.
- */
+/** Builds the stub from the two live members the cases below need to change: the `apiUrl` spy the host assertions read, and the active-locale signal the language case moves. */
 function configSurface(
   apiUrl: Mock<(path: string) => string>,
   activeLocale: WritableSignal<string>,
@@ -222,10 +172,7 @@ const APPLICATION_WIRE: Readonly<Record<string, unknown>> = {
   locale: APP_LOCALE,
 };
 
-/**
- * The two lifecycle actions, each with the body its own command posts and the body that must reach
- * the server. They differ in the date member and in the command's wire spelling (AAP 0.7.3 W8).
- */
+/** The two lifecycle actions, each with the body its own command posts and the body that must reach the server (AAP 0.7.3). */
 const ACTION_CASES: readonly {
   readonly command: SavingsCommand;
   readonly request: SavingsActionInput;
@@ -254,11 +201,7 @@ const ACTION_CASES: readonly {
   },
 ];
 
-/**
- * The commands paired with the other command's date member, which `action()` must refuse before it
- * issues any request: a pair that disagrees would post one action's payload to the other action's
- * command (see `actionBody()`).
- */
+/** The commands paired with the other command's date member, which `action()` must refuse before it issues any request: a pair that disagrees would post one action's payload to the other action's command (see. */
 const MISMATCHED_ACTION_CASES: readonly {
   readonly label: string;
   readonly command: SavingsCommand;
@@ -316,11 +259,7 @@ const TRANSACTION_CASES: readonly {
   },
 ];
 
-/**
- * The two branches of `GET /savingsaccounts/template`, which differ only in whether the product is
- * known: the client-only read and the client-and-product read stay the two distinct calls the
- * legacy form makes (AAP 0.7.3 W8 row).
- */
+/** The two branches of `GET /savingsaccounts/template`, which differ only in whether the product is known: the client-only read and the client-and-product read stay the two distinct calls the legacy form makes (AAP 0.7.3. */
 const TEMPLATE_CASES: readonly {
   readonly label: string;
   readonly args: readonly [clientId: number | string, productId?: number | string];
@@ -344,13 +283,7 @@ const TEMPLATE_CASES: readonly {
   },
 ];
 
-/**
- * One call of each of the service's five public methods, with the arguments that method needs, so a
- * single case can prove that none of them composes anything before it is subscribed (Rule 1 clause 8;
- * AAP 0.7.2 "Date handling").
- *
- * @param service The service under test, built by the case's own `TestBed`.
- */
+/** One call of each of the service's five public methods, with the arguments that method needs, so a single case can prove that none of them composes anything before it is subscribed (Rule 1 clause 8; AAP 0.7.2 "Date. */
 function callsOf(
   service: SavingsService,
 ): readonly { readonly label: string; readonly call: () => Observable<unknown> }[] {
@@ -373,8 +306,7 @@ describe('SavingsService', () => {
   let activeLocale: WritableSignal<string>;
 
   beforeEach(() => {
-    // A fresh spy and a fresh language per test, so one case's composition and its calls are never
-    // read by the next case's assertions.
+    // A fresh spy and a fresh language per test, so one case's composition and its calls are never read by the next case's assertions.
     apiUrl = vi.fn((path: string): string => API_ROOT + SEPARATOR + path);
     activeLocale = signal(APP_LOCALE);
 
@@ -391,8 +323,7 @@ describe('SavingsService', () => {
   });
 
   afterEach(() => {
-    // A request the service issued but this spec never saw fails here, and so does one it should
-    // have issued and did not.
+    // A request the service issued but this spec never saw fails here, and so does one it should have issued and did not.
     httpMock.verify();
   });
 
@@ -402,16 +333,14 @@ describe('SavingsService', () => {
 
       service.template(...args).subscribe((template) => received.push(template));
 
-      // The service names only the resource path: the host and the API root belong to the
-      // configuration, so it composes no URL of its own (AAP 0.4.2).
+      // The service names only the resource path: the host and the API root belong to the configuration, so it composes no URL of its own (AAP 0.4.2).
       expect(apiUrl).toHaveBeenCalledWith('savingsaccounts/template');
 
       const request = httpMock.expectOne(
         isRequest('GET', savingsUrl('savingsaccounts', 'template')),
       );
 
-      // The whole parameter set, in the order it is appended: an absent `productId` leaves the
-      // parameter off the URL entirely rather than sending an empty one.
+      // The whole parameter set, in the order it is appended: an absent `productId` leaves the parameter off the URL entirely rather than sending an empty one.
       expect(request.request.params.keys()).toEqual(params.map(([name]) => name));
       for (const [name, value] of params) {
         expect(request.request.params.get(name)).toBe(value);
@@ -420,8 +349,7 @@ describe('SavingsService', () => {
 
       request.flush(answer);
 
-      // The payload is returned untouched: no option list is filtered, sorted or renamed here
-      // (Rule 1 clause 3).
+      // The payload is returned untouched: no option list is filtered, sorted or renamed here (Rule 1 clause 3).
       expect(received).toEqual([answer]);
     });
   }
@@ -439,8 +367,7 @@ describe('SavingsService', () => {
     expect(request.request.params.keys()).toEqual([]);
     expect(request.request.body).toEqual(APPLICATION_WIRE);
 
-    // Spelled out as well as compared above: the two members every date-bearing payload carries are
-    // what the server parses the date with (AAP 0.7.2 "Date handling"; Rule 1 clause 2).
+    // Spelled out as well as compared above: the two members every date-bearing payload carries are what the server parses the date with (AAP 0.7.2 "Date handling"; Rule 1 clause 2).
     expect(request.request.body).toMatchObject({
       submittedOnDate: '21 November 2026',
       dateFormat: 'dd MMMM yyyy',
@@ -458,8 +385,7 @@ describe('SavingsService', () => {
 
     const request = httpMock.expectOne(isRequest('POST', savingsUrl('savingsaccounts')));
 
-    // The member is present and empty, so the server's own required-field rule reports the absence
-    // instead of a date this application invented (Rule 1 clause 3).
+    // The member is present and empty, so the server's own required-field rule reports the absence instead of a date this application invented (Rule 1 clause 3).
     expect(bodyKeys(request.request)).toContain('submittedOnDate');
     expect(request.request.body.submittedOnDate).toBeNull();
     expect(request.request.body).toEqual({
@@ -488,8 +414,7 @@ describe('SavingsService', () => {
 
     const frenchRequest = httpMock.expectOne(isRequest('POST', savingsUrl('savingsaccounts')));
 
-    // A language selected after startup reaches the next payload, month names included, so the value
-    // and the `locale` beside it describe the same language (AAP 0.7.2 "Date handling").
+    // A language selected after startup reaches the next payload, month names included, so the value and the `locale` beside it describe the same language (AAP 0.7.2 "Date handling").
     expect(frenchRequest.request.body).toEqual({
       ...APPLICATION_WIRE,
       locale: 'fr',
@@ -509,8 +434,7 @@ describe('SavingsService', () => {
 
       const request = httpMock.expectOne(isRequest('GET', savingsUrl('savingsaccounts', ACCOUNT_ID)));
 
-      // One parameter, because one request carries the status, the summary and the transaction list
-      // the record page renders (AAP 0.7.3 W8 row; AAP 0.7.1 `savings` row).
+      // One parameter, because one request carries the status, the summary and the transaction list the record page renders (AAP 0.7.3 W8 row; AAP 0.7.1 `savings` row).
       expect(request.request.params.keys()).toEqual(['associations']);
       expect(request.request.params.get('associations')).toBe('all');
       expect(request.request.body).toBeNull();
@@ -539,24 +463,19 @@ describe('SavingsService', () => {
       expect(sent.request.params.keys()).toEqual(['command']);
       expect(sent.request.params.get('command')).toBe(command);
       expect(sent.request.body).toEqual(wire);
-      // The command travels in the query string and never in the body, exactly as the legacy
-      // resource call sends it (AAP 0.7.3; Rule 1 clause 2).
+      // The command travels in the query string and never in the body, exactly as the legacy resource call sends it (AAP 0.7.3; Rule 1 clause 2).
       expect(bodyKeys(sent.request)).toEqual([member, 'dateFormat', 'locale']);
 
       sent.flush({});
 
-      // The response body is discarded: the caller returns to the record, whose own read shows the
-      // account's new status (AAP 0.7.3 W8 row).
+      // The response body is discarded: the caller returns to the record, whose own read shows the account's new status (AAP 0.7.3 W8 row).
       expect(received).toEqual([undefined]);
     });
   }
 
   for (const { label, command, request: body, message } of MISMATCHED_ACTION_CASES) {
     it(`refuses ${label} and issues no request`, () => {
-      // A pair that disagrees is a mistake in the screen's code rather than something the server can
-      // be asked about, and refusing it is what keeps one click to one POST (AAP 0.1.1). The refusal
-      // arrives as an observable error — `action()` runs the pair check inside its `defer` — so a
-      // caller that handles only the `error` notification still sees it (AAP 0.14.1).
+      // A pair that disagrees is a mistake in the screen's code rather than something the server can be asked about, and refusing it is what keeps one click to one POST (AAP 0.1.1) (AAP 0.14.1).
       const messages: string[] = [];
       let emissions = 0;
 
@@ -571,8 +490,7 @@ describe('SavingsService', () => {
       expect(messages).toHaveLength(1);
       expect(messages[0]).toMatch(message);
       httpMock.expectNone(isRequest('POST', savingsUrl('savingsaccounts', ACCOUNT_ID)));
-      // Stronger than the one path above: the pair check runs before the URL is composed, so the
-      // controller saw no request of any method or URL for this call.
+      // Stronger than the one path above: the pair check runs before the URL is composed, so the controller saw no request of any method or URL for this call.
       httpMock.expectNone(() => true);
     });
   }
@@ -674,9 +592,7 @@ describe('SavingsService', () => {
       isRequest('POST', savingsUrl('savingsaccounts', ACCOUNT_ID, 'transactions')),
     );
 
-    // The form named no payment type, so the member is present and empty: the server's own
-    // required-field rule reports the absence, and no id this application invented reaches the
-    // request body (Rule 1 clause 3, AAP 0.4.4 decision 6).
+    // The form named no payment type, so the member is present and empty: the server's own required-field rule reports the absence, and no id this application invented reaches the request body (Rule 1 clause 3, AAP 0.4.4.
     expect(bodyKeys(sent.request)).toContain('paymentTypeId');
     expect(sent.request.body.paymentTypeId).toBeNull();
     expect(sent.request.body).toEqual({
@@ -717,10 +633,7 @@ describe('SavingsService', () => {
       .expectOne(isRequest('GET', savingsUrl('savingsaccounts', ACCOUNT_ID)))
       .flush(refusal, { status: 404, statusText: 'Not Found' });
 
-    // One failure, no emission and no completion: the service maps nothing and swallows nothing, and
-    // the status and body it hands on are the ones Fineract sent rather than a failure re-created in
-    // the service, so the screen can render the not-found message in place of the record (AAP 0.7.4,
-    // AAP 0.4.2, AAP 0.14.2 "Error handling").
+    // One failure, no emission and no completion: the service maps nothing and swallows nothing, and the status and body it hands on are the ones Fineract sent rather than a failure re-created in the service, so the screen (AAP 0.7.4, AAP 0.4.2, AAP 0.14.2).
     expect(failures).toHaveLength(1);
     expect(received).toEqual([]);
     expect(failures[0]?.status).toBe(404);
@@ -745,8 +658,7 @@ describe('SavingsService', () => {
 
       const composed = call();
 
-      // Nothing at call time: neither the configuration's URL — which throws until it has resolved —
-      // nor the active locale, nor the transport has been touched (AAP 0.7.2 "Date handling").
+      // Nothing at call time: neither the configuration's URL — which throws until it has resolved — nor the active locale, nor the transport has been touched (AAP 0.7.2 "Date handling").
       expect(apiUrl, label).not.toHaveBeenCalled();
       httpMock.expectNone(() => true);
 
@@ -772,8 +684,7 @@ describe('SavingsService', () => {
 
     const request = httpMock.expectOne(isRequest('POST', savingsUrl('savingsaccounts')));
 
-    // The body carries the language in force at subscribe time, month name included, so the value and
-    // the `locale` beside it describe the same language (AAP 0.7.2 "Date handling").
+    // The body carries the language in force at subscribe time, month name included, so the value and the `locale` beside it describe the same language (AAP 0.7.2 "Date handling").
     expect(request.request.body).toEqual({
       ...APPLICATION_WIRE,
       locale: 'fr',
@@ -784,11 +695,7 @@ describe('SavingsService', () => {
   });
 
   it('refuses a crafted route id with the guard message and issues no request at all', () => {
-    // The router hands an `:id` over URL-decoded, so this value would leave `/api/v1` and read another
-    // resource on the same host (CWE-20, CWE-22). The refusal arrives as an observable error — the form
-    // every caller of this service already handles (`firstValueFrom` inside a `try`, or a `catchError`
-    // beside it) — because `defer` keeps the invalid segment from being an exception thrown out of a
-    // `switchMap` projection.
+    // The router hands an `:id` over URL-decoded, so this value would leave `/api/v1` and read another resource on the same host (CWE-20, CWE-22).
     const crafted = '../../../users';
     const refusals: Error[] = [];
     let emissions = 0;
@@ -807,8 +714,7 @@ describe('SavingsService', () => {
 
     expect(emissions).toBe(0);
     expect(refusals).toHaveLength(2);
-    // Each refusal's message is the guard's fixed sentence, so neither the rejected value nor the
-    // call that composed the segment is in the text a screen renders; both are in `cause` instead.
+    // Each refusal's message is the guard's fixed sentence, so neither the rejected value nor the call that composed the segment is in the text a screen renders; both are in `cause` instead.
     for (const refusal of refusals) {
       expect(refusal.message).not.toContain(crafted);
       expect(String(refusal.cause)).toContain(`'${crafted}'`);
@@ -817,8 +723,7 @@ describe('SavingsService', () => {
     expect(String(refusals[0].cause)).toContain('SavingsService.get');
     expect(refusals[1].message).not.toContain('SavingsService.transaction');
     expect(String(refusals[1].cause)).toContain('SavingsService.transaction');
-    // Nothing was sent, on either path or in any other shape; the teardown's `verify()` says the same
-    // for the whole case.
+    // Nothing was sent, on either path or in any other shape; the teardown's `verify()` says the same for the whole case.
     httpMock.expectNone(isRequest('GET', savingsUrl('savingsaccounts', crafted)));
     httpMock.expectNone(isRequest('POST', savingsUrl('savingsaccounts', crafted, 'transactions')));
     httpMock.expectNone(() => true);

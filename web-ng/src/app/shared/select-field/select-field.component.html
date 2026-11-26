@@ -1,26 +1,7 @@
-<!--
-  One predicate for both error states: `.has-error` and `aria-invalid` are read from `invalid`, so the
-  select cannot show no error while announcing an invalid entry, and it states the rule exactly as the
-  sibling `shared/date-field` does, since both fields sit on the same forms.
-
-  `invalid` is read here, not from a computed signal: `invalid`, `touched` and `dirty` on a
-  FormControl are plain properties, so a computed would keep the first verdict for ever.
-
-  Deliberately absent: a native `required` would let the browser block a submission that Fineract
-  alone decides (`required` reaches assistive technology as `aria-required`), and an input or blur
-  listener would double-write the value, since the value accessor behind `[formControl]` on this same
-  element already owns them. The one listener this template does add is the `<select>`'s own `change`,
-  which writes nothing itself: it publishes the value the accessor has just written through
-  `valueChange`, so a consumer never has to depend on this element's DOM event reaching its host.
--->
+<!-- One predicate for both error states: `.has-error` and `aria-invalid` are read from `invalid`, so the select cannot show no error while announcing an invalid entry, and it states the rule exactly as the sibling. -->
 @let invalid = control().invalid && (control().touched || control().dirty);
 
-<!--
-  A visible `<label for>` is the control's accessible name, so the attribute is suppressed whenever one
-  renders: an `aria-label` beside it would override the visible text and break "label in name"
-  (WCAG 2.5.3). With no visible label, `ariaLabel` is the only name the control can expose, and an
-  empty one leaves the element exactly as the legacy markup renders it.
--->
+<!-- A visible `<label for>` is the control's accessible name, so the attribute is suppressed whenever one renders: an `aria-label` beside it would override the visible text and break "label in name" (WCAG 2.5.3). With no visible label, `ariaLabel` is the only name the control can expose, and an empty one leaves the element exactly as the legacy markup renders it. -->
 @let accessibleName = label() ? null : (ariaLabel() || null);
 
 <div class="form-group" [class.has-error]="invalid">
@@ -37,18 +18,10 @@
     (change)="emitSelection()"
   >
     @if (placeholder()) {
-      <!-- The prompt is a selectable row that returns the field to empty, matching the legacy chosen
-           control, whose prompt carries visible text and is therefore an ordinary results row: chosen
-           treats only an empty-TEXT option as non-selectable. No registered deliberate difference
-           covers making it unselectable, so a user can always clear a selection the caller made. -->
+      <!-- The prompt is a selectable row that returns the field to empty, matching the legacy chosen control, whose prompt carries visible text and is therefore an ordinary results row: chosen treats only an empty-TEXT option as non-selectable. No registered deliberate difference covers making it unselectable, so a user can always clear a selection the caller made. -->
       <option [ngValue]="null">{{ placeholder() }}</option>
     }
-    <!-- ngValue writes the template's own id, so an office id keeps its number type (1, not "1");
-         a plain value binding writes the option's DOM string and changes the request body.
-
-         Rows are tracked by position, as the client profile card does: a feature service can hand in
-         two options carrying one id, which `shared/` cannot rule out for a caller's `number | string`
-         id, and tracking by id raises NG0955 and can reconcile a row onto the wrong option. -->
+    <!-- ngValue writes the template's own id, so an office id keeps its number type (1, not "1"); a plain value binding writes the option's DOM string and changes the request body. Rows are tracked by position, as the client profile card does: a feature service can hand in two options carrying one id, which `shared/` cannot rule out for a caller's `number | string` id, and tracking by id raises NG0955 and can reconcile a row onto the wrong option. -->
     @for (option of options(); track $index) {
       <option [ngValue]="option.id">{{ option.name }}</option>
     }

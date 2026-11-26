@@ -1,52 +1,4 @@
-<!--
-  Charges section of the individual loan record (`#/viewloanaccount/:id`; AAP 0.7.1 row `loans`,
-  AAP 0.7.2 row `LoanCharge`, AAP 0.7.3 row "Loan charges"). It renders the rows the parent took from
-  the loan record's own `charges` member and issues no
-  request of its own (Rule 1 clause 2; Rule 2: no URL, host or endpoint appears here).
-
-  Exactly one of the two branches renders. A loan that carries no charges shows the shared explicit
-  empty state and no error, which is the state AAP 0.7.4 requires of this surface; the table renders
-  otherwise, one row per element of `rows()` in the order the API returned them — no sort, filter,
-  pager or subtotal (Rule 1 clause 3). Every cell is the server's own value: `name` verbatim and never
-  through `TranslatePipe`, because translating a charge's name would put words in the server's mouth;
-  amounts through `DecimalPipe`, the same grouping the legacy table's `number` filter applies; and the
-  due date through the shared display pattern, so a charge that falls due on disbursement renders an
-  empty cell rather than an invalid date. The legacy tab's fee-or-penalty, payment-due,
-  calculation-type and waived columns are not reproduced here, and that narrowing rests on the plan
-  recording it as an intentional difference (AAP 0.10.5).
-
-  The two row actions are links to the screens that post them — `pay` and `waive` on
-  `#/loanaccountcharge/:id/:action/:chargeId`, the route `loans.routes.ts` declares — and each is
-  gated by `HasPermissionDirective` on the single code the record passes down, `UPDATE_LOAN`: the
-  code that route is guarded by, so the directive and the guard cannot disagree here (AAP 0.14.1).
-  The record's own action group is a different matter and gates each of its links on the Fineract
-  code that link's step needs (see `loan-view.component.html`), which is why the one code this
-  section receives is the charge route's write code and not a copy of the group's permissions.
-
-  Each anchor answers to two independent conditions, and each hides the anchor without removing it.
-  The first is the permission code above. The second is legacy's own per-row eligibility, which the
-  component works out once per row as `row.canPay` and `row.canWaive` from the payload's own flags:
-  waive is offered only for an unsettled charge that does not fall due on disbursement, on a loan that
-  is `Active`, and pay only for a charge the server reports `chargePayable`, on a loan that is
-  `Active` — exactly the legacy record's rule
-  (`app/views/loans/viewloanaccountdetails.html:865,868`;
-  `app/scripts/controllers/loanAccount/ViewLoanDetailsController.js:168-175`), which AAP 0.10.5
-  registers no difference from (Rule 1 clause 3). The ineligible anchor carries Bootstrap 3's global
-  `.hidden` utility, so this file still declares no stylesheet, no inline style and no colour (Rule 1
-  clause 6), and the permission directive's own inline `display` gate stays untouched beside it. Each
-  anchor carries a per-charge id, so the charge a row's entry point belongs to is named in the DOM for
-  the screens' selectors.
-
-  This section deliberately offers no "Add Charge" control of its own: the record renders the one
-  entry point to `#/addloancharge/:id` in its joined action group (see `loan-view.component.html`),
-  and the legacy record likewise has no add button inside its charges tab. A second control on the
-  same route would give one action two homes on one screen (Rule 1 clause 3).
-
-  The look is entirely global: `.table.table-striped` for the table, `.btn.btn-primary.btn-sm` for the
-  row actions and the empty state's own `.text-center.text-muted`. The owning record page supplies the
-  card, so this file adds no panel, no heading, no stylesheet, no inline style and no colour of its own
-  (Rule 1 clause 6).
--->
+<!-- Charges section of the individual loan record (`#/viewloanaccount/:id`; AAP 0.7.1 row `loans`, AAP 0.7.2 row `LoanCharge`, AAP 0.7.3 row "Loan charges") (Rule 1 clause 2, Rule 2, AAP 0.7.4, Rule 1 clause 3). -->
 @if (isEmpty()) {
   <app-empty-state id="loan-charges-empty" [message]="'label.nodata' | translate" />
 } @else {
@@ -54,8 +6,7 @@
     <thead>
       <tr>
         <th scope="col">{{ 'label.heading.name' | translate }}</th>
-        <!-- The charge's own due date is labelled with label.heading.dueasof: that is the caption the
-             legacy record heads this column with, and the key every locale bundle carries. -->
+        <!-- The charge's own due date is labelled with label.heading.dueasof: that is the caption the legacy record heads this column with, and the key every locale bundle carries. -->
         <th scope="col">{{ 'label.heading.dueasof' | translate }}</th>
         <th scope="col">{{ 'label.heading.amount' | translate }}</th>
         <th scope="col">{{ 'label.heading.paid' | translate }}</th>

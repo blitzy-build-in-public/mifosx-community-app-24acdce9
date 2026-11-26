@@ -4,8 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { EmptyStateComponent } from './empty-state.component';
 
 describe('EmptyStateComponent', () => {
-  // Angular types `nativeElement`/`firstElementChild` loosely; these two casts are the only boundary
-  // in this spec, so every assertion below stays type-checked.
+  // Angular types `nativeElement`/`firstElementChild` loosely; these two casts are the only boundary in this spec, so every assertion below stays type-checked.
   function render(message: string): HTMLElement {
     const fixture = TestBed.createComponent(EmptyStateComponent);
     // `message` is `input.required<string>()`, so it is set before the first change detection.
@@ -46,9 +45,7 @@ describe('EmptyStateComponent', () => {
     const host = render('No loans found.');
     const element = root(host);
     expect(element.childElementCount).toBe(0);
-    expect(
-      element.querySelectorAll('button, a, img, svg, i, input, select, textarea, .alert, .text-danger'),
-    ).toHaveLength(0);
+    expect(element.querySelectorAll('button, a, img, svg, i, input, select, textarea, .alert, .text-danger'), ).toHaveLength(0);
     expect(element.textContent).toBe('No loans found.');
   });
 

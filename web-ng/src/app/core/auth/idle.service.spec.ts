@@ -1,36 +1,9 @@
-/**
- * Behavioural spec for `IdleService` — the client-side reproduction of the legacy ng-idle triple
- * (30-minute idle duration, 10-second warning, 15-minute keepalive) that AAP 0.3.4 claim 8 inherits
- * from the legacy session configuration and AAP 0.7.1 lists as the core row `IdleService`.
- *
- * Every case drives fake time with `vi.useFakeTimers()` and `vi.advanceTimersByTime()`, so the
- * schedule is measured to the millisecond with no real-timer wait. Two subscriptions opened per case
- * record when each emission arrives, as fake milliseconds since the service was built, which is what
- * lets a case state an exact instant (29:50, 30:00) rather than merely "eventually".
- *
- * The contracts asserted here, in the order the cases appear:
- * - the schedule is silent for the whole window before the warning;
- * - `warning$` fires at exactly 29:50 and `timeout$` at exactly 30:00, once each and never twice;
- * - `reset()` at 10:00 moves both deadlines by a full window, leaving the original ones silent;
- * - the 15-minute heartbeat re-arms itself without user action, leaves both idle deadlines where
- *   `start()` put them, and stops once the warning fires — the behaviour the service documents;
- * - `stop()` silences everything, `start()` replaces a running schedule instead of doubling it, and
- *   the three durations come from the resolved configuration rather than from hard-coded literals;
- * - no HTTP request is issued across 45 minutes of fake time spanning `start()`, two heartbeats and a
- *   `reset()`, which is the deliberate difference AAP 0.10.5 item 10 registers against legacy
- *   (the legacy keepalive was client-side only, so parity requires no call).
- *
- * The cases run against the real `IdleService` with only its one dependency stubbed, so a change to
- * the arithmetic, the deadline offsets or the heartbeat's lifecycle fails here. Rule 1 clause 9: no
- * `console.*` call, and the configuration fixture is the shipped `DEFAULT_APP_CONFIG` — configuration
- * values only, with no credential, token or session material anywhere in this file.
- */
+/** Behavioural spec for `IdleService` — the client-side reproduction of the legacy ng-idle triple (30-minute idle duration, 10-second warning, 15-minute keepalive) that AAP 0.3.4 claim 8 inherits from the legacy session (AAP 0.7.1). */
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { Subscription } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
 import { DEFAULT_APP_CONFIG, type AppConfig } from '../config/app-config.model';
 import { AppConfigService } from '../config/app-config.service';
 import { IdleService } from './idle.service';
@@ -62,32 +35,19 @@ const KEEPALIVE_DELAY_MS = KEEPALIVE_MINUTES * MS_PER_MINUTE;
 /** 600 000 ms — the instant the `reset()` case re-arms the schedule from. */
 const TEN_MINUTES_MS = 10 * MS_PER_MINUTE;
 
-/**
- * The `AppConfigService` surface `IdleService` reads, in the shape the real service publishes it: a
- * resolved `config` and the `apiUrl()` every Fineract caller composes its URL with. Implementing it as
- * a `Pick` of the real class keeps the stub tied to that class, so a renamed or re-typed member fails
- * to compile here instead of silently stubbing nothing.
- */
+/** The `AppConfigService` surface `IdleService` reads. */
 class StubAppConfigService implements Pick<AppConfigService, 'config' | 'apiUrl'> {
   constructor(private readonly resolved: AppConfig) {}
-
   get config(): AppConfig {
     return this.resolved;
   }
-
   apiUrl(path: string): string {
     const resource = path.replace(/^\/+/, '');
-
     return `${this.resolved.apiBaseUrl}${this.resolved.apiPath}/${resource}`;
   }
 }
 
-/**
- * The resolved configuration the harness supplies: the configuration the build ships with, carrying
- * all eight `AppConfig` members, including the real `dateFormat` literal `'dd MMMM yyyy'`. Deriving it
- * from `DEFAULT_APP_CONFIG` is what pins this suite to the shipped 30 / 10 / 15 triple, so a refactor
- * that changes the legacy durations fails here (Rule 1 clause 3).
- */
+/** The resolved configuration the harness supplies: the configuration the build ships with, carrying all eight `AppConfig` members, including the real `dateFormat` literal `'dd MMMM yyyy'` (Rule 1 clause 3). */
 function configFor(overrides: Partial<AppConfig> = {}): AppConfig {
   return { ...DEFAULT_APP_CONFIG, ...overrides };
 }
@@ -108,13 +68,7 @@ interface Harness {
 /** Every subscription this file opened, so `afterEach` can unsubscribe from the never-completing subjects. */
 const openSubscriptions: Subscription[] = [];
 
-/**
- * Builds the real `IdleService` with its one dependency replaced, plus the `HttpTestingController`
- * every Fineract-facing service is surrounded by, so the no-request case has a client to inspect.
- *
- * `TestBed.resetTestingModule()` first, because a case may ask for a second harness under a different
- * configuration; the injector is rebuilt rather than reaching into the singleton it already holds.
- */
+/** Builds the real `IdleService` with its one dependency replaced, plus the `HttpTestingController` every Fineract-facing service is surrounded by, so the no-request case has a client to inspect. */
 function createHarness(config: AppConfig): Harness {
   TestBed.resetTestingModule();
   TestBed.configureTestingModule({
@@ -202,8 +156,7 @@ describe('IdleService', () => {
       vi.advanceTimersByTime(TEN_MINUTES_MS);
       service.reset();
 
-      // 1 789 999 ms after the reset is 2 389 999 ms into the session: the original 29:50 and 30:00 have
-      // both passed in silence, and the re-armed warning has not yet arrived.
+      // 1 789 999 ms after the reset is 2 389 999 ms into the session: the original 29:50 and 30:00 have both passed in silence, and the re-armed warning has not yet arrived.
       vi.advanceTimersByTime(WARNING_DELAY_MS - 1);
       expect(emissions.warnings).toEqual([]);
       expect(emissions.timeouts).toEqual([]);
@@ -236,8 +189,7 @@ describe('IdleService', () => {
       vi.advanceTimersByTime(WARNING_DELAY_MS - KEEPALIVE_DELAY_MS);
       expect(emissions.warnings).toEqual([WARNING_DELAY_MS]);
 
-      // Going idle stops the heartbeat, exactly as ng-idle halts its keepalive at $idleStart; only the
-      // timeout is still armed.
+      // Going idle stops the heartbeat, exactly as ng-idle halts its keepalive at $idleStart; only the timeout is still armed.
       expect(vi.getTimerCount()).toBe(1);
 
       vi.advanceTimersByTime(IDLE_DELAY_MS - WARNING_DELAY_MS);
@@ -298,8 +250,7 @@ describe('IdleService', () => {
     });
 
     it('derives every deadline from the configured durations instead of hard-coding them', () => {
-      // One minute of idle, a ten-second warning and a one-minute heartbeat: the same expressions the
-      // service uses now produce 50 000 / 60 000 rather than 1 790 000 / 1 800 000.
+      // One minute of idle, a ten-second warning and a one-minute heartbeat: the same expressions the service uses now produce 50 000 / 60 000 rather than 1 790 000 / 1 800 000.
       const shortened = createHarness(
         configFor({ idleMinutes: 1, warningSeconds: 10, keepaliveMinutes: 1 }),
       );
@@ -330,9 +281,7 @@ describe('IdleService', () => {
       service.reset();
       vi.advanceTimersByTime(20 * MS_PER_MINUTE);
 
-      // Two heartbeats and a reset later the clock has spoken only through its two observables, and
-      // nothing at all was handed to the HTTP client: the keepalive reaches no server, which is the
-      // deliberate difference AAP 0.10.5 item 10 registers against the legacy client-side keepalive.
+      // Two heartbeats and a reset later the clock has spoken only through its two observables, and nothing at all was handed to the HTTP client: the keepalive reaches no server, which is the deliberate difference AAP 0.10.5.
       expect(emissions.warnings).toEqual([]);
       expect(httpMock.match(() => true)).toHaveLength(0);
       expect(httpMock.verify()).toBeUndefined();

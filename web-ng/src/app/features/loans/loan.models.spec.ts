@@ -1,16 +1,8 @@
 import { describe, expect, it } from 'vitest';
-
 import { readSelectedId, toLoanStatusKey } from './loan.models';
 import type { StatusKey } from '../../shared/status-key.util';
 
-/**
- * Every status the fork's `LoanStatus` enum declares (`LoanStatus.java`), by its numeric id and by
- * its `loanStatusType.*` message code, with the indicator key each one must paint.
- *
- * The four multi-segment closing codes are the ones a last-segment match used to drop, and `400`
- * and `602` are terminal states the id table used to omit, so this list is also the regression
- * guard for both.
- */
+/** Every status the fork’s `LoanStatus` enum declares, by numeric id and by its `loanStatusType.*` code, with the indicator key it paints (AAP 0.7.2; the multi-segment closing codes and ids 400/602 are the regression guard). */
 const STATUS_CASES: readonly {
   readonly id: string | number;
   readonly code: string;
@@ -36,24 +28,20 @@ describe('toLoanStatusKey', () => {
       expect(toLoanStatusKey(id), String(id)).toBe(key);
     }
   });
-
   it('paints the key of every loanStatusType.* code, whole name and all', () => {
     for (const { code, key } of STATUS_CASES) {
       expect(toLoanStatusKey(code), code).toBe(key);
     }
   });
-
   it('accepts the id as text, and a code without its prefix', () => {
     expect(toLoanStatusKey('300')).toBe('active');
     expect(toLoanStatusKey('rejected')).toBe('closed');
     expect(toLoanStatusKey('closed.reschedule.outstanding.amount')).toBe('closed');
   });
-
   it('never paints an id the enum does not declare', () => {
     expect(toLoanStatusKey(900)).toBe('other');
     expect(toLoanStatusKey('900')).toBe('other');
   });
-
   it('keeps a missing or unrecognised status neutral rather than claiming a state', () => {
     expect(toLoanStatusKey(null)).toBe('other');
     expect(toLoanStatusKey(undefined)).toBe('other');
@@ -62,11 +50,7 @@ describe('toLoanStatusKey', () => {
   });
 });
 
-/**
- * The two shapes a persisted enumeration id arrives in, each with the id it names: the plain number a
- * payload sends for a single selection, and the `{id, code, value}` object the option lists are built
- * from. Both name the same id, so a reader that accepted one shape would empty a select for the other.
- */
+// The two shapes a persisted id arrives in — a plain number and the `{id, code, value}` object — so a reader accepting one shape would empty a select for the other.
 const SELECTED_ID_CASES: readonly [string, unknown, number][] = [
   ['a plain number', 3, 3],
   [
@@ -75,8 +59,6 @@ const SELECTED_ID_CASES: readonly [string, unknown, number][] = [
     3,
   ],
 ];
-
-/** The values that name no id, so the caller's field stays empty instead of posting a substitute. */
 const UNSELECTED_VALUES: readonly [string, unknown][] = [
   ['an object without an id', { code: 'interestRateFrequencyType.years' }],
   ['an object whose id is text', { id: '3' }],
@@ -92,7 +74,6 @@ describe('readSelectedId', () => {
   it.each(SELECTED_ID_CASES)('reads the id of %s', (_label, value, id) => {
     expect(readSelectedId(value)).toBe(id);
   });
-
   it.each(UNSELECTED_VALUES)('reads no id from %s', (_label, value) => {
     expect(readSelectedId(value)).toBeNull();
   });

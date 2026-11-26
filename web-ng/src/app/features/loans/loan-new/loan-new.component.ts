@@ -31,71 +31,28 @@ import { LoanService } from '../loan.service';
 import type { LoanApplicationInput } from '../loan.service';
 import { RepaymentPreviewComponent } from './repayment-preview/repayment-preview.component';
 
-/**
- * The two controls of one charge row of the application's charge list: the charge the applicant
- * picked and the amount the server reports for it.
- *
- * `chargeId` holds the `SelectValue` a `SelectFieldComponent` writes — the charge's own id with its
- * runtime type intact — and `amount` a `number | null`, so a row the applicant has not filled in
- * carries no invented figure. A row is posted only when `chargeId` is set; an untouched row sends
- * nothing at all, which is what keeps `charges` off the body of an application that applies none
- * (AAP 0.7.2, `LoanApplicationRequest.charges`).
- */
+/** The two controls of one charge row of the application's charge list: the charge the applicant picked and the amount the server reports for it (AAP 0.7.2). */
 interface ChargeRowControls {
   readonly chargeId: FormControl<SelectValue | null>;
   readonly amount: FormControl<number | null>;
 }
 
-/**
- * Whether a value is a plain object whose members can be read by key.
- *
- * `LoanTemplate` declares the members this application consumes, and the fork sends more beside
- * them: the option list of every enumerated term (`amortizationTypeOptions`, `productOptions`,
- * `repaymentFrequencyTypeOptions`, …) and the selected value of several of those enumerations as an
- * object (`{id, code, value}`) rather than as the plain number the model declares. Those are the
- * payloads read through this predicate, and it is the single documented boundary where they are
- * reached as `unknown` and then narrowed by the guards below — no member of the plan's model is
- * re-declared here, no value is asserted past the type system, and no field of the file is `any`
- * (Rule 1 clause 4, AAP 0.14.1). Reading a member the model does declare through this record would
- * lose the model's type for nothing, so every declared member is read off the model directly.
- *
- * A value that is an array is not a record: it carries no member this screen reads by name, so a
- * reply of the wrong shape yields no option row instead of a member invented from its indices.
- */
+/** Whether a value is a plain object whose members can be read by key (Rule 1 clause 4, AAP 0.14.1). */
 function isWireObject(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/**
- * A non-empty string, or `null` for every other value.
- *
- * An empty string counts as absent because Fineract sends `""` for a member it has no value for,
- * and rendering an empty label or posting an empty identifier is not the same as leaving the field
- * empty (Rule 1 clause 3: no value is invented, and none is silently turned into another).
- */
+/** A non-empty string, or `null` for every other value. An empty string counts as absent because Fineract sends `""` for a member it has no value for, and rendering an empty label or posting an empty identifier is not the (Rule 1 clause 3). */
 function asText(value: unknown): string | null {
   return typeof value === 'string' && value !== '' ? value : null;
 }
 
-/**
- * A finite number, or `null`.
- *
- * `NaN` and `Infinity` are excluded: neither is a figure any Fineract payload carries, and letting
- * one into a request body would post a value the applicant never entered.
- */
+/** A finite number, or `null`. `NaN` and `Infinity` are excluded: neither is a figure any Fineract payload carries, and letting one into a request body would post a value the applicant never entered. */
 function asNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-/**
- * The identifier of an option or of a selected enumeration value: a finite number or a non-empty
- * string, or `null`.
- *
- * The two types both occur in the payloads this screen reads — every `…Options` list is keyed by a
- * numeric id, while `shared/select-field` keeps whichever type the template sent so the posted body
- * carries the value the server gave (Rule 1 clause 2) — so the reader keeps both and a control
- * holding a string is not coerced to a number.
- */
+/** The identifier of an option or of a selected enumeration value: a finite number or a non-empty string, or `null` (Rule 1 clause 2). */
 function asId(value: unknown): SelectValue | null {
   const numeric = asNumber(value);
   if (numeric !== null) {
@@ -105,12 +62,7 @@ function asId(value: unknown): SelectValue | null {
   return asText(value);
 }
 
-/**
- * The display name of a staff row: `displayName` is what `loanOfficerOptions` carries, while
- * `name` is what every other list carries, and a row that has neither is labelled with the staff
- * member's own first and last name rather than with an empty option (Rule 1 clause 3: the label is
- * the server's text, never a locally invented one).
- */
+/** The display name of a staff row: `displayName` is what `loanOfficerOptions` carries, while `name` is what every other list carries, and a row that has neither is labelled with the staff member's own first and last name (Rule 1 clause 3). */
 function readRowName(record: Readonly<Record<string, unknown>>): string | null {
   const named = asText(record['name']) ?? asText(record['displayName']);
   if (named !== null) {
@@ -125,16 +77,7 @@ function readRowName(record: Readonly<Record<string, unknown>>): string | null {
   return joined === '' ? null : joined;
 }
 
-/**
- * One row of an option list, or `null` for an entry that names no id and no label.
- *
- * The rows of the lists this screen renders arrive in three shapes and this reader accepts all
- * three: `{id, name}` for products and funds, `{id, code, value}` for the enumerated term lists, and
- * a staff row carrying `displayName`. The label is the server's text in every case — `value` before
- * `code`, because `value` is the human wording and `code` the message key (AAP 0.4.3, Rule 1
- * clause 3) — and the received order is preserved, since the template's order is the order the
- * legacy screens listed.
- */
+/** One row of an option list, or `null` for an entry that names no id and no label (AAP 0.4.3, Rule 1 clause 3). */
 function readOptionRow(value: unknown): SelectOption | null {
   if (!isWireObject(value)) {
     return null;
@@ -168,90 +111,14 @@ function readOptionRows(value: unknown): readonly SelectOption[] {
   return rows;
 }
 
-/**
- * Local midnight of the browser's current date.
- *
- * A form's own default date follows the legacy screen and comes from the browser clock; the
- * tenant's business date is the E2E harness's business and is never read by the application
- * (AAP 0.10.5 item 15, Rule 1 clause 2). Local midnight rather than the current instant, so the day
- * the applicant sees is the day `shared/date-format.util.toFineractDate` writes into the payload.
- */
+/** Local midnight of the browser's current date. A form's own default date follows the legacy screen and comes from the browser clock; the tenant's business date is the E2E harness's business and is never read by the (AAP 0.10.5, Rule 1 clause 2). */
 function today(): Date {
   const now = new Date();
 
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
-/**
- * The individual loan application screen — `#/newclientloanaccount/:clientId` — which is workflow
- * **W4** (submit an application after previewing its repayment schedule) and the surface workflow
- * **W7** is proved on (a Fineract validation error rendered verbatim) (AAP 0.7.3 "W4 loan
- * application", "W7 validation error"; AAP 0.7.4 loan screens; AAP 0.10.1).
- *
- * **Four calls, all through `LoanService`.** `GET /loans/template?templateType=individual&clientId=`
- * on entry and again with `&productId=` when the product changes, `GET /charges/{id}?template=true`
- * when a charge is picked, `POST /loans?command=calculateLoanSchedule` for the preview and
- * `POST /loans` for the submission (AAP 0.7.3). No URL, path, host, header or query parameter is
- * composed here: `loan.service.ts` owns all of them and the single interceptor owns the auth and
- * tenant headers, so this file holds no endpoint and no host (Rule 1 clause 2 and 5, Rule 2).
- *
- * **One route emission, one application.** `:clientId` is read from `route.paramMap`, never from the
- * snapshot: the router reuses this component when the URL moves from one client's application route to
- * another — the client record links each of its accounts to a form of its own — so a single read would
- * leave the first client's form, options and message on screen under the second client's URL and would
- * issue no request at all. Every emission therefore clears the form, its option lists, the preview and
- * the message, and re-reads the template for the client the URL now names, exactly as `loan-edit`
- * handles the same reuse; an answer that arrives after the URL moved on is discarded rather than
- * painted, and leaving the screen cancels the read it left outstanding.
- *
- * **One builder, two triggers.** `buildRequest()` is the only place the application is assembled and
- * both `preview()` and `submit()` post its result, which is what makes the previewed schedule the
- * schedule of the application actually submitted (AAP 0.7.2, W4). Nothing else reads the form into a
- * payload — no second `FormGroup`, no spread of `form.value` in the template.
- *
- * **Every default and every option comes from the template.** `applyTemplate` seeds the fields from
- * the payload and the pickers from the payload's own lists, in the payload's order. Where the plan's
- * model does not declare a list the fork sends (`amortizationTypeOptions`, `interestTypeOptions`,
- * `interestCalculationPeriodTypeOptions`, `loanTermFrequencyTypeOptions`,
- * `repaymentFrequencyTypeOptions`, `interestRateFrequencyTypeOptions`) it is read through
- * `isWireObject` and narrowed by the readers above — never replaced by a constant written into this
- * file, because a hard-coded enumeration is a dropdown the legacy screen never showed (Rule 1
- * clause 3). `principal` and every amount carry `Validators.required` and nothing else: legacy
- * applies no bound, and W7 exists to prove Fineract itself rejects a principal above the product
- * maximum (Rule 1 clause 3).
- *
- * **The strategy field is named for the legacy form but carries the code.** The control is
- * `transactionProcessingStrategyId`, the id the legacy template fixes and the E2E page object
- * targets, while its value is the strategy **code**: the fork rejects
- * `transactionProcessingStrategyId` with HTTP 400 ("The parameter transactionProcessingStrategyId is
- * not supported") and accepts `transactionProcessingStrategyCode`, which is the member
- * `LoanApplicationRequest` declares and the one posted (Rule 1 clause 2).
- *
- * **`dateFormat` and `locale` are not this screen's to set.** `buildRequest` returns
- * `LoanApplicationInput` — the application body without the pair — and `LoanService` writes
- * `dateFormat` and `locale` at the wire boundary from the configured format and the active locale,
- * exactly as it does for every other dated loan body (`LoanRepaymentInput` and its siblings). The
- * form therefore holds dates and values only, so this screen cannot pair a date with a format or a
- * locale the server does not read, and the preview and the submission stay the same object by
- * construction, because both go through that one builder (AAP 0.7.2 "Date handling", AAP 0.14.1;
- * Rule 1 clause 2).
- *
- * **`TranslateService` is deliberately not injected.** Every visible string goes through
- * `TranslatePipe`, so a language switch re-renders the screen without a reload and no injected
- * service is left unused. This is the one deviation from the folder's contract, and it changes no
- * dependency direction.
- *
- * **Errors are values.** A 4xx rejection sets `error` to Fineract's own `message`, unaltered and
- * untranslated, and every entered value survives, because W7 compares the message character for
- * character with the server's `defaultUserMessage`; a 5xx or a transport failure sets nothing,
- * because `core/http/fineract.interceptor.ts` has already raised the notification and a second one
- * would double-report (Rule 1 clause 3, AAP 0.7.4). Nothing about the session, the request or the
- * payload is logged (Rule 1 clause 9).
- *
- * **One request per click.** Both triggers are guarded by `createSubmitGuard()`, whose `runOnce`
- * refuses a second entry while a call is in flight, and both are disabled from `guard.busy()`, so
- * one click against a non-idempotent endpoint is one request (AAP 0.1.1, W5).
- */
+/** The individual loan application screen — `#/newclientloanaccount/:clientId` — which is workflow **W4** (submit an application after previewing its repayment schedule) and the surface workflow **W7** is proved on (a (AAP 0.7.3, AAP 0.7.4, AAP 0.10.1, Rule 1 clause 2). */
 @Component({
   selector: 'app-loan-new',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -268,10 +135,7 @@ function today(): Date {
 export class LoanNewComponent {
   private readonly loanService = inject(LoanService);
 
-  /**
-   * The activated route, subscribed to for the `:clientId` of `#/newclientloanaccount/:clientId`: the
-   * router reuses this component across clients, so the segment is followed rather than sampled once.
-   */
+  /** The activated route, subscribed to for the `:clientId` of `#/newclientloanaccount/:clientId`: the router reuses this component across clients, so the segment is followed rather than sampled once. */
   private readonly route = inject(ActivatedRoute);
 
   private readonly router = inject(Router);
@@ -281,42 +145,22 @@ export class LoanNewComponent {
 
   private readonly formBuilder = inject(FormBuilder);
 
-  /**
-   * The client the application is opened for, exactly as the route carries it: `null` when the URL
-   * names no client.
-   *
-   * A signal, not a snapshot value: the router reuses this component when the URL moves from one
-   * client's application to another, so the segment has to follow every emission of `route.paramMap`
-   * and every reader of it — the template read, the posted body and the Cancel link.
-   */
+  /** The client the application is opened for, exactly as the route carries it: `null` when the URL names no client. */
   readonly clientId = signal<string | null>(null);
 
-  /** The repayment schedule of the last preview, or `null` before one is asked for and after the
-   *  product changes. Bound straight to `app-repayment-preview`. */
+  /** The repayment schedule of the last preview, or `null` before one is asked for and after the product changes. */
   readonly schedule = signal<RepaymentSchedule | null>(null);
 
   /** Fineract's own failure text for the last rejected call, rendered verbatim above the form. */
   readonly error = signal<string | null>(null);
 
-  /**
-   * True when the server accepted the application but its answer named no loan id, which leaves the
-   * screen with no record to open.
-   *
-   * `POST /loans` has already created the loan by then, so returning quietly would be a submission
-   * whose outcome nobody sees (AAP 0.14.2: every call path ends in a rendered message). The template
-   * renders a notice beside the error region instead, and the flag is cleared at the start of every
-   * submission and on every route emission, so it always describes the latest one.
-   */
+  /** True when the server accepted the application but its answer named no loan id, which leaves the screen with no record to open (AAP 0.14.2). */
   readonly submittedWithoutId = signal(false);
 
-  /** True when the route names no client, so there is nothing to open an application for and no
-   *  request is made. The template renders its message in place of the form. */
+  /** True when the route names no client, so there is nothing to open an application for and no request is made. */
   readonly notFound = signal(false);
 
-  /** True while a template read is in flight — on entry and after a product change. Consumed by the
-   *  card body's `aria-busy` in `loan-new.component.html`, which marks the form busy for assistive
-   *  technology while leaving it rendered: legacy shows the form at once and renders no loader
-   *  (AAP 0.2.4, Rule 1 clause 3). */
+  /** True while a template read is in flight — on entry and after a product change (AAP 0.2.4, Rule 1 clause 3). */
   readonly loading = signal(true);
 
   /** Keeps one click on either trigger to one request against a non-idempotent endpoint. */
@@ -328,8 +172,7 @@ export class LoanNewComponent {
   /** Loan officers the application may be assigned to, from the template's `loanOfficerOptions`. */
   readonly loanOfficerOptions = signal<readonly SelectOption[]>([]);
 
-  /** Funds the loan may draw on, from the template's `fundOptions`; empty on a tenant that uses
-   *  none, and the field is then simply not offered a value. */
+  /** Funds the loan may draw on, from the template's `fundOptions`; empty on a tenant that uses none, and the field is then simply not offered a value. */
   readonly fundOptions = signal<readonly SelectOption[]>([]);
 
   /** Charges applicable to the application, from the template's `chargeOptions`, in its order. */
@@ -353,18 +196,10 @@ export class LoanNewComponent {
   /** Interest calculation periods, from `interestCalculationPeriodTypeOptions`. */
   readonly interestCalculationPeriodTypeOptions = signal<readonly SelectOption[]>([]);
 
-  /** Transaction processing strategies, keyed by the `code` the application posts rather than by an
-   *  id, because the fork's list is keyed by code (see the class comment). */
+  /** Transaction processing strategies, keyed by the `code` the application posts rather than by an id, because the fork's list is keyed by code (see the class comment). */
   readonly transactionProcessingStrategyOptions = signal<readonly SelectOption[]>([]);
 
-  /**
-   * The application form: one control per field of `LoanApplicationRequest`, named as the legacy
-   * template names it so the E2E page object resolves each control the same way on both front ends.
-   *
-   * `principal`, the term, repayment and interest members carry `Validators.required` and nothing
-   * more; the dates hold `Date | null`; `loanOfficerId` and `fundId` stay unvalidated because a
-   * tenant need not have officers or funds to choose from (Rule 1 clause 3).
-   */
+  /** The application form: one control per field of `LoanApplicationRequest`, named as the legacy template names it so the E2E page object resolves each control the same way on both front ends (Rule 1 clause 3). */
   readonly form = this.formBuilder.group({
     productId: this.formBuilder.control<SelectValue | null>(null, Validators.required),
     principal: this.formBuilder.control<number | null>(null, Validators.required),
@@ -386,36 +221,13 @@ export class LoanNewComponent {
     charges: this.formBuilder.array<FormGroup<ChargeRowControls>>([]),
   });
 
-  /**
-   * The charge rows of the form, as the template iterates them: the charges the template preselected
-   * plus any the applicant adds through {@link addCharge}.
-   *
-   * The same `FormArray` as `form.controls.charges`, named separately so the template does not have
-   * to spell the path out and so `removeCharge`/`addCharge` and the template cannot address two
-   * different arrays.
-   */
+  /** The charge rows of the form, as the template iterates them: the charges the template preselected plus any the applicant adds through {@link addCharge}. The same `FormArray` as `form.controls.charges`, named separately. */
   readonly chargeRows: FormArray<FormGroup<ChargeRowControls>> = this.form.controls.charges;
 
-  /**
-   * Monotonic token of the template reads, so the answer to an earlier read cannot overwrite the
-   * fields seeded by a later one.
-   *
-   * Two quick product selections issue two `GET /loans/template` calls, and so does an in-place move
-   * from one client's application route to another; the server may answer them out of order, and only
-   * the newest answer is applied. The counter costs nothing and prevents one client's — or one
-   * product's — terms from being shown beside another's schedule.
-   */
+  /** Monotonic token of the template reads, so the answer to an earlier read cannot overwrite the fields seeded by a later one. */
   private templateSequence = 0;
 
-  /**
-   * Subscribes to the route's parameters, which is the screen's whole entry point.
-   *
-   * One subscription, never a `snapshot` read beside it: Angular reuses this component when the URL
-   * moves from one `#/newclientloanaccount/{clientId}` to another, and a single read would leave the
-   * first client's form, option lists, preview and message on screen for the second client. Each
-   * emission therefore resets the screen and re-runs the template read, the way `loan-edit` handles the
-   * same reuse.
-   */
+  /** Subscribes to the route's parameters, which is the screen's whole entry point. */
   constructor() {
     this.route.paramMap
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -424,16 +236,7 @@ export class LoanNewComponent {
       });
   }
 
-  /**
-   * Applies one route emission: stores the segment, clears everything the previous emission put on the
-   * screen, and starts the read the new URL needs.
-   *
-   * A route that names no client issues no request — the screen shows its not-found message instead —
-   * so that path takes the next {@link templateSequence} number itself, which is what discards a read
-   * the previous emission left outstanding, and clears `loading`, which no read will clear for it.
-   *
-   * @param clientId the emission's `:clientId` segment, or `null` when it carries none.
-   */
+  /** Applies one route emission: stores the segment, clears everything the previous emission put on the screen, and starts the read the new URL needs. */
   private applyRoute(clientId: string | null): void {
     this.clientId.set(clientId);
     this.reset();
@@ -452,14 +255,7 @@ export class LoanNewComponent {
     void this.loadTemplate(parsed);
   }
 
-  /**
-   * Clears everything the previous emission put on the screen — the form and its charge rows, every
-   * option list the template filled, the preview and the failure — so a route that names another client
-   * never shows the earlier client's application.
-   *
-   * `loading` goes back to `true` until the new read settles, and the not-found outcome of the previous
-   * route is dropped: it described the client the URL has left.
-   */
+  /** Clears everything the previous emission put on the screen — the form and its charge rows, every option list the template filled, the preview and the failure — so a route that names another client never shows the earlier. */
   private reset(): void {
     this.form.reset();
     this.chargeRows.clear();
@@ -481,22 +277,7 @@ export class LoanNewComponent {
     this.loading.set(true);
   }
 
-  /**
-   * The application as the endpoint takes it: the one body both triggers post.
-   *
-   * `clientId` comes from the route, every term member from its control, the two dates as `Date`
-   * values that `LoanService` formats at the boundary, and `charges` only when at least one row names
-   * a charge — an application that applies none sends no `charges` member at all, exactly as the
-   * legacy form dropped the empty array (Rule 1 clause 2). `loanOfficerId` and `fundId` are added
-   * only when a value is selected: never an empty string and never `0`, which would name an officer
-   * or a fund that does not exist.
-   *
-   * @returns The body for `POST /loans` and for `POST /loans?command=calculateLoanSchedule`, without
-   *   the `dateFormat`/`locale` pair, which `LoanService` writes at the boundary.
-   * @throws Error when a required field holds no value. Both triggers refuse an invalid form before
-   *   they reach here, so this guard keeps the declared shape of the body honest — it never stands in
-   *   for validation, and it never posts a figure the applicant did not enter (Rule 1 clause 3).
-   */
+  /** The application as the endpoint takes it: the one body both triggers post (Rule 1 clause 2, Rule 1 clause 3). */
   buildRequest(): LoanApplicationInput {
     const values = this.form.getRawValue();
 
@@ -550,14 +331,7 @@ export class LoanNewComponent {
     return request;
   }
 
-  /**
-   * Asks the server to calculate the application's repayment schedule and shows it.
-   *
-   * The body is `buildRequest()`'s own, so the preview describes the application `submit()` posts.
-   * An invalid form is reported in place and sends nothing, which is what the legacy form's own
-   * submission did; beyond that no rule is added — neither trigger is disabled on partial validity,
-   * because legacy had no such restriction (Rule 1 clause 3).
-   */
+  /** Asks the server to calculate the application's repayment schedule and shows it (Rule 1 clause 3). */
   preview(): void {
     void this.guard.runOnce(async () => {
       if (!this.isReadyToSend()) {
@@ -575,14 +349,7 @@ export class LoanNewComponent {
     });
   }
 
-  /**
-   * Submits the application and opens the loan record it created.
-   *
-   * The record is addressed by the id the server reports for the new loan — `resourceId`, or the
-   * `loanId` the legacy screen navigated with when a fork omits the former — and never by a value
-   * this screen derived (Rule 1 clause 2). A response that reports neither leaves the loan created
-   * but unaddressable, so the screen renders that outcome rather than returning quietly (AAP 0.14.2).
-   */
+  /** Submits the application and opens the loan record it created (Rule 1 clause 2, AAP 0.14.2). */
   submit(): void {
     void this.guard.runOnce(async () => {
       this.submittedWithoutId.set(false);
@@ -608,19 +375,7 @@ export class LoanNewComponent {
     });
   }
 
-  /**
-   * Re-reads the template for the newly chosen product and reseeds the whole form from it, which is
-   * what the legacy screen did on a product change (AAP 0.3.4 claim 14).
-   *
-   * The defaults are never copied out of a partial `product` projection: the product-dependent terms
-   * the server computed live at the top level of the template, so the whole payload is applied. The
-   * previous product's preview is discarded first, because a schedule calculated for another product
-   * must not stay on screen beside this one's terms.
-   *
-   * @param productId The chosen product, as the field publishes it through `valueChange`; the
-   *   control's own value is used when the caller passes none, so both
-   *   `(valueChange)="onProductChange($event)"` and `onProductChange(id)` behave alike.
-   */
+  /** Re-reads the template for the newly chosen product and reseeds the whole form from it, which is what the legacy screen did on a product change (AAP 0.3.4 claim 14). */
   onProductChange(productId: SelectValue | null = null): void {
     const clientId = this.clientIdNumber();
     const selected = productId ?? this.form.controls.productId.value;
@@ -633,18 +388,7 @@ export class LoanNewComponent {
     void this.loadTemplate(clientId, selected);
   }
 
-  /**
-   * Reads the picked charge's own terms and puts the amount the server reports into the row.
-   *
-   * The figure is the server's, never one computed or copied here, because a charge may be a flat
-   * amount or a percentage of the principal and only the server knows which (Rule 1 clause 3). A
-   * charge whose payload reports no amount leaves the field empty — it is `required`, and Fineract
-   * decides what the charge costs.
-   *
-   * @param rowIndex The charge row that changed.
-   * @param chargeId The picked charge, when the caller passes it; the row's own control value is used
-   *   otherwise.
-   */
+  /** Reads the picked charge's own terms and puts the amount the server reports into the row (Rule 1 clause 3). */
   onChargeSelect(rowIndex: number, chargeId: SelectValue | null = null): void {
     if (!this.isChargeRow(rowIndex)) {
       return;
@@ -653,9 +397,7 @@ export class LoanNewComponent {
     const row = this.chargeRows.at(rowIndex);
     const selected = chargeId ?? row.controls.chargeId.value;
 
-    // The select writes its own control before this handler runs; writing the value here as well
-    // keeps the row coherent for a caller that names the charge directly, so the amount read below
-    // always belongs to the charge the body will post.
+    // The select writes its own control before this handler runs; writing the value here as well keeps the row coherent for a caller that names the charge directly, so the amount read below always belongs to the charge the.
     if (chargeId !== null && row.controls.chargeId.value !== chargeId) {
       row.controls.chargeId.setValue(chargeId);
     }
@@ -671,30 +413,19 @@ export class LoanNewComponent {
     void this.readChargeAmount(rowIndex, selected);
   }
 
-  /** Adds an empty charge row, which the applicant then fills from the charge list — the application
-   *  screen's counterpart of the legacy wizard's "add charge" step. */
+  /** Adds an empty charge row, which the applicant then fills from the charge list — the application screen's counterpart of the legacy wizard's "add charge" step. */
   addCharge(): void {
     this.chargeRows.push(this.chargeRow(null, null));
   }
 
-  /**
-   * Removes a charge row, so a charge the applicant picked and then thought better of is not posted.
-   *
-   * @param rowIndex The row to drop; an index outside the array is ignored.
-   */
+  /** Removes a charge row, so a charge the applicant picked and then thought better of is not posted. @param rowIndex The row to drop; an index outside the array is ignored. */
   removeCharge(rowIndex: number): void {
     if (this.isChargeRow(rowIndex)) {
       this.chargeRows.removeAt(rowIndex);
     }
   }
 
-  /**
-   * Reads the template and applies it, discarding an answer that a later read has superseded, and
-   * cancelling the read if the screen is left before it answers.
-   *
-   * @param clientId Client the application is opened for.
-   * @param productId Product whose defaults are wanted, absent for the first read.
-   */
+  /** Reads the template and applies it, discarding an answer that a later read has superseded, and cancelling the read if the screen is left before it answers. @param clientId Client the application is opened for. @param. */
   private async loadTemplate(clientId: number, productId?: SelectValue): Promise<void> {
     const sequence = ++this.templateSequence;
     this.loading.set(true);
@@ -721,33 +452,14 @@ export class LoanNewComponent {
     }
   }
 
-  /**
-   * Whether a read still speaks for the screen: it is the newest read, and the screen it belongs to has
-   * not been destroyed, so a read the route or the teardown cancelled can neither seed the form nor
-   * clear the loading state of whatever replaced it.
-   *
-   * @param sequence the read's {@link templateSequence} number.
-   */
+  /** Whether a read still speaks for the screen: it is the newest read, and the screen it belongs to has not been destroyed, so a read the route or the teardown cancelled can neither seed the form nor clear the loading state. */
   private isCurrent(sequence: number): boolean {
     return !this.destroyRef.destroyed && sequence === this.templateSequence;
   }
 
-  /**
-   * Seeds every option list, every default and every charge row from one template payload.
-   *
-   * The fields are seeded from the template's own values and left empty where the template has none:
-   * a product-less template answers its option lists with every default null, and those fields then
-   * stay empty for the applicant to fill (AAP 0.7.2, `LoanTemplate`). Only `submittedOnDate` is
-   * defaulted here, from the browser clock, because Fineract sends no submission date and the legacy
-   * controller set it to `new Date()`; an already-entered date is kept across a product change, as
-   * legacy kept it. A new payload also clears the previous preview and error, which describe an
-   * application that no longer exists.
-   *
-   * @param template The payload of `GET /loans/template`.
-   */
+  /** Seeds every option list, every default and every charge row from one template payload (AAP 0.7.2). */
   private applyTemplate(template: LoanTemplate): void {
-    // A payload that is not a plain object carries no option list and no default, so the record every
-    // read below goes through is then empty and every field keeps the value it already holds.
+    // A payload that is not a plain object carries no option list and no default, so the record every read below goes through is then empty and every field keeps the value it already holds.
     const wire: Readonly<Record<string, unknown>> = isWireObject(template) ? template : {};
 
     this.productOptions.set(readOptionRows(wire['productOptions']));
@@ -797,15 +509,7 @@ export class LoanNewComponent {
     this.loading.set(false);
   }
 
-  /**
-   * Rebuilds the charge rows from the payload's preselected charges and offers the applicable ones.
-   *
-   * A charge is offered only if the template lists it, and a preselected one is posted with the amount
-   * the template reports for it; an application that applies no charge keeps an empty array and posts
-   * no `charges` member at all (Rule 1 clause 2).
-   *
-   * @param template The payload of `GET /loans/template`.
-   */
+  /** Rebuilds the charge rows from the payload's preselected charges and offers the applicable ones (Rule 1 clause 2). */
   private seedCharges(template: LoanTemplate): void {
     this.chargeOptions.set(template.chargeOptions ?? template.charges ?? []);
     this.chargeRows.clear();
@@ -815,16 +519,7 @@ export class LoanNewComponent {
     }
   }
 
-  /**
-   * Puts the amount the server reports for one charge into its row.
-   *
-   * The charge's own template is the authority for the amount — `GET /charges/{id}?template=true`
-   * answers with the charge itself, whose `amount` is the figure a flat charge costs (Rule 1
-   * clause 2). A row removed while the read was in flight is left alone.
-   *
-   * @param rowIndex Row the charge was picked in.
-   * @param chargeId Charge to read.
-   */
+  /** Puts the amount the server reports for one charge into its row (Rule 1 clause 2). */
   private async readChargeAmount(rowIndex: number, chargeId: SelectValue): Promise<void> {
     try {
       const template = await firstValueFrom(this.loanService.chargeTemplate(chargeId));
@@ -833,8 +528,7 @@ export class LoanNewComponent {
         return;
       }
 
-      // `GET /charges/{id}?template=true` answers with the charge itself, whose declared `amount` is
-      // the figure; a payload that answers with the picker shape instead is read from its first row.
+      // `GET /charges/{id}?template=true` answers with the charge itself, whose declared `amount` is the figure; a payload that answers with the picker shape instead is read from its first row.
       const options: readonly LoanChargeOption[] = template.chargeOptions ?? [];
       const amount = template.amount ?? asNumber(options[0]?.amount) ?? null;
 
@@ -857,10 +551,7 @@ export class LoanNewComponent {
     return rowIndex >= 0 && rowIndex < this.chargeRows.length;
   }
 
-  /**
-   * Whether the form may be sent: an invalid form is marked touched, which is what shows each
-   * field's error state, and then sends nothing.
-   */
+  /** Whether the form may be sent: an invalid form is marked touched, which is what shows each field's error state, and then sends nothing. */
   private isReadyToSend(): boolean {
     if (this.form.valid) {
       return true;
@@ -871,26 +562,7 @@ export class LoanNewComponent {
     return false;
   }
 
-  /**
-   * Shows Fineract's own text for a rejected call, and leaves a 5xx or transport failure alone.
-   *
-   * A 4xx carries the message the applicant has to act on — W7 compares it character for character
-   * with the server's `defaultUserMessage` — so it is rendered exactly as received, with no prefix,
-   * no translation and no reformatting, and the entered values stay untouched. A 5xx or a status of
-   * 0 has already been turned into a notification by `core/http/fineract.interceptor.ts`; raising a
-   * second message here would report one failure twice (AAP 0.7.4, Rule 1 clause 3). A rejection that
-   * is not a Fineract answer — the body guard described on {@link buildRequest} refusing to assemble
-   * a payload — shows no text either: there is no server message to show, the form keeps every
-   * entered value, and nothing is posted.
-   *
-   * The discriminator is `screenFailure` in `core/http/api-error.ts`, the shared rule every screen in
-   * this application applies: it answers the failure for a 4xx and `null` for a 5xx, a transport
-   * failure or a fault of this application's own. `error` is set to that answer's message, `null`
-   * included, so a message no longer describes the latest failure is cleared rather than left on
-   * screen.
-   *
-   * @param error Whatever the failed call rejected with.
-   */
+  /** Shows Fineract's own text for a rejected call, and leaves a 5xx or transport failure alone (AAP 0.7.4, Rule 1 clause 3). */
   private reportError(error: unknown): void {
     this.error.set(screenFailure(error)?.message ?? null);
   }

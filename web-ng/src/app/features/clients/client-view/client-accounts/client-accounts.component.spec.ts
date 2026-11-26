@@ -4,16 +4,11 @@ import {
   type HttpErrorResponse,
   type HttpInterceptorFn,
 } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-  type TestRequest,
-} from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting, type TestRequest, } from '@angular/common/http/testing';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { provideTranslateService, TranslateService } from '@ngx-translate/core';
 import { catchError, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
 import { DEFAULT_APP_CONFIG } from '../../../../core/config/app-config.model';
 import { AppConfigService } from '../../../../core/config/app-config.service';
 import { toApiError, type FineractError } from '../../../../core/http/api-error';
@@ -24,87 +19,22 @@ import type {
 } from '../../client.models';
 import { ClientAccountsComponent } from './client-accounts.component';
 
-/**
- * Behaviour of the accounts section of the individual client record's `General` tab — the read-only
- * table of the client's loan and savings accounts (AAP 0.7.1 Features row `clients`,
- * `ClientViewComponent` with `ClientAccountsComponent`; AAP 0.7.3 row "W3 search and view client";
- * AAP 0.7.4 `#/viewclient/:id`, Figma node `1:4`; AAP 0.11.1 "unit specs beside every component and
- * service"; Rule 1 clause 8).
- *
- * What it pins, case by case, is everything the section decides for itself:
- *
- *  1. it makes exactly one `GET /clients/{id}/accounts` for the id its parent binds, and no other
- *     call at all — the section reads nothing else and writes nothing;
- *  2. the response's two families become rows with the loans first and the savings second, each in
- *     the endpoint's order, and each row carries that family's own balance figure (`loanBalance` for
- *     a loan, `accountBalance` for savings) rather than one derived total;
- *  3. a row whose family reported no figure renders an empty balance cell — no zero, no dash and no
- *     placeholder the payload never carried (Rule 1 clause 3: match legacy, do not improve it);
- *  4. every row's status is the shared `app-status-swatch` and nothing else: no status word appears
- *     in the row, which is the deliberate difference the plan registers for every status indicator
- *     (AAP 0.10.5 item 11);
- *  5. a client holding no account at all — the endpoint's `{}`, which omits both keys — renders the
- *     shared explicit empty state and no table (AAP 0.7.4 "an explicit empty state and no error");
- *  6. a failed read flags the failure and leaves no rows, so the section never claims "no accounts"
- *     about a client whose accounts could not be read;
- *  7. rebinding the `clientId` input re-reads for the new client and replaces the rows, which is what
- *     keeps a record navigated to another client from showing the previous one's accounts;
- *  8. a 4xx renders Fineract's own `defaultUserMessage` verbatim in the alert region the section
- *     owns — the interceptor notifies for status `0` and `>= 500` alone — and still claims neither
- *     rows nor "no accounts" (AAP 0.7.4; Rule 1 clause 3: the server's text, unaltered);
- *  9. the read a rebinding supersedes is abandoned, so its answer can never arrive and a slow
- *     earlier response cannot replace the accounts of the record now on screen.
- *
- * **Providers.** The configuration is loaded from a stubbed `fetch` before the component exists,
- * because the service composes the URL from it; the ngx-translate stack carries the four column
- * headings and the empty-state sentence the template resolves. There is no router and no second
- * service: this section's only collaborator is the clients family's own service, and the error
- * mapping is the production one installed as an interceptor, so a failure arrives as the `ApiError`
- * the component catches in the application (AAP 0.4.2; Rule 1 clause 5).
- *
- * **Why the real service and a testing transport, not a hand-written stub.** Every spec in this
- * feature observes the call a screen makes where the screen makes it, which is what proves the
- * method, the path and the parameters of the call and not merely that some method was invoked; the
- * request and response envelope remains `client.service.spec.ts`'s contract, so nothing is asserted
- * twice. The transport is also what makes the abandoned-read case provable: a request `switchMap`
- * supersedes is cancelled, and a cancelled request can never deliver a body.
- *
- * Figma provenance: file `DKm5TBFbXypfqyx4xUdhBw`, frame `2:2` ("Legacy"), flow "Sign in and open a
- * client record" — Login `1:5` → Clients list `1:3` → Individual client view `1:4`. The raster paints
- * the section's heading and no row, so the row set below is the one `client.models.ts` declares for
- * the endpoint and the shared table styling is the design's own inherited metrics.
- *
- * The fixtures are synthetic: invented account numbers, product names and figures. Nothing here
- * reproduces tenant data, and nothing logs a client id, an account number or a payload (Rule 1
- * clause 9).
- */
-
+/** Behaviour of the accounts section of the individual client record's `General` tab. */
 /** The configuration the stubbed transport serves: the application's own documented default shape. */
 const SERVED_CONFIG = DEFAULT_APP_CONFIG;
-
 /** The API root every client URL is composed from, built from the resolved configuration. */
 const API_ROOT = `${SERVED_CONFIG.apiBaseUrl}${SERVED_CONFIG.apiPath}`;
-
 /** The client whose accounts the section is bound to, as the record route delivers it. */
 const CLIENT_ID = '2';
-
 /** A second client, for the rebinding case: a record opened on another client must re-read. */
 const OTHER_CLIENT_ID = 5;
-
-/**
- * `GET /clients/{id}/accounts` for one client id. Composed here from the same root the service uses,
- * so a changed endpoint would fail this suite rather than pass silently (Rule 1 clause 2).
- *
- * @param id the client id the URL names.
- */
+/** `GET /clients/{id}/accounts` for one client id. Composed here from the same root the service uses, so a changed endpoint would fail this suite rather than pass silently (Rule 1 clause 2). */
 function accountsUrl(id: number | string): string {
   return `${API_ROOT}/clients/${id}/accounts`;
 }
-
 /** Status objects as Fineract sends them: only the code is read, and never rendered. */
 const LOAN_STATUS = { id: 300, code: 'loanStatusType.active', value: 'Active' };
 const SAVINGS_STATUS = { id: 300, code: 'savingsAccountStatusType.active', value: 'Active' };
-
 /** A loan account carrying the outstanding figure its family reports. */
 const LOAN_ACCOUNT: ClientLoanAccountSummary = {
   id: 21,
@@ -113,7 +43,6 @@ const LOAN_ACCOUNT: ClientLoanAccountSummary = {
   status: LOAN_STATUS,
   loanBalance: 5000,
 };
-
 /** A savings account carrying the balance its family reports, with a fractional part. */
 const SAVINGS_ACCOUNT: ClientSavingsAccountSummary = {
   id: 31,
@@ -122,35 +51,21 @@ const SAVINGS_ACCOUNT: ClientSavingsAccountSummary = {
   status: SAVINGS_STATUS,
   accountBalance: 1200.5,
 };
-
-/**
- * A savings account whose family reported no figure at all: `accountBalance` is absent, which is the
- * state the balance cell must render as empty.
- */
+/** A savings account whose family reported no figure at all: `accountBalance` is absent, which is the state the balance cell must render as empty. */
 const SAVINGS_WITHOUT_FIGURE: ClientSavingsAccountSummary = {
   id: 32,
   accountNo: '000000032',
   productName: 'Parity Savings Two',
   status: SAVINGS_STATUS,
 };
-
 /** The endpoint's answer for a client holding one loan and two savings accounts. */
 const ACCOUNTS: ClientAccountSummary = {
   loanAccounts: [LOAN_ACCOUNT],
   savingsAccounts: [SAVINGS_ACCOUNT, SAVINGS_WITHOUT_FIGURE],
 };
-
-/**
- * The endpoint's answer for a client holding nothing: both collections are omitted rather than sent
- * empty, which was observed live and is what the model documents.
- */
+/** The endpoint's answer for a client holding nothing: both collections are omitted rather than sent empty, which was observed live and is what the model documents. */
 const NO_ACCOUNTS: ClientAccountSummary = {};
-
-/**
- * A refusal as the fork sends one: `defaultUserMessage` is the text a screen renders verbatim,
- * character for character, because workflow W7 compares what it shows with the server's own message
- * rather than with a translation of it (AAP 0.7.2 row `FineractError`; Rule 1 clause 3).
- */
+/** A refusal as the fork sends one: `defaultUserMessage` is the text a screen renders verbatim, character for character. */
 const FINERACT_REFUSAL: FineractError = {
   defaultUserMessage: 'Client has reached the maximum number of active loan accounts',
   userMessageGlobalisationCode: 'error.msg.client.max.accounts',
@@ -161,20 +76,11 @@ const FINERACT_REFUSAL: FineractError = {
     },
   ],
 };
-
-/**
- * Status words the section conveys through the swatch and never through text. Checked in lower case
- * over each row's whole text (AAP 0.10.5 item 11).
- */
+/** Status words the section conveys through the swatch and never through text. Checked in lower case over each row's whole text (AAP 0.10.5 item 11). */
 const STATUS_TEXT: readonly string[] = ['active', 'pending', 'closed', 'rejected', 'withdrawn'];
-
 /** A dash alone, the stand-in a reader would mistake for a figure; the empty cell carries none. */
 const LONE_DASH = /^[-–—]+$/;
-
-/**
- * Installs the production mapping of a Fineract failure onto the test transport, so a rejection
- * arrives as the `ApiError` the component catches (AAP 0.4.2).
- */
+/** Installs the production mapping of a Fineract failure onto the test transport, so a rejection arrives as the `ApiError` the component catches (AAP 0.4.2). */
 const MAP_FINERACT_FAILURES: HttpInterceptorFn = (request, next) =>
   next(request).pipe(
     catchError((failure: HttpErrorResponse) => throwError(() => toApiError(failure))),
@@ -184,52 +90,37 @@ describe('ClientAccountsComponent', () => {
   let fixture: ComponentFixture<ClientAccountsComponent>;
   let component: ClientAccountsComponent;
   let httpMock: HttpTestingController;
-
-  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines the
-  // cast to one line and keeps the DOM assertions type-checked (Rule 1 clause 4).
+  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines the cast to one line and keeps the DOM assertions type-checked (Rule 1 clause 4).
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
-
-  /**
-   * Mounts the section for one client.
-   *
-   * The input is bound before the first change detection because the component loads from it as soon
-   * as it is set: the effect that hands the id to the load pipeline runs in that first pass, so the
-   * read a case answers is already in flight when this returns.
-   */
+  /** Mounts the section for one client. */
   function mount(clientId: number | string): void {
     fixture = TestBed.createComponent(ClientAccountsComponent);
     component = fixture.componentInstance;
     fixture.componentRef.setInput('clientId', clientId);
     fixture.detectChanges();
   }
-
   /** Matches the section's one read for `clientId`. */
   function isAccountsRead(clientId: number | string): (request: TestRequest['request']) => boolean {
     return (request) => request.method === 'GET' && request.url === accountsUrl(clientId);
   }
-
   /** The rendered account rows, in document order. */
   function renderedRows(): HTMLTableRowElement[] {
     return Array.from(host().querySelectorAll<HTMLTableRowElement>('#client-accounts tbody tr'));
   }
-
   beforeEach(async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn<typeof fetch>(() => {
-        // `Response` stand-in: the three members `AppConfigService.fetchRawConfig` reads. The cast is
-        // the single boundary where the partial object becomes the response the service expects.
+        // `Response` stand-in: the three members `AppConfigService.fetchRawConfig` reads. The cast is the single boundary where the partial object becomes the response the service expects.
         const body = {
           ok: true,
           status: 200,
           statusText: 'OK',
           json: () => Promise.resolve(SERVED_CONFIG),
         };
-
         return Promise.resolve(body as unknown as Response);
       }),
     );
-
     TestBed.configureTestingModule({
       imports: [ClientAccountsComponent],
       providers: [
@@ -238,9 +129,7 @@ describe('ClientAccountsComponent', () => {
         provideTranslateService(),
       ],
     });
-
     await TestBed.inject(AppConfigService).load();
-
     const translate = TestBed.inject(TranslateService);
     translate.setTranslation(
       'en',
@@ -255,49 +144,34 @@ describe('ClientAccountsComponent', () => {
       true,
     );
     translate.use('en');
-
     httpMock = TestBed.inject(HttpTestingController);
   });
-
-  afterEach(() => {
-    httpMock.verify();
-    vi.unstubAllGlobals();
-  });
-
+  afterEach(() => { httpMock.verify(); vi.unstubAllGlobals(); });
   it('reads the bound client’s accounts once, and nothing else', async () => {
     mount(CLIENT_ID);
-
     const read = httpMock.expectOne(isAccountsRead(CLIENT_ID));
-
     expect(read.request.method).toBe('GET');
     // No query parameter travels with the read: the endpoint takes the id in its path alone.
     expect(read.request.params.keys()).toEqual([]);
     expect(read.request.body).toBeNull();
     // The section reads only this: no record read, no template read, no client list.
     expect(httpMock.match(() => true)).toHaveLength(0);
-
-    // While the read is outstanding the section paints neither a table nor a "no accounts" claim:
-    // `loading` starts true so the empty state cannot flash before the first answer has been read.
+    // While the read is outstanding the section paints neither a table nor a "no accounts" claim: `loading` starts true so the empty state cannot flash before the first answer has been read.
     expect(component.loading()).toBe(true);
     expect(host().querySelector('#client-accounts')).toBeNull();
     expect(host().querySelector('app-empty-state')).toBeNull();
-
     read.flush(ACCOUNTS);
     await fixture.whenStable();
     fixture.detectChanges();
-    // A further change-detection pass — the record re-rendered for any reason at all — asks for the
-    // accounts no second time.
+    // A further change-detection pass — the record re-rendered for any reason at all — asks for the accounts no second time.
     fixture.detectChanges();
-
     expect(httpMock.match(() => true)).toHaveLength(0);
   });
-
   it('renders the loans and then the savings, each with its own family’s balance figure', async () => {
     mount(CLIENT_ID);
     httpMock.expectOne(isAccountsRead(CLIENT_ID)).flush(ACCOUNTS);
     await fixture.whenStable();
     fixture.detectChanges();
-
     // The endpoint's order is kept: one loan row, then the savings rows as the server listed them.
     expect(component.rows().map((row) => row.id)).toEqual([21, 31, 32]);
     expect(component.rows().map((row) => row.accountNo)).toEqual([
@@ -313,114 +187,78 @@ describe('ClientAccountsComponent', () => {
     // The design's four columns — account number, product, status and balance — and no fifth.
     expect(Array.from(host().querySelectorAll('#client-accounts thead th'))).toHaveLength(4);
   });
-
   it('leaves the balance cell empty for a row whose family reported no figure', async () => {
     mount(CLIENT_ID);
     httpMock.expectOne(isAccountsRead(CLIENT_ID)).flush(ACCOUNTS);
     await fixture.whenStable();
     fixture.detectChanges();
-
     const cells = renderedRows().map((row) => Array.from(row.cells));
-
-    // The figure cells are the fourth of each row, beneath the right-aligned balance heading, and
-    // they carry the figures legacy's `number` filter prints — `{{loanaccount.loanBalance|number}}`
-    // and `{{savingaccount.accountBalance|number}}` in `app/views/clients/viewclient.html:349,446` —
-    // including the thousands separator, so the record groups a balance as the legacy record did
-    // (AAP 0.10.2 "displayed data … and their formatting"; Rule 1 clause 3).
+    // The figure cells are the fourth of each row, beneath the right-aligned balance heading.
     expect(cells[0]?.[3]?.textContent?.trim()).toBe('5,000');
     expect(cells[1]?.[3]?.textContent?.trim()).toBe('1,200.5');
     // A missing figure is an empty cell: no zero the server never reported, no dash, no placeholder.
     expect(cells[2]?.[3]?.textContent?.trim()).toBe('');
     expect(cells[2]?.[3]?.textContent ?? '').not.toMatch(LONE_DASH);
   });
-
   it('renders one status swatch per row and no status word anywhere in the row', async () => {
     mount(CLIENT_ID);
     httpMock.expectOne(isAccountsRead(CLIENT_ID)).flush(ACCOUNTS);
     await fixture.whenStable();
     fixture.detectChanges();
-
     for (const row of renderedRows()) {
       expect(row.querySelectorAll('app-status-swatch')).toHaveLength(1);
-
       const cell = row.cells[2];
       const swatch = cell?.querySelector('span.status-swatch');
-
-      // The status cell is the shared indicator with the colour class the active key paints, and
-      // nothing beside it: the cell itself carries no text at all (AAP 0.2.3 row `StatusSwatch`).
+      // The status cell is the shared indicator with the colour class the active key paints, and nothing beside it: the cell itself carries no text at all (AAP 0.2.3 row `StatusSwatch`).
       expect(swatch).not.toBeNull();
       expect(swatch?.classList.contains('status-active')).toBe(true);
       expect(cell?.textContent?.trim()).toBe('');
-      // No tooltip and no accessible name turn the colour back into a word — not on the indicator,
-      // not on its host component and not anywhere else in the cell.
+      // No tooltip and no accessible name turn the colour back into a word — not on the indicator, not on its host component and not anywhere else in the cell.
       expect(cell?.querySelector('[title], [aria-label]')).toBeNull();
       // Decorative, so the accessible content of the row stays with the cells that carry data.
       expect(swatch?.getAttribute('aria-hidden')).toBe('true');
-
       const text = (row.textContent ?? '').toLowerCase();
-
-      for (const statusWord of STATUS_TEXT) {
-        expect(text).not.toContain(statusWord);
-      }
-
+      for (const statusWord of STATUS_TEXT) { expect(text).not.toContain(statusWord); }
       // The server's own label for the state is on the payload and is deliberately not shown.
       expect(text).not.toContain(LOAN_STATUS.value.toLowerCase());
     }
   });
-
   it('renders the explicit empty state and no table for a client holding no account', async () => {
     mount(CLIENT_ID);
     httpMock.expectOne(isAccountsRead(CLIENT_ID)).flush(NO_ACCOUNTS);
     await fixture.whenStable();
     fixture.detectChanges();
-
     expect(component.rows()).toEqual([]);
     expect(component.failed()).toBe(false);
-    // The shared explicit empty state sits inside the section's own body, and no table claims rows
-    // there are none of.
+    // The shared explicit empty state sits inside the section's own body, and no table claims rows there are none of.
     expect(host().querySelector('.panel-body app-empty-state')).not.toBeNull();
     expect(host().querySelector('#client-accounts')).toBeNull();
     // An empty result is not a failure: no alert region and no failure wording anywhere on screen.
     expect(host().querySelector('.alert')).toBeNull();
     expect((host().textContent ?? '').toLowerCase()).not.toContain('error');
   });
-
   it('flags a failed read and leaves no rows behind', async () => {
     mount(CLIENT_ID);
-    httpMock
-      .expectOne(isAccountsRead(CLIENT_ID))
-      .flush({}, { status: 503, statusText: 'Service Unavailable' });
+    httpMock.expectOne(isAccountsRead(CLIENT_ID)).flush({}, { status: 503, statusText: 'Service Unavailable' });
     await fixture.whenStable();
     fixture.detectChanges();
-
-    // The failure is state, not an exception: the section flags it, holds no rows, and renders no
-    // table, so nothing on screen claims a page of accounts about a client whose accounts were never
-    // read (AAP 0.7.4).
+    // The failure is state, not an exception: the section flags it, holds no rows, and renders no table.
     expect(component.failed()).toBe(true);
     expect(component.rows()).toEqual([]);
     expect(component.loading()).toBe(false);
     expect(host().querySelector('#client-accounts')).toBeNull();
-    // The screen stays usable: the section's body is still mounted, it raises no alert of its own —
-    // the interceptor has already notified with that same text for a 5xx — and it never claims the
-    // client holds no accounts (AAP 0.7.4; no second report of one failure).
+    // The screen stays usable: the section's body is still mounted, it raises no alert of its own — the interceptor has already notified with that same text for a 5xx.
     expect(host().querySelector('.panel-body')).not.toBeNull();
     expect(host().querySelector('.alert')).toBeNull();
     expect(host().querySelector('app-empty-state')).toBeNull();
   });
-
   it('renders Fineract’s own refusal text verbatim, and still claims no accounts', async () => {
     mount(CLIENT_ID);
-    httpMock
-      .expectOne(isAccountsRead(CLIENT_ID))
-      .flush(FINERACT_REFUSAL, { status: 403, statusText: 'Forbidden' });
+    httpMock.expectOne(isAccountsRead(CLIENT_ID)).flush(FINERACT_REFUSAL, { status: 403, statusText: 'Forbidden' });
     await fixture.whenStable();
     fixture.detectChanges();
-
     const alerts = Array.from(host().querySelectorAll('.alert'));
-
-    // A 4xx is the failure the interceptor does not notify, so the section renders the server's own
-    // `defaultUserMessage` itself: exactly one region, carrying the text unaltered — no prefix, no
-    // suffix, no translation (AAP 0.7.4; Rule 1 clause 3).
+    // A 4xx is the failure the interceptor does not notify, so the section renders the server's own `defaultUserMessage` itself: exactly one region, carrying the text unaltered — no prefix, no suffix.
     expect(alerts).toHaveLength(1);
     expect(alerts[0]?.textContent?.trim()).toBe(FINERACT_REFUSAL.defaultUserMessage);
     // A refusal is not an empty account list: no table, no empty state, no rows.
@@ -429,55 +267,39 @@ describe('ClientAccountsComponent', () => {
     expect(host().querySelector('#client-accounts')).toBeNull();
     expect(host().querySelector('app-empty-state')).toBeNull();
   });
-
   it('abandons the read a rebinding supersedes, so a late answer cannot replace the newer rows', async () => {
     mount(CLIENT_ID);
     const superseded = httpMock.expectOne(isAccountsRead(CLIENT_ID));
-
     // The record was navigated to another client before the first client's read had answered.
     fixture.componentRef.setInput('clientId', OTHER_CLIENT_ID);
     fixture.detectChanges();
-
     const current = httpMock.expectOne(isAccountsRead(OTHER_CLIENT_ID));
-
-    // `switchMap` abandons the first read instead of racing it: the transport reports that read
-    // cancelled and refuses to deliver any body for it, which is what stops a slow earlier response
-    // from replacing the accounts of the record now on screen.
+    // `switchMap` abandons the first read instead of racing it: the transport reports that read cancelled and refuses to deliver any body for it.
     expect(superseded.cancelled).toBe(true);
     expect(() => superseded.flush(ACCOUNTS)).toThrow(/cancelled/i);
-
-    // The newer read is the one that lands, and the three-account summary the superseded read would
-    // have carried never reaches the table.
+    // The newer read is the one that lands, and the three-account summary the superseded read would have carried never reaches the table.
     current.flush({ loanAccounts: [LOAN_ACCOUNT] });
     await fixture.whenStable();
     fixture.detectChanges();
-
     expect(component.rows().map((row) => row.id)).toEqual([LOAN_ACCOUNT.id]);
     expect(renderedRows()).toHaveLength(1);
   });
-
   it('re-reads for a newly bound client and replaces the rows', async () => {
     mount(CLIENT_ID);
     httpMock.expectOne(isAccountsRead(CLIENT_ID)).flush(ACCOUNTS);
     await fixture.whenStable();
     fixture.detectChanges();
-
     expect(component.rows()).toHaveLength(3);
-
     // The record was navigated to another client, which binds the same input with that client's id.
     fixture.componentRef.setInput('clientId', OTHER_CLIENT_ID);
     fixture.detectChanges();
-
     const reRead = httpMock.expectOne(isAccountsRead(OTHER_CLIENT_ID));
-
     expect(reRead.request.method).toBe('GET');
     // The previous client's rows are not left on screen while the new read is outstanding.
     expect(component.loading()).toBe(true);
-
     reRead.flush({ loanAccounts: [LOAN_ACCOUNT] });
     await fixture.whenStable();
     fixture.detectChanges();
-
     expect(component.rows().map((row) => row.id)).toEqual([21]);
     expect(component.loading()).toBe(false);
     expect(httpMock.match(() => true)).toHaveLength(0);

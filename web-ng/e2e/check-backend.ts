@@ -1,21 +1,10 @@
-/**
- * Backend provenance gate for the parity harness (AAP 0.9.4 row 11, 0.10.4; Rule 2): proves a run's
- * backend is Blitzy-Sandbox/blitzy-fineract built from source at the revision `FINERACT_COMMIT` pins,
- * and records the commit and environment the parity report header names. It reads
- * `GET /fineract-provider/actuator/info`, the server-root management endpoint owned by
- * `web-ng/tools/parity/harness-allowlist.json`; no header is sent, the body is never printed (Rule 1
- * clause 9), and the facts — endpoint reachable, remote reported, remote is the fork, commit reported,
- * and, whenever `FINERACT_COMMIT` is set, commit agrees with that pinned revision — are checked
- * separately so a failure names the missing one. The result reaches git-ignored
- * `e2e/.captures/backend-info.json`; environment: `codespaces` or `mac` (0.10.4).
- */
+/** Backend provenance gate for the parity harness (AAP 0.9.4 row 11, 0.10.4; Rule 2): proves a run's backend is Blitzy-Sandbox/blitzy-fineract built from source at the revision `FINERACT_COMMIT` pins, by reading `GET (Rule 1 clause 9). */
 import { request } from '@playwright/test';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveCliIntent, type CliUsage } from '../tools/parity/lib/cli';
 import { FINERACT_URL } from './seed/fixtures';
-
 /** Where the run happened; the report header names it (AAP 0.10.4). */
 export type BackendEnvironment = 'mac' | 'codespaces';
 /** Provenance of the backend under test: the report header's backend row and the check's own time. */
@@ -23,65 +12,36 @@ export interface BackendInfo {
   remote: string; commit: string; environment: BackendEnvironment;
   fineractUrl: string; checkedAt: string;
 }
-
-/**
- * Server root of the backend this gate proves: the locally built Fineract on
- * `https://localhost:8443` unless the run sets `FINERACT_URL` to another address (Rule 2). Resolved
- * once, in `seed/fixtures.ts`, where an unset or blank value falls back to that default and trailing
- * slashes are stripped, so the address recorded in `fineractUrl` is the same address the seed, the
- * state snapshot and the page objects compose and the two can never describe different backends.
- */
+/** Server root of the backend this gate proves, resolved once in `seed/fixtures.ts` (`FINERACT_URL`, else the locally built Fineract, trailing slashes stripped) so the address recorded is the address the seed, the state snapshot and the page objects compose (Rule 2). */
 export { FINERACT_URL };
-// The only repository a run may be backed by, the harness-owned endpoint (in harness-allowlist.json
-// only, because the application never calls it), the commit-id shape, and the git-ignored artefact.
+// The only repository a run may be backed by, the harness-owned endpoint (harness-allowlist.json only), the commit-id shape, and the git-ignored artefact.
 const REQUIRED_REMOTE = 'Blitzy-Sandbox/blitzy-fineract';
 const INFO_PATH = '/fineract-provider/actuator/info';
 const COMMIT_PATTERN = /^[0-9a-f]{7,40}$/i;
 const BACKEND_INFO_PATH = fileURLToPath(new URL('.captures/backend-info.json', import.meta.url));
-
-/**
- * Detects the verification environment both harness entry points report (AAP 0.10.4): `CODESPACES`,
- * trimmed and lowercased, where unset, empty, `0` and `false` all mean the Mac and any other value
- * Codespaces. `web-ng/e2e/seed/seed.ts` calls this same function, so the gate and the seed can never
- * disagree about where a run happened (AAP 0.10.3 keeps environment differences to variables only).
- */
+/** Detects the verification environment both harness entry points report (AAP 0.10.4): `CODESPACES` unset, empty, `0` or `false` means the Mac, anything else Codespaces — the same function the seed calls, so gate and seed cannot disagree. */
 export function detectBackendEnvironment(): BackendEnvironment {
   const codespaces = (process.env['CODESPACES'] ?? '').trim().toLowerCase();
   return codespaces.length > 0 && codespaces !== '0' && codespaces !== 'false' ? 'codespaces' : 'mac';
 }
-
 /** Narrows a JSON object; `Array.isArray` alone would leave array elements loosely typed. */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
-
 /** Reads a dotted field path, answering `undefined` wherever the payload along the way is no object. */
 function at(value: unknown, path: string): unknown {
   return path.split('.').reduce<unknown>((node, key) => (isRecord(node) ? node[key] : undefined), value);
 }
-
 /** Every string the payload holds, so a shape the named probes do not reach is still searched. */
 function allStrings(body: unknown): string[] {
   return (JSON.stringify(body) ?? '').match(/"[^"]*"/g)?.map((quoted) => quoted.slice(1, -1)) ?? [];
 }
-
-/**
- * The revision this run must be backed by, or `null` when no revision is pinned: `FINERACT_COMMIT`,
- * trimmed, the value both verification environments hand in (AAP 0.10.3). An unset or blank variable
- * leaves the gate proving presence alone, so `npm run check:backend` still runs outside the Blitzy
- * environment (AAP 0.10.4).
- */
+/** The revision this run must be backed by, or `null` when none is pinned: a blank `FINERACT_COMMIT` leaves the gate proving presence alone, so it still runs outside the Blitzy environment (AAP 0.10.4). */
 function pinnedCommit(): string | null {
   const pinned = (process.env['FINERACT_COMMIT'] ?? '').trim();
   return pinned.length > 0 ? pinned : null;
 }
-
-/**
- * Whether two commit ids name the same revision: `a` and `b` are compared case-insensitively, and an
- * abbreviated id agrees with the full id it prefixes in either direction, so a 40-character pin matches
- * a server's seven-character report and vice versa. `COMMIT_PATTERN`'s seven-character floor is what
- * keeps two different revisions from matching on a short common prefix.
- */
+/** Whether two commit ids name the same revision: case-insensitive, an abbreviated id agreeing with the id it prefixes either way, `COMMIT_PATTERN`'s seven-character floor keeping two different revisions apart. */
 function namesSameCommit(a: string, b: string): boolean {
   const left = a.trim().toLowerCase();
   const right = b.trim().toLowerCase();
@@ -89,7 +49,6 @@ function namesSameCommit(a: string, b: string): boolean {
   const longer = left.length <= right.length ? right : left;
   return COMMIT_PATTERN.test(shorter) && longer.startsWith(shorter);
 }
-
 /** The remote the backend was built from as `owner/name`, probed from Spring's unmodelled info map. */
 function readRemote(body: unknown): string | null {
   const reported: unknown =
@@ -101,14 +60,7 @@ function readRemote(body: unknown): string | null {
   return reported.replace(/^git@[^:]+:/, '').replace(/^[a-z][a-z\d+.-]*:\/\/[^/]+\//i, '')
     .replace(/\/+$/, '').replace(/\.git$/i, '').trim();
 }
-
-/**
- * The commit id the backend reports, or `null`. Only the `git.commit.id.*` probes are read, so a
- * dependency hash or any other payload string can never satisfy the commit fact. The whole-payload
- * search survives as a last resort for a backend that nests the id where those probes do not reach,
- * and then only while `FINERACT_COMMIT` pins a revision: a payload value counts solely when it *is*
- * that pinned revision, so no unrelated hash is ever accepted (AAP 0.9.4 row 11).
- */
+/** The commit id the backend reports, or `null`: only the `git.commit.id.*` probes count, so a dependency hash cannot satisfy the fact; the whole-payload search is a last resort and then only for the pinned revision (AAP 0.9.4 row 11). */
 function readCommit(body: unknown): string | null {
   const named = ['git.commit.id.full', 'git.commit.id.abbrev', 'git.commit.id']
     .map((path) => at(body, path))
@@ -118,7 +70,6 @@ function readCommit(body: unknown): string | null {
   if (pinned === null) return null;
   return allStrings(body).map((value) => value.trim()).find((value) => namesSameCommit(value, pinned)) ?? null;
 }
-
 /** Raised when provenance cannot be proven; the message lists every failed fact and the human's fix. */
 export class BackendProvenanceError extends Error {
   constructor(readonly failures: readonly string[]) {
@@ -131,12 +82,7 @@ export class BackendProvenanceError extends Error {
   }
 }
 
-/**
- * Resolves provenance via Playwright's API request client, so no Chromium; self-signed TLS accepted.
- * The fork remote is always proven, and the revision too whenever `FINERACT_COMMIT` pins one, so a
- * fork built at the wrong revision fails the run instead of passing the gate that exists to catch it
- * (Rule 2, AAP 0.9.4 row 11).
- */
+/** Resolves provenance via Playwright's API request client, so no Chromium; self-signed TLS accepted (Rule 2, AAP 0.9.4). */
 export async function resolveBackendInfo(): Promise<BackendInfo> {
   const failures: string[] = [];
   let remote: string | null = null;
@@ -194,10 +140,7 @@ export function readBackendInfo(): BackendInfo | null {
   }
 }
 
-/**
- * What `--help` prints (finding 406f-F02): the one request this check makes, the artefact it writes,
- * the variables it reads — named, never valued (Rule 1 clause 9) — and how it is run.
- */
+/** What `--help` prints (finding 406f-F02): the one request this check makes, the artefact it writes, the variables it reads — named, never valued (Rule 1 clause 9) — and how it is run. */
 const BACKEND_USAGE: CliUsage = {
   name: 'check:backend',
   summary: 'Proves the parity run is backed by Blitzy-Sandbox/blitzy-fineract built from source, and records the commit and environment it found.',
@@ -219,8 +162,7 @@ const BACKEND_USAGE: CliUsage = {
 const invokedDirectly = process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (invokedDirectly) {
-  // Usage is answered before the request, so `--help` proves no provenance and writes no artefact
-  // (finding 406f-F02); the exit code is set, never forced, so a piped line survives.
+  // Usage is answered before the request, so `--help` proves no provenance and writes no artefact (finding 406f-F02); the exit code is set, never forced, so a piped line survives.
   const intent = resolveCliIntent(BACKEND_USAGE, process.argv.slice(2));
   if (intent.kind === 'handled') {
     process.exitCode = intent.exitCode;

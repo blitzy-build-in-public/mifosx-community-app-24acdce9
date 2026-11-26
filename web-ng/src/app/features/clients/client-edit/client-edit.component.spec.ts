@@ -13,29 +13,7 @@ import type { ClientEditRequest, ClientMutationResponse, ClientTemplate } from '
 import { ClientService } from '../client.service';
 import { ClientEditComponent } from './client-edit.component';
 
-/**
- * Behaviour of the edit-client screen — `#/editclient/:id`, the client half of AAP 0.7.3's "Client
- * list and edit" row and one of the two route targets the clients feature previously lacked
- * (AAP 0.7.4 screens; AAP 0.8.2 feature route `editclient/:id`; Rule 1 clause 8, "tests prove
- * behaviour").
- *
- * What the suite drives is the screen's public surface and the traffic it produces: the one seed read
- * and the one save, the form the seed fills, the name set the record's shape selects, the body the
- * save posts, the controls the record marks required — which block the request and report the missing
- * value in place — the duplicate-submission guarantee, the failure banner that carries Fineract's own
- * text verbatim, and the two states in which no form exists. It also drives the record a second route
- * emission names, because the router reuses this component when the URL moves from one
- * `#/editclient/{id}` to another.
- * `ClientService` is stubbed at its own token, so the endpoint contract of
- * `GET /clients/{id}?template=true` and `PUT /clients/{id}` stays in `client.service.spec.ts` and no
- * HTTP client, interceptor or transport takes part here (Rule 1 clause 5). The router, the
- * translation stack and the permission gate are the real ones: the cancel control is a `RouterLink`,
- * so the router is composed with the route that serves this screen.
- *
- * Dates stay `Date` instances here: the screen never formats one, and the body cases pin that the
- * screen leaves `dateFormat` and `locale` to `ClientService.update`, which overwrites both at the
- * wire boundary (AAP 0.7.2 "Date handling"; AAP 0.14.1).
- */
+/** Behaviour of the edit-client screen — `#/editclient/:id`, the client half of AAP 0.7.3's "Client list and edit" row and one of the two route targets the clients feature previously lacked (AAP 0.7.4 screens; AAP 0.8.2 (Rule 1 clause 8, Rule 1 clause 5, AAP 0.7.2, AAP 0.14.1). */
 
 /** The route that serves the edit screen, exactly as `clients.routes.ts` declares it. */
 const ROUTES: Routes = [
@@ -46,12 +24,7 @@ const ROUTES: Routes = [
 /** The client the screen was opened on: the id `#/editclient/2` names. */
 const CLIENT_ID = '2';
 
-/**
- * The edit read's payload: the template members `ClientTemplate` declares plus the client's own
- * values the same response folds in, which is what legacy's `EditClientController` seeds its form
- * from. The extra members are the ones the component projects locally, so the fixture carries them
- * the way the wire does.
- */
+/** The edit read's payload: the template members `ClientTemplate` declares plus the client's own values the same response folds in, which is what legacy's `EditClientController` seeds its form from. */
 const PAYLOAD = {
   officeId: 1,
   officeOptions: [{ id: 1, name: 'Head Office' }],
@@ -78,14 +51,7 @@ const ENTITY_PAYLOAD = {
 /** The message Fineract answers a missing record with, matched character for character. */
 const NOT_FOUND_MESSAGE = 'Client with id `2` does not exist.';
 
-/**
- * The record a second route emission addresses: the id `#/editclient/25` names, and the client the
- * baseline data holds under client number 000000025.
- *
- * Every seeded value differs from {@link PAYLOAD}'s — both names, the external id and the mobile
- * number — so a second emission that kept the first client's values in the form could not pass as the
- * second client's record.
- */
+/** The record a second route emission addresses: the id `#/editclient/25` names, and the client the baseline data holds under client number 000000025. */
 const SECOND_CLIENT_ID = '25';
 
 const SECOND_PAYLOAD = {
@@ -106,11 +72,7 @@ const REJECTED_MESSAGE = 'The client name is already in use by another client.';
 /** The response a successful save answers with. */
 const SAVED: ClientMutationResponse = { resourceId: 2, clientId: 2 };
 
-/**
- * The captions this screen resolves, keyed exactly as the shipped flat legacy bundles key them
- * (`app/global-translations/`). A key that did not resolve would render humanised through the
- * missing-translation handler, so serving the real wording is what proves the labels resolve.
- */
+/** The captions this screen resolves, keyed exactly as the shipped flat legacy bundles key them (`app/global-translations/`). */
 const TRANSLATIONS: Readonly<Record<string, string>> = {
   'label.heading.editclient': 'Edit Client',
   'label.heading.notavailable': 'Not Available',
@@ -139,11 +101,7 @@ interface PermissionsStub {
   has(key: string): boolean;
 }
 
-/**
- * The ngx-translate surface this screen touches: the `translate()` signal `TranslatePipe` 18
- * resolves its keys through. The screen holds no label signal of its own, so nothing else is
- * stubbed and nothing here reaches the network.
- */
+/** The ngx-translate surface this screen touches: the `translate()` signal `TranslatePipe` 18 resolves its keys through. */
 interface TranslateStub {
   readonly currentLang: Signal<string>;
   translate(key: string): Signal<string>;
@@ -161,10 +119,7 @@ function translateStub(): TranslateStub {
   };
 }
 
-/**
- * An observable the spec settles by hand, for the in-flight case: subscribing stores the completion,
- * so a case can hold the save open, submit again, then answer it once.
- */
+/** An observable the spec settles by hand, for the in-flight case: subscribing stores the completion, so a case can hold the save open, submit again, then answer it once. */
 function deferredSave(): { readonly response: Observable<ClientMutationResponse>; complete(): void } {
   let settle: (() => void) | null = null;
 
@@ -191,14 +146,7 @@ describe('ClientEditComponent', () => {
   let clients: ClientServiceStub;
   let navigate: Mock<(commands: readonly unknown[]) => Promise<boolean>>;
 
-  /**
-   * Configures the TestBed for one case with the stubbed reads, then opens the screen at `url`
-   * through the real router.
-   *
-   * Every case starts here, so the route and the answer the service gives are the only things it
-   * changes. The module is reset first because a case supplies its own providers, and a module left
-   * instantiated by the previous case cannot take new ones.
-   */
+  /** Configures the TestBed for one case with the stubbed reads, then opens the screen at `url` through the real router. */
   async function render(url: string): Promise<RouterTestingHarness> {
     TestBed.resetTestingModule();
 
@@ -218,19 +166,13 @@ describe('ClientEditComponent', () => {
 
     const harness = await RouterTestingHarness.create(url);
 
-    // The seed read resolves in a microtask, so the first paint is taken once the queue has drained
-    // and the fixture is stable.
+    // The seed read resolves in a microtask, so the first paint is taken once the queue has drained and the fixture is stable.
     await settle(harness);
 
     return harness;
   }
 
-  /**
-   * Lets the queued reads and the form's own value changes settle, then paints, which is what one
-   * route emission produces once its answer has arrived.
-   *
-   * @param harness the harness serving the edit route.
-   */
+  /** Lets the queued reads and the form's own value changes settle, then paints, which is what one route emission produces once its answer has arrived. @param harness the harness serving the edit route. */
   async function settle(harness: RouterTestingHarness): Promise<void> {
     for (let turn = 0; turn < 5; turn += 1) {
       await Promise.resolve();
@@ -303,8 +245,7 @@ describe('ClientEditComponent', () => {
     expect(activationDate?.getMonth()).toBe(10);
     expect(activationDate?.getDate()).toBe(21);
 
-    // Nothing has failed, so the failure region is absent — the state is proven rather than assumed,
-    // and the rejection case below is the only place a banner may appear.
+    // Nothing has failed, so the failure region is absent — the state is proven rather than assumed, and the rejection case below is the only place a banner may appear.
     expect(host.querySelector('.alert.alert-danger')).toBeNull();
     expect(component.error()).toBeNull();
   });
@@ -314,8 +255,7 @@ describe('ClientEditComponent', () => {
     const host = hostOf(harness);
     const component = componentOf(harness);
 
-    // Two fields are edited — one name and one contact value — so the posted body is the form's and
-    // not the payload the read answered with.
+    // Two fields are edited — one name and one contact value — so the posted body is the form's and not the payload the read answered with.
     expect(inputValue(host, 'mobileNo')).toBe('2025550102');
     component.form.controls.lastname.setValue('Okafor-Rowe');
     component.form.controls.mobileNo.setValue('2025550199');
@@ -337,11 +277,7 @@ describe('ClientEditComponent', () => {
     // An active record posts its activation date.
     expect(body?.activationDate).toBeInstanceOf(Date);
 
-    // Exactly the members `ClientEditRequest` declares, and nothing the form does not own: no office,
-    // no client id, no account number. The date-wire pair is the model's own constant here, and
-    // `ClientService.update` — whose `ClientEditInput` omits both members — rewrites it from the
-    // resolved configuration and the active language before the body reaches the wire, so the screen
-    // cannot widen what the endpoint receives (AAP 0.7.2 "Date handling"; Rule 1 clause 2).
+    // Exactly the members `ClientEditRequest` declares, and nothing the form does not own: no office, no client id, no account number (AAP 0.7.2, Rule 1 clause 2).
     expect(Object.keys(body ?? {}).sort()).toEqual([
       'activationDate',
       'dateFormat',
@@ -351,9 +287,7 @@ describe('ClientEditComponent', () => {
       'locale',
       'mobileNo',
     ]);
-    // `client.service.spec.ts` pins the wire body this endpoint receives — 'dd MMMM yyyy' plus the
-    // active locale, in English and moved to French — so the pair asserted here is the one the screen
-    // hands `ClientService.update`, the owner of the wire pair, not the one that reaches the wire.
+    // `client.service.spec.ts` pins the wire body this endpoint receives — 'dd MMMM yyyy' plus the active locale, in English and moved to French — so the pair asserted here is the one the screen hands `ClientService.update`.
     expect(body?.dateFormat).toBe(DISPLAY_DATE_FORMAT);
     expect(
       body?.locale,
@@ -397,8 +331,7 @@ describe('ClientEditComponent', () => {
     await component.submit();
     harness.detectChanges();
 
-    // The legacy template marks this control required and nothing more, so the screen is what stops
-    // the request — and it stops it before a body is built (Rule 1 clause 3).
+    // The legacy template marks this control required and nothing more, so the screen is what stops the request — and it stops it before a body is built (Rule 1 clause 3).
     expect(clients.update).not.toHaveBeenCalled();
     expect(navigate).not.toHaveBeenCalled();
     expect(component.form.controls.firstname.touched).toBe(true);
@@ -455,8 +388,7 @@ describe('ClientEditComponent', () => {
     const first = component.submit();
     const second = component.submit();
 
-    // The latch the save control binds is closed while the call is out, so a click that slipped past
-    // the disabled button still reaches no second request.
+    // The latch the save control binds is closed while the call is out, so a click that slipped past the disabled button still reaches no second request.
     expect(component.guard.busy()).toBe(true);
 
     save.complete();
@@ -481,8 +413,7 @@ describe('ClientEditComponent', () => {
     await component.submit();
     harness.detectChanges();
 
-    // One banner, carrying the server's text and nothing else: no prefix, no suffix, no retranslation
-    // (AAP 0.7.2 "Rendered verbatim"; Rule 1 clause 3, the message workflow W7 compares).
+    // One banner, carrying the server's text and nothing else: no prefix, no suffix, no retranslation (AAP 0.7.2 "Rendered verbatim"; Rule 1 clause 3, the message workflow W7 compares).
     const banners = host.querySelectorAll('.alert.alert-danger');
 
     expect(banners.length).toBe(1);
@@ -527,8 +458,7 @@ describe('ClientEditComponent', () => {
 
     expect(inputValue(hostOf(harness), 'firstname')).toBe('Ada');
 
-    // The router reuses this component when the URL moves from one edit route to another, so a second
-    // emission is what an in-app move between two edit URLs produces.
+    // The router reuses this component when the URL moves from one edit route to another, so a second emission is what an in-app move between two edit URLs produces.
     await harness.navigateByUrl(`/editclient/${SECOND_CLIENT_ID}`);
     await settle(harness);
 
@@ -582,8 +512,7 @@ describe('ClientEditComponent', () => {
 
     expect(inputValue(hostOf(harness), 'firstname')).toBe('Marcus');
 
-    // The earlier client's answer lands last. It is dropped rather than applied, or the first
-    // client's values would be edited under the second client's URL.
+    // The earlier client's answer lands last. It is dropped rather than applied, or the first client's values would be edited under the second client's URL.
     first.next(PAYLOAD);
     first.complete();
     await settle(harness);

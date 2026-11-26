@@ -1,59 +1,4 @@
-/**
- * Playwright traffic recorder for the legacy-versus-next parity suite: it records every Fineract API
- * exchange a page makes during one workflow on one front end, normalises each exchange before
- * anything is serialised, and diffs two normalised captures.
- *
- * Why this module exists. Parity here is behavioural, not visual (AAP 0.1.1): a workflow passes when
- * the new application reaches the same Fineract end state through the same ordered API calls as the
- * legacy application (AAP 0.10.1). That comparison only says something once incidental variance has
- * been removed, so the removal happens here — {@link diffExchanges} then compares behaviour instead
- * of run-specific ids, clocks and key order. The normalisation rules are AAP 0.10.2, applied in the
- * order listed below.
- *
- * Rule 1 clause 9 is discharged in the same place. The `Authorization` header, the authentication
- * key and every password field are masked before an exchange record exists, so no later code path —
- * a report writer, a diff, a captured file — can serialise them: headers are reduced to presence
- * booleans and a body field or query parameter named for a credential or a session becomes
- * {@link MASKED}. The module keeps no credential in a variable, writes none to a message and holds no
- * logger.
- *
- * A response body arrives as a promise, so a capture that serialised only what had already resolved
- * would lose the body of the last call a workflow made. Teardown is therefore two steps:
- * {@link CaptureSession.stop} detaches the listeners and answers with the exchanges as they stand,
- * while {@link CaptureSession.settle} — which {@link CaptureSession.write} awaits — waits for every body
- * read still in flight before it freezes the records. Either route then carries the bodies of the calls
- * it recorded, which is what AAP 0.10.1 compares.
- *
- * The only artefact written is one JSON file under `web-ng/e2e/.captures/network/`, at a path fixed
- * by the project and workflow id ({@link CAPTURES_DIR}), so two runs that made the same calls with
- * the same run date produce byte-identical files (AAP 0.10.2, determinism).
- *
- * Normalisation applied to every recorded exchange, in this order:
- *
- * 1. **Filtering** — only `fetch`/`xhr` requests below `/fineract-provider/` that are not static
- *    assets are recorded; the document, legacy `views/**` partials, translations, fonts and images
- *    are dropped before a record exists.
- * 2. **Masking** — `Authorization` and tenant headers are reduced to presence booleans; a body field or
- *    a query parameter whose name says credential or session material becomes {@link MASKED}, while a
- *    boolean flag that merely contains such a word is compared as it stands; a request body that is not
- *    JSON becomes a fixed marker.
- * 3. **Path templating** — numeric segments become role tokens: `/clients/123` → `/clients/{clientId}`.
- * 4. **Body ids** — a numeric value under a key the run generates an id for becomes the role token of
- *    that id, so a generated id is compared by its role and its sequence, never by its value. Every
- *    reference id — office, product, staff, payment type, a `status` or `loanType` object — is compared
- *    by value, because the two front ends choosing differently is a difference the gate must report.
- * 5. **Dates** — a value under a date-naming key — `submittedOnDate`, `dueDate`, `dateOfBirth` — becomes
- *    a day offset from the run date, in either shape Fineract reports one in: `21 November 2026` and
- *    `[2026, 11, 21]` on a run date of the same day both become `d0` (AAP 0.10.2, "Dates"; AAP 0.10.1,
- *    "Run date"). A value under such a key that is not a date, `dateFormat` included, stays verbatim.
- * 6. **Audit block** — `timestamps` subtrees are dropped from response bodies; no workflow asserts
- *    them.
- * 7. **Query parameters** — keys sorted ascending, a repeated key joined with `,` in its own order, and
- *    a value under a credential- or session-named key masked to {@link MASKED}; `command` is kept
- *    because it distinguishes Fineract action endpoints.
- * 8. **Key order** — every object's keys sorted recursively at normalisation time; arrays keep their
- *    order, because schedule periods, transactions and charges are ordered data (AAP 0.10.2).
- */
+/** Playwright traffic recorder for the parity suite: records every Fineract API exchange one workflow on one front end makes, normalises it per AAP 0.10.2, and diffs two captures (AAP 0.10.1) (Rule 1 clause 9). */
 import * as filesystem from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -61,99 +6,28 @@ import type { Page, Request, Response } from '@playwright/test';
 
 import { dayOffset, formatDateOnly, parseFineractDate } from '../seed/fixtures';
 
-/**
- * What every masked field is replaced with. A fixed string, so the two front ends' captures compare
- * equal by construction and a reader can see that a value was deliberately hidden rather than absent.
- */
+/** What every masked field becomes: a fixed string, so both front ends' captures compare equal by construction and a reader sees the value was deliberately hidden. */
 export const MASKED = '***';
-
-/**
- * Extensions of the files a page fetches as part of rendering rather than as an API call. AAP 0.10.2
- * excludes static assets from the comparison and from the parity fixture's host assertion, which is
- * why {@link isStaticAssetUrl} is exported: both sides of that rule read this one definition.
- */
+/** Extensions of files a page fetches to render: AAP 0.10.2 excludes static assets from the comparison and from the fixture's host assertion, so both sides read this one list via {@link isStaticAssetUrl}. */
 export const STATIC_ASSET_EXTENSIONS: readonly string[] = [
-  'js',
-  'css',
-  'map',
-  'png',
-  'jpg',
-  'jpeg',
-  'gif',
-  'svg',
-  'ico',
-  'woff',
-  'woff2',
-  'ttf',
-  'eot',
+  'js', 'css', 'map', 'png', 'jpg', 'jpeg', 'gif', 'svg', 'ico', 'woff', 'woff2', 'ttf', 'eot',
 ];
-
-/**
- * Path prefixes served as static assets without a file extension: the built application's `assets/`
- * directory and the legacy translations the new app loads in place (AAP 0.4.4).
- */
+/** Path prefixes served as static assets without an extension: the built app's `assets/` and the legacy translations the new app loads in place (AAP 0.4.4). */
 const STATIC_PATH_PREFIXES: readonly string[] = ['/assets/', '/global-translations/'];
-
-/**
- * The prefix every Fineract API call carries (AAP 0.7.3), held as a pattern because this module only
- * ever tests a pathname against it: only the application's services compose Fineract URLs, and the
- * capture records whatever they sent. A pattern rather than a string also keeps the module from
- * carrying an API-shaped literal, which `tools/parity/check-endpoints.ts` would have to be taught to
- * exempt — a recorder holds no URL it is allowed to call.
- */
+/** The prefix every Fineract API call carries (AAP 0.7.3), held as a pattern so this module carries no API-shaped literal an endpoint scan would have to exempt. */
 const API_PATH_PREFIX = /^\/fineract-provider\//;
-
-/**
- * The tenant header's *name* — the API contract's own constant, not tenant data. The value the
- * header carries is tenant data and is never read into a record (Rule 1 clause 9, AAP 0.4.2): only
- * its presence is kept, as `hasTenantHeader`.
- */
+/** The tenant header's name — the API contract's constant, not tenant data: only its presence is kept, as `hasTenantHeader` (Rule 1 clause 9, AAP 0.4.2). */
 const TENANT_HEADER_NAME = 'Fineract-Platform-TenantId';
-
 /** The credential header, compared by lowercase name because `Request.headers()` lower-cases keys. */
 const AUTHORIZATION_HEADER_NAME = 'authorization';
-
-/**
- * Stored in place of a request body that is not JSON. Such a body cannot be masked field by field
- * (Rule 1 clause 9), so it is never stored: the marker says a body was sent, and the two front ends
- * compare equal when they both sent a non-JSON body to the same endpoint.
- */
+/** Stands in for a request body that is not JSON, which cannot be masked field by field and so is never stored (Rule 1 clause 9). */
 const NON_JSON_BODY = '<non-json body>';
-
-/**
- * How long {@link CaptureSession.settle} waits for one round of response body reads that are still in
- * flight. Generous for a payload the browser is still handing over, and short enough that a body the
- * page will never deliver cannot hold a workflow's teardown open: an exchange whose read has not settled
- * by then keeps `responseBody: null`, which is the same record a failed read leaves.
- */
+/** How long {@link CaptureSession.settle} waits for one round of in-flight body reads; an exchange unsettled by then keeps `responseBody: null`, as a failed read leaves it. */
 const BODY_SETTLE_TIMEOUT_MS = 5000;
-
-/**
- * Body fields that carry a credential or session material (Rule 1 clause 9): the `password` the login
- * form sends, the `base64EncodedAuthenticationKey` the authentication response returns (AAP 0.7.2
- * `AuthResponse`), and the credential- and session-shaped names a forked or extended payload could
- * carry — `passcode`, `token`, `secret`, `session`, `authorization`, `apiKey`, `credential`, with `pass`
- * and `pin` covered as whole names only. Masking is by name because a body is otherwise unmodelled, so
- * a session-bearing field cannot reach a record, a diff or a file under any of them (AAP 0.10.2,
- * "Session and auth material"). A boolean flag whose name merely contains one of these words is
- * compared instead, because a flag is not a secret: {@link normaliseValue} answers booleans first.
- */
+/** Body fields masked by name for Rule 1 clause 9: `password`, `base64EncodedAuthenticationKey` (AAP 0.7.2 `AuthResponse`), and the credential- or session-shaped `passcode`, `token`, `secret`, `session`, `authorization`, `apiKey`, `credential`, with `pass` and `pin` whole names only — so no session-bearing field reaches a record, a diff or a file (AAP 0.10.2), while a boolean flag that merely contains one of these words is compared as it stands. */
 const SECRET_KEY_PATTERN =
   /password|passcode|^pass$|^pin$|token|secret|session|authorization|authenticationKey|apiKey|credential/i;
-
-/**
- * Body keys whose id a run generates: the ids AAP 0.10.2 compares by their role in the sequence rather
- * than by their literal value, because each front end creates its own record and so sees its own
- * number for the same step.
- *
- * An allowlist rather than an `id`/`…Id` pattern, because the two possible mistakes are not equally
- * visible. A reference id — `officeId`, `productId`, `staffId`, `paymentTypeId`, the `id` of a
- * `status`/`loanType`/`documentType` object — normalised to a role token makes a real difference
- * between the two front ends vanish from the diff: a false pass, which nothing downstream re-checks
- * and criterion 4 cannot detect. An id that belongs here but is compared by value only adds a loud
- * difference to a report a human already reads. So the list names what the run creates and nothing
- * else; every other id is compared by value.
- */
+/** Body keys whose id a run generates, which AAP 0.10.2 therefore compares by role in the sequence, not by value; an allowlist, because roling a reference id (`officeId`, `productId`, `status.id`) would hide a real difference between the front ends. */
 const GENERATED_ID_KEYS: ReadonlySet<string> = new Set<string>([
   'clientId',
   'loanId',
@@ -165,13 +39,7 @@ const GENERATED_ID_KEYS: ReadonlySet<string> = new Set<string>([
   'identifierId',
   'resourceId',
 ]);
-
-/**
- * Entity nouns whose bare `id` a run generates: in `{ client: { id: 7 } }` the id is the client the
- * run created, so it takes a role token as a `clientId` does. A noun outside this list is a reference
- * object — `status`, `documentType`, `loanType`, `amortizationType` — whose id both front ends must
- * choose identically and which is therefore compared by value.
- */
+/** Entity nouns whose bare `id` a run generates, so `{ client: { id: 7 } }` reads `{clientId}`; a noun outside this list (`status`, `documentType`, `loanType`) is a reference compared by value. */
 const GENERATED_ENTITY_NOUNS: readonly string[] = [
   'client',
   'loan',
@@ -184,55 +52,20 @@ const GENERATED_ENTITY_NOUNS: readonly string[] = [
   'identifier',
   'resource',
 ];
-
-/**
- * A key naming a date — `submittedOnDate`, `dueDate`, `approvedOnDate`, and `dateOfBirth`, whose name
- * puts the word first — matched as a prefix, a suffix or after a separator, case-insensitively. The
- * name is only the gate to the date branch: whether the value under it is a date is
- * {@link parseFineractDate}'s decision, which is what keeps `dateFormat` and `locale` verbatim.
- */
+/** A key naming a date (`submittedOnDate`, `dueDate`, and `dateOfBirth`, word first), matched as prefix, suffix or after a separator; {@link parseFineractDate} then decides whether the value is a date, which keeps `dateFormat` verbatim. */
 const DATE_KEY_PATTERN = /(^|_|\b)date|date$/i;
-
-/**
- * Fineract's server-side audit block. AAP 0.10.2 drops timestamps no workflow asserts; the whole
- * subtree goes, because its `[year, month, day]` arrays would otherwise need date normalisation of
- * their own for values nothing compares.
- */
+/** Fineract's server-side audit block: AAP 0.10.2 drops the `timestamps` subtree, whose `[year, month, day]` arrays no workflow asserts. */
 const AUDIT_BLOCK_KEY = 'timestamps';
-
 /** Request kinds that can carry an API call; a `document` request is a page load, never an API call. */
 const API_RESOURCE_TYPES: readonly string[] = ['fetch', 'xhr'];
-
-/**
- * Absolute directory this module writes into: `web-ng/e2e/.captures`, resolved from this file's own
- * location rather than from the working directory, so it is the same however the suite is launched
- * (AAP 0.8.1, 0.11.1). `web-ng/.gitignore` ignores `/e2e/.captures`, so nothing written here can be
- * committed. `capture/state-snapshot.ts` imports this constant instead of recomputing the path.
- */
+/** Absolute `web-ng/e2e/.captures` — gitignored, resolved from this file so every launch writes the same place, and imported by `capture/state-snapshot.ts` (AAP 0.8.1, 0.11.1). */
 export const CAPTURES_DIR: string = resolve(dirname(fileURLToPath(import.meta.url)), '..', '.captures');
-
-/**
- * The file-name component of a capture artefact: the project or workflow id reduced to characters that
- * cannot leave the capture directory, so an id shapes a name but never a path. The ids the harness uses
- * — `legacy`, `next`, `W2`, `CHAIN` — pass through unchanged.
- *
- * Exported because `capture/state-snapshot.ts` writes its snapshot beside this module's capture under
- * the same `<project>__<workflow>.json` convention (AAP 0.8.1), and two definitions of the sanitiser
- * would be free to drift apart. Surrounding whitespace is trimmed first, so an id that reached the
- * harness through configuration still names the same file either writer would produce.
- *
- * @param value Project or workflow id, or `null` when the capture carried none.
- */
+/** The file-name part of an artefact id: trimmed, with everything outside `[A-Za-z0-9._-]` replaced by `_`, so an id shapes a name but never a path; shared with `capture/state-snapshot.ts` under one `<project>__<workflow>.json` convention. */
 export function fileNamePart(value: string | null): string {
   const safe = (value ?? 'unknown').trim().replace(/[^A-Za-z0-9._-]/g, '_');
   return safe.length > 0 ? safe : 'unknown';
 }
-
-/**
- * A JSON-shaped value after normalisation: every scalar a Fineract payload can carry, and the arrays
- * and objects built from them. Nothing else survives {@link normaliseValue}, so a record is always
- * serialisable and a diff always has a value to compare.
- */
+/** A JSON-shaped value after {@link normaliseValue}: every scalar a Fineract payload carries, and the arrays and objects built from them, so a record always serialises. */
 export type NormalizedValue =
   | string
   | number
@@ -240,23 +73,15 @@ export type NormalizedValue =
   | null
   | NormalizedValue[]
   | { [key: string]: NormalizedValue };
-
-/**
- * One Fineract API exchange, normalised as AAP 0.10.2 requires. Every field is a value two runs must
- * agree on; the fields that are deliberately absent are as important as the ones present — no headers
- * (only their presence), no timestamps, no generated ids, no query ordering.
- */
+/** One Fineract API exchange normalised as AAP 0.10.2 requires: no headers (only their presence), no timestamps, no generated ids, no query ordering. */
 export interface NormalizedExchange {
   /** HTTP method, upper-cased. */
   readonly method: string;
-  /** Origin the call went to, e.g. `https://localhost:8443`; kept so the parity fixture can prove the
-   * run never left the configured backend (Rule 2), and deliberately not compared by
-   * {@link diffExchanges}. */
+  /** Origin the call went to, e.g. `https://localhost:8443`: the parity fixture proves the run never left the configured backend (Rule 2), and {@link diffExchanges} does not compare it. */
   readonly origin: string;
   /** Pathname with numeric segments templated by role, e.g. `/fineract-provider/api/v1/clients/{clientId}`. */
   readonly path: string;
-  /** Query parameters with keys sorted ascending; a repeated key keeps its values joined with `,`, and
-   * a credential- or session-named key's value is {@link MASKED} (Rule 1 clause 9). */
+  /** Query parameters with keys sorted ascending, a repeated key's values joined with `,`, and a credential- or session-named key's value {@link MASKED} (Rule 1 clause 9). */
   readonly query: Readonly<Record<string, string>>;
   /** HTTP status, or `0` when no response arrived (a failed request is still evidence). */
   readonly status: number;
@@ -269,19 +94,11 @@ export interface NormalizedExchange {
   /** Masked, canonicalised response body; `null` when no JSON body arrived. */
   readonly responseBody: NormalizedValue | null;
 }
-
-/**
- * The tokens one capture's generated ids were mapped to: the real id as a string, and the role token
- * it became, e.g. `'123' -> '{clientId}'` (AAP 0.10.2, "ids compared by role in the sequence").
- */
+/** The tokens one capture's generated ids were mapped to: the real id as a string to the role token it became, e.g. `'123' -> '{clientId}'` (AAP 0.10.2, ids compared by role). */
 export interface RoleMap {
   readonly [realId: string]: string;
 }
-
-/**
- * A whole capture: the metadata that makes the written file self-describing, plus its exchanges and
- * the role tokens they produced.
- */
+/** A whole capture: the metadata that makes the written file self-describing, its exchanges, and the role tokens they produced. */
 export interface NormalizedCapture {
   /** Playwright project the capture came from: `legacy` or `next`, `null` when unset. */
   readonly project: string | null;
@@ -294,45 +111,29 @@ export interface NormalizedCapture {
   /** Real id to role token, for readers of the written file. */
   readonly roles: RoleMap;
 }
-
 /** How one capture is started. Every field is optional, so a caller can record first and annotate later. */
 export interface CaptureOptions {
   /** Playwright project the capture belongs to. */
   project?: 'legacy' | 'next';
   /** Workflow id the capture covers, e.g. `'W2'` or `'CHAIN'`. */
   workflow?: string;
-  /** The tenant's business date read from Fineract (AAP 0.10.1), never the browser clock; dates in
-   * payloads are converted to offsets from it. Without it, dates stay verbatim. */
+  /** The tenant's business date read from Fineract (AAP 0.10.1), never the browser clock; payload dates become offsets from it, and without it they stay verbatim. */
   runDate?: Date;
   /** Directory to write into instead of {@link CAPTURES_DIR}; used only by the module's own tests. */
   outputDir?: string;
 }
-
-/** A running capture. `stop()` and `write()` may be called in either order, and each one answers for
- * the other: `write()` awaits {@link CaptureSession.settle}, so the file carries every body the page
- * had already fetched however little the caller waited first. */
+/** A running capture: `stop()` and `write()` may be called in either order, and `write()` awaits {@link CaptureSession.settle} so the file carries every body the page had fetched. */
 export interface CaptureSession {
-  /** The capture being built; its `exchanges` fills as the page makes calls and `roles` answers for
-   * whatever has been recorded so far. */
+  /** The capture being built; its `exchanges` fills as the page makes calls and its `roles` answers for whatever has been recorded so far. */
   readonly capture: NormalizedCapture;
-  /** Detaches the page listeners and returns the exchanges as they stand, without freezing them: a
-   * response body this capture is still reading is the capture's own work, not a caller mutation, so it
-   * may still land. A caller that needs every body uses {@link CaptureSession.settle} or
-   * {@link CaptureSession.write}. Idempotent. */
+  /** Detaches the page listeners and answers with the exchanges as they stand, without freezing them; idempotent. A caller that needs every body uses {@link CaptureSession.settle} or {@link CaptureSession.write}. */
   stop(): NormalizedExchange[];
-  /** Detaches the page listeners, waits for every response body read still in flight, then freezes the
-   * records and returns the exchanges. Idempotent, and the array it answers with is the one `stop()`
-   * returned. */
+  /** Detaches the listeners, waits for every in-flight response body read, then freezes the records and answers with the exchanges; idempotent, and the array is the one `stop()` returned. */
   settle(): Promise<NormalizedExchange[]>;
-  /** Writes the capture as JSON, once every response body has settled, and resolves with the absolute
-   * path of the file it wrote. */
+  /** Writes the capture as JSON once every response body has settled, and resolves with the absolute path of the file it wrote. */
   write(folder?: string): Promise<string>;
 }
-
-/**
- * One difference between two captures. AAP 0.10.2 compares the ordered API calls, so a difference is
- * always anchored to the exchange it occurred in — by position, method and path.
- */
+/** One difference between two captures, anchored to the exchange it occurred in — by position, method and path, because AAP 0.10.2 compares the ordered API calls. */
 export interface ExchangeDiff {
   /** Position of the exchange in both captures, from zero. */
   readonly index: number;
@@ -340,26 +141,14 @@ export interface ExchangeDiff {
   readonly method: string;
   /** Normalised path of that exchange, so a reader can find it without reading the capture. */
   readonly path: string;
-  /** What differs, as a value path: `method`, `path`, `query.command`, `status`,
-   * `hasTenantHeader`, `hasAuthorizationHeader`, `requestBody.principal`,
-   * `responseBody.errors[0].defaultUserMessage`, or `exchange` when a counterpart is missing. */
+  /** What differs, as a value path: `method`, `path`, `query.command`, `status`, `hasTenantHeader`, `hasAuthorizationHeader`, `requestBody.principal`, `responseBody.errors[0].defaultUserMessage`, or `exchange`. */
   readonly field: string;
   /** The legacy side's value; `null` when that side has no such value or no such exchange. */
   readonly legacy: NormalizedValue;
   /** The new app's value; `null` when that side has no such value or no such exchange. */
   readonly next: NormalizedValue;
 }
-
-/**
- * Whether a URL addresses a static asset rather than an API call.
- *
- * Exported because AAP 0.10.2 excludes static assets from the comparison *and* from the parity
- * fixture's host assertion, and a second definition in the fixture would let the two drift apart.
- * An unparseable string answers `false` rather than throwing: the caller is classifying a URL a
- * browser produced, and a capture must never fail over one odd string.
- *
- * @param url Absolute URL to classify.
- */
+/** Whether a URL addresses a static asset rather than an API call — AAP 0.10.2 excludes them and the fixture's host assertion reads this same definition; an unparseable URL answers `false` instead of throwing. */
 export function isStaticAssetUrl(url: string): boolean {
   let pathname: string;
   try {
@@ -375,37 +164,15 @@ export function isStaticAssetUrl(url: string): boolean {
   const dot = lastSegment.lastIndexOf('.');
   return dot >= 0 && STATIC_ASSET_EXTENSIONS.includes(lastSegment.slice(dot + 1));
 }
-
-/**
- * The role tokens one exchange's ids were mapped to, assigned in the order that exchange presents
- * them: its path segments left to right, then its request body in sorted-key order, then its response
- * body.
- *
- * A registry belongs to a single exchange rather than to the whole capture, and that is what keeps
- * the artefact deterministic. A response body is normalised when its `json()` promise settles, and two
- * parallel requests can settle in either order, so a registry shared across exchanges could hand
- * `{loanId}` and `{loanId_2}` to the same two ids in an order that differs between the legacy run and
- * the new-app run — a difference the diff would then report as behaviour. Scoped per exchange, the
- * sequence is intrinsic to the payload, which is the only order both front ends share. A token
- * depends on a role and a position, never on a value, so payloads with the same shape still
- * normalise to the same tokens on both sides.
- */
+/** The role tokens one exchange's ids were mapped to, in the order that exchange presents them — path segments, request body in key order, response body — so the sequence is intrinsic to the payload and two bodies settling in either order cannot differ between the front ends. */
 class RoleRegistry {
   /** `${role}\u0000${realId}` to the token that id was given. */
   private readonly tokens = new Map<string, string>();
-
   /** Role to the number of distinct ids it has been given, which yields the `_2`, `_3` suffixes. */
   private readonly counts = new Map<string, number>();
-
   /** Registrations in the order they happened, so the capture-level {@link RoleMap} is stable. */
   private readonly order: { readonly realId: string; readonly token: string }[] = [];
-
-  /**
-   * The token for one id under one role, registering it when this exchange has not named it yet.
-   *
-   * @param role Role the id belongs to, e.g. `clientId`.
-   * @param realId The id exactly as it appeared: digits only, as Fineract sends it.
-   */
+  /** The token for one id under one role, registering it when this exchange has not named that id yet. */
   token(role: string, realId: string): string {
     const key = `${role}\u0000${realId}`;
     const known = this.tokens.get(key);
@@ -419,19 +186,12 @@ class RoleRegistry {
     this.order.push({ realId, token: assigned });
     return assigned;
   }
-
   /** Every registration this exchange made, in order. */
   entries(): readonly { readonly realId: string; readonly token: string }[] {
     return this.order;
   }
 }
-
-/**
- * Role names for the collections the harness meets, keyed by the path segment that holds the id.
- * AAP 0.7.3's resources spell the collection in lower case and Fineract's model spells the id in
- * camel case; naming the ones in scope here keeps `{savingsAccountId}` from becoming
- * `{savingsaccountId}`.
- */
+/** Role names for the collections the harness meets, keyed by path segment: AAP 0.7.3 spells collections in lower case and Fineract models ids in camel case, which keeps `{savingsAccountId}` from becoming `{savingsaccountId}`. */
 const ROLE_NAMES: ReadonlyMap<string, string> = new Map<string, string>([
   ['clients', 'clientId'],
   ['loans', 'loanId'],
@@ -447,12 +207,7 @@ const ROLE_NAMES: ReadonlyMap<string, string> = new Map<string, string>([
   ['datatables', 'dataTableId'],
   ['paymenttypes', 'paymentTypeId'],
 ]);
-
-/**
- * The plural noun as a singular one, for a collection {@link ROLE_NAMES} does not name and for the
- * body keys {@link generatedIdRole} reads: `reports` becomes `report`, while a noun that is already
- * singular — or that merely ends in `us` or `ss`, as `status` and `address` do — is left alone.
- */
+/** The plural noun as a singular one (`reports` becomes `report`), leaving alone a noun already singular or ending in `us`/`ss`, as `status` and `address` do. */
 function singularise(noun: string): string {
   if (noun.endsWith('ies') && noun.length > 3) {
     return `${noun.slice(0, -3)}y`;
@@ -462,11 +217,7 @@ function singularise(noun: string): string {
   }
   return noun.endsWith('s') && noun.length > 1 ? noun.slice(0, -1) : noun;
 }
-
-/**
- * The role an id segment carries: named for the collection it identifies, and `id` when the path
- * offers it none — a bare numeric segment at the start of a path has no collection to belong to.
- */
+/** The role an id segment carries, named for the collection it identifies, and `id` when the path offers none. */
 function roleForSegment(segments: readonly string[], position: number): string {
   const parent: string | undefined = position > 0 ? segments[position - 1] : undefined;
   if (parent === undefined || parent.length === 0 || /^\d+$/.test(parent)) {
@@ -475,15 +226,7 @@ function roleForSegment(segments: readonly string[], position: number): string {
   const named = ROLE_NAMES.get(parent);
   return named ?? `${singularise(parent)}Id`;
 }
-
-/**
- * Templates an id-carrying path by role, registering each id in its exchange's registry, so a path
- * compares as `/fineract-provider/api/v1/clients/{clientId}` whichever client the run happened to
- * create (AAP 0.10.2, "ids compared by role").
- *
- * @param pathname URL pathname, e.g. `/fineract-provider/api/v1/clients/123/accounts`.
- * @param roles Registry of the exchange this path belongs to.
- */
+/** Templates an id-carrying path by role, registering each id in its exchange's registry, so a path compares as `/clients/{clientId}` whichever client the run created (AAP 0.10.2). */
 function normalisePath(pathname: string, roles: RoleRegistry): string {
   const segments = pathname.split('/').filter((segment) => segment.length > 0);
   const templated = segments.map((segment, position) =>
@@ -491,19 +234,7 @@ function normalisePath(pathname: string, roles: RoleRegistry): string {
   );
   return `/${templated.join('/')}`;
 }
-
-/**
- * The query parameters of one call, keys sorted ascending so `?limit=-1&offset=0` and
- * `?offset=0&limit=-1` normalise alike. A repeated key keeps its own values in their own order, joined
- * with `,`: the order inside a key is the caller's, and discarding it would hide a real difference.
- * `command` is kept because it is what separates Fineract's action endpoints (AAP 0.7.3).
- *
- * The value of a key named for a credential or session material is {@link MASKED} instead of the values
- * the page sent, under {@link SECRET_KEY_PATTERN} and on the same terms as a body field: the name
- * decides, the key itself stays, and both front ends' captures compare equal by construction. A query
- * parameter therefore cannot reach a record, a diff or a written file unmasked (Rule 1 clause 9;
- * AAP 0.10.2, "Session and auth material").
- */
+/** The query parameters of one call: keys sorted, a repeated key's own values joined with `,` in their order, `command` kept because it separates Fineract's action endpoints (AAP 0.7.3), and a credential- or session-named value {@link MASKED} (Rule 1 clause 9). */
 function normaliseQuery(url: URL): Record<string, string> {
   const query: Record<string, string> = {};
   for (const key of [...new Set(url.searchParams.keys())].sort()) {
@@ -511,26 +242,12 @@ function normaliseQuery(url: URL): Record<string, string> {
   }
   return query;
 }
-
-/**
- * Whether a header is present, compared case-insensitively because HTTP header names are not
- * case-sensitive and either front end may send any casing.
- *
- * Only presence leaves this function. The two headers this module asks about carry a credential and
- * tenant data, and neither value is read into a record, a message or a file (Rule 1 clause 9;
- * AAP 0.4.2 keeps the tenant out of captured traffic).
- */
+/** Whether a header is present, compared case-insensitively because header names are not case-sensitive; only presence leaves, since the two headers asked about carry a credential and tenant data (Rule 1 clause 9, AAP 0.4.2). */
 function hasHeader(headers: Record<string, string>, name: string): boolean {
   const wanted = name.toLowerCase();
   return Object.keys(headers).some((header) => header.toLowerCase() === wanted);
 }
-
-/**
- * A date as a day offset from the run date: `d0` for the run date itself, `d+1` the day after, `d-2`
- * two days before. AAP 0.10.2 compares dates as offsets, so a capture taken on a different business
- * date still compares equal; the arithmetic belongs to `dayOffset()` in `../seed/fixtures`, which
- * owns whole-day handling for the whole harness.
- */
+/** A date as a day offset from the run date — `d0`, `d+1`, `d-2` — so a capture taken on another business date still compares equal (AAP 0.10.2); the arithmetic is `dayOffset()` in `../seed/fixtures`. */
 function dateOffsetToken(date: Date, runDate: Date): string {
   const offset = dayOffset(runDate, date);
   if (offset === 0) {
@@ -538,8 +255,6 @@ function dateOffsetToken(date: Date, runDate: Date): string {
   }
   return offset > 0 ? `d+${offset}` : `d${offset}`;
 }
-
-
 /** What one body needs to know while it is normalised. */
 interface WalkContext {
   /** Registry of the exchange the body belongs to. */
@@ -549,22 +264,11 @@ interface WalkContext {
   /** Whether to drop the server-side audit block; a response body carries one, a request never does. */
   readonly dropAuditBlock: boolean;
 }
-
 /** Narrows a parsed JSON payload to a JSON object, leaving the values inside it unmodelled. */
 function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
-
-/**
- * The role a body id belongs to, or `null` when that id is a reference the comparison must keep by
- * value.
- *
- * A named generated id answers its own key (`clientId`); a bare `id` answers `id` at the top of a body
- * — the shape Fineract uses for a bare record — and the enclosing noun's role when that noun is one the
- * run creates, so `{ client: { id: 7 } }` reads `{clientId}`. A collection key is matched as it stands
- * as well as singularised, because {@link singularise} turns the already-singular `savings` into
- * `saving`.
- */
+/** The role a body id belongs to, or `null` when it is a reference the comparison keeps by value: a named generated key answers its own key, and a bare `id` answers `id` at the top of a body or the role of its enclosing created noun. */
 function generatedIdRole(key: string, parentKey: string): string | null {
   if (GENERATED_ID_KEYS.has(key)) {
     return key;
@@ -581,25 +285,7 @@ function generatedIdRole(key: string, parentKey: string): string | null {
   );
   return known === undefined ? null : `${known}Id`;
 }
-
-/**
- * Normalises one JSON value: masks a field whose name says credential or session material but compares
- * a boolean flag as it stands, turns a payload date under a date-named key into a day offset,
- * canonicalises key order, turns an id into a role token and drops the audit block, in the single pass
- * that also builds the record (AAP 0.10.2).
- *
- * Every `unknown` reached here is a Fineract request or response body — payload JSON this harness
- * does not model field by field, because comparing payloads the application is not typed for at the
- * boundary is the whole purpose of the capture. Narrowing to `unknown` and checking each JSON kind as
- * it is walked is the documented boundary Rule 1 clause 4 permits; an `any` would carry the payload's
- * shape into this module unchecked, and masking (Rule 1 clause 9) must not be able to miss a field.
- *
- * @param value Value to normalise.
- * @param context What the body needs while it is normalised.
- * @param key The key this value sits under, or `''` at the top of a body.
- * @param parentKey The nearest enclosing object key, which names the role of a bare `id`.
- * @returns The normalised value, or `undefined` when the record must omit the value entirely.
- */
+/** Normalises one JSON value in a single pass: masks a credential- or session-named field while comparing a boolean flag as it stands, turns a date under a date-named key into a day offset, sorts keys, roles a generated id and drops the audit block (AAP 0.10.2). Each `unknown` here is an unmodelled Fineract payload — the documented boundary Rule 1 clause 4 permits, since masking (Rule 1 clause 9) must not be able to miss a field. */
 function normaliseValue(
   value: unknown,
   context: WalkContext,
@@ -607,10 +293,7 @@ function normaliseValue(
   parentKey: string,
 ): NormalizedValue | undefined {
   if (typeof value === 'boolean') {
-    // A boolean carries no credential and no session material, so a flag whose name merely contains a
-    // secret word — `shouldRenewPassword`, `isTwoFactorAuthenticationRequired` (AAP 0.7.2,
-    // `AuthResponse`) — is compared rather than masked. Masking it would erase real parity signal for
-    // no security gain: nothing about a `true`/`false` could leak a secret.
+    // A boolean carries no credential and no session material, so a flag whose name merely contains a secret word — `shouldRenewPassword`, `isTwoFactorAuthenticationRequired` (AAP 0.7.2, `AuthResponse`) — is compared rather than masked: nothing about a `true`/`false` could leak a secret.
     return value;
   }
   if (SECRET_KEY_PATTERN.test(key)) {
@@ -620,19 +303,14 @@ function normaliseValue(
     return null;
   }
   if (context.runDate !== null && DATE_KEY_PATTERN.test(key)) {
-    // Dates are read before the shape branches because Fineract reports one date two ways: as the
-    // payload text form `dd MMMM yyyy` and as a `[year, month, day]` triple (AAP 0.7.2; AAP 0.10.2,
-    // "Dates"). Both reduce to the day offset built from the run date, so a run that spans two
-    // business dates still compares equal; a value under a date-named key that is not a date — a
-    // `dateFormat`, say — falls through to the branches below and is kept as it stands.
+    // Dates are read before the shape branches because Fineract reports one date two ways — the payload text form `dd MMMM yyyy` and a `[year, month, day]` triple (AAP 0.7.2; AAP 0.10.2, "Dates") — and both reduce to the day offset built from the run date, so a run that spans two business dates still compares equal; a value under a date-named key that is not a date, a `dateFormat` say, falls through to the branches below and is kept as it stands.
     const parsedDate = parseFineractDate(value);
     if (parsedDate !== null) {
       return dateOffsetToken(parsedDate, context.runDate);
     }
   }
   if (Array.isArray(value)) {
-    // Arrays keep their order: repayment-schedule periods, transactions and charges are ordered data
-    // (AAP 0.10.2). An element sits under the same key as its array, so the role context is unchanged.
+    // Arrays keep their order, because repayment-schedule periods, transactions and charges are ordered data (AAP 0.10.2); an element sits under the same key as its array, so the role context is unchanged.
     return value.map((element) => normaliseValue(element, context, key, parentKey) ?? null);
   }
   if (isJsonObject(value)) {
@@ -658,13 +336,7 @@ function normaliseValue(
   // JSON cannot carry anything else, and `undefined` is how a key that must not appear is expressed.
   return undefined;
 }
-
-/**
- * Normalises a string field: a numeric value under a key the run generates an id for becomes a role
- * token, and everything else — a reference id, `dateFormat` and `locale`, whose values AAP 0.10.2
- * compares verbatim, and a value under a date-named key in a shape {@link parseFineractDate} does not
- * read — is kept as it stands.
- */
+/** Normalises a string field: a numeric value under a generated-id key becomes a role token; everything else stays verbatim, `dateFormat` and `locale` included (AAP 0.10.2). */
 function normaliseText(value: string, context: WalkContext, key: string, parentKey: string): NormalizedValue {
   const role = generatedIdRole(key, parentKey);
   if (role !== null && /^\d+$/.test(value)) {
@@ -672,12 +344,7 @@ function normaliseText(value: string, context: WalkContext, key: string, parentK
   }
   return value;
 }
-
-/**
- * Normalises a number field: an integer under a key the run generates an id for becomes a role token,
- * and every other number — a reference id included, since two front ends sending different payment
- * types or offices is exactly the difference the diff must report — is compared by its value.
- */
+/** Normalises a number field: an integer under a generated-id key becomes a role token, and every other number — a reference id included — is compared by value. */
 function normaliseNumber(value: number, context: WalkContext, key: string, parentKey: string): NormalizedValue {
   const role = generatedIdRole(key, parentKey);
   if (role !== null && Number.isInteger(value) && value >= 0) {
@@ -685,29 +352,17 @@ function normaliseNumber(value: number, context: WalkContext, key: string, paren
   }
   return value;
 }
-
-/**
- * A whole body after normalisation, or `null` when there is no body to record. A body that normalises
- * to nothing at all is `null` rather than an empty object, so "no body" and "an empty body" stay
- * distinguishable.
- */
+/** A whole body after normalisation, or `null` when there is none or nothing survives it, so no body and an empty body stay distinguishable. */
 function normaliseBody(payload: unknown, context: WalkContext): NormalizedValue | null {
   return normaliseValue(payload, context, '', '') ?? null;
 }
-
-/**
- * The request body of one exchange, masked and normalised, or `null` when the request carried none.
- *
- * A body that is not JSON is never stored — it cannot be masked field by field, and Rule 1 clause 9
- * forbids an unmasked body reaching the capture — so {@link NON_JSON_BODY} stands in for it.
- */
+/** The request body of one exchange, masked and normalised, or `null`; a body that is not JSON is never stored and {@link NON_JSON_BODY} stands in for it (Rule 1 clause 9). */
 function readRequestBody(request: Request, context: WalkContext): NormalizedValue | null {
   let raw: string | null;
   try {
     raw = request.postData();
   } catch {
-    // A body that is no longer readable (the page went away, or the browser released the buffer) is
-    // recorded as absent instead of failing the capture it belongs to.
+    // A body that is no longer readable (the page went away, or the browser released the buffer) is recorded as absent instead of failing the capture it belongs to.
     return null;
   }
   if (raw === null || raw.length === 0) {
@@ -724,9 +379,7 @@ function readRequestBody(request: Request, context: WalkContext): NormalizedValu
   }
   return normaliseBody(parsed, context);
 }
-
-/** One exchange while it is being filled; frozen and handed out as a {@link NormalizedExchange} once
- * {@link CaptureSession.settle} has waited for its body and frozen the records. */
+/** One exchange while it is being filled; frozen and handed out as a {@link NormalizedExchange} once {@link CaptureSession.settle} has waited for its body. */
 interface MutableExchange {
   method: string;
   origin: string;
@@ -738,21 +391,12 @@ interface MutableExchange {
   requestBody: NormalizedValue | null;
   responseBody: NormalizedValue | null;
 }
-
 /** An exchange paired with the registry that normalises it, so a late response body still has one. */
 interface TrackedExchange {
   readonly record: MutableExchange;
   readonly roles: RoleRegistry;
 }
-
-/**
- * The run date a capture was given, copied so later mutation by the caller cannot move the offsets
- * this capture has already written.
- *
- * @throws When the date is invalid. A capture normalised against an unusable run date would leave
- * every date verbatim and report differences that are not behaviour, so the mistake is raised where
- * it is made rather than silently absorbed.
- */
+/** The run date a capture was given, copied so later caller mutation cannot move offsets already written; an invalid date throws here rather than leaving every date verbatim and reporting differences that are not behaviour. */
 function requireRunDate(date: Date): Date {
   if (Number.isNaN(date.getTime())) {
     throw new Error(
@@ -762,22 +406,7 @@ function requireRunDate(date: Date): Date {
   }
   return new Date(date.getTime());
 }
-
-
-/**
- * Starts recording the Fineract API exchanges of one page.
- *
- * The listeners attach to a page the caller already drives: nothing is created, navigated or awaited
- * here, so a caller starts a capture before its first interaction and stops it in teardown. A page
- * that was already closed is tolerated — the session then records no exchanges and still writes,
- * which a parity report shows as a workflow that made no API calls rather than as a crash during
- * teardown.
- *
- * @param page Playwright page whose traffic belongs to the workflow.
- * @param options Project and workflow the capture belongs to, the run date its dates are measured
- * from, and the directory it is written to.
- * @throws When `options.runDate` is an invalid `Date`; see {@link requireRunDate}.
- */
+/** Starts recording one page's Fineract API exchanges: the listeners attach to a page the caller already drives, and a page that was already closed records none and still writes; an invalid `options.runDate` throws (see {@link requireRunDate}). */
 export function startCapture(page: Page, options: CaptureOptions = {}): CaptureSession {
   const project = options.project ?? null;
   const workflow = options.workflow ?? null;
@@ -786,24 +415,14 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
 
   const tracked: TrackedExchange[] = [];
   const byRequest = new Map<Request, TrackedExchange>();
-  /** Every response body read this capture has started and not yet seen settle. {@link settle} waits for
-   * them, so a body that arrives once the listeners are detached still reaches the record it belongs to
-   * instead of dropping out of the comparison (AAP 0.10.1 compares the ordered calls with their bodies). */
+  /** Every response body read this capture started and has not seen settle: {@link settle} waits for them, so a body arriving after the listeners detach still reaches its record (AAP 0.10.1 compares the calls with their bodies). */
   const pendingBodies = new Set<Promise<void>>();
   let stopped = false;
-  /** The exchanges in record order, built once so `stop()` answers with the same array however often it
-   * is called and `capture.exchanges` agrees with it afterwards. */
+  /** The exchanges in record order, built once, so `stop()` answers with the same array however often it is called and `capture.exchanges` agrees with it. */
   let collected: NormalizedExchange[] | null = null;
-  /** Whether the records have been frozen. A body read that settles afterwards is skipped rather than
-   * assigned to a frozen record, which strict mode would throw on. */
+  /** Whether the records are frozen; a body read that settles afterwards is skipped rather than assigned to a frozen record, which strict mode would throw on. */
   let frozen = false;
-
-  /**
-   * Records one request. Only a Fineract API call becomes an exchange: AAP 0.10.1 compares "the
-   * ordered API calls", so the HTML document, the legacy app's AngularJS `views/**` partials (which
-   * the new app never fetches), translation files, images and fonts are dropped before a record
-   * exists — keeping any of them would manufacture a difference that says nothing about behaviour.
-   */
+  /** Records one request: only a Fineract API call becomes an exchange, so the document, the legacy `views/**` partials, translations, images and fonts are dropped (AAP 0.10.1 compares the ordered API calls). */
   const onRequest = (request: Request): void => {
     if (stopped || !API_RESOURCE_TYPES.includes(request.resourceType())) {
       return;
@@ -823,9 +442,7 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
     }
     let headers: Record<string, string> = {};
     try {
-      // `headers()` is the synchronous view of the headers the browser actually sent. It omits
-      // cookie-related headers only, so both headers that matter here are visible: the front ends set
-      // them from JavaScript on every call.
+      // `headers()` is the synchronous view of the headers the browser actually sent: it omits cookie-related headers only, so both headers that matter here are visible, because the front ends set them from JavaScript on every call.
       headers = request.headers();
     } catch {
       // A request torn away from its page has no readable headers; it is still recorded, without them.
@@ -846,16 +463,7 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
     tracked.push(entry);
     byRequest.set(request, entry);
   };
-
-  /**
-   * Reads one response body into the exchange its request created, and keeps the read in
-   * {@link pendingBodies} until it settles so {@link settle} can wait for it.
-   *
-   * The read is the capture's own work rather than a caller's mutation, so its callbacks are gated on
-   * the records not being frozen yet and not on the listeners being detached: a body that arrives after
-   * `stop()` still lands, and one that arrives after the freeze is skipped instead of being assigned to
-   * a frozen record. Neither callback rejects, so the set always drains.
-   */
+  /** Reads one response body into the exchange its request created and keeps the read in {@link pendingBodies} until it settles; the callbacks are gated on the freeze and not on detachment, so a late body still lands and one arriving after the freeze is skipped. */
   const readBody = (entry: TrackedExchange, response: Response): void => {
     const context: WalkContext = { roles: entry.roles, runDate, dropAuditBlock: true };
     const read: Promise<void> = response.json().then(
@@ -876,13 +484,7 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
     };
     void read.then(forget, forget);
   };
-
-  /**
-   * Attaches a response to the exchange its request created, and starts reading its body when that body
-   * is JSON. A failed request keeps `status: 0` — a request that never got an answer is still evidence
-   * about the call that was made — and a body still unread when {@link settle} has waited long enough
-   * is recorded as absent rather than guessed at.
-   */
+  /** Attaches a response to the exchange its request created and starts reading a JSON body: a request that never got an answer keeps `status: 0`, and a body still unread after the wait is recorded as absent rather than guessed. */
   const onResponse = (response: Response): void => {
     const entry = byRequest.get(response.request());
     if (entry === undefined || stopped) {
@@ -894,7 +496,6 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
     }
     readBody(entry, response);
   };
-
   /** Marks an exchange whose request failed: no status, no body, but a recorded attempt. */
   const onRequestFailed = (request: Request): void => {
     const entry = byRequest.get(request);
@@ -910,8 +511,7 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
     page.on('response', onResponse);
     page.on('requestfailed', onRequestFailed);
   } catch {
-    // A page closed before the capture started emits nothing more; the session is still usable and
-    // writes an empty capture, which is the honest record of a workflow that made no API calls.
+    // A page closed before the capture started emits nothing more; the session is still usable and writes an empty capture, which is the honest record of a workflow that made no API calls.
   }
 
   const capture: NormalizedCapture = {
@@ -923,8 +523,7 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
     },
     get roles(): RoleMap {
       const merged: { [realId: string]: string } = {};
-      // Capture order, first registration wins: the map answers "which token did this id get" for a
-      // reader of the file, while the tokens themselves were assigned per exchange (RoleRegistry).
+      // Capture order, first registration wins: the map answers "which token did this id get" for a reader of the file, while the tokens themselves were assigned per exchange (RoleRegistry).
       for (const entry of tracked) {
         for (const registration of entry.roles.entries()) {
           if (!Object.hasOwn(merged, registration.realId)) {
@@ -935,22 +534,12 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
       return merged;
     },
   };
-
-  /** The exchanges in record order, built once and handed out unchanged afterwards, so `stop()` and
-   * `settle()` answer with one array and `capture.exchanges` agrees with both. */
+  /** The exchanges in record order, built once and handed out unchanged, so `stop()` and `settle()` answer with one array and `capture.exchanges` agrees with both. */
   function exchanges(): NormalizedExchange[] {
     collected ??= tracked.map((entry) => entry.record);
     return collected;
   }
-
-  /**
-   * Detaches the three page listeners and refuses any further record. Idempotent, and it tolerates a
-   * page that is already gone — a closed page has nothing left to detach and, `stopped` being set first,
-   * cannot add to this capture either way.
-   *
-   * Detaching stops new records from arriving and leaves the records already held writable, because a
-   * body read this capture started is the capture's own work rather than a caller mutation.
-   */
+  /** Detaches the three page listeners and refuses further records; idempotent, tolerant of a page already gone, and it leaves the records held writable because a body read it started is the capture's own work. */
   function detach(): void {
     if (stopped) {
       return;
@@ -961,18 +550,10 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
       page.off('response', onResponse);
       page.off('requestfailed', onRequestFailed);
     } catch {
-      // Detaching from a page that is already gone has nothing left to detach; `stopped` above still
-      // keeps a receiver that stayed attached from adding to this capture.
+      // Detaching from a page that is already gone has nothing left to detach; `stopped` above still keeps a receiver that stayed attached from adding to this capture.
     }
   }
-
-  /**
-   * Freezes every record, once, and answers with the exchanges. Freezing is what makes a record a
-   * {@link NormalizedExchange} a caller may hold: from then on a body read that settles late is skipped
-   * rather than written into a frozen record. Calling it again returns the same array without doing the
-   * work twice, and `capture.exchanges` answers with that array from then on, so a caller may hold
-   * either reference.
-   */
+  /** Freezes every record, once, and answers with the exchanges: a body read settling later is skipped rather than written, and a repeat call returns the same array without doing the work twice. */
   function freezeRecords(): NormalizedExchange[] {
     const list = exchanges();
     if (!frozen) {
@@ -983,50 +564,23 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
     }
     return list;
   }
-
-  /**
-   * Detaches the listeners and answers with the exchanges as they stand. Idempotent, and the same array
-   * comes back however often it is called.
-   *
-   * It neither freezes the records nor waits for a response body still in flight: a body this capture
-   * started reading is the capture's own work, so it is still allowed to land after teardown. A caller
-   * that needs every body must use {@link settle} or {@link write}.
-   */
+  /** Detaches the listeners and answers with the exchanges as they stand; idempotent, and it neither freezes the records nor waits for an in-flight body, so a caller that needs every body uses {@link settle} or {@link write}. */
   function stop(): NormalizedExchange[] {
     detach();
     return exchanges();
   }
-
-  /**
-   * Detaches the listeners, waits for every response body read still in flight, then freezes the records
-   * and answers with the exchanges. Idempotent, and the array is the one {@link stop} returned.
-   *
-   * Waiting is what keeps the comparison honest: AAP 0.10.1 compares the ordered API calls including
-   * their bodies, so a body that never settled must not silently vanish from it. {@link readsSettled}
-   * bounds the wait, so a body the page will never deliver cannot hold teardown open for ever.
-   */
+  /** Detaches the listeners, waits for every in-flight body read — bounded by {@link readsSettled} — freezes the records and answers with the exchanges, because AAP 0.10.1 compares the ordered calls including bodies a page must not silently drop. */
   async function settle(): Promise<NormalizedExchange[]> {
     detach();
     while (pendingBodies.size > 0) {
-      // A whole round is awaited at once and the loop repeats, because a read that settles may leave
-      // another one behind it in the set.
+      // A whole round is awaited at once and the loop repeats, because a read that settles may leave another one behind it in the set.
       if (!(await readsSettled([...pendingBodies]))) {
         break;
       }
     }
     return freezeRecords();
   }
-
-  /**
-   * Writes the capture as JSON and resolves with the absolute path it wrote, inside
-   * `<folder ?? outputDir ?? CAPTURES_DIR>/network/`.
-   *
-   * {@link settle} runs first, so a capture that is still running is stopped, its bodies are read and
-   * its records frozen before anything is serialised: `write()` and `stop()` may be used in either
-   * order, and the file carries every body either way. The file name is `<project>__<workflow>.json` —
-   * deterministic, so the report writer and the fixture find it without being told, and matching the
-   * `<project>__<workflow>` convention of the sibling capture folders.
-   */
+  /** Writes the capture as JSON to `<folder ?? outputDir ?? CAPTURES_DIR>/network/<project>__<workflow>.json` and resolves with that path, after {@link settle}, so `write()` and `stop()` may be used in either order. */
   async function write(folder?: string): Promise<string> {
     await settle();
     const directory = resolve(folder ?? outputDir ?? CAPTURES_DIR, 'network');
@@ -1038,24 +592,13 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
 
   return { capture, stop, settle, write };
 }
-
-/**
- * Whether a response carries a JSON body and is therefore worth reading. Anything else — an empty
- * body, HTML from a proxy, a binary download — is recorded as absent rather than parsed on a guess.
- */
+/** Whether a response carries a JSON body and is worth reading; anything else — an empty body, proxy HTML, a binary download — is recorded as absent rather than parsed on a guess. */
 function responseCarriesJson(response: Response): boolean {
   const headers = response.headers();
   const contentType = Object.hasOwn(headers, 'content-type') ? headers['content-type'] : '';
   return contentType.toLowerCase().includes('json');
 }
-
-/**
- * Waits for one round of response body reads, giving up after {@link BODY_SETTLE_TIMEOUT_MS} so a read
- * the browser will never finish cannot keep {@link CaptureSession.settle} waiting for ever.
- *
- * @param reads Body reads to wait for; the caller has already taken them out of its pending set.
- * @returns `true` once every read settled, `false` when the wait timed out first.
- */
+/** Waits for one round of response body reads, giving up after {@link BODY_SETTLE_TIMEOUT_MS} so a read the browser will never finish cannot hold teardown open; answers `false` when the wait timed out. */
 async function readsSettled(reads: readonly Promise<void>[]): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const expired = new Promise<boolean>((resolveExpiry) => {
@@ -1069,22 +612,18 @@ async function readsSettled(reads: readonly Promise<void>[]): Promise<boolean> {
     }
   }
 }
-
 /** One exchange rendered as a comparable string, for a call that has no counterpart on the other side. */
 function summariseExchange(exchange: NormalizedExchange): NormalizedValue {
   return `${exchange.method} ${exchange.path} -> ${exchange.status}`;
 }
-
 /** An exchange at a position, or `undefined` past the end, so a length mismatch is a value not a throw. */
 function exchangeAt(exchanges: readonly NormalizedExchange[], index: number): NormalizedExchange | undefined {
   return index < exchanges.length ? exchanges[index] : undefined;
 }
-
 /** A normalised value as an array, or `null` when it is not one. */
 function asArray(value: NormalizedValue): readonly NormalizedValue[] | null {
   return Array.isArray(value) ? value : null;
 }
-
 /** A normalised value as an object, or `null` when it is not one. */
 function asObject(value: NormalizedValue): { [key: string]: NormalizedValue } | null {
   if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
@@ -1092,24 +631,15 @@ function asObject(value: NormalizedValue): { [key: string]: NormalizedValue } | 
   }
   return null;
 }
-
 /** A record's field as a comparable value: `null` when the field is absent on that side. */
 function fieldValue(record: { [key: string]: NormalizedValue }, key: string): NormalizedValue {
   return Object.hasOwn(record, key) ? record[key] : null;
 }
-
 /** An array's element, or `null` past the end, so arrays of different lengths compare element by element. */
 function elementAt(values: readonly NormalizedValue[], index: number): NormalizedValue {
   return index < values.length ? values[index] : null;
 }
-
-/**
- * Compares two normalised values and reports every leaf that differs. Object keys are already sorted
- * by normalisation, so key order cannot produce a false difference; array order is significant and is
- * compared position by position. A shape that changes between the sides — an object where the other
- * has an array, or a scalar — is one difference at that node, because the calls diverged there and the
- * leaves below it have no counterpart to compare.
- */
+/** Compares two normalised values and reports every leaf that differs: keys are already sorted, array order is significant, and a shape that changes between the sides is one difference at that node because the leaves below it have no counterpart. */
 function compareValues(
   field: string,
   legacy: NormalizedValue,
@@ -1137,25 +667,7 @@ function compareValues(
     report(field, legacy, next);
   }
 }
-
-/**
- * Compares two normalised captures call by call, in the order the pages issued them: AAP 0.10.1 makes
- * the ordered API calls the criterion, so exchanges pair by position and are never matched by content.
- * An empty result is parity.
- *
- * `origin` is not compared. The host is a hard gate — `e2e/fixtures/parity-fixture.ts` fails a run
- * whose `/fineract-provider/` traffic left `FINERACT_URL` (Rule 2) — and restating that here would
- * bury a backend misconfiguration inside a request diff a reader would take for a behavioural
- * difference.
- *
- * Nothing here throws: an input the comparison cannot walk is reported as a difference at the node
- * where it stops making sense, because a comparison the harness could not complete is a finding in its
- * own right.
- *
- * @param legacy Normalised exchanges of the legacy baseline.
- * @param next Normalised exchanges of the new application.
- * @returns One entry per difference, ordered by exchange and by field; empty when the two agree.
- */
+/** Compares two captures call by call in the order the pages issued them, pairing exchanges by position and never by content (AAP 0.10.1); `origin` is not compared because the fixture's host gate owns it (Rule 2), and nothing throws — a shape the walk cannot follow is itself reported as a difference. */
 export function diffExchanges(
   legacy: readonly NormalizedExchange[],
   next: readonly NormalizedExchange[],

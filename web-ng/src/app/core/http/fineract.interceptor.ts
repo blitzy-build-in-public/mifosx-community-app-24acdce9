@@ -1,20 +1,4 @@
-/**
- * The application's single HTTP interceptor (AAP 0.4.2, 0.7.1, 0.14.1; Rule 1 clause 5): it owns the two
- * headers every Fineract call carries and the mapping of a failed response into `ApiError`, and nothing
- * else — no logging, retry, cache, metrics or second interceptor.
- *
- * **Two headers, no third.** `Fineract-Platform-TenantId` carries the resolved configuration's tenant on
- * every request; `Authorization: Basic <authenticationKey>` carries the session in effect, which the
- * authentication request itself does not send — the pairing the legacy provider applied
- * (`app/scripts/services/HttpServiceProvider.js:42-53`), removal on sign-out being automatic here
- * because the header is derived from the session rather than stored.
- *
- * **No URL rewriting.** Only the headers change, which keeps `npm run check:endpoints` a true statement
- * about the application and the parity harness's host assertion meaningful (AAP 0.4.2). Before the
- * configuration resolves, a request passes through untouched (AAP 0.7.1). The 401 redirect preserving the
- * attempted route and the single notification for a 5xx or transport failure are deliberate differences
- * from legacy registered in the plan, not defects to remove (AAP 0.7.4, 0.10.5).
- */
+/** The application's single HTTP interceptor (AAP 0.4.2, AAP 0.7.1, AAP 0.14.1; Rule 1 clause 5): it owns the two headers every Fineract call carries — `Fineract-Platform-TenantId` and `Authorization: Basic (AAP 0.7.4, AAP 0.10.5). */
 import { HttpErrorResponse, type HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { Router } from '@angular/router';
@@ -34,10 +18,7 @@ const AUTHORIZATION_HEADER = 'Authorization';
 /** The one allowlisted endpoint this file names, resolved through `apiUrl()` and never composed here. */
 const AUTHENTICATION_ENDPOINT = 'authentication';
 
-/**
- * Attaches the tenant and Basic authorization headers, maps failures into `ApiError`, ends the session and
- * returns to the login screen on a 401, and raises one notification for a 5xx or transport failure.
- */
+/** Attaches the tenant and Basic authorization headers, maps failures into `ApiError`, ends the session and returns to the login screen on a 401, and raises one notification for a 5xx or transport failure. */
 export const fineractInterceptor: HttpInterceptorFn = (req, next) => {
   const config = inject(AppConfigService);
   const session = inject(SessionService);
@@ -76,12 +57,7 @@ export const fineractInterceptor: HttpInterceptorFn = (req, next) => {
 
           // Left to the login screen while it is showing, rather than re-navigating it into a loop.
           if (!router.url.startsWith('/login')) {
-            // Settled rather than dropped: a navigation the router refuses would otherwise be an
-            // unhandled rejection, and the user is told the return to the login screen did not
-            // happen instead of being left on a screen the ended session can no longer serve. The
-            // text is the navigation sentence naming that screen, because a refused navigation
-            // carries no server text, and the router's own wording names nothing an operator acts
-            // on (`api-error.ts` `navigationFailure`).
+            // Settled rather than dropped: a navigation the router refuses would otherwise be an unhandled rejection, and the user is told the return to the login screen did not happen instead of being left on a screen the ended.
             void router
               .navigate(['/login'], { queryParams: { returnUrl: router.url } })
               .catch((cause: unknown) => {

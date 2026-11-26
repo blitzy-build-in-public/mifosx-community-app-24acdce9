@@ -20,38 +20,9 @@ import type {
 } from './client.models';
 import { ClientService, type ClientActionInput, type ClientEditInput } from './client.service';
 
-/**
- * Contract spec for `ClientService`: the one place the clients family composes a Fineract URL and
- * turns a model into a payload (Rule 1 clause 8; AAP 0.7.3 endpoint rows "W2 create and activate
- * client", "Client list and edit", "Client actions" and "W3 search and view client"; AAP 0.11.1 row
- * for this path).
- *
- * Every public method is pinned against the real `HttpTestingController` transport, so the
- * assertions are on the request the application actually sends — method, path, the whole parameter
- * set and the whole body — and never on a stand-in for `HttpClient`. Three properties are asserted
- * for each call beyond its shape:
- *
- *   - the date-format pair. Every date-bearing body carries `dateFormat: 'dd MMMM yyyy'` and the
- *     active `locale`, and every date member is the string `toFineractDate` produced, never a `Date`
- *     (AAP 0.7.2 "Date handling"; Rule 1 clause 2).
- *   - the host. The URL is composed by `AppConfigService.apiUrl()`, which this spec stubs and spies
- *     on, so a service that built its own host would fail here (AAP 0.4.2; Rule 2).
- *   - the absent header. Neither the authorization nor the tenant header is set here; both belong
- *     to `core/http/fineract.interceptor.ts` (AAP 0.4.2).
- *
- * The transport is registered without the application's interceptor, because the interceptor is
- * what adds those headers: a request asserted here is the service's own contribution to it.
- *
- * The `AppConfigService` stub is a fixed, non-secret configuration whose `apiUrl()` composes
- * exactly as the real one documents, so an expected URL and a requested URL are built the same way.
- * The resolution of `apiBaseUrl` and `apiPath` is proved in `core/config/app-config.service.spec.ts`.
- */
+/** Contract spec for `ClientService`: the one place the clients family composes a Fineract URL and turns a model into a payload (Rule 1 clause 8; AAP 0.7.3 endpoint rows "W2 create and activate client", "Client list and (AAP 0.11.1, AAP 0.7.2, Rule 1 clause 2, AAP 0.4.2). */
 
-/**
- * The served API host and root, written as `web-ng/src/assets/config.json` ships them, so the URLs
- * this spec expects are the URLs the deployed application produces (AAP 0.4.4 decision 5(a)). No
- * demo host appears here or anywhere else in this tree (Rule 2).
- */
+/** The served API host and root, written as `web-ng/src/assets/config.json` ships them, so the URLs this spec expects are the URLs the deployed application produces (AAP 0.4.4 decision 5(a)) (Rule 2). */
 const API_BASE_URL = 'https://localhost:8443';
 const API_PATH = '/fineract-provider/api/v1';
 const API_ROOT = API_BASE_URL + API_PATH;
@@ -69,10 +40,7 @@ const FINERACT_DATE_FORMAT = 'dd MMMM yyyy';
 const CLIENT_ID = 2;
 const CLIENT_ID_TEXT = '2';
 
-/**
- * A date the client screens hold as a `Date`, built from its local calendar parts so the expected
- * string below cannot shift with the machine's time zone (AAP 0.7.2 "Date handling").
- */
+/** A date the client screens hold as a `Date`, built from its local calendar parts so the expected string below cannot shift with the machine's time zone (AAP 0.7.2 "Date handling"). */
 const CLIENT_DATE = new Date(2026, 10, 21);
 
 /** That date as every date-bearing payload must carry it: `dd MMMM yyyy` in the active locale. */
@@ -81,12 +49,7 @@ const CLIENT_DATE_TEXT = '21 November 2026';
 /** The same date in French, for the case that proves the payload follows the selected language. */
 const CLIENT_DATE_TEXT_FR = '21 novembre 2026';
 
-/**
- * The URL the service must request for the given path segments: the API root the configuration
- * supplies and the resource segments the service owns, joined with one separator.
- *
- * @param segments Resource segments, exactly as `client.service.ts` names them.
- */
+/** The URL the service must request for the given path segments: the API root the configuration supplies and the resource segments the service owns, joined with one separator. @param segments Resource segments, exactly as. */
 function clientUrl(...segments: readonly (string | number)[]): string {
   return [API_ROOT, ...segments].join(SEPARATOR);
 }
@@ -107,20 +70,10 @@ function bodyKeys(request: HttpRequest<unknown>): string[] {
   return typeof body === 'object' && body !== null ? Object.keys(body) : [];
 }
 
-/**
- * The `AppConfigService` surface `ClientService` uses: the resolved configuration, the URL
- * composition every service shares, and the live active locale.
- */
+/** The `AppConfigService` surface `ClientService` uses: the resolved configuration, the URL composition every service shares, and the live active locale. */
 type ConfigSurface = Pick<AppConfigService, 'config' | 'apiUrl' | 'activeLocale'>;
 
-/**
- * Builds the stub from the two live members the cases below need to change: the `apiUrl` spy the
- * host assertions read, and the active-locale signal the language case moves. A fresh pair per test
- * keeps one case's calls and language out of the next.
- *
- * @param apiUrl The spy standing in for `AppConfigService.apiUrl`.
- * @param activeLocale The signal standing in for `AppConfigService.activeLocale`.
- */
+/** Builds the stub from the two live members the cases below need to change: the `apiUrl` spy the host assertions read, and the active-locale signal the language case moves. */
 function configSurface(
   apiUrl: Mock<(path: string) => string>,
   activeLocale: WritableSignal<string>,
@@ -260,11 +213,7 @@ const TEMPLATE_CASES: readonly {
   },
 ];
 
-/**
- * A person the create form posts: both names, both optional strings, an active record whose
- * submission and activation fall on the same day. The two dates are `Date | null` on the model and
- * become `dd MMMM yyyy` strings in the body.
- */
+/** A person the create form posts: both names, both optional strings, an active record whose submission and activation fall on the same day. */
 const PERSON_CREATE: ClientCreateRequest = {
   officeId: 1,
   legalFormId: 1,
@@ -294,11 +243,7 @@ const PERSON_CREATE_WIRE: Readonly<Record<string, unknown>> = {
   activationDate: CLIENT_DATE_TEXT,
 };
 
-/**
- * The same person, with every optional member absent and both dates missing. The body must then
- * leave the optional strings out and send each date as `null`, so the server's own required-field
- * rules decide what is missing instead of an empty string standing in for a value.
- */
+/** The same person, with every optional member absent and both dates missing. */
 const UNDATED_CREATE: ClientCreateRequest = {
   officeId: 1,
   legalFormId: 1,
@@ -348,20 +293,10 @@ const ENTITY_CREATE_WIRE: Readonly<Record<string, unknown>> = {
   active: false,
 };
 
-/**
- * The same person, with a `locale` the caller picked. The service must ignore it and send the
- * active language, because the two members are filled at the API boundary and no screen sets them.
- */
+/** The same person, with a `locale` the caller picked. The service must ignore it and send the active language, because the two members are filled at the API boundary and no screen sets them. */
 const CALLER_LOCALE_CREATE: ClientCreateRequest = { ...PERSON_CREATE, locale: 'de' };
 
-/**
- * The one case table of `PUT /clients/{id}`, whose two branches differ in the activation date.
- *
- * Each request is a `ClientEditInput`: the fields the edit screen holds, with no `dateFormat` or
- * `locale`, because the service fills both from the configuration at the boundary. The wire
- * expectations below still carry the pair, which is what proves it comes from the configuration and
- * not from the caller (AAP 0.7.2 "Date handling"; Rule 1 clause 2).
- */
+/** The one case table of `PUT /clients/{id}`, whose two branches differ in the activation date (AAP 0.7.2, Rule 1 clause 2). */
 const EDIT_CASES: readonly {
   readonly label: string;
   readonly request: ClientEditInput;
@@ -398,8 +333,7 @@ const EDIT_CASES: readonly {
     },
   },
   {
-    // The remaining branch of the body builder: every optional member absent, so none of them
-    // reaches the payload and the server alone decides what an edit needs.
+    // The remaining branch of the body builder: every optional member absent, so none of them reaches the payload and the server alone decides what an edit needs.
     label: 'its activation date alone',
     request: {
       activationDate: CLIENT_DATE,
@@ -429,14 +363,7 @@ const EDIT_CASES: readonly {
 const COMMAND_PARAM_VALUES: readonly Extract<ClientActionCommand, 'close' | 'reject' | 'withdraw'>[] =
   ['close', 'reject', 'withdraw'];
 
-/**
- * The five lifecycle commands, each with the body its own command posts and the body that must
- * reach the server. Every request is a `ClientActionInput` — the fields the action screen holds, with
- * no `dateFormat` or `locale` — and every wire expectation carries the pair the service adds from the
- * configuration, so these cases prove the caller supplies neither member and the payload still does
- * (AAP 0.7.2 "Date handling"; Rule 1 clause 2). The reason ids are the ids
- * `GET /clients/template?commandParam=…` returns, never constants a screen invents.
- */
+/** The five lifecycle commands, each with the body its own command posts and the body that must reach the server (AAP 0.7.2, Rule 1 clause 2). */
 const ACTION_CASES: readonly {
   readonly command: ClientActionCommand;
   readonly request: ClientActionInput;
@@ -497,9 +424,7 @@ const ACTION_CASES: readonly {
     },
   },
   {
-    // The reactivation date is a member of the payload rather than an optional extra: the fork
-    // validates it with `notNull` and refuses a blank body as invalid JSON, so the command posts the
-    // date and the date-format pair beside it (Rule 1 clause 2).
+    // The reactivation date is a member of the payload rather than an optional extra: the fork validates it with `notNull` and refuses a blank body as invalid JSON, so the command posts the date and the date-format pair (Rule 1 clause 2).
     command: 'reactivate',
     request: {
       command: 'reactivate',
@@ -513,16 +438,7 @@ const ACTION_CASES: readonly {
   },
 ];
 
-/**
- * The three commands whose reason member is posted only when a reason was chosen, each with the body
- * a tenant that configures no narration produces: the action's own date and the date-format pair the
- * service adds, and no reason member at all.
- *
- * `GET /clients/template?commandParam=<command>` may answer `{"isStaff":false,"narrations":[]}`, and
- * legacy posts these actions anyway with whatever its unvalidated reason select held — nothing — so
- * the member is left out entirely rather than sent as `undefined` or `null`, and Fineract's own
- * refusal is what the screen renders (Rule 1 clause 3; AAP 0.7.4).
- */
+/** The three commands whose reason member is posted only when a reason was chosen, each with the body a tenant that configures no narration produces: the action's own date and the date-format pair the service adds, and no (Rule 1 clause 3, AAP 0.7.4). */
 const UNREASONED_ACTION_CASES: readonly {
   readonly command: Extract<ClientActionCommand, 'close' | 'reject' | 'withdraw'>;
   readonly reasonKey: string;
@@ -570,14 +486,7 @@ const UNREASONED_ACTION_CASES: readonly {
   },
 ];
 
-/**
- * The two write bodies `EDIT_CASES` and `ACTION_CASES` can only prove in English, because their
- * fixtures pin the language the suite starts in. Each case here moves the active language to French
- * before the call and expects the whole body, month name included, so a `locale` fixed at `'en'` in
- * `editWire` or in `actionWire` — or a date formatted with a fixed language while the member beside
- * it follows the selection — fails here, which an English fixture cannot show (AAP 0.7.2 "Date
- * handling"; Rule 1 clause 2).
- */
+/** The two write bodies `EDIT_CASES` and `ACTION_CASES` can only prove in English, because their fixtures pin the language the suite starts in (AAP 0.7.2, Rule 1 clause 2). */
 const LOCALISED_WRITE_CASES: readonly {
   readonly label: string;
   readonly method: 'PUT' | 'POST';
@@ -629,8 +538,7 @@ describe('ClientService', () => {
   let activeLocale: WritableSignal<string>;
 
   beforeEach(() => {
-    // A fresh spy and a fresh language per test, so one case's composition and its calls are never
-    // read by the next case's assertions.
+    // A fresh spy and a fresh language per test, so one case's composition and its calls are never read by the next case's assertions.
     apiUrl = vi.fn((path: string): string => API_ROOT + SEPARATOR + path);
     activeLocale = signal(APP_LOCALE);
 
@@ -647,8 +555,7 @@ describe('ClientService', () => {
   });
 
   afterEach(() => {
-    // A request the service issued but this spec never saw fails here, and so does one it should
-    // have issued and did not.
+    // A request the service issued but this spec never saw fails here, and so does one it should have issued and did not.
     httpMock.verify();
   });
 
@@ -657,8 +564,7 @@ describe('ClientService', () => {
 
     service.list({ offset: 0, limit: 25 }).subscribe((page) => received.push(page));
 
-    // The service names only the resource path: the host and the API root belong to the
-    // configuration, so it composes no URL of its own (AAP 0.4.2).
+    // The service names only the resource path: the host and the API root belong to the configuration, so it composes no URL of its own (AAP 0.4.2).
     expect(apiUrl).toHaveBeenCalledTimes(1);
     expect(apiUrl).toHaveBeenCalledWith('clients');
 
@@ -713,8 +619,7 @@ describe('ClientService', () => {
 
       const request = httpMock.expectOne(isRequest('GET', clientUrl('clients', 'template')));
 
-      // The whole parameter set, in the order it is appended: a narrowing parameter can only be sent
-      // together with the office it narrows (AAP 0.7.3 row "W2 create and activate client").
+      // The whole parameter set, in the order it is appended: a narrowing parameter can only be sent together with the office it narrows (AAP 0.7.3 row "W2 create and activate client").
       expect(request.request.params.keys()).toEqual(params.map(([name]) => name));
       for (const [name, value] of params) {
         expect(request.request.params.get(name)).toBe(value);
@@ -724,8 +629,7 @@ describe('ClientService', () => {
     });
   }
 
-  // The route parameter of `#/viewclient/:id` is a string, while every id the service writes is a
-  // number; both forms must resolve to the one URL Fineract serves.
+  // The route parameter of `#/viewclient/:id` is a string, while every id the service writes is a number; both forms must resolve to the one URL Fineract serves.
   for (const id of [CLIENT_ID, CLIENT_ID_TEXT] as const) {
     it(`reads one client by its ${typeof id} route parameter`, () => {
       const received: Client[] = [];
@@ -760,8 +664,7 @@ describe('ClientService', () => {
 
     request.flush(CLIENT_TEMPLATE);
 
-    // The caller receives the record merged with its template, its option lists included, so a
-    // projection that dropped, emptied or reordered them fails here as well as below.
+    // The caller receives the record merged with its template, its option lists included, so a projection that dropped, emptied or reordered them fails here as well as below.
     expect(received).toEqual([CLIENT_TEMPLATE]);
     expect(received[0]?.officeOptions.map((option) => option.name)).toEqual([
       'Head Office',
@@ -826,8 +729,7 @@ describe('ClientService', () => {
 
     request.flush(IDENTIFIER_TEMPLATE);
 
-    // The types reach the caller under the member the tab reads and in the server's order, so a
-    // projection that renamed, emptied or reordered `allowedDocumentTypes` fails here.
+    // The types reach the caller under the member the tab reads and in the server's order, so a projection that renamed, emptied or reordered `allowedDocumentTypes` fails here.
     expect(received).toEqual([IDENTIFIER_TEMPLATE]);
     expect(received[0]?.allowedDocumentTypes.map((type) => type.name)).toEqual([
       'Passport',
@@ -859,8 +761,7 @@ describe('ClientService', () => {
     expect(request.request.params.keys()).toEqual([]);
     expect(request.request.body).toEqual(PERSON_CREATE_WIRE);
 
-    // Spelled out as well as compared above: the two members every date-bearing payload carries are
-    // what the server parses the dates with (AAP 0.7.2 "Date handling"; Rule 1 clause 2).
+    // Spelled out as well as compared above: the two members every date-bearing payload carries are what the server parses the dates with (AAP 0.7.2 "Date handling"; Rule 1 clause 2).
     expect(request.request.body).toMatchObject({
       dateFormat: 'dd MMMM yyyy',
       locale: 'en',
@@ -907,8 +808,7 @@ describe('ClientService', () => {
 
     const englishRequest = httpMock.expectOne(isRequest('POST', clientUrl('clients')));
 
-    // The caller's own `locale` never reaches the body, and the English month name matches the
-    // `locale` beside it.
+    // The caller's own `locale` never reaches the body, and the English month name matches the `locale` beside it.
     expect(englishRequest.request.body).toEqual(PERSON_CREATE_WIRE);
     englishRequest.flush(MUTATION_RESULT);
 
@@ -918,8 +818,7 @@ describe('ClientService', () => {
 
     const frenchRequest = httpMock.expectOne(isRequest('POST', clientUrl('clients')));
 
-    // A language selected after startup reaches the next payload, month names included, so the value
-    // and the `locale` beside it describe the same language (AAP 0.7.2 "Date handling").
+    // A language selected after startup reaches the next payload, month names included, so the value and the `locale` beside it describe the same language (AAP 0.7.2 "Date handling").
     expect(frenchRequest.request.body).toEqual({
       ...PERSON_CREATE_WIRE,
       locale: 'fr',
@@ -934,9 +833,7 @@ describe('ClientService', () => {
     it(`fills the ${label} body's date-format pair from the active language, never from a fixed language`, () => {
       const received: ClientMutationResponse[] = [];
 
-      // The language is selected before the call, because the body is built when the service method
-      // runs and not when the caller subscribed; the two members and the month names of that body are
-      // then asserted together, so a `locale` that does not follow the selection fails here.
+      // The language is selected before the call, because the body is built when the service method runs and not when the caller subscribed; the two members and the month names of that body are then asserted together, so a.
       activeLocale.set('fr');
 
       send(service).subscribe((result) => received.push(result));
@@ -979,8 +876,7 @@ describe('ClientService', () => {
       expect(sent.request.params.keys()).toEqual([]);
       expect(sent.request.body).toEqual(wire);
 
-      // The update endpoint refuses an office and keeps the submission date, so neither is posted
-      // (client.models.ts, `ClientEditRequest`).
+      // The update endpoint refuses an office and keeps the submission date, so neither is posted (client.models.ts, `ClientEditRequest`).
       expect(bodyKeys(sent.request)).not.toContain('officeId');
       expect(bodyKeys(sent.request)).not.toContain('submittedOnDate');
 
@@ -996,8 +892,7 @@ describe('ClientService', () => {
 
       const request = httpMock.expectOne(isRequest('GET', clientUrl('clients', 'template')));
 
-      // One parameter and nothing else, so the endpoint answers with narrations rather than with a
-      // client template (AAP 0.7.3 row "Client actions").
+      // One parameter and nothing else, so the endpoint answers with narrations rather than with a client template (AAP 0.7.3 row "Client actions").
       expect(request.request.params.keys()).toEqual(['commandParam']);
       expect(request.request.params.get('commandParam')).toBe(action);
       expect(request.request.body).toBeNull();
@@ -1038,8 +933,7 @@ describe('ClientService', () => {
 
     const sent = httpMock.expectOne(isRequest('POST', clientUrl('clients', CLIENT_ID)));
 
-    // The server's own required-field message is what the screen shows, so the absence of the date
-    // travels as `null` and is never replaced by a date this application invented.
+    // The server's own required-field message is what the screen shows, so the absence of the date travels as `null` and is never replaced by a date this application invented.
     expect(sent.request.body).toEqual({
       dateFormat: FINERACT_DATE_FORMAT,
       locale: APP_LOCALE,
@@ -1059,8 +953,7 @@ describe('ClientService', () => {
       expect(sent.request.params.get('command')).toBe(command);
       expect(sent.request.body).toEqual(wire);
 
-      // `toEqual` ignores a member whose value is `undefined`, so the absence is asserted on the key
-      // list: the body carries no reason member to send at all.
+      // `toEqual` ignores a member whose value is `undefined`, so the absence is asserted on the key list: the body carries no reason member to send at all.
       expect(bodyKeys(sent.request)).not.toContain(reasonKey);
 
       sent.flush(MUTATION_RESULT);
@@ -1076,11 +969,7 @@ describe('ClientService', () => {
     const messages: string[] = [];
     let emissions = 0;
 
-    // The command travels in the query string and the body describes the action, so a mismatch would
-    // post one action's payload to another action's endpoint. It is refused before any request, and
-    // the refusal arrives as an observable error — not as an exception thrown out of the call —
-    // because `defer` runs the guard when the observable is subscribed, which is the one error
-    // channel every caller of this service already handles (AAP 0.14.1).
+    // The command travels in the query string and the body describes the action, so a mismatch would post one action's payload to another action's endpoint (AAP 0.14.1).
     service.action(CLIENT_ID, 'activate', closure).subscribe({
       next: () => (emissions += 1),
       error: (failure: unknown) => {
@@ -1097,11 +986,7 @@ describe('ClientService', () => {
   });
 
   it('refuses a crafted route id with the guard message and issues no request at all', () => {
-    // The router hands an `:id` over URL-decoded, so this value reaches the service as a path that
-    // would leave `/api/v1` and read another resource on the same host (CWE-20, CWE-22). The refusal
-    // arrives as an observable error, which is the form every caller of this service already handles
-    // (`firstValueFrom` inside a `try`, or a `catchError` beside it) — `defer` is what makes the
-    // invalid id an error value rather than an exception thrown out of a `switchMap` projection.
+    // The router hands an `:id` over URL-decoded, so this value reaches the service as a path that would leave `/api/v1` and read another resource on the same host (CWE-20, CWE-22).
     const crafted = '../../../users';
     const refusals: Error[] = [];
     let emissions = 0;
@@ -1117,15 +1002,12 @@ describe('ClientService', () => {
 
     expect(emissions).toBe(0);
     expect(refusals).toHaveLength(1);
-    // The message is the guard's fixed sentence, which names neither the rejected value nor the call
-    // that composed the segment: it is the text a screen renders, so neither diagnostic may be in it.
-    // Both are readable in the error's `cause`, which the displayable-failure mapper never reads.
+    // The message is the guard's fixed sentence, which names neither the rejected value nor the call that composed the segment: it is the text a screen renders, so neither diagnostic may be in it.
     expect(refusals[0].message).not.toContain(crafted);
     expect(refusals[0].message).not.toContain('ClientService.get');
     expect(String(refusals[0].cause)).toContain(`'${crafted}'`);
     expect(String(refusals[0].cause)).toContain('ClientService.get');
-    // Nothing was sent: no read of the family this call owns, and no request of any other shape. The
-    // teardown's `verify()` states the same expectation for the whole case.
+    // Nothing was sent: no read of the family this call owns, and no request of any other shape.
     httpMock.expectNone(isRequest('GET', clientUrl('clients', crafted)));
     httpMock.expectNone(() => true);
   });

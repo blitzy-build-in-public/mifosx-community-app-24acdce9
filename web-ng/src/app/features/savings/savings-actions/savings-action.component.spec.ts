@@ -1,47 +1,19 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { computed, signal, type Signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
-import {
-  ActivatedRoute,
-  convertToParamMap,
-  provideRouter,
-  Router,
-  type ParamMap,
-} from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter, Router, type ParamMap, } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import { BehaviorSubject, EMPTY, Observable, of, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { PermissionsService } from '../../../core/auth/permissions.service';
 import { toApiError } from '../../../core/http/api-error';
-import {
-  NotificationService,
-  type NotificationKind,
-} from '../../../core/notifications/notification.service';
+import { NotificationService, type NotificationKind, } from '../../../core/notifications/notification.service';
 import type { SavingsTransactionTemplate } from '../savings.models';
-import {
-  SavingsService,
-  type SavingsActionInput,
-  type SavingsTransactionInput,
-} from '../savings.service';
+import { SavingsService, type SavingsActionInput, type SavingsTransactionInput, } from '../savings.service';
 import { SavingsActionComponent } from './savings-action.component';
 
-/**
- * Behaviour of the savings action screen — the last steps of workflow W8 (AAP 0.10.1 W8 row; AAP 0.7.1
- * `savings` row): the operation the `:action` segment selects, the form that operation draws, the one
- * request each submit sends to the family's own service, the template read the cash-transaction form
- * makes, the not-found outcome that sends nothing, the verbatim Fineract text a refusal shows with every
- * entered value kept, the refusal a missing required value produces without any request at all, a failed
- * template read that leaves the form standing, an amount that travels exactly as entered, and the Cancel
- * anchor that leaves for the record without one.
- *
- * The endpoint-level contract — method, path, query parameters and the `dateFormat`/`locale` members of
- * the body — belongs to `savings.service.spec.ts`, so `SavingsService` is stubbed at its own token and
- * no HTTP client, interceptor or transport takes part in this file (Rule 1 clause 5). The translation
- * stack, the permission gate and the notification queue are stubbed the same way. Dates stay `Date`
- * instances here: the screen never formats one, and the posted-body cases pin that the service is the
- * only writer of the `dd MMMM yyyy` string (AAP 0.7.2 "Date handling", AAP 0.14.1).
- */
+/** Behaviour of the savings action screen — the last steps of workflow W8 (AAP 0.10.1 W8 row, AAP 0.7.1 `savings` row): the operation the `:action` segment selects, the form it draws, the one request each submit sends, the (Rule 1 clause 5, AAP 0.7.2, AAP 0.14.1). */
 
 /** The account the screen was opened on: the `:id` segment of the route. */
 const ACCOUNT_ID = '41';
@@ -50,25 +22,13 @@ const ACCOUNT_ID = '41';
 const SECOND_ACCOUNT_ID = '47';
 
 /** The payment types the transactions template offers, deliberately in a non-alphabetical order. */
-const PAYMENT_TYPES: SavingsTransactionTemplate = {
-  paymentTypeOptions: [
-    { id: 2, name: 'Cash' },
-    { id: 1, name: 'Cheque' },
-  ],
-};
+const PAYMENT_TYPES: SavingsTransactionTemplate = { paymentTypeOptions: [{ id: 2, name: 'Cash' }, { id: 1, name: 'Cheque' },], };
 
 /** The second account's transactions template: another list, so a stale answer is caught by its rows. */
-const SECOND_PAYMENT_TYPES: SavingsTransactionTemplate = {
-  paymentTypeOptions: [
-    { id: 4, name: 'Transfer' },
-    { id: 3, name: 'Cheque' },
-  ],
-};
+const SECOND_PAYMENT_TYPES: SavingsTransactionTemplate = { paymentTypeOptions: [{ id: 4, name: 'Transfer' }, { id: 3, name: 'Cheque' },], };
 
 /** The payload's payment-type labels, in payload order. */
-const PAYMENT_TYPE_NAMES: readonly string[] = PAYMENT_TYPES.paymentTypeOptions.map(
-  (option) => option.name,
-);
+const PAYMENT_TYPE_NAMES: readonly string[] = PAYMENT_TYPES.paymentTypeOptions.map((option) => option.name, );
 
 /** The payment type the cash-transaction cases choose: the payload's first row. */
 const CHOSEN_PAYMENT_TYPE_ID = 2;
@@ -85,37 +45,22 @@ const SERVER_FAILURE_MESSAGE = 'The request could not be processed because an in
 /** The refusal the transactions-template read answers with, surfaced above the form it belongs to. */
 const TEMPLATE_FAILURE_MESSAGE = 'The transaction template could not be built for this account.';
 
-/**
- * The dates the cases enter, each built from its calendar parts so it is local midnight everywhere and
- * no assertion can shift by a timezone. Three distinct days, so a body carrying the wrong field — or the
- * wrong command's date — is visible rather than hidden by two equal values.
- */
+/** The dates the cases enter, each built from its calendar parts so it is local midnight everywhere and no assertion can shift by a timezone; three distinct days, so a body carrying the wrong field — or the wrong command's date — is visible rather than hidden by two equal values. */
 const APPROVED_ON = new Date(2026, 10, 21);
 const ACTIVATED_ON = new Date(2026, 10, 22);
 const TRANSACTION_ON = new Date(2026, 10, 23);
 
-/**
- * An amount larger than any product maximum: the screen must pass it through untouched, because the
- * server owns the bound and the legacy form adds none (Rule 1 clause 3, workflow W7's rule for amounts).
- */
+/** An amount larger than any product maximum: the screen must pass it through untouched, because the server owns the bound and the legacy form adds none (Rule 1 clause 3, workflow W7's rule for amounts). */
 const LARGE_TRANSACTION_AMOUNT = 50000;
 
 /** `SavingsService` as this screen uses it: the two writes and the one template read, all stubbed. */
 interface SavingsServiceStub {
   readonly action: Mock<
-    (
-      id: number | string,
-      command: 'approve' | 'activate',
-      body: SavingsActionInput,
-    ) => Observable<void>
+    (id: number | string, command: 'approve' | 'activate', body: SavingsActionInput, ) => Observable<void>
   >;
   readonly transactionTemplate: Mock<(id: number | string) => Observable<SavingsTransactionTemplate>>;
   readonly transaction: Mock<
-    (
-      id: number | string,
-      command: 'deposit' | 'withdrawal',
-      body: SavingsTransactionInput,
-    ) => Observable<void>
+    (id: number | string, command: 'deposit' | 'withdrawal', body: SavingsTransactionInput, ) => Observable<void>
   >;
 }
 
@@ -129,30 +74,17 @@ interface PermissionsStub {
   has(key: string): boolean;
 }
 
-/**
- * `NotificationService` as this screen would use it. The interceptor is the only reporter of a failure a
- * screen must not paint twice, so a case states that the screen raised no notice of its own instead of
- * inferring it from the absence of a widget nobody mounted here.
- */
+/** `NotificationService` as this screen would use it: the interceptor is the only reporter of a failure a screen must not paint twice, so a case states that the screen raised no notice of its own instead of inferring it from the absence of a widget nobody mounted here. */
 interface NotificationStub {
   readonly show: Mock<(kind: NotificationKind, message: string) => void>;
 }
 
-/**
- * The active route as the component reads it: the parameter map the router delivers `:id` and
- * `:action` on, held as a subject so a case can move the URL the way the router does on the same
- * mounted component.
- */
+/** The active route as the component reads it: the parameter map the router delivers `:id` and `:action` on, held as a subject so a case can move the URL the way the router does on the same mounted component. */
 interface ActivatedRouteStub {
   readonly paramMap: BehaviorSubject<ParamMap>;
 }
 
-/**
- * The ngx-translate surface this screen touches: the constructor's two subscriptions, the
- * `currentLang()` and `instant()` reads behind the label signals, and the `translate()` signal
- * `TranslatePipe` 18 resolves its own keys through. Members the screen never reads are absent rather
- * than stubbed, and nothing here reaches the network.
- */
+/** The ngx-translate surface this screen touches: the constructor's two subscriptions, the `currentLang()` and `instant()` reads behind the label signals, and the `translate()` signal `TranslatePipe` 18 resolves its own keys through; members the screen never reads are absent rather than stubbed, and nothing here reaches the network. */
 interface TranslateStub {
   readonly currentLang: Signal<string>;
   instant(key: string): string;
@@ -184,18 +116,11 @@ function routeWith(id: string | null, action: string | null): ActivatedRouteStub
 /** Builds the translation stub the TestBed provides. */
 function translateStub(): TranslateStub {
   return {
-    currentLang: signal('en').asReadonly(),
-    instant: (key: string): string => key,
-    translate: (key: string): Signal<string> => computed(() => key),
-    onLangChange: EMPTY,
-    onTranslationChange: EMPTY,
-  };
+    currentLang: signal('en').asReadonly(), instant: (key: string): string => key,
+    translate: (key: string): Signal<string> => computed(() => key), onLangChange: EMPTY, onTranslationChange: EMPTY, };
 }
 
-/**
- * An observable a case settles by hand, so one route's answer can be held open while the URL moves on —
- * the order in which a superseded read answers last.
- */
+/** An observable a case settles by hand, so one route's answer can be held open while the URL moves on — the order in which a superseded read answers last. */
 function deferredResponse<T>(): { readonly response: Observable<T>; resolve(value: T): void } {
   let settle: ((value: T) => void) | null = null;
 
@@ -207,20 +132,15 @@ function deferredResponse<T>(): { readonly response: Observable<T>; resolve(valu
   });
 
   return {
-    response,
-    resolve(value: T): void {
+    response, resolve(value: T): void {
       if (settle === null) {
         throw new Error('the screen never subscribed to the deferred response');
       }
       settle(value);
-    },
-  };
+    }, };
 }
 
-/**
- * An observable the spec settles by hand, for the in-flight assertion: subscribing it stores the
- * completion, so a case can hold a write open, click again, then answer it.
- */
+/** An observable the spec settles by hand, for the in-flight assertion: subscribing it stores the completion, so a case can hold a write open, click again, then answer it. */
 function deferredCompletion(): { readonly response: Observable<void>; complete(): void } {
   let settle: (() => void) | null = null;
 
@@ -232,25 +152,15 @@ function deferredCompletion(): { readonly response: Observable<void>; complete()
   });
 
   return {
-    response,
-    complete(): void {
+    response, complete(): void {
       if (settle === null) {
         throw new Error('the screen never subscribed to the deferred response');
       }
       settle();
-    },
-  };
+    }, };
 }
 
-/**
- * A Fineract refusal as this screen receives it in the application: the interceptor's own `toApiError`
- * mapping of the failed response, so the error class and the server's verbatim text are the production
- * pair rather than a hand-built error that merely resembles them (AAP 0.4.2, workflow W7).
- *
- * @param status the HTTP status the server answered with.
- * @param message the body's `defaultUserMessage`, the text every in-scope screen renders unchanged.
- * @returns the failure a rejected request delivers.
- */
+/** A Fineract refusal as this screen receives it in the application: the interceptor's own `toApiError` mapping of the failed response, so the error class and the server's verbatim text are the production pair rather than a hand-built error that merely resembles them (AAP 0.4.2, workflow W7). */
 function failure(status: number, message: string): ReturnType<typeof toApiError> {
   return toApiError(new HttpErrorResponse({ status, error: { defaultUserMessage: message } }));
 }
@@ -313,11 +223,7 @@ describe('SavingsActionComponent', () => {
     return (host().textContent ?? '').replace(/\s+/g, ' ').trim();
   }
 
-  /**
-   * Lets a constructor's template read answer and the first paint show it: its
-   * `await firstValueFrom(...)` resumes in a microtask, which the await below crosses before the
-   * render, so the payment types are on screen by the time a case asserts them.
-   */
+  /** Lets a constructor's template read answer and the first paint show it: its `await firstValueFrom(...)` resumes in a microtask, which the await below crosses before the render, so the payment types are on screen by the time a case asserts them. */
   async function settle(): Promise<void> {
     await Promise.resolve();
     await fixture.whenStable();
@@ -333,10 +239,7 @@ describe('SavingsActionComponent', () => {
     await settle();
   }
 
-  /**
-   * Moves the mounted screen to another action route the way the router does when only the segments
-   * change: the same component instance stays on screen and the parameter map emits again.
-   */
+  /** Moves the mounted screen to another action route the way the router does when only the segments change: the same component instance stays on screen and the parameter map emits again. */
   async function navigateTo(id: string, action: string): Promise<void> {
     route.paramMap.next(paramsFor(id, action));
     await settle();
@@ -348,23 +251,14 @@ describe('SavingsActionComponent', () => {
     component.transactionForm.controls.paymentTypeId.setValue(CHOSEN_PAYMENT_TYPE_ID);
   }
 
-  /**
-   * The body the action call carried, narrowed to the approval shape the way `SavingsService.action()`
-   * narrows it: `approvedOnDate` is the member only an approval body holds.
-   *
-   * @returns the approval body, or `undefined` when no call was made or it carried the other shape.
-   */
+  /** The body the action call carried, narrowed to the approval shape the way `SavingsService.action()` narrows it: `approvedOnDate` is the member only an approval body holds. */
   function postedApproveBody(): { readonly approvedOnDate: Date | null } | undefined {
     const body: SavingsActionInput | undefined = savings.action.mock.calls[0]?.[2];
 
     return body !== undefined && 'approvedOnDate' in body ? body : undefined;
   }
 
-  /**
-   * The same narrowing for the activation command, whose body carries `activatedOnDate` instead.
-   *
-   * @returns the activation body, or `undefined` when no call was made or it carried the other shape.
-   */
+  /** The same narrowing for the activation command, whose body carries `activatedOnDate` instead. */
   function postedActivateBody(): { readonly activatedOnDate: Date | null } | undefined {
     const body: SavingsActionInput | undefined = savings.action.mock.calls[0]?.[2];
 
@@ -377,22 +271,13 @@ describe('SavingsActionComponent', () => {
     notifications = { show: vi.fn() };
 
     TestBed.configureTestingModule({
-      imports: [SavingsActionComponent],
-      providers: [
-        { provide: SavingsService, useValue: savings },
-        { provide: Router, useValue: router },
+      imports: [SavingsActionComponent], providers: [{ provide: SavingsService, useValue: savings }, { provide: Router, useValue: router },
         { provide: TranslateService, useValue: translateStub() },
         { provide: PermissionsService, useValue: { has: (): boolean => true } satisfies PermissionsStub },
-        { provide: NotificationService, useValue: notifications },
-      ],
-    });
+        { provide: NotificationService, useValue: notifications }, ], });
   });
 
-  /**
-   * Discards the module a case built, so a deferred answer or a mounted screen of one case can never
-   * reach the next — the reuse cases hold a response open across a URL change, and the Cancel case
-   * re-configures the module for the application's real router.
-   */
+  /** Discards the module a case built, so a deferred answer or a mounted screen of one case can never reach the next — the reuse cases hold a response open across a URL change and the Cancel case re-configures the module for the application's real router. */
   afterEach(() => {
     TestBed.resetTestingModule();
   });
@@ -402,8 +287,7 @@ describe('SavingsActionComponent', () => {
 
     await render(ACCOUNT_ID, 'approve');
 
-    // The approval screen draws its one date field and nothing a cash transaction owns, so the control
-    // a case fills below is the operation's own field rather than another form's.
+    // The approval screen draws its one date field and nothing a cash transaction owns, so the control a case fills below is the operation's own field rather than another form's.
     expect(host().querySelectorAll('app-date-field')).toHaveLength(1);
     expect(host().querySelector('#approvedOnDate')).not.toBeNull();
     expect(host().querySelector('#transactionAmount')).toBeNull();
@@ -414,13 +298,10 @@ describe('SavingsActionComponent', () => {
     await component.submit();
 
     expect(savings.action).toHaveBeenCalledTimes(1);
-    // The date reaches the service as the `Date` the field holds: the service is the only writer of the
-    // `dd MMMM yyyy` string it becomes on the wire (AAP 0.7.2 "Date handling").
+    // The date reaches the service as the `Date` the field holds: the service is the only writer of the `dd MMMM yyyy` string it becomes on the wire (AAP 0.7.2 date handling).
     expect(postedApproveBody()?.approvedOnDate).toBeInstanceOf(Date);
     expect(postedApproveBody()?.approvedOnDate).toEqual(APPROVED_ON);
-    expect(savings.action).toHaveBeenCalledWith(ACCOUNT_ID, 'approve', {
-      approvedOnDate: APPROVED_ON,
-    });
+    expect(savings.action).toHaveBeenCalledWith(ACCOUNT_ID, 'approve', { approvedOnDate: APPROVED_ON, });
     expect(savings.transaction).not.toHaveBeenCalled();
     expect(router.navigate).toHaveBeenCalledWith(['/viewsavingaccount', ACCOUNT_ID]);
   });
@@ -435,13 +316,10 @@ describe('SavingsActionComponent', () => {
     await component.submit();
 
     expect(savings.action).toHaveBeenCalledTimes(1);
-    // Each command sends its own date member and no other: the activation body cannot carry the
-    // approval date, which is what keeps the two lifecycle shapes apart (AAP 0.7.2).
+    // Each command sends its own date member and no other: the activation body cannot carry the approval date, which is what keeps the two lifecycle shapes apart (AAP 0.7.2).
     expect(postedActivateBody()?.activatedOnDate).toEqual(ACTIVATED_ON);
     expect(postedActivateBody()).not.toHaveProperty('approvedOnDate');
-    expect(savings.action).toHaveBeenCalledWith(ACCOUNT_ID, 'activate', {
-      activatedOnDate: ACTIVATED_ON,
-    });
+    expect(savings.action).toHaveBeenCalledWith(ACCOUNT_ID, 'activate', { activatedOnDate: ACTIVATED_ON, });
     expect(savings.transactionTemplate).not.toHaveBeenCalled();
     expect(router.navigate).toHaveBeenCalledWith(['/viewsavingaccount', ACCOUNT_ID]);
   });
@@ -455,8 +333,7 @@ describe('SavingsActionComponent', () => {
     expect(savings.transactionTemplate).toHaveBeenCalledWith(ACCOUNT_ID);
 
     const options = Array.from(paymentTypeSelect().options).map((option) =>
-      (option.textContent ?? '').trim(),
-    );
+      (option.textContent ?? '').trim(), );
     expect(options.slice(1)).toEqual([...PAYMENT_TYPE_NAMES]);
   });
 
@@ -472,10 +349,7 @@ describe('SavingsActionComponent', () => {
 
     expect(savings.transaction).toHaveBeenCalledTimes(1);
     expect(savings.transaction).toHaveBeenCalledWith(ACCOUNT_ID, 'deposit', {
-      transactionDate: TRANSACTION_ON,
-      transactionAmount: TRANSACTION_AMOUNT,
-      paymentTypeId: CHOSEN_PAYMENT_TYPE_ID,
-    });
+      transactionDate: TRANSACTION_ON, transactionAmount: TRANSACTION_AMOUNT, paymentTypeId: CHOSEN_PAYMENT_TYPE_ID, });
     expect(savings.transaction.mock.calls[0]?.[2].transactionDate).toBeInstanceOf(Date);
     expect(router.navigate).toHaveBeenCalledWith(['/viewsavingaccount', ACCOUNT_ID]);
   });
@@ -485,9 +359,7 @@ describe('SavingsActionComponent', () => {
 
     await render(ACCOUNT_ID, 'deposit');
 
-    // The browser's own increment for the field. Left at the `type="number"` default of one whole unit,
-    // an ordinary two-decimal amount would be reported as a step mismatch; the form's `novalidate` keeps
-    // the increment from ever blocking a submit the server decides (Rule 1 clause 3).
+    // The browser's own increment for the field: left at the `type="number"` default of one whole unit, an ordinary two-decimal amount would be reported as a step mismatch, and the form's `novalidate` keeps the increment from ever blocking a submit the server decides (Rule 1 clause 3).
     expect(amountInput().getAttribute('step')).toBe('0.01');
   });
 
@@ -496,15 +368,11 @@ describe('SavingsActionComponent', () => {
 
     await render(ACCOUNT_ID, 'deposit');
 
-    // Untouched and empty, the field reports nothing: the operator has not entered a value yet, so
-    // there is nothing to correct.
+    // Untouched and empty, the field reports nothing: the operator has not entered a value yet, so there is nothing to correct.
     expect(amountGroup().classList.contains('has-error')).toBe(false);
     expect(renderedText()).not.toContain('label.requiredfield');
 
-    // Entering a value and clearing it leaves the control invalid and dirty while it is still focused,
-    // which is the state the screen must report without waiting for the field to be left. A programmatic
-    // `setValue` reports through the model side of the form, so the dirty flag is set the way the value
-    // accessor sets it on a user edit.
+    // Entering a value and clearing it leaves the control invalid and dirty while it is still focused, which is the state the screen must report without waiting for the field to be left; a programmatic `setValue` reports through the model side of the form, so the dirty flag is set the way the value accessor sets it on a user edit.
     const amount = component.transactionForm.controls.transactionAmount;
     amount.setValue(TRANSACTION_AMOUNT);
     amount.setValue(null);
@@ -517,8 +385,7 @@ describe('SavingsActionComponent', () => {
 
     expect(amountGroup().classList.contains('has-error')).toBe(true);
     expect(amountGroup().querySelector('.help-block')?.textContent?.trim()).toBe('label.requiredfield');
-    // The message is a display concern only: the form stays unsendable for the missing value, and no
-    // rule beyond the legacy `required` was added.
+    // The message is a display concern only: the form stays unsendable for the missing value, and no rule beyond the legacy `required` was added.
     expect(amount.invalid).toBe(true);
     expect(savings.transaction).not.toHaveBeenCalled();
   });
@@ -529,8 +396,7 @@ describe('SavingsActionComponent', () => {
 
     await render(ACCOUNT_ID, 'deposit');
 
-    // Only the amount is filled. The legacy form marks the date and the amount and nothing else, so
-    // an unchosen payment type must leave the form valid instead of turning the submission away.
+    // Only the amount is filled: the legacy form marks the date and the amount and nothing else, so an unchosen payment type must leave the form valid instead of turning the submission away.
     component.transactionForm.controls.transactionAmount.setValue(TRANSACTION_AMOUNT);
 
     expect(component.transactionForm.controls.paymentTypeId.value).toBeNull();
@@ -540,14 +406,10 @@ describe('SavingsActionComponent', () => {
 
     await component.submit();
 
-    // The form named no payment type, so `null` travels and the server's own required-field rule is
-    // what answers (AAP 0.4.4 decision 6, Rule 1 clause 3).
+    // The form named no payment type, so `null` travels and the server's own required-field rule is what answers (AAP 0.4.4 decision 6, Rule 1 clause 3).
     expect(savings.transaction).toHaveBeenCalledTimes(1);
     expect(savings.transaction).toHaveBeenCalledWith(ACCOUNT_ID, 'deposit', {
-      transactionDate,
-      transactionAmount: TRANSACTION_AMOUNT,
-      paymentTypeId: null,
-    });
+      transactionDate, transactionAmount: TRANSACTION_AMOUNT, paymentTypeId: null, });
     expect(router.navigate).toHaveBeenCalledWith(['/viewsavingaccount', ACCOUNT_ID]);
   });
 
@@ -601,8 +463,7 @@ describe('SavingsActionComponent', () => {
 
     const first = component.submit();
 
-    // The guard sets its busy signal synchronously, before the request is subscribed: one render
-    // shows the control already disabled while the call is still outstanding.
+    // The guard sets its busy signal synchronously, before the request is subscribed: one render shows the control already disabled while the call is still outstanding.
     fixture.detectChanges();
     expect(component.guard.busy()).toBe(true);
     expect(submitButton().disabled).toBe(true);
@@ -630,8 +491,7 @@ describe('SavingsActionComponent', () => {
     await component.submit();
     fixture.detectChanges();
 
-    // The alert carries the server's own sentence, character for character: no prefix, no truncation and
-    // no translation (AAP 0.7.2 "Rendered verbatim", AAP 0.7.4; workflow W7 compares it exactly).
+    // The alert carries the server's own sentence, character for character: no prefix, no truncation and no translation (AAP 0.7.2 rendered verbatim, AAP 0.7.4; workflow W7 compares it exactly).
     expect(host().querySelector('.alert.alert-danger')?.textContent?.trim()).toBe(REJECTED_MESSAGE);
     expect(component.error()).toBe(REJECTED_MESSAGE);
     // The form stays mounted with everything the user entered, so the refusal can be corrected in place.
@@ -654,8 +514,7 @@ describe('SavingsActionComponent', () => {
     await component.submit();
     fixture.detectChanges();
 
-    // A 5xx has already produced the interceptor's single notification, so the screen paints no
-    // second copy of it (AAP 0.7.4): it keeps no failure of its own and renders no alert.
+    // A 5xx has already produced the interceptor's single notification, so the screen paints no second copy of it (AAP 0.7.4): it keeps no failure of its own and renders no alert.
     expect(component.error()).toBeNull();
     expect(host().querySelector('.alert.alert-danger')).toBeNull();
     expect(renderedText()).not.toContain(SERVER_FAILURE_MESSAGE);
@@ -669,8 +528,7 @@ describe('SavingsActionComponent', () => {
 
   it('re-reads the payment types for a second account, clearing the first form’s values', async () => {
     savings.transactionTemplate.mockImplementation((id) =>
-      of(String(id) === SECOND_ACCOUNT_ID ? SECOND_PAYMENT_TYPES : PAYMENT_TYPES),
-    );
+      of(String(id) === SECOND_ACCOUNT_ID ? SECOND_PAYMENT_TYPES : PAYMENT_TYPES), );
 
     await render(ACCOUNT_ID, 'deposit');
     fillTransactionForm();
@@ -678,17 +536,16 @@ describe('SavingsActionComponent', () => {
 
     await navigateTo(SECOND_ACCOUNT_ID, 'deposit');
 
-    // One read per emission, addressed by the account the URL now names…
+    // One read per emission, addressed by the account the URL now names.
     expect(savings.transactionTemplate.mock.calls).toEqual([[ACCOUNT_ID], [SECOND_ACCOUNT_ID]]);
-    // …and nothing of the first account's screen survives it: no amount, no chosen payment type.
+    // ...and nothing of the first account's screen survives it: no amount, no chosen payment type.
     expect(component.transactionForm.controls.transactionAmount.value).toBeNull();
     expect(component.transactionForm.controls.paymentTypeId.value).toBeNull();
     expect(component.error()).toBeNull();
 
     // The picker offers only the payload the new route's read answered.
     const options = Array.from(paymentTypeSelect().options).map((option) =>
-      (option.textContent ?? '').trim(),
-    );
+      (option.textContent ?? '').trim(), );
     expect(options.slice(1)).toEqual(SECOND_PAYMENT_TYPES.paymentTypeOptions.map((option) => option.name));
     expect(options).not.toContain(PAYMENT_TYPE_NAMES[0]);
   });
@@ -706,8 +563,7 @@ describe('SavingsActionComponent', () => {
     expect(savings.transactionTemplate).toHaveBeenCalledTimes(1);
     expect(component.notFound()).toBe(false);
     expect(renderedText()).toContain('label.heading.approvesavingaccount');
-    // The cash-transaction form's values went with the operation that collected them, and the approval
-    // form holds its own browser-clock default.
+    // The cash-transaction form's values went with the operation that collected them, and the approval form holds its own browser-clock default.
     expect(component.transactionForm.controls.transactionAmount.value).toBeNull();
     expect(component.transactionForm.controls.paymentTypeId.value).toBeNull();
     expect(component.approveForm.controls.approvedOnDate.value).toBeInstanceOf(Date);
@@ -719,30 +575,25 @@ describe('SavingsActionComponent', () => {
     const second = deferredResponse<SavingsTransactionTemplate>();
 
     savings.transactionTemplate.mockImplementation((id) =>
-      String(id) === SECOND_ACCOUNT_ID ? second.response : first.response,
-    );
+      String(id) === SECOND_ACCOUNT_ID ? second.response : first.response, );
 
     await render(ACCOUNT_ID, 'deposit');
 
-    // The first account's read is still unanswered when the URL moves to the second account, which is
-    // what a move between two action routes produces when the earlier response is the slower one.
+    // The first account's read is still unanswered when the URL moves to the second account, which is what a move between two action routes produces when the earlier response is the slower one.
     await navigateTo(SECOND_ACCOUNT_ID, 'deposit');
 
     second.resolve(SECOND_PAYMENT_TYPES);
     await settle();
 
     expect(component.paymentTypes().map((option) => option.name)).toEqual(
-      SECOND_PAYMENT_TYPES.paymentTypeOptions.map((option) => option.name),
-    );
+      SECOND_PAYMENT_TYPES.paymentTypeOptions.map((option) => option.name), );
 
-    // The earlier answer lands last. It is dropped rather than published, so the first account's
-    // payment types can never be offered under the second account's URL.
+    // The earlier answer lands last. It is dropped rather than published, so the first account's payment types can never be offered under the second account's URL.
     first.resolve(PAYMENT_TYPES);
     await settle();
 
     expect(component.paymentTypes().map((option) => option.name)).toEqual(
-      SECOND_PAYMENT_TYPES.paymentTypeOptions.map((option) => option.name),
-    );
+      SECOND_PAYMENT_TYPES.paymentTypeOptions.map((option) => option.name), );
     expect(component.error()).toBeNull();
   });
 
@@ -751,16 +602,14 @@ describe('SavingsActionComponent', () => {
 
     await render(ACCOUNT_ID, 'deposit');
 
-    // The date and the amount are the two required fields; the payment type carries no rule of its own,
-    // so it is never the reason a submission is refused (AAP 0.4.4 decision 6, Rule 1 clause 3).
+    // The date and the amount are the two required fields; the payment type carries no rule of its own, so it is never the reason a submission is refused (AAP 0.4.4 decision 6, Rule 1 clause 3).
     component.transactionForm.controls.transactionDate.setValue(null);
     component.transactionForm.controls.transactionAmount.setValue(null);
 
     await component.submit();
 
     expect(savings.transaction).not.toHaveBeenCalled();
-    // The form is touched as a whole, so the missing values are reported in place rather than leaving
-    // the operator with a button that does nothing.
+    // The form is touched as a whole, so the missing values are reported in place rather than leaving the operator with a button that does nothing.
     expect(component.transactionForm.controls.transactionDate.touched).toBe(true);
     expect(component.transactionForm.controls.transactionAmount.touched).toBe(true);
     expect(component.transactionForm.controls.paymentTypeId.touched).toBe(true);
@@ -785,18 +634,13 @@ describe('SavingsActionComponent', () => {
   });
 
   it('surfaces a failed transactions-template read without unmounting the form', async () => {
-    savings.transactionTemplate.mockReturnValue(
-      throwError(() => failure(400, TEMPLATE_FAILURE_MESSAGE)),
-    );
+    savings.transactionTemplate.mockReturnValue(throwError(() => failure(400, TEMPLATE_FAILURE_MESSAGE)), );
 
     await render(ACCOUNT_ID, 'deposit');
 
-    expect(host().querySelector('.alert.alert-danger')?.textContent?.trim()).toBe(
-      TEMPLATE_FAILURE_MESSAGE,
-    );
+    expect(host().querySelector('.alert.alert-danger')?.textContent?.trim()).toBe(TEMPLATE_FAILURE_MESSAGE, );
     expect(component.error()).toBe(TEMPLATE_FAILURE_MESSAGE);
-    // The template read failed, not the screen: the three controls are still there to be filled, so the
-    // operator can retry once the payment types are available instead of losing the form.
+    // The template read failed, not the screen: the three controls are still there to be filled, so the operator can retry once the payment types are available instead of losing the form.
     expect(host().querySelector('#transactionDate')).not.toBeNull();
     expect(amountInput()).not.toBeNull();
     expect(paymentTypeSelect()).not.toBeNull();
@@ -817,36 +661,22 @@ describe('SavingsActionComponent', () => {
 
     await component.submit();
 
-    // The figure the service receives is the figure the form held, untouched: the server owns the bound
-    // and its own message is what answers an out-of-range amount.
+    // The figure the service receives is the figure the form held, untouched: the server owns the bound and its own message is what answers an out-of-range amount.
     expect(savings.transaction.mock.calls[0]?.[2].transactionAmount).toBe(LARGE_TRANSACTION_AMOUNT);
     expect(savings.transaction).toHaveBeenCalledWith(ACCOUNT_ID, 'deposit', {
-      transactionDate: TRANSACTION_ON,
-      transactionAmount: LARGE_TRANSACTION_AMOUNT,
-      paymentTypeId: CHOSEN_PAYMENT_TYPE_ID,
-    });
+      transactionDate: TRANSACTION_ON, transactionAmount: LARGE_TRANSACTION_AMOUNT, paymentTypeId: CHOSEN_PAYMENT_TYPE_ID, });
   });
 
   it('returns to the record from the Cancel anchor, without sending anything', async () => {
-    // The application's real router, because the address a `RouterLink` renders is the router's own
-    // serialisation of the command list; the `navigate` stub cannot produce one.
+    // The application's real router, because the address a `RouterLink` renders is the router's own serialisation of the command list; the `navigate` stub cannot produce one.
     TestBed.resetTestingModule();
     route = routeWith(ACCOUNT_ID, 'approve');
 
     TestBed.configureTestingModule({
-      imports: [SavingsActionComponent],
-      providers: [
-        provideRouter([]),
-        { provide: SavingsService, useValue: savings },
-        { provide: ActivatedRoute, useValue: route },
-        { provide: TranslateService, useValue: translateStub() },
-        {
-          provide: PermissionsService,
-          useValue: { has: (): boolean => true } satisfies PermissionsStub,
-        },
-        { provide: NotificationService, useValue: notifications },
-      ],
-    });
+      imports: [SavingsActionComponent], providers: [provideRouter([]), { provide: SavingsService, useValue: savings },
+        { provide: ActivatedRoute, useValue: route }, { provide: TranslateService, useValue: translateStub() }, {
+          provide: PermissionsService, useValue: { has: (): boolean => true } satisfies PermissionsStub, },
+        { provide: NotificationService, useValue: notifications }, ], });
 
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
 
@@ -854,12 +684,8 @@ describe('SavingsActionComponent', () => {
     component = fixture.componentInstance;
     await settle();
 
-    // A containment check rather than an exact string: the address is serialised with the location
-    // strategy the workspace configures, so the assertion states where Cancel leads, not how the prefix
-    // happens to be spelled (with hash location it carries the `#/` form).
-    expect(host().querySelector('a.btn.btn-default')?.getAttribute('href')).toContain(
-      `/viewsavingaccount/${ACCOUNT_ID}`,
-    );
+    // A containment check rather than an exact string: the address is serialised with the location strategy the workspace configures, so the assertion states where Cancel leads, not how the prefix happens to be spelled (with hash location it carries the `#/` form).
+    expect(host().querySelector('a.btn.btn-default')?.getAttribute('href')).toContain(`/viewsavingaccount/${ACCOUNT_ID}`, );
     // Leaving the screen is the anchor's own job: no request and no programmatic navigation.
     expect(savings.action).not.toHaveBeenCalled();
     expect(savings.transaction).not.toHaveBeenCalled();

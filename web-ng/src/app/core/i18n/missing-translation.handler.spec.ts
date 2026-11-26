@@ -16,36 +16,13 @@ import {
 } from './missing-translation.handler';
 import { provideTranslate, TRANSLATE_LOADER_PREFIX, TRANSLATE_LOADER_SUFFIX } from './translate.config';
 
-/**
- * Stand-in for the legacy English bundle `app/global-translations/locale-en.json`, served only where
- * a checkout carries no legacy tree.
- *
- * The criterion's case below serves the legacy file itself, read in place by
- * {@link readLegacyEnglishBundle}: the file is never copied, imported into the build or regenerated
- * (Rule 1 clause 6, AAP 0.6.2). This checkout carries no `app/` tree — the same absence
- * `web-ng/tools/parity/lib/legacy-scan.ts` reports for `check:templates` and `src/styles.scss` records
- * for the legacy partials — so this object answers there instead and the case still runs. It repeats
- * the two keys the criterion names, with the values the legacy bundle gives them, so what the case
- * proves is the same whichever source serves it.
- *
- * Flat keys are the point: the legacy bundles are not nested, and the migrated screens address
- * `label.heading.clients` and its neighbours directly.
- *
- * Test input only. This object is never an application translation source, adds no locale file and is
- * not copied into the build (Rule 1 clause 6).
- */
+/** Stand-in for the legacy English bundle `app/global-translations/locale-en.json`, served only where a checkout carries no legacy tree (Rule 1 clause 6, AAP 0.6.2). */
 const LEGACY_EN_BUNDLE: Record<string, string> = {
   'label.heading.clients': 'Clients',
   'label.input.username': 'Username',
 };
 
-/**
- * Served path of the English bundle, written as a literal rather than composed from the loader
- * constants on purpose: `angular.json` maps `app/global-translations` to `global-translations` and
- * `index.html` declares `<base href="/">`, so the bundle sits at the site root with no `assets/`
- * segment and no leading slash. Composing the expectation from the constants would let a changed
- * prefix move the assertion with it and pass while every label 404s.
- */
+/** Served path of the English bundle, written as a literal rather than composed from the loader constants on purpose: `angular.json` maps `app/global-translations` to `global-translations` and `index.html` declares `<base. */
 const LEGACY_EN_BUNDLE_URL = 'global-translations/locale-en.json';
 
 /** One legacy bundle read in place: the file it came from and its flat contents. */
@@ -61,17 +38,7 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/**
- * Parses one legacy bundle file and proves it holds what every legacy translation file holds: a flat
- * JSON object whose every value is a translated string.
- *
- * A file that is present but of another shape is a broken legacy tree rather than an absent one, so it
- * throws with the file and the offending key named. Reading it as an empty or partial bundle would let
- * the case below pass on nothing, which is the failure mode this whole reader exists to rule out.
- *
- * @param path absolute path of the bundle file.
- * @returns the file's flat, dotted contents.
- */
+/** Parses one legacy bundle file and proves it holds what every legacy translation file holds: a flat JSON object whose every value is a translated string. */
 function parseLegacyBundle(path: string): Record<string, string> {
   let parsed: unknown;
 
@@ -100,19 +67,7 @@ function parseLegacyBundle(path: string): Record<string, string> {
   return bundle;
 }
 
-/**
- * Reads the legacy English bundle in place, or answers `null` where no checkout-visible copy exists.
- *
- * AAP 0.10.3 criterion 2 asks for a test that loads a legacy `app/global-translations` file, so the
- * case below serves this file's own contents through the real loader wherever it can be found, and the
- * file is read where it stands rather than copied into the repository, imported into the build or
- * regenerated (Rule 1 clause 6, AAP 0.6.2). The two candidates are the repository root — the parent of
- * the workspace `npm test` runs from — and the workspace-relative location `angular.json`'s asset input
- * names. `import.meta.url` cannot locate the tree here: the unit-test builder serves a spec from an
- * `http` URL, not a `file` one.
- *
- * @returns the path of the bundle found and its flat contents, or `null` when no candidate exists.
- */
+/** Reads the legacy English bundle in place, or answers `null` where no checkout-visible copy exists (AAP 0.10.3, Rule 1 clause 6, AAP 0.6.2). */
 function readLegacyEnglishBundle(): LegacyEnglishBundle | null {
   const candidates: readonly string[] = [
     resolve(process.cwd(), '..', 'app/global-translations/locale-en.json'),
@@ -128,13 +83,7 @@ function readLegacyEnglishBundle(): LegacyEnglishBundle | null {
   return null;
 }
 
-/**
- * A one-line host that renders a key the way both templates do — through `TranslatePipe` — so the
- * suite can prove the pipe path reaches this handler and not only `TranslateService.instant()`.
- *
- * The default key is the idle warning's sentence, because that is the string a user reads through the
- * pipe on a screen whose bundle cannot carry it (AAP 0.1.1 requirement 1).
- */
+/** A one-line host that renders a key the way both templates do — through `TranslatePipe` — so the suite can prove the pipe path reaches this handler and not only `TranslateService.instant()` (AAP 0.1.1). */
 @Component({
   selector: 'app-translate-probe',
   imports: [TranslatePipe],
@@ -151,28 +100,13 @@ interface TranslateHarness {
   readonly httpMock: HttpTestingController;
 }
 
-/**
- * The two keys the application itself introduces, each with the English copy it must render.
- *
- * Written out rather than read back from `APP_OWNED_TRANSLATIONS`, so a changed default is reported
- * here as a difference instead of being compared against itself. Both are the application's own copy:
- * no legacy bundle carries an idle warning — AAP 0.1.1 requires one and the legacy `$idleTimeout`
- * handler logged out silently (`app/scripts/controllers/main/MainController.js:139-143`) — and the
- * bundles in `app/global-translations/` are read in place and never edited (Rule 1 clauses 1 and 6).
- */
+/** The two keys the application itself introduces, each with the English copy it must render (AAP 0.1.1). */
 const APP_OWNED_COPY: readonly (readonly [key: string, text: string])[] = [
   ['label.message.session.expiring', 'You have been inactive and will be signed out shortly.'],
   ['label.button.stay.signed.in', 'Stay signed in'],
 ];
 
-/**
- * Composes the production i18n providers with the HTTP testing backend.
- *
- * Provider order matters: `provideHttpClientTesting()` replaces the backend of the `HttpClient`
- * installed by `provideHttpClient()`, and `provideTranslate()` deliberately does not provide
- * `HttpClient` itself, so both of the first two are required. Injecting `TranslateService` starts
- * its initial `use(lang)` load, which leaves exactly one bundle request outstanding.
- */
+/** Composes the production i18n providers with the HTTP testing backend. */
 function createHarness(): TranslateHarness {
   TestBed.configureTestingModule({
     providers: [provideTranslate(), provideHttpClient(), provideHttpClientTesting()],
@@ -181,13 +115,7 @@ function createHarness(): TranslateHarness {
   return { translate: TestBed.inject(TranslateService), httpMock: TestBed.inject(HttpTestingController) };
 }
 
-/**
- * Loads the legacy-shaped bundle through the real loader and fails the test on any request the
- * screen was not expected to make.
- *
- * @param harness stack under test
- * @param bundle flat, dotted translations to serve for `en`
- */
+/** Loads the legacy-shaped bundle through the real loader and fails the test on any request the screen was not expected to make. @param harness stack under test @param bundle flat, dotted translations to serve for `en` */
 async function loadLegacyBundle(
   harness: TranslateHarness,
   bundle: Record<string, string> = LEGACY_EN_BUNDLE,
@@ -200,10 +128,7 @@ async function loadLegacyBundle(
   harness.httpMock.verify();
 }
 
-/**
- * Builds the context ngx-translate hands the handler. Only `key` is read by the handler, and
- * `translateService` is the real instance, so no cast and no stub is needed.
- */
+/** Builds the context ngx-translate hands the handler. Only `key` is read by the handler, and `translateService` is the real instance, so no cast and no stub is needed. */
 function missingKeyParams(key: string, translateService: TranslateService): MissingTranslationHandlerParams {
   return { key, translateService };
 }
@@ -221,8 +146,7 @@ function captureWarnings(): string[] {
 
 describe('FineractMissingTranslationHandler', () => {
   beforeEach(() => {
-    // Reset explicitly rather than relying on the runner: a second `configureTestingModule` on an
-    // instantiated module throws.
+    // Reset explicitly rather than relying on the runner: a second `configureTestingModule` on an instantiated module throws.
     TestBed.resetTestingModule();
   });
 
@@ -245,8 +169,7 @@ describe('FineractMissingTranslationHandler', () => {
       expect(request.request.url.startsWith('/')).toBe(false);
       expect(request.request.url).not.toContain('assets/');
 
-      // The loader constants are the parity contract behind that path, pinned here so a change to
-      // either half is reported by this spec rather than by a missing label in the running app.
+      // The loader constants are the parity contract behind that path, pinned here so a change to either half is reported by this spec rather than by a missing label in the running app.
       expect(TRANSLATE_LOADER_PREFIX).toBe('global-translations/locale-');
       expect(TRANSLATE_LOADER_SUFFIX).toBe('.json');
 
@@ -265,11 +188,9 @@ describe('FineractMissingTranslationHandler', () => {
       const legacy = readLegacyEnglishBundle();
       const { translate, httpMock } = createHarness();
       const handle = vi.spyOn(FineractMissingTranslationHandler.prototype, 'handle');
-      // The legacy file's own contents wherever this checkout lets the spec read one, the stand-in that
-      // repeats the criterion's two keys where it does not; every assertion below holds for either source.
+      // The legacy file's own contents wherever this checkout lets the spec read one, the stand-in that repeats the criterion's two keys where it does not; every assertion below holds for either source.
       const bundle: Record<string, string> = legacy === null ? LEGACY_EN_BUNDLE : legacy.bundle;
-      // Named in the assertions below, so a failure states which source answered: the legacy file itself
-      // or the stand-in standing in for a checkout that carries no legacy tree.
+      // Named in the assertions below, so a failure states which source answered: the legacy file itself or the stand-in standing in for a checkout that carries no legacy tree.
       const source: string =
         legacy === null ? 'the in-memory stand-in, this checkout carrying no legacy app/ tree' : legacy.path;
 
@@ -280,14 +201,11 @@ describe('FineractMissingTranslationHandler', () => {
       await loaded;
       httpMock.verify();
 
-      // The served bundle carries both keys, so what follows resolves them instead of falling through to
-      // the missing-translation handler — the case is a proof of resolution, not of the handler's answer.
+      // The served bundle carries both keys, so what follows resolves them instead of falling through to the missing-translation handler — the case is a proof of resolution, not of the handler's answer.
       expect(Object.keys(bundle)).toContain('label.heading.clients');
       expect(Object.keys(bundle)).toContain('label.input.username');
 
-      // AAP 0.10.3 criterion 2, key by key: the flat dotted keys of the legacy bundle resolve to the
-      // translations that bundle itself carries, and the example the criterion names resolves as the
-      // legacy file answers it.
+      // AAP 0.10.3 criterion 2, key by key: the flat dotted keys of the legacy bundle resolve to the translations that bundle itself carries, and the example the criterion names resolves as the legacy file answers it.
       expect(translate.instant('label.heading.clients'), `bundle source: ${source}`).toBe(
         bundle['label.heading.clients'],
       );
@@ -360,8 +278,7 @@ describe('FineractMissingTranslationHandler', () => {
       expect(warnings).toHaveLength(1);
       expect(warnings[0]).toContain('label.heading.missing');
 
-      // Rule 1 clause 9: the single sanctioned console line carries the key and nothing else — no
-      // translated value, no request payload and no credential, session or tenant material.
+      // Rule 1 clause 9: the single sanctioned console line carries the key and nothing else — no translated value, no request payload and no credential, session or tenant material.
       expect(warnings[0]).not.toContain('Clients');
       expect(warnings[0]).not.toContain('Username');
       expect(warnings[0]).not.toMatch(/authorization|authentication|password|base64|tenant|bearer/i);
@@ -376,12 +293,7 @@ describe('FineractMissingTranslationHandler', () => {
       const handler = new FineractMissingTranslationHandler();
       const params = missingKeyParams('label.heading.missing', harness.translate);
 
-      // Angular's `isDevMode()` reads the global `ngDevMode`, and a production build defines it as
-      // `false` — the very value `enableProdMode()` writes. Writing that global puts the handler in
-      // its production branch here without mocking the function that is under proof. The development
-      // bundle installs an object under the same name for its own diagnostics, so its descriptor is
-      // kept and put back: deleting the global outright would leave later Angular code unable to
-      // read it at all.
+      // Angular's `isDevMode()` reads the global `ngDevMode`, and a production build defines it as `false` — the very value `enableProdMode()` writes.
       const original: PropertyDescriptor | undefined = Reflect.getOwnPropertyDescriptor(
         globalThis,
         'ngDevMode',
@@ -417,9 +329,7 @@ describe('FineractMissingTranslationHandler', () => {
 
         const warnings = captureWarnings();
 
-        // The key reaches the handler — the bundle below carries neither of the two — and the
-        // application's own copy comes back instead of a humanised key, which is what makes the idle
-        // warning translatable rather than frozen English (AAP 0.1.1 requirement 1; AAP 0.7.4).
+        // The key reaches the handler — the bundle below carries neither of the two — and the application's own copy comes back instead of a humanised key, which is what makes the idle warning translatable rather than frozen (AAP 0.1.1, AAP 0.7.4).
         expect(harness.translate.instant(key)).toBe(expected);
         expect(harness.translate.instant(key)).not.toBe(key);
 
@@ -429,8 +339,7 @@ describe('FineractMissingTranslationHandler', () => {
     );
 
     it('holds exactly the two keys the application introduces, so no legacy key is shadowed', () => {
-      // A third entry would answer a key a served bundle is meant to own, and a missing entry would
-      // leave the idle warning humanised — both would be silent at run time, so the set is pinned here.
+      // A third entry would answer a key a served bundle is meant to own, and a missing entry would leave the idle warning humanised — both would be silent at run time, so the set is pinned here.
       expect([...APP_OWNED_TRANSLATIONS.keys()]).toEqual(APP_OWNED_COPY.map(([key]) => key));
 
       for (const [key, text] of APP_OWNED_COPY) {
@@ -448,8 +357,7 @@ describe('FineractMissingTranslationHandler', () => {
       expect(harness.translate.instant('label.button.stay.signed.in')).toBe('Stay signed in');
       expect(warnings).toHaveLength(0);
 
-      // The map answers two keys, not the key space: every other absent key keeps the humanised label
-      // and the single development-only warning the handler has always emitted.
+      // The map answers two keys, not the key space: every other absent key keeps the humanised label and the single development-only warning the handler has always emitted.
       expect(harness.translate.instant('label.heading.missing')).toBe('Missing');
       expect(warnings).toHaveLength(1);
       expect(warnings[0]).toContain('label.heading.missing');
@@ -463,8 +371,7 @@ describe('FineractMissingTranslationHandler', () => {
         const harness = createHarness();
         const warnings = captureWarnings();
 
-        // Rendered before the bundle is flushed, so the key really is absent at the moment the pipe
-        // asks for it — the state the idle warning is in on every screen of the application.
+        // Rendered before the bundle is flushed, so the key really is absent at the moment the pipe asks for it — the state the idle warning is in on every screen of the application.
         const fixture = TestBed.createComponent(TranslateProbeComponent);
         fixture.componentRef.setInput('key', key);
         fixture.detectChanges();
@@ -472,12 +379,10 @@ describe('FineractMissingTranslationHandler', () => {
         await loadLegacyBundle(harness);
         fixture.detectChanges();
 
-        // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines
-        // the boundary cast to this line (Rule 1 clause 4).
+        // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines the boundary cast to this line (Rule 1 clause 4).
         const rendered: string = (fixture.nativeElement as HTMLElement).textContent?.trim() ?? '';
 
-        // The template renders the application's own English copy: not the raw key, not a humanised
-        // label, and nothing reported to the console (AAP 0.1.1 requirement 1, AAP 0.14.2).
+        // The template renders the application's own English copy: not the raw key, not a humanised label, and nothing reported to the console (AAP 0.1.1 requirement 1, AAP 0.14.2).
         expect(rendered).toBe(expected);
         expect(rendered).not.toBe(key);
         expect(warnings).toHaveLength(0);

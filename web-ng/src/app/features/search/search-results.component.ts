@@ -18,66 +18,7 @@ import { ApiError } from '../../core/http/api-error';
 import { EmptyStateComponent } from '../../shared/empty-state/empty-state.component';
 import { HasPermissionDirective } from '../../shared/has-permission.directive';
 
-/**
- * The global search results screen: the destination of the signed-in navbar's search control, where
- * a client or a loan is found by name, account number or identifier (AAP 0.7.1 Features row `search`;
- * AAP 0.7.3 row "Shell: global search"; AAP 0.8.2 route `search/:query`; AAP 0.10.5 item 9;
- * AAP 0.11.1 row for this folder; Figma's flow covers the three in-scope screens and not this one,
- * so the look is the legacy results list `app/views/search/glresults.html` renders: a Bootstrap 3
- * card whose body holds one `.blockquoteresult` block per result).
- *
- * **One call per parameter set, and the URL lives elsewhere.** Results arrive through
- * `SearchService.search()` — the only caller of the endpoint and the only file that composes its URL
- * (Rule 1 clause 2; AAP 0.14.1 "Every URL literal lives in a service"). This file therefore holds no
- * host, path or query-parameter literal of any kind, injects no HTTP client and knows no fallback
- * host (Rule 1 clause 5; Rule 2), which is what keeps `npm run check:endpoints` silent about this
- * folder. The one string it composes is a client-side navigation target, built through `Router` from
- * the route paths the clients and loans route arrays declare — never `window.location`.
- *
- * **Reading the parameters reactively.** The query is the `:query` path segment, and the two
- * parameters the request is made with travel beside it as the route's own query parameters: the
- * `scope` the user chose and legacy's `exactMatch` flag. All of them are read from the route's
- * observables and combined, so the component re-runs the search when any of them changes: the navbar
- * reuses this route for a second search, and a snapshot read would answer the first search for the
- * rest of the visit. The stream is switched, not merged, so an in-flight request is superseded
- * rather than racing its successor, and it emits once for the initial navigation — one call per
- * parameter set, never two.
- *
- * **Which scopes exist.** The route's `scope` parameter is matched against the three scopes the
- * control offers, and any other value — the legacy scopes this migration leaves with the legacy
- * application, an empty value, a missing one, a differently cased one — resolves to `all`
- * (AAP 0.10.5 item 9; AAP 0.9.2). The value is not lower-cased or otherwise repaired: a request for
- * an out-of-scope resource must not be silently turned into a different search (Rule 1 clause 3).
- *
- * **Errors are values, and only a 4xx is this screen's to say** (AAP 0.14.1, AAP 0.7.4). A refused
- * search becomes `ApiError.message` — Fineract's own text, verbatim, never translated, prefixed or
- * trimmed (Rule 1 clause 3) — on a signal the template renders, so the screen stays mounted and
- * usable and the rows already shown are kept. The text is limited to a 4xx, which is the convention
- * every sibling surface keeps and the plan's own state table sets: a 5xx or a transport failure is
- * reported by `core/http/fineract.interceptor.ts`, the owner of the single notification for exactly
- * those statuses, so showing the same problem inline as well would report it twice. A rejection that
- * is not an `ApiError` did not come from Fineract at all — the interceptor maps every
- * `HttpErrorResponse` into one — so its text, which can embed the request URL, is not put on screen
- * either. The component neither notifies nor logs: the interceptor is the only place a failure or a
- * session detail could reach an output (Rule 1 clause 9), and nothing here writes the query, a
- * payload or an identifier to any console output at all.
- *
- * **What it deliberately does not do** (Rule 1 clause 3, AAP 0.7.4). No spinner, skeleton or
- * placeholder — the design carries no loader asset (AAP 0.2.4); no sorting, filtering, paging or
- * reconciliation of the server's rows, which are rendered in the order received; no scope control,
- * no filter toolbar, no card title and no export affordance, because the navbar owns the search and
- * the legacy results list renders none of them (`app/views/search/glresults.html`); no status field
- * of any kind, which legacy never displayed on a result; and no link to any out-of-scope module
- * (AAP 0.9.2). The one bound it keeps is legacy's own, applied beside {@link rows}: an answer longer
- * than {@link LEGACY_SEARCH_NOTICE_THRESHOLD} results is cut to its first
- * {@link LEGACY_SEARCH_ROW_CAP} and the legacy bundle's own notice is shown above them (Rule 1
- * clause 3).
- *
- * **States.** Nothing painted before the first response; the rows once they arrive; the explicit
- * empty state — and no error — when a completed search matched nothing (AAP 0.7.4); Fineract's
- * message above the rows when a 4xx refused the read; and the rows left standing, with the
- * interceptor's notification as the only report, when a 5xx or a transport failure stopped it.
- */
+/** The global search results screen: the destination of the signed-in navbar's search control, where a client or a loan is found by name, account number or identifier (AAP 0.7.1 Features row `search`; AAP 0.7.3 row "Shell (AAP 0.8.2, AAP 0.10.5, AAP 0.11.1, Rule 1 clause 2). */
 @Component({
   selector: 'app-search-results',
   imports: [
@@ -93,16 +34,10 @@ export class SearchResultsComponent {
   /** The search endpoint's only application caller: this screen composes no request of its own. */
   private readonly searchService = inject(SearchService);
 
-  /**
-   * The route whose `:query` segment and `scope` and `exactMatch` parameters select the search to
-   * run.
-   */
+  /** The route whose `:query` segment and `scope` and `exactMatch` parameters select the search to run. */
   private readonly route = inject(ActivatedRoute);
 
-  /**
-   * Navigation only: each row carries the `UrlTree` of the record it opens, built here from the
-   * clients and loans route paths, so the template links without composing a path of its own.
-   */
+  /** Navigation only: each row carries the `UrlTree` of the record it opens, built here from the clients and loans route paths, so the template links without composing a path of its own. */
   private readonly router = inject(Router);
 
   /** Ends the parameter subscription with the component, so no late response writes a dead view. */
@@ -117,27 +52,13 @@ export class SearchResultsComponent {
   /** The rows the last successful search returned, in the server's order; kept when a later one fails. */
   private readonly results = signal<readonly SearchResult[]>([]);
 
-  /**
-   * Fineract's own text for a 4xx of the last attempt, verbatim, or `null` when there is nothing to
-   * show: a success, a 5xx, a transport failure, or a rejection that is not an `ApiError`.
-   */
+  /** Fineract's own text for a 4xx of the last attempt, verbatim, or `null` when there is nothing to show: a success, a 5xx, a transport failure, or a rejection that is not an `ApiError`. */
   private readonly failureMessage = signal<string | null>(null);
 
-  /**
-   * Whether the last attempt failed, whatever it had to say for itself.
-   *
-   * It is separate from {@link failureMessage} because a failure does not always carry text this
-   * screen may show — a 5xx or a transport failure belongs to the interceptor alone — and the empty
-   * state must not stand in for it: without this, a failed read that renders no message would look
-   * exactly like a search that matched nothing (AAP 0.7.4).
-   */
+  /** Whether the last attempt failed, whatever it had to say for itself (AAP 0.7.4). */
   private readonly failed = signal<boolean>(false);
 
-  /**
-   * Whether the search on screen has answered — an emptied query or a response, successful or not.
-   * It is what keeps the empty state from painting in the frames before the first response, and
-   * {@link failed} is what keeps it from standing in for a failure.
-   */
+  /** Whether the search on screen has answered — an emptied query or a response, successful or not. */
   private readonly searchCompleted = signal<boolean>(false);
 
   /** The trimmed `:query` segment the screen is showing (AAP 0.7.1's `query: Signal<string>`). */
@@ -146,25 +67,12 @@ export class SearchResultsComponent {
   /** The validated scope the screen is showing, one of the three the control offers. */
   readonly scope: Signal<SearchScope> = this.currentScope.asReadonly();
 
-  /**
-   * The answer the results list renders, with legacy's own bound applied.
-   *
-   * Legacy's controller keeps an answer of up to 200 results whole and, above that, its first 201 —
-   * `if (data.length > 200) { scope.searchResults = data.slice(0, 201); scope.showMsg = true }`
-   * (`app/scripts/controllers/main/SearchController.js:10-18`) — and shows the bundle's
-   * `label.search.query.matched.results.exceeds.max.length` beside them
-   * (`app/views/search/glresults.html:5`). The cut is applied to the raw answer, before projection,
-   * so a result of a kind this screen does not model is dropped after it exactly as legacy renders
-   * after its own slice (Rule 1 clause 3).
-   */
+  /** The answer the results list renders, with legacy's own bound applied (Rule 1 clause 3). */
   private readonly cappedResults: Signal<SearchCap> = computed<SearchCap>(() =>
     capToLegacyLimit(this.results()),
   );
 
-  /**
-   * The results to render: every result of the bounded answer mapped to the results list's own view
-   * model, in the server's order.
-   */
+  /** The results to render: every result of the bounded answer mapped to the results list's own view model, in the server's order. */
   readonly rows: Signal<readonly SearchResultRow[]> = computed<readonly SearchResultRow[]>(() => {
     const rendered: SearchResultRow[] = [];
 
@@ -178,65 +86,26 @@ export class SearchResultsComponent {
     return rendered;
   });
 
-  /**
-   * Whether the answer the screen holds was longer than legacy's own notice threshold, which is what
-   * makes the results list render the bundle's
-   * `label.search.query.matched.results.exceeds.max.length` above the blocks it kept
-   * (`app/scripts/controllers/main/SearchController.js:12`; `app/views/search/glresults.html:5`).
-   *
-   * It follows the answer rather than the query: an answer of 200 results or fewer, and a blank query
-   * that answered with nothing, both leave it `false`, while an answer of 201 already raises it —
-   * legacy tests `data.length > 200` before it slices, so 201 results are all kept and still
-   * announced. A failed attempt leaves it standing beside the results it kept (Rule 1 clause 3).
-   */
+  /** Whether the answer the screen holds was longer than legacy's own notice threshold, which is what makes the results list render the bundle's `label.search.query.matched.results.exceeds.max.length` above the blocks it (Rule 1 clause 3). */
   readonly exceedsMaxLength: Signal<boolean> = computed<boolean>(
     () => this.cappedResults().exceedsMaxLength,
   );
 
-  /**
-   * The message to render for the last attempt: Fineract's own text for a 4xx, verbatim and
-   * untranslated, or `null` when there is nothing to show. Assigned to the template's alert region
-   * and to nothing else — the interceptor has already raised its single notification for a 5xx, a
-   * transport failure or a rejection that never reached Fineract, so reporting one of those here as
-   * well would show one problem twice (AAP 0.7.4).
-   */
+  /** The message to render for the last attempt: Fineract's own text for a 4xx, verbatim and untranslated, or `null` when there is nothing to show (AAP 0.7.4). */
   readonly error: Signal<string | null> = this.failureMessage.asReadonly();
 
-  /**
-   * Whether the completed search matched nothing — the state that renders the explicit empty state
-   * and no error. All three conditions matter: a search must have answered (so the empty state cannot
-   * flash before the first response), the attempt must not have failed (so a failed read is never
-   * rendered as "no results", whether or not the failure carried text this screen may show), and it
-   * must hold no rows.
-   */
+  /** Whether the completed search matched nothing — the state that renders the explicit empty state and no error. */
   readonly isEmpty: Signal<boolean> = computed<boolean>(
     () => this.searchCompleted() && !this.failed() && this.rows().length === 0,
   );
 
-  /**
-   * The legacy translation key that names each row's family, so the `Entity:` line carries a
-   * translated word rather than the untranslated discriminator the API sends (`CLIENT`, `LOAN`).
-   *
-   * The two keys are the legacy bundle's own, and naming the family is what the legacy results list
-   * did on the same `<Entity>: … | <Office|Client>: …` line (`app/views/search/glresults.html:57-64`);
-   * no key for a results heading exists in those bundles, so this screen adds no wording of its own
-   * (Rule 1 clauses 3 and 6). The record is exhaustive over the two kinds the list renders, so a
-   * third kind would be a compile error rather than an empty cell.
-   */
+  /** The legacy translation key that names each row's family, so the `Entity:` line carries a translated word rather than the untranslated discriminator the API sends (`CLIENT`, `LOAN`). */
   protected readonly entityLabelKey: Readonly<Record<SearchResultRow['kind'], string>> = {
     client: 'label.heading.client',
     loan: 'label.heading.loan',
   };
 
-  /**
-   * Runs one search for the route's current parameters, and another whenever either of them changes.
-   *
-   * The two parameter observables are combined rather than read from a snapshot, because a second
-   * search through the same route instance must replace the first one's results. `switchMap` makes
-   * the newest parameter set win and cancels the previous request's answer, so one search can never
-   * overwrite the results of the search after it, and `takeUntilDestroyed` ends the subscription with
-   * the component.
-   */
+  /** Runs one search for the route's current parameters, and another whenever either of them changes. */
   constructor() {
     combineLatest([this.route.paramMap, this.route.queryParamMap])
       .pipe(
@@ -244,9 +113,7 @@ export class SearchResultsComponent {
         tap((criteria: SearchCriteria) => {
           this.currentQuery.set(criteria.query);
           this.currentScope.set(criteria.scope);
-          // A new search starts with nothing to report and no completed answer: the previous rows
-          // stay on screen while it runs, but a previous message, the failure it recorded, and the
-          // empty state they gate do not.
+          // A new search starts with nothing to report and no completed answer: the previous rows stay on screen while it runs, but a previous message, the failure it recorded, and the empty state they gate do not.
           this.failureMessage.set(null);
           this.failed.set(false);
           this.searchCompleted.set(false);
@@ -257,8 +124,7 @@ export class SearchResultsComponent {
       .subscribe((outcome: SearchOutcome) => {
         this.searchCompleted.set(true);
         this.failureMessage.set(outcome.error);
-        // `null` rows is the failure case: what is already rendered is left exactly as it was, and
-        // the failure is remembered so the empty state cannot pass for an answer.
+        // `null` rows is the failure case: what is already rendered is left exactly as it was, and the failure is remembered so the empty state cannot pass for an answer.
         this.failed.set(outcome.rows === null);
 
         if (outcome.rows !== null) {
@@ -267,16 +133,7 @@ export class SearchResultsComponent {
       });
   }
 
-  /**
-   * The search one parameter set asks for: the trimmed query, the validated scope and the
-   * exact-match flag.
-   *
-   * @param params The route's path parameters, carrying `:query`.
-   * @param queryParams The route's query parameters, carrying `scope` and `exactMatch`.
-   * @returns The three values the request is made with; the query is trimmed, the scope is never a
-   * value outside the three the control offers, and the flag is legacy's own default when the URL
-   * carries none.
-   */
+  /** The search one parameter set asks for: the trimmed query, the validated scope and the exact-match flag. @param params The route's path parameters, carrying `:query`. @param queryParams The route's query parameters. */
   private toCriteria(params: ParamMap, queryParams: ParamMap): SearchCriteria {
     return {
       query: (params.get('query') ?? '').trim(),
@@ -285,30 +142,13 @@ export class SearchResultsComponent {
     };
   }
 
-  /**
-   * Issues the search, or answers immediately with nothing to search for.
-   *
-   * An empty or whitespace-only query is never sent: the screen empties its results list and shows
-   * the empty state instead (the navbar reports no empty query either, so this guards a hand-typed
-   * URL).
-   * A failure is caught here and returned as a value, so the parameter subscription survives it and
-   * the next search still runs (AAP 0.14.1).
-   *
-   * @param criteria The trimmed query, validated scope and exact-match flag to search with.
-   * @returns A stream of exactly one outcome: the rows, or the message to show beside the rows kept —
-   * `null` when the failure is the interceptor's to report.
-   */
+  /** Issues the search, or answers immediately with nothing to search for (AAP 0.14.1). */
   private search(criteria: SearchCriteria): Observable<SearchOutcome> {
     if (criteria.query === '') {
       return of<SearchOutcome>({ rows: [], error: null });
     }
 
-    // The request carries the three parameters legacy's own controller forwards — the text, the
-    // resource and the flag that asks for the literal string: `SearchController.js:9` calls
-    // `globalSearch.search({query, resource, exactMatch})`, so all three are sent, and the flag is
-    // sent even when it is `false`, because legacy distinguishes "false" from "absent" (AAP 0.7.2's
-    // `GlobalSearchParams`; AAP 0.7.3 row "Shell: global search"). The scope reaches the model as
-    // `resource`, and no other parameter is added to the call legacy made (Rule 1 clauses 2 and 3).
+    // The request carries the three parameters legacy's own controller forwards — the text, the resource and the flag that asks for the literal string: `SearchController.js:9` calls `globalSearch.search({query, resource (AAP 0.7.2, AAP 0.7.3).
     const params: GlobalSearchParams = {
       query: criteria.query,
       resource: criteria.scope,
@@ -321,31 +161,7 @@ export class SearchResultsComponent {
     );
   }
 
-  /**
-   * Projects one result of the search envelope onto the block the results list renders.
-   *
-   * The three entity types the in-scope scopes can return are read by their own fields, with the
-   * discriminator the service declares and no cast and no `any` (Rule 1 clause 4). What each block
-   * carries, and why, follows both the payload the backend builds (verified in the running fork's
-   * search query) and the line legacy prints for that family
-   * (`app/views/search/glresults.html:11-64`):
-   *
-   *   - a `CLIENT` row names the client in `entityName`, its account in `entityAccountNo`, and its
-   *     **office** in `parentName` — which is why the block's parent label is `label.heading.office`
-   *     and its account segment is printed;
-   *   - a `CLIENTIDENTIFIER` row is a client matched by one of its identifiers: `parentId` is the
-   *     client's id and `parentName` its display name, so the row opens that client exactly as the
-   *     legacy list's `#/viewclient/{parentId}` did, its own `entityName` is the identifier value
-   *     that matched, its parent label is `label.heading.client`, and no account segment is printed
-   *     because legacy prints none on that row;
-   *   - a `LOAN` row's `entityName` is the loan **product**'s name, `parentName` the owning client
-   *     and `entityAccountNo` the loan account, so the block prints the account segment and names the
-   *     parent with `label.heading.client`.
-   *
-   * @param result One element of the search answer, discriminated by its `entityType`.
-   * @returns The row to render, or `null` for a row the union does not describe — a discriminator the
-   * server added beyond the three this application models, which is skipped rather than guessed at.
-   */
+  /** Projects one result of the search envelope onto the block the results list renders (Rule 1 clause 4). */
   private toRow(result: SearchResult): SearchResultRow | null {
     switch (result.entityType) {
       case 'CLIENT':
@@ -396,56 +212,24 @@ export class SearchResultsComponent {
   }
 }
 
-/**
- * One rendered block of the results list: the fields the template binds, resolved once per row
- * rather than once per change-detection pass.
- *
- * Module-local and deliberately not exported: nothing outside this screen has a use for a projection
- * of the search envelope, so no other file can come to depend on the shape of this list.
- */
+/** One rendered block of the results list: the fields the template binds, resolved once per row rather than once per change-detection pass. */
 interface SearchResultRow {
-  /**
-   * Stable, unique key for the template's `track`: the row's entity type and its own id, so two
-   * results never share a key and the loop never falls back to `$index`.
-   */
+  /** Stable, unique key for the template's `track`: the row's entity type and its own id, so two results never share a key and the loop never falls back to `$index`. */
   readonly key: string;
-
-  /**
-   * Which family the row came from. A client matched by an identifier is still a client row: it
-   * opens the client's record and prints the client family's wording.
-   */
+  /** Which family the row came from. A client matched by an identifier is still a client row: it opens the client's record and prints the client family's wording. */
   readonly kind: 'client' | 'loan';
-
   /** The account number the row carries, or `''` when the resource reported none. */
   readonly accountNo: string;
-
   /** The row's own label: a client's display name, or the loan product's name for a loan row. */
   readonly name: string;
-
-  /**
-   * Whether the block prints legacy's `| #<accountNo>` segment after the name. True for a `CLIENT`
-   * result and for a `LOAN` result, false for a client matched by one of its identifiers, which
-   * legacy prints with no account number at all (`app/views/search/glresults.html:11-43`).
-   */
+  /** Whether the block prints legacy's `| #<accountNo>` segment after the name. */
   readonly printsAccountNo: boolean;
-
-  /**
-   * The name the block prints after the parent label: the client's office for a `CLIENT` result, the
-   * owning client for a `LOAN` result and for a client matched by an identifier, or `''` when the
-   * payload carried none — no placeholder or invented word stands in for it (Rule 1 clause 3).
-   */
+  /** The name the block prints after the parent label: the client's office for a `CLIENT` result, the owning client for a `LOAN` result and for a client matched by an identifier, or `''` when the payload carried none — no (Rule 1 clause 3). */
   readonly parentName: string;
-
-  /**
-   * The legacy translation key that names what {@link parentName} is for this row's family: the
-   * client's office, or the client the row belongs to. Legacy picks the same label per family, and
-   * both keys are its own (`app/views/search/glresults.html:57-64`).
-   */
+  /** The legacy translation key that names what {@link parentName} is for this row's family: the client's office, or the client the row belongs to. */
   readonly parentLabelKey: 'label.heading.office' | 'label.heading.client';
-
   /** The record the row opens: the client's or the loan's own in-scope route. */
   readonly link: UrlTree;
-
   /** The permission the link requires: the backend's own read code for the row's family. */
   readonly permission: 'READ_CLIENT' | 'READ_LOAN';
 }
@@ -454,94 +238,42 @@ interface SearchResultRow {
 interface SearchCriteria {
   /** The trimmed, unquoted search text; empty means there is nothing to search for. */
   readonly query: string;
-
   /** The scope to search, always one of the three the control offers. */
   readonly scope: SearchScope;
-
-  /**
-   * Whether the text arrived quoted — legacy's `exactMatch`, always sent and `false` when the route
-   * carried no recognised value.
-   */
+  /** Whether the text arrived quoted — legacy's `exactMatch`, always sent and `false` when the route carried no recognised value. */
   readonly exactMatch: boolean;
 }
 
-/**
- * What one search attempt produced: the rows to render, and the message to show beside the old ones
- * when the failure is one this screen reports itself.
- */
+/** What one search attempt produced: the rows to render, and the message to show beside the old ones when the failure is one this screen reports itself. */
 interface SearchOutcome {
   /** The rows to render, or `null` meaning "keep what is already on screen" (a failed attempt). */
   readonly rows: readonly SearchResult[] | null;
-
-  /**
-   * The text to render for a failed attempt — Fineract's own message for a 4xx — or `null` when
-   * there is nothing for this screen to show: a success, a 5xx, a transport failure, or a rejection
-   * that is not an `ApiError`, all of which are the interceptor's to report.
-   */
+  /** The text to render for a failed attempt — Fineract's own message for a 4xx — or `null` when there is nothing for this screen to show: a success, a 5xx, a transport failure, or a rejection that is not an `ApiError`, all. */
   readonly error: string | null;
 }
 
-/**
- * The answer as the results list renders it, with legacy's own bound applied: the results to project,
- * and whether the answer was long enough for legacy's own notice to be shown above them.
- */
+/** The answer as the results list renders it, with legacy's own bound applied: the results to project, and whether the answer was long enough for legacy's own notice to be shown above them. */
 interface SearchCap {
   /** The results to project: the answer unchanged, or its first {@link LEGACY_SEARCH_ROW_CAP} rows. */
   readonly results: readonly SearchResult[];
-
   /** Whether the answer held more than {@link LEGACY_SEARCH_NOTICE_THRESHOLD} results. */
   readonly exceedsMaxLength: boolean;
 }
 
-/**
- * The answer length above which legacy shows its notice: its controller tests `data.length > 200`
- * before it cuts anything (`app/scripts/controllers/main/SearchController.js:10`).
- */
+/** The answer length above which legacy shows its notice: its controller tests `data.length > 200` before it cuts anything (`app/scripts/controllers/main/SearchController.js:10`). */
 const LEGACY_SEARCH_NOTICE_THRESHOLD = 200;
 
-/**
- * The rows legacy keeps when it cuts an answer short: `data.slice(0, 201)`, one more than the
- * threshold (`app/scripts/controllers/main/SearchController.js:11`).
- */
+/** The rows legacy keeps when it cuts an answer short: `data.slice(0, 201)`, one more than the threshold (`app/scripts/controllers/main/SearchController.js:11`). */
 const LEGACY_SEARCH_ROW_CAP = 201;
 
-/**
- * Applies legacy's own bound to the search answer.
- *
- * The search endpoint takes no `limit` this application sets, so the whole answer arrives and the
- * screen decides how much of it to render — exactly the decision legacy's controller took:
- * `if (data.length > 200) { scope.searchResults = data.slice(0, 201); scope.showMsg = true } else {
- * scope.searchResults = data }` (`app/scripts/controllers/main/SearchController.js:10-18`), with
- * `label.search.query.matched.results.exceeds.max.length` ("This query shows only the first 200
- * records.") rendered above the rows it kept (`app/views/search/glresults.html:5`;
- * `app/global-translations/locale-en.json:678`). The threshold is tested before the cut, exactly as
- * legacy tests it, so an answer of 200 results or fewer comes back unchanged with no notice, an answer
- * of 201 comes back whole and already announced, and a longer one comes back cut to 201 and announced.
- * That is also what keeps the flag off for an ordinary search and for the empty answer a blank query
- * produces (Rule 1 clause 3).
- *
- * @param results The answer as `GET /search` returned it, in the server's order.
- * @returns The results to project, and whether the answer was long enough to raise the notice.
- */
+/** Applies legacy's own bound to the search answer. The search endpoint takes no `limit` this application sets, so the whole answer arrives and the screen decides how much of it to render — exactly the decision legacy's (Rule 1 clause 3). */
 function capToLegacyLimit(results: readonly SearchResult[]): SearchCap {
   return results.length > LEGACY_SEARCH_NOTICE_THRESHOLD
     ? { results: results.slice(0, LEGACY_SEARCH_ROW_CAP), exceedsMaxLength: true }
     : { results, exceedsMaxLength: false };
 }
 
-/**
- * The scope the route's `scope` parameter names.
- *
- * Only the three scopes the navigation control offers are accepted, and everything else is `all`:
- * the legacy application's groups, savings, shares and identifier scopes belong to migration units
- * that are out of scope (AAP 0.9.2, AAP 0.10.5 item 9), so a URL asking for one searches both
- * in-scope families rather than being refused or silently rewritten to a third family. The value is
- * compared exactly as it arrived — not trimmed, not lower-cased — so `ALL` is not repaired into a
- * scope the caller did not name (Rule 1 clause 3).
- *
- * @param raw The `scope` query parameter exactly as the route delivered it, or `null` when absent.
- * @returns The scope to search with.
- */
+/** The scope the route's `scope` parameter names. Only the three scopes the navigation control offers are accepted, and everything else is `all`: the legacy application's groups, savings, shares and identifier scopes (AAP 0.9.2, AAP 0.10.5, Rule 1 clause 3). */
 function toScope(raw: string | null): SearchScope {
   switch (raw) {
     case 'clients':
@@ -553,45 +285,12 @@ function toScope(raw: string | null): SearchScope {
   }
 }
 
-/**
- * Legacy's `exactMatch` flag for the route's `exactMatch` parameter.
- *
- * Legacy derived the value in the navbar, put the literal `true` or `false` in its URL and let
- * `SearchController` forward whatever arrived, so the parameter is always part of the request:
- * only the literal `true` asks Fineract for the whole string, and an absent or unrecognised value is
- * legacy's own unquoted `false` rather than a reason to drop the parameter (AAP 0.3.4; AAP 0.7.2's
- * `GlobalSearchParams`; Rule 1 clauses 2 and 3). The value is compared exactly as it arrived — not
- * trimmed, not lower-cased — so `TRUE` is not repaired into a flag the caller did not send.
- *
- * @param raw The `exactMatch` query parameter exactly as the route delivered it, or `null` when the
- *   URL carried none.
- * @returns `true` only when the parameter asked for an exact match.
- */
+/** Legacy's `exactMatch` flag for the route's `exactMatch` parameter (AAP 0.3.4, AAP 0.7.2). */
 function toExactMatch(raw: string | null): boolean {
   return raw === 'true';
 }
 
-/**
- * The message to render for a failed search.
- *
- * Only a 4xx of Fineract's own carries text here. `ApiError` is what the interceptor maps every
- * Fineract failure into, and for a 4xx its `message` is the server's own text, which is returned
- * unchanged — no prefix, suffix, capitalisation or translation, because a server message is
- * displayed exactly as the server wrote it (AAP 0.7.2 row `FineractError`; Rule 1 clause 3).
- *
- * Everything else answers `null`, and every case for the same reason: the screen must not report a
- * problem the interceptor already reported, and must not put text on screen that is not the
- * server's. A 5xx and a transport failure (status `0`) have already raised the interceptor's single
- * notification (`core/http/fineract.interceptor.ts:89-92`), so text here would show one problem
- * twice. A rejection that is not an `ApiError` never came from Fineract at all — the interceptor
- * maps every `HttpErrorResponse` into one — so a plain `Error`'s message is Angular's or the
- * application's own text, which can embed the request URL and disclose the configured API host, and
- * a rejection that is not an `Error` carries nothing to show. This is the same 4xx-only rule the
- * sibling surfaces keep (`client-list.component.ts`, `client-accounts.component.ts`; AAP 0.7.4).
- *
- * @param failure Whatever the request rejected with.
- * @returns Fineract's own message for a 4xx, or `null` when this screen has nothing to show.
- */
+/** The message to render for a failed search. Only a 4xx of Fineract's own carries text here (AAP 0.7.2, Rule 1 clause 3, AAP 0.7.4). */
 function toMessage(failure: unknown): string | null {
   return failure instanceof ApiError && failure.status >= 400 && failure.status < 500
     ? failure.message

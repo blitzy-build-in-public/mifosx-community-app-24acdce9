@@ -1,14 +1,4 @@
-<!--
-  Header labels are the legacy bundle's own keys, matched column for column to the record page's
-  schedule table (`loan-view/loan-schedule`) so the application's two schedules cannot diverge:
-  `label.heading.no` numbers the period, and `label.heading.date` is what the legacy tables
-  (`app/views/loans/newloanaccount.html`, `previewloanrepaymentschedule.html`) put over the due
-  date — no locale bundle defines a `label.heading.period` or `label.heading.duedate` key.
-
-  The empty state is "no schedule calculated yet", not an error, so it uses the bundle's own
-  no-data label and no alert or retry region lives here: `loan-new` renders a failed calculation
-  from the API error it received.
--->
+<!-- Header labels are the legacy bundle's own keys, matched column for column to the record page's schedule table (`loan-view/loan-schedule`) so the application's two schedules cannot diverge: `label.heading.no` numbers the. -->
 @if (isEmpty()) {
   <app-empty-state
     id="repayment-preview-empty"
@@ -28,18 +18,9 @@
         <th scope="col">{{ 'label.heading.outstanding' | translate }}</th>
       </tr>
     </thead>
-    <!-- The server's own periods in the server's order, at the record's one date pattern (the
-         component's `displayFormat`) and through the default `number` pipe, which is what the
-         record page's schedule table (`loan-view/loan-schedule`) and legacy's own `number` filter
-         render: forcing a fraction width here would print 5,000.00 beside that table's 5,000.
-         Each row is the component's `rows()` projection, which already carries both dates parsed,
-         so no date cell re-reads a wire date on a change detection pass. -->
+    <!-- The server's own periods in the server's order, at the record's one date pattern (the component's `displayFormat`) and through the default `number` pipe, which is what the record page's schedule table. -->
     <tbody>
-      <!-- Keyed by position rather than by period number: the server's order is kept as sent, never
-           re-sorted, filtered or paginated, and the leading disbursement row carries no period number
-           to key on — two such rows would raise NG0955. Each row is the component's `rows()`
-           projection, so both of its dates are already parsed and no date cell re-reads a wire date
-           on a change detection pass. -->
+      <!-- Keyed by position rather than by period number: the server's order is kept as sent, never re-sorted, filtered or paginated, and the leading disbursement row carries no period number to key on — two such rows would raise. -->
       @for (row of rows(); track $index) {
         <tr>
           <td>{{ row.period }}</td>

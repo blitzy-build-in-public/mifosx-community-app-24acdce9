@@ -28,41 +28,9 @@ import {
   type LoanRepaymentInput,
 } from './loan.service';
 
-/**
- * Contract spec for `LoanService`: the one place the loans family composes a Fineract URL and turns
- * a model into a payload (Rule 1 clause 8; AAP 0.7.3 endpoint rows "W4 loan application", "Loan
- * edit", "W5 approve and disburse", "W6 repayment" and "Loan charges"; AAP 0.11.1 row for this path).
- *
- * Every public method is pinned against the real `HttpTestingController` transport, so the
- * assertions are on the request the application actually sends — method, path, the whole parameter
- * set and the whole body — and never on a stand-in for `HttpClient`. Four properties are asserted
- * for each call beyond its shape:
- *
- *   - the date-format pair. Every date-bearing body carries `dateFormat: 'dd MMMM yyyy'` and the
- *     active `locale`, and every date member is the string `toFineractDate` produced, never a `Date`
- *     (AAP 0.7.2 "Date handling"; Rule 1 clause 2). The `undoapproval` and `undodisbursal` bodies
- *     carry neither member, because the server takes no date for them and legacy sent neither — and
- *     that absence is asserted, not assumed.
- *   - the command's home. `command` travels in the query string and never in the body, exactly as
- *     the legacy resource calls send it (AAP 0.7.3; Rule 1 clause 2).
- *   - the host. Each URL is composed by `AppConfigService.apiUrl()`, which this spec stubs and spies
- *     on, so a service that built its own host would fail here (AAP 0.4.2; Rule 2).
- *   - the absent header. Neither the authorization nor the tenant header is set here; both belong to
- *     `core/http/fineract.interceptor.ts` (AAP 0.4.2).
- *
- * The transport is registered without the application's interceptor, because the interceptor is
- * what adds those headers: a request asserted here is the service's own contribution to it.
- *
- * The `AppConfigService` stub is a fixed, non-secret configuration whose `apiUrl()` composes exactly
- * as the real one documents, so an expected URL and a requested URL are built the same way. The
- * resolution of `apiBaseUrl` and `apiPath` is proved in `core/config/app-config.service.spec.ts`.
- */
+/** Contract spec for `LoanService`: the one place the loans family composes a Fineract URL and turns a model into a payload (Rule 1 clause 8; AAP 0.7.3 endpoint rows "W4 loan application", "Loan edit", "W5 approve and (AAP 0.11.1, AAP 0.7.2, Rule 1 clause 2, AAP 0.4.2). */
 
-/**
- * The served API host and root, written as `web-ng/src/assets/config.json` ships them, so the URLs
- * this spec expects are the URLs the deployed application produces (AAP 0.4.4 decision 5(a)). No
- * demo host appears here or anywhere else in this tree (Rule 2).
- */
+/** The served API host and root, written as `web-ng/src/assets/config.json` ships them, so the URLs this spec expects are the URLs the deployed application produces (AAP 0.4.4 decision 5(a)) (Rule 2). */
 const API_BASE_URL = 'https://localhost:8443';
 const API_PATH = '/fineract-provider/api/v1';
 const API_ROOT = API_BASE_URL + API_PATH;
@@ -86,17 +54,11 @@ const PRODUCT_ID = 1;
 const CHARGE_ID = 8;
 const PICKED_CHARGE_ID = 3;
 
-/**
- * The two charges a loan already carries: the loan-charge ids the edit body re-posts, which are what
- * keep each charge rather than re-creating it, and the charge definitions those rows apply.
- */
+/** The two charges a loan already carries: the loan-charge ids the edit body re-posts, which are what keep each charge rather than re-creating it, and the charge definitions those rows apply. */
 const LOAN_CHARGE_ID = 12;
 const SECOND_LOAN_CHARGE_ID = 13;
 
-/**
- * The dates the loan screens hold as `Date` values, built from their local calendar parts so the
- * expected strings below cannot shift with the machine's time zone (AAP 0.7.2 "Date handling").
- */
+/** The dates the loan screens hold as `Date` values, built from their local calendar parts so the expected strings below cannot shift with the machine's time zone (AAP 0.7.2 "Date handling"). */
 const SUBMITTED_DATE = new Date(2026, 10, 21);
 const DISBURSEMENT_DATE = new Date(2026, 10, 24);
 
@@ -107,12 +69,7 @@ const DISBURSEMENT_TEXT = '24 November 2026';
 /** The submission date in French, for the case that proves the payload follows the selected language. */
 const SUBMITTED_TEXT_FR = '21 novembre 2026';
 
-/**
- * The URL the service must request for the given path segments: the API root the configuration
- * supplies and the resource segments the service owns, joined with one separator.
- *
- * @param segments Resource segments, exactly as `loan.service.ts` names them.
- */
+/** The URL the service must request for the given path segments: the API root the configuration supplies and the resource segments the service owns, joined with one separator. @param segments Resource segments, exactly as. */
 function loanUrl(...segments: readonly (string | number)[]): string {
   return [API_ROOT, ...segments].join(SEPARATOR);
 }
@@ -133,20 +90,10 @@ function bodyKeys(request: HttpRequest<unknown>): string[] {
   return typeof body === 'object' && body !== null ? Object.keys(body) : [];
 }
 
-/**
- * The `AppConfigService` surface `LoanService` uses: the resolved configuration, the URL composition
- * every service shares, and the live active locale.
- */
+/** The `AppConfigService` surface `LoanService` uses: the resolved configuration, the URL composition every service shares, and the live active locale. */
 type ConfigSurface = Pick<AppConfigService, 'config' | 'apiUrl' | 'activeLocale'>;
 
-/**
- * Builds the stub from the two live members the cases below need to change: the `apiUrl` spy the
- * host assertions read, and the active-locale signal the language case moves. A fresh pair per test
- * keeps one case's calls and language out of the next.
- *
- * @param apiUrl The spy standing in for `AppConfigService.apiUrl`.
- * @param activeLocale The signal standing in for `AppConfigService.activeLocale`.
- */
+/** Builds the stub from the two live members the cases below need to change: the `apiUrl` spy the host assertions read, and the active-locale signal the language case moves. */
 function configSurface(
   apiUrl: Mock<(path: string) => string>,
   activeLocale: WritableSignal<string>,
@@ -186,11 +133,7 @@ const PRODUCT_TEMPLATE: LoanTemplate = {
   transactionProcessingStrategyCode: 'mifos-standard-strategy',
 };
 
-/**
- * The `GET /charges/{id}?template=true` answer: one charge carrying its own top-level `amount` and
- * currency, and no `chargeOptions` list — the shape the running fork sends and the member
- * `LoanNewComponent.readChargeAmount` reads.
- */
+/** The `GET /charges/{id}?template=true` answer: one charge carrying its own top-level `amount` and currency, and no `chargeOptions` list — the shape the running fork sends and the member. */
 const CHARGE_TEMPLATE: ChargeTemplate = {
   amount: 25,
   chargeAppliesTo: { id: 1, value: 'Loan' },
@@ -232,12 +175,7 @@ const SCHEDULE: RepaymentSchedule = {
   loanTermInDays: 365,
 };
 
-/**
- * The loan's `charges` rows, exactly as the fork reports them inside the loan payload — the loan
- * charge's own id, the definition it applies, its amounts and the date it falls due. The record's
- * charge section and the edit's re-posted rows are both built from this member of the loan read
- * (AAP 0.7.3 rows "W6 repayment" and "Loan edit").
- */
+/** The loan's `charges` rows, exactly as the fork reports them inside the loan payload — the loan charge's own id, the definition it applies, its amounts and the date it falls due (AAP 0.7.3). */
 const LOAN_CHARGES: readonly LoanCharge[] = [
   {
     id: LOAN_CHARGE_ID,
@@ -311,10 +249,7 @@ const TRANSACTION_TEMPLATE: LoanTransactionTemplate = {
   loanId: LOAN_ID,
 };
 
-/**
- * The application the new-loan form posts: every member the model requires, both dates set, and the
- * optional officer, fund and charge present so the whole body is pinned.
- */
+/** The application the new-loan form posts: every member the model requires, both dates set, and the optional officer, fund and charge present so the whole body is pinned. */
 const APPLICATION: LoanApplicationRequest = {
   clientId: CLIENT_ID,
   productId: PRODUCT_ID,
@@ -366,11 +301,7 @@ const APPLICATION_WIRE: Readonly<Record<string, unknown>> = {
   locale: APP_LOCALE,
 };
 
-/**
- * The same application with both dates missing and every optional member unset. The body must then
- * leave the optional members out and post no date at all, so the server's own required-field rules
- * decide what is missing instead of a value this application invented (Rule 1 clause 3).
- */
+/** The same application with both dates missing and every optional member unset (Rule 1 clause 3). */
 const UNDATED_APPLICATION: LoanApplicationRequest = {
   clientId: CLIENT_ID,
   productId: PRODUCT_ID,
@@ -417,17 +348,10 @@ const UNDATED_APPLICATION_WIRE: Readonly<Record<string, unknown>> = {
   locale: APP_LOCALE,
 };
 
-/**
- * The same application, with a `locale` the caller picked. The service must ignore it and send the
- * active language, because the two members are filled at the API boundary and no screen sets them.
- */
+/** The same application, with a `locale` the caller picked. The service must ignore it and send the active language, because the two members are filled at the API boundary and no screen sets them. */
 const CALLER_LOCALE_APPLICATION: LoanApplicationRequest = { ...APPLICATION, locale: 'de' };
 
-/**
- * The five lifecycle commands, each with the body its own command posts and the body that must reach
- * the server. The three dated commands carry the date-format pair; the two undo commands carry
- * neither, because the server takes no date for them (AAP 0.7.2 `LoanActionRequest`).
- */
+/** The five lifecycle commands, each with the body its own command posts and the body that must reach the server (AAP 0.7.2). */
 const ACTION_CASES: readonly {
   readonly command: LoanCommand;
   readonly request: LoanActionRequest;
@@ -488,8 +412,7 @@ const ACTION_CASES: readonly {
     },
   },
   {
-    // The note alone: the server accepts `note` here and nothing else, so no date and no
-    // date-format pair are sent (AAP 0.7.2 `LoanActionRequest`).
+    // The note alone: the server accepts `note` here and nothing else, so no date and no date-format pair are sent (AAP 0.7.2 `LoanActionRequest`).
     command: 'undoapproval',
     request: { command: 'undoapproval', note: 'Correction before disbursement' },
     wire: { note: 'Correction before disbursement' },
@@ -501,15 +424,7 @@ const ACTION_CASES: readonly {
   },
 ];
 
-/**
- * The three dated lifecycle commands with every member the form can leave unset left unset: the date
- * itself is `null` and no note, approved amount or expected disbursement date is supplied.
- *
- * Each body must then be the date-format pair alone. A member the form did not set is omitted rather
- * than posted empty — that is the body the legacy application transmitted, whose unset form values
- * `JSON.stringify` dropped — so the gap is Fineract's own required-field rule to report and never a
- * value this application invented (AAP 0.7.2 `LoanActionRequest`; Rule 1 clauses 2 and 3).
- */
+/** The three dated lifecycle commands with every member the form can leave unset left unset: the date itself is `null` and no note, approved amount or expected disbursement date is supplied (AAP 0.7.2). */
 const ACTION_OMISSION_CASES: readonly {
   readonly command: LoanCommand;
   readonly request: LoanActionInput;
@@ -532,13 +447,7 @@ const ACTION_OMISSION_CASES: readonly {
   },
 ];
 
-/**
- * The two loan-charge commands. The endpoint pays or waives the charge's **whole outstanding
- * portion**, so `pay` carries only the date the payment is recorded on and `waive` carries neither a
- * date, an amount nor a payment type: the running server refuses an `amount` and a `paymentTypeId`
- * on the parameter binding, which is why neither arm declares one (AAP 0.7.3, "Loan charges";
- * `LoanChargeActionRequest`).
- */
+/** The two loan-charge commands. The endpoint pays or waives the charge's **whole outstanding portion**, so `pay` carries only the date the payment is recorded on and `waive` carries neither a date, an amount nor a payment (AAP 0.7.3). */
 const CHARGE_ACTION_CASES: readonly {
   readonly command: LoanChargeActionCommand;
   readonly request: LoanChargeActionInput;
@@ -612,12 +521,7 @@ const CHARGE_WITHOUT_DUE_DATE: LoanChargeRequest = {
   locale: APP_LOCALE,
 };
 
-/**
- * The charges a loan edit re-posts: the charges the loaded record carries, each with its own
- * loan-charge id, the definition it applies, the amount the record reports as `amountOrPercentage`,
- * and the due date as a `Date` — one charge dated, one carrying no date at all (AAP 0.7.3 row
- * "Loan edit"; legacy `EditLoanAccAppController.submit` posts the same four members).
- */
+/** The charges a loan edit re-posts: the charges the loaded record carries, each with its own loan-charge id, the definition it applies, the amount the record reports as `amountOrPercentage`, and the due date as a `Date` (AAP 0.7.3). */
 const REPOSTED_CHARGES: NonNullable<LoanApplicationRequest['charges']> = [
   { id: LOAN_CHARGE_ID, chargeId: PICKED_CHARGE_ID, amount: 25, dueDate: DISBURSEMENT_DATE },
   { id: SECOND_LOAN_CHARGE_ID, chargeId: CHARGE_ID, amount: 40, dueDate: null },
@@ -629,11 +533,7 @@ const REPOSTED_CHARGES_WIRE: readonly Readonly<Record<string, unknown>>[] = [
   { id: SECOND_LOAN_CHARGE_ID, chargeId: CHARGE_ID, amount: 40 },
 ];
 
-/**
- * The two branches of `GET /loans/template`, which differ only in whether the product is known.
- * The first load names the client alone and receives the bare template whose `productOptions` fill
- * the picker; a product change re-reads the same endpoint with the chosen id (AAP 0.3.4 claim 14).
- */
+/** The two branches of `GET /loans/template`, which differ only in whether the product is known (AAP 0.3.4). */
 const TEMPLATE_CASES: readonly {
   readonly label: string;
   readonly args: readonly [clientId: number | string, productId?: number | string];
@@ -668,11 +568,7 @@ describe('LoanService', () => {
   let activeLocale: WritableSignal<string>;
 
   beforeEach(() => {
-    // A fresh spy and a fresh language per test, so one case's composition and its calls are never
-    // read by the next case's assertions. The composition mirrors the real `apiUrl()` exactly: the
-    // loans service names its paths with a leading slash (`apiUrl('/loans')`), which the real method
-    // strips and joins with one separator, so the stub strips it too and an expected URL and a
-    // requested URL are built the same way (AAP 0.4.2).
+    // A fresh spy and a fresh language per test, so one case's composition and its calls are never read by the next case's assertions (AAP 0.4.2).
     apiUrl = vi.fn((path: string): string => API_ROOT + SEPARATOR + path.replace(/^\/+/, ''));
     activeLocale = signal(APP_LOCALE);
 
@@ -689,8 +585,7 @@ describe('LoanService', () => {
   });
 
   afterEach(() => {
-    // A request the service issued but this spec never saw fails here, and so does one it should
-    // have issued and did not.
+    // A request the service issued but this spec never saw fails here, and so does one it should have issued and did not.
     httpMock.verify();
   });
 
@@ -704,8 +599,7 @@ describe('LoanService', () => {
 
       const request = httpMock.expectOne(isRequest('GET', loanUrl('loans', 'template')));
 
-      // The whole parameter set, in the order it is appended: `productId` is added only when a
-      // product is already chosen (AAP 0.7.3 row "W4 loan application").
+      // The whole parameter set, in the order it is appended: `productId` is added only when a product is already chosen (AAP 0.7.3 row "W4 loan application").
       expect(request.request.params.keys()).toEqual(params.map(([name]) => name));
       for (const [name, value] of params) {
         expect(request.request.params.get(name)).toBe(value);
@@ -751,8 +645,7 @@ describe('LoanService', () => {
     expect(request.request.params.get('command')).toBe('calculateLoanSchedule');
     expect(request.request.body).toEqual(APPLICATION_WIRE);
 
-    // Spelled out as well as compared above: the two members every date-bearing payload carries are
-    // what the server parses the dates with (AAP 0.7.2 "Date handling"; Rule 1 clause 2).
+    // Spelled out as well as compared above: the two members every date-bearing payload carries are what the server parses the dates with (AAP 0.7.2 "Date handling"; Rule 1 clause 2).
     expect(request.request.body).toMatchObject({
       dateFormat: 'dd MMMM yyyy',
       locale: 'en',
@@ -773,21 +666,16 @@ describe('LoanService', () => {
 
     const request = httpMock.expectOne(isRequest('POST', loanUrl('loans')));
 
-    // Submission is the endpoint's default command, so legacy sent none and neither does this
-    // (AAP 0.7.3 W4; Rule 1 clause 2).
+    // Submission is the endpoint's default command, so legacy sent none and neither does this (AAP 0.7.3 W4; Rule 1 clause 2).
     expect(request.request.params.keys()).toEqual([]);
-    // The identical serialiser, so the schedule the user previewed was computed from exactly the
-    // application the user then submitted (AAP 0.7.3 W4).
+    // The identical serialiser, so the schedule the user previewed was computed from exactly the application the user then submitted (AAP 0.7.3 W4).
     expect(request.request.body).toEqual(APPLICATION_WIRE);
 
     request.flush(ACTION_RESULT);
   });
 
   it('posts the preview and the submission as byte-identical bodies', () => {
-    // The preview is only truthful if it is computed from the application that is then submitted, so
-    // the two requests are compared to each other rather than each to expected members: the same
-    // input must produce the same wire body from both methods, differing only in the command
-    // parameter that names the preview (AAP 0.7.3 W4; AAP 0.7.2 row `LoanApplicationRequest`).
+    // The preview is only truthful if it is computed from the application that is then submitted, so the two requests are compared to each other rather than each to expected members: the same input must produce the same wire (AAP 0.7.3, AAP 0.7.2).
     service.previewSchedule(APPLICATION).subscribe();
     service.create(APPLICATION).subscribe();
 
@@ -812,8 +700,7 @@ describe('LoanService', () => {
 
     expect(request.request.body).toEqual(UNDATED_APPLICATION_WIRE);
 
-    // The absence, member by member: a null date is no date, and an unset optional is no member, so
-    // the server's own required-field rule is what reports the gap (Rule 1 clause 3).
+    // The absence, member by member: a null date is no date, and an unset optional is no member, so the server's own required-field rule is what reports the gap (Rule 1 clause 3).
     expect(bodyKeys(request.request)).not.toContain('submittedOnDate');
     expect(bodyKeys(request.request)).not.toContain('expectedDisbursementDate');
     expect(bodyKeys(request.request)).not.toContain('loanOfficerId');
@@ -828,8 +715,7 @@ describe('LoanService', () => {
 
     const englishRequest = httpMock.expectOne(isRequest('POST', loanUrl('loans')));
 
-    // The caller's own `locale` never reaches the body, and the English month name matches the
-    // `locale` beside it.
+    // The caller's own `locale` never reaches the body, and the English month name matches the `locale` beside it.
     expect(englishRequest.request.body).toEqual(APPLICATION_WIRE);
     englishRequest.flush(ACTION_RESULT);
 
@@ -839,8 +725,7 @@ describe('LoanService', () => {
 
     const frenchRequest = httpMock.expectOne(isRequest('POST', loanUrl('loans')));
 
-    // A language selected after startup reaches the next payload, month names included, so the value
-    // and the `locale` beside it describe the same language (AAP 0.7.2 "Date handling").
+    // A language selected after startup reaches the next payload, month names included, so the value and the `locale` beside it describe the same language (AAP 0.7.2 "Date handling").
     expect(frenchRequest.request.body).toEqual({
       ...APPLICATION_WIRE,
       locale: 'fr',
@@ -861,8 +746,7 @@ describe('LoanService', () => {
 
       const request = httpMock.expectOne(isRequest('GET', loanUrl('loans', LOAN_ID)));
 
-      // Both parameters, and only those: the associations are the ones the edit form reads
-      // (AAP 0.7.3 row "Loan edit").
+      // Both parameters, and only those: the associations are the ones the edit form reads (AAP 0.7.3 row "Loan edit").
       expect(request.request.params.keys()).toEqual(['template', 'associations']);
       expect(request.request.params.get('template')).toBe('true');
       expect(request.request.params.get('associations')).toBe(
@@ -886,9 +770,7 @@ describe('LoanService', () => {
 
       const request = httpMock.expectOne(isRequest('GET', loanUrl('loans', LOAN_ID)));
 
-      // One parameter, because `associations=all` is what carries the repayment schedule — and with
-      // it the loan's money totals — beside the transactions and the loan's own charges (AAP 0.7.3
-      // row "W6 repayment"). No charge-list request is issued for a record: the rows arrive here.
+      // One parameter, because `associations=all` is what carries the repayment schedule — and with it the loan's money totals — beside the transactions and the loan's own charges (AAP 0.7.3 row "W6 repayment").
       expect(request.request.params.keys()).toEqual(['associations']);
       expect(request.request.params.get('associations')).toBe('all');
       expect(request.request.body).toBeNull();
@@ -898,9 +780,7 @@ describe('LoanService', () => {
       expect(received).toEqual([LOAN_ACCOUNT]);
       expect(received[0]?.repaymentSchedule?.periods).toHaveLength(1);
 
-      // The charges the record's charge section lists and the edit re-posts come out of this same
-      // answer, unchanged: the loan-charge id beside the definition id, the amounts, and the due
-      // date as the server sent it (AAP 0.7.3; Rule 1 clause 2).
+      // The charges the record's charge section lists and the edit re-posts come out of this same answer, unchanged: the loan-charge id beside the definition id, the amounts, and the due date as the server sent it (AAP 0.7.3 (Rule 1 clause 2).
       expect(received[0]?.charges).toEqual(LOAN_CHARGES);
       expect(received[0]?.charges?.[0]?.chargeId).toBe(PICKED_CHARGE_ID);
       expect(received[0]?.charges?.[1]?.dueDate).toBeUndefined();
@@ -915,8 +795,7 @@ describe('LoanService', () => {
     const request = httpMock.expectOne(isRequest('PUT', loanUrl('loans', LOAN_ID)));
 
     expect(request.request.params.keys()).toEqual([]);
-    // The edit posts the application's own field set: the server accepts the same members, so there
-    // is no second member list to drift (AAP 0.7.3 row "Loan edit").
+    // The edit posts the application's own field set: the server accepts the same members, so there is no second member list to drift (AAP 0.7.3 row "Loan edit").
     expect(request.request.body).toEqual(APPLICATION_WIRE);
 
     request.flush(ACTION_RESULT);
@@ -927,11 +806,7 @@ describe('LoanService', () => {
 
     const request = httpMock.expectOne(isRequest('PUT', loanUrl('loans', LOAN_ID)));
 
-    // `PUT /loans/{id}` treats `charges` as the loan's complete set, so the body carries a row per
-    // charge with the loan-charge id that keeps it; a row's `dueDate` is formatted exactly as a
-    // top-level date is — the active locale's `dd MMMM yyyy`, never the ISO string `JSON.stringify`
-    // would make of a `Date` — and a charge with no due date posts no member at all
-    // (AAP 0.7.3 row "Loan edit"; AAP 0.7.2 "Date handling"; Rule 1 clause 2).
+    // `PUT /loans/{id}` treats `charges` as the loan's complete set, so the body carries a row per charge with the loan-charge id that keeps it; a row's `dueDate` is formatted exactly as a top-level date is — the active (AAP 0.7.3, AAP 0.7.2, Rule 1 clause 2).
     expect(request.request.body).toEqual({ ...APPLICATION_WIRE, charges: REPOSTED_CHARGES_WIRE });
 
     request.flush(ACTION_RESULT);
@@ -968,8 +843,7 @@ describe('LoanService', () => {
         isRequest('GET', loanUrl('loans', LOAN_ID, 'transactions', 'template')),
       );
 
-      // One endpoint takes the command as a parameter, which is why one method serves both forms
-      // (AAP 0.7.3 rows "W5 approve and disburse" and "W6 repayment").
+      // One endpoint takes the command as a parameter, which is why one method serves both forms (AAP 0.7.3 rows "W5 approve and disburse" and "W6 repayment").
       expect(request.request.params.keys()).toEqual(['command']);
       expect(request.request.params.get('command')).toBe(command);
       expect(request.request.body).toBeNull();
@@ -995,8 +869,7 @@ describe('LoanService', () => {
       expect(sent.request.params.get('command')).toBe(command);
       expect(sent.request.body).toEqual(wire);
 
-      // The command travels in the query string and never in the body, exactly as the legacy
-      // resource call sends it (AAP 0.7.3; Rule 1 clause 2).
+      // The command travels in the query string and never in the body, exactly as the legacy resource call sends it (AAP 0.7.3; Rule 1 clause 2).
       expect(bodyKeys(sent.request)).not.toContain('command');
 
       if (command === 'undoapproval' || command === 'undodisbursal') {
@@ -1021,9 +894,7 @@ describe('LoanService', () => {
 
       expect(sent.request.params.keys()).toEqual(['command']);
       expect(sent.request.params.get('command')).toBe(command);
-      // The date-format pair and nothing else: the date the form left empty is no date at all, and no
-      // optional member is invented in its place, so Fineract's required-field rule reports the gap
-      // (Rule 1 clauses 2 and 3; AAP 0.7.2).
+      // The date-format pair and nothing else: the date the form left empty is no date at all, and no optional member is invented in its place, so Fineract's required-field rule reports the gap (Rule 1 clauses 2 and 3; AAP (AAP 0.7.2).
       expect(sent.request.body).toEqual({ dateFormat: FINERACT_DATE_FORMAT, locale: APP_LOCALE });
       for (const member of absent) {
         expect(bodyKeys(sent.request)).not.toContain(member);
@@ -1104,8 +975,7 @@ describe('LoanService', () => {
   });
 
   it('sends a repayment with no payment type without the member, leaving the choice to the server', () => {
-    // A repayment template that offers no payment type: the form has no choice to send, and the model
-    // makes the member optional because Fineract accepts a repayment without one (AAP 0.7.2).
+    // A repayment template that offers no payment type: the form has no choice to send, and the model makes the member optional because Fineract accepts a repayment without one (AAP 0.7.2).
     service
       .repay(LOAN_ID, {
         transactionDate: DISBURSEMENT_DATE,
@@ -1144,8 +1014,7 @@ describe('LoanService', () => {
       isRequest('POST', loanUrl('loans', LOAN_ID, 'transactions')),
     );
 
-    // An absent note is no member rather than an empty string, which is the body the legacy form
-    // posted when its note was left blank (Rule 1 clause 2).
+    // An absent note is no member rather than an empty string, which is the body the legacy form posted when its note was left blank (Rule 1 clause 2).
     expect(bodyKeys(sent.request)).not.toContain('note');
     expect(sent.request.body).toEqual({
       transactionDate: DISBURSEMENT_TEXT,
@@ -1222,9 +1091,7 @@ describe('LoanService', () => {
       expect(sent.request.params.get('command')).toBe(command);
       expect(sent.request.body).toEqual(wire);
       expect(bodyKeys(sent.request)).not.toContain('command');
-      // The members the endpoint refuses on the parameter binding: neither command posts an amount and
-      // neither posts a payment type, while only `pay` posts the date it is recorded on (AAP 0.7.3,
-      // "Loan charges"; `LoanChargeActionRequest`).
+      // The members the endpoint refuses on the parameter binding: neither command posts an amount and neither posts a payment type, while only `pay` posts the date it is recorded on (AAP 0.7.3, "Loan charges".
       expect(bodyKeys(sent.request)).not.toContain('amount');
       expect(bodyKeys(sent.request)).not.toContain('paymentTypeId');
 
@@ -1245,20 +1112,13 @@ describe('LoanService', () => {
 
     expect(sent.request.params.get('command')).toBe('pay');
     expect(bodyKeys(sent.request)).not.toContain('transactionDate');
-    // The format pair alone, as a waiver sends it: the empty date is no date rather than an empty
-    // one, and the server's own rule reports it (Rule 1 clauses 2 and 3).
+    // The format pair alone, as a waiver sends it: the empty date is no date rather than an empty one, and the server's own rule reports it (Rule 1 clauses 2 and 3).
     expect(sent.request.body).toEqual({ dateFormat: FINERACT_DATE_FORMAT, locale: APP_LOCALE });
 
     sent.flush(ACTION_RESULT);
   });
 
-  /**
-   * The path segment is the loan's own charge row — the `resourceId` `POST /loans/{id}/charges`
-   * answers — and not the charge definition id the picker offers: with this body,
-   * `POST /loans/8/charges/1?command=pay` answers 404 "Loan charge with identifier 1 does not exist
-   * for loan 8" for a definition attached as loan-charge 5, while the same command against
-   * `/charges/5` resolves the charge (AAP 0.7.3, "Loan charges").
-   */
+  /** The path segment is the loan's own charge row — the `resourceId` `POST /loans/{id}/charges` answers — and not the charge definition id the picker offers: with this body, `POST /loans/8/charges/1?command=pay` answers 404 (AAP 0.7.3). */
   it('posts the charge action against the loan-charge id it is given, never the definition id', () => {
     const loanChargeId = 5;
 
@@ -1277,9 +1137,7 @@ describe('LoanService', () => {
   });
 
   it('refuses to post the charge action when the body describes the other command', () => {
-    // The command travels in the query string and the discriminator in the body, so a mismatched pair
-    // would post one command's payload to the other's non-idempotent endpoint. The refusal arrives as
-    // an observable error — `defer` runs the guard on subscribe — and no request is issued.
+    // The command travels in the query string and the discriminator in the body, so a mismatched pair would post one command's payload to the other's non-idempotent endpoint.
     const messages: string[] = [];
     let emissions = 0;
 
@@ -1298,9 +1156,7 @@ describe('LoanService', () => {
   });
 
   it('refuses a lifecycle action whose body describes another command, and issues no request', () => {
-    // The two travel separately — the command in the query string, the discriminator in the body — and
-    // neither action endpoint is idempotent, so a mismatched pair never reaches the server. It reaches
-    // the subscriber as an observable error instead of an exception thrown out of the call.
+    // The two travel separately — the command in the query string, the discriminator in the body — and neither action endpoint is idempotent, so a mismatched pair never reaches the server.
     const messages: string[] = [];
     let emissions = 0;
 
@@ -1375,11 +1231,7 @@ describe('LoanService', () => {
       .expectOne(isRequest('GET', loanUrl('loans', LOAN_ID)))
       .flush({ defaultUserMessage: serverMessage }, { status: 404, statusText: 'Not Found' });
 
-    // One failure, no emission and nothing swallowed: this service maps no error, so Fineract's own
-    // `defaultUserMessage` reaches the caller on the response the interceptor turns into `ApiError`
-    // and the record screen prints verbatim (AAP 0.7.2 "rendered verbatim"; workflow W7). The mapping
-    // itself belongs to `core/http/fineract.interceptor.spec.ts`, which is why the transport here is
-    // registered without that interceptor (AAP 0.4.2).
+    // One failure, no emission and nothing swallowed: this service maps no error, so Fineract's own `defaultUserMessage` reaches the caller on the response the interceptor turns into `ApiError` and the record screen prints (AAP 0.7.2, AAP 0.4.2).
     expect(failures).toHaveLength(1);
     expect(received).toEqual([]);
     expect(failures[0]?.status).toBe(404);
@@ -1387,11 +1239,7 @@ describe('LoanService', () => {
   });
 
   it('refuses a crafted route id or charge id with the guard message and issues no request at all', () => {
-    // The router hands an `:id` over URL-decoded, so this value would leave `/api/v1` and read another
-    // resource on the same host (CWE-20, CWE-22). Both identifier segments of the charges path are
-    // guarded, and both refusals arrive as observable errors — the form every caller of this service
-    // already handles (`firstValueFrom` inside a `try`, or a `catchError` beside it) — because `defer`
-    // keeps the invalid segment from being an exception thrown out of a `switchMap` projection.
+    // The router hands an `:id` over URL-decoded, so this value would leave `/api/v1` and read another resource on the same host (CWE-20, CWE-22).
     const crafted = '../../../users';
     const refusals: Error[] = [];
     let emissions = 0;
@@ -1410,8 +1258,7 @@ describe('LoanService', () => {
 
     expect(emissions).toBe(0);
     expect(refusals).toHaveLength(2);
-    // Each refusal's message is the guard's fixed sentence, so neither the rejected value nor the
-    // call that composed the segment is in the text a screen renders; both are in `cause` instead.
+    // Each refusal's message is the guard's fixed sentence, so neither the rejected value nor the call that composed the segment is in the text a screen renders; both are in `cause` instead.
     for (const refusal of refusals) {
       expect(refusal.message).not.toContain(crafted);
       expect(String(refusal.cause)).toContain(`'${crafted}'`);
@@ -1420,8 +1267,7 @@ describe('LoanService', () => {
     expect(String(refusals[0].cause)).toContain('LoanService.get');
     expect(refusals[1].message).not.toContain('LoanService.chargeAction');
     expect(String(refusals[1].cause)).toContain('LoanService.chargeAction');
-    // Nothing was sent, on either path or in any other shape; the teardown's `verify()` says the same
-    // for the whole case.
+    // Nothing was sent, on either path or in any other shape; the teardown's `verify()` says the same for the whole case.
     httpMock.expectNone(isRequest('GET', loanUrl('loans', crafted)));
     httpMock.expectNone(isRequest('POST', loanUrl('loans', LOAN_ID, 'charges', crafted)));
     httpMock.expectNone(() => true);

@@ -1,71 +1,18 @@
-/**
- * Behavioural spec for `SessionService`, the legacy session entry both front ends share, and the proof
- * AAP 0.10.3 criterion 2 asks for: "one test round-trips a legacy-shaped session fixture".
- *
- * The round-trip test below is that proof — a fixture of `{userId, authenticationKey,
- * userPermissions}` is written, read back unchanged and restored through a `GET /users/{id}` reader,
- * with `PermissionsService` answering the fixture's permissions afterwards. The tests that follow pin
- * one contract each of the rest of the service (AAP 0.7.1, row `SessionService`; AAP 0.7.2, row
- * `SessionData`; legacy `app/scripts/services/SessionManager.js:20-23,31,36-48` and
- * `app/scripts/webstorage-configuration.js:3,6-12`):
- * - `write()` stores exactly one entry at the composed legacy key, holding only the three legacy
- *   fields and the values the caller supplied;
- * - `sessionStorageKey()` derives that key from the legacy prefix and entry name in one place, which is
- *   the single expression AAP 0.9.4 row 7 leaves open until a legacy login is observed;
- * - `read()` reads what an AngularJS screen wrote there, under either key spelling, and publishes
- *   nothing of its own;
- * - `read()` answers `null` for an absent, non-JSON or wrongly-typed entry, because a malformed entry
- *   is not a session, and leaves such an entry exactly where it is — a read reports and never repairs,
- *   which is what the legacy wrapper does;
- * - `restore()` publishes a stored session and its permissions, reads the user once, publishes the
- *   label the user menu shows, and keeps the stored permission list even when the projection reports
- *   others (the legacy override);
- * - `restore()` resolves `false` without reading when nothing is stored, and without rejecting when
- *   the read fails, leaving the entry and the closed gate as they were;
- * - `clear()` removes the entry, empties both signals and withdraws the permissions;
- * - a document with no browsing context still round-trips the session, in memory.
- *
- * The service is constructed with the runtime injector and `runInInjectionContext` rather than through
- * `TestBed`: its only two dependencies are the document and `PermissionsService`, so supplying them
- * directly keeps the assertions on the same real service instance the application injects and needs no
- * fixture module for a class with no template.
- *
- * Security (Rule 1 clause 9, AAP 0.10.4): the fixture's authentication key is assembled at run time
- * from parts, so no credential-shaped literal reaches the source, and it is asserted through object
- * equality rather than printed.
- *
- * The second block, `SessionService restore over HTTP`, proves the projection `restore()` publishes over
- * a real handler chain, and the shape of the request the reader it is handed puts on the transport. The
- * reader there is a stand-in in the shape `SessionUserReader` declares, because `SessionService` owns no
- * `HttpClient`; the production `GET /users/{id}` reader's own composition — method, path, parameters,
- * body and the interceptor's headers — is proven in `auth.service.spec.ts` (AAP 0.7.3 W1:
- * `GET /users/{id}`, `userResource`; Rule 1 clause 8).
- */
+/** Behavioural spec for `SessionService`, the legacy session entry both front ends share, and the proof AAP 0.10.3 criterion 2 asks for: "one test round-trips a legacy-shaped session fixture". */
 import { HttpHandler, HttpRequest, HttpResponse, provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { DOCUMENT, Injector, runInInjectionContext } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Subject, filter, map, of, throwError, type Observable } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-
 import { AppConfigService } from '../config/app-config.service';
 import { PermissionsService } from './permissions.service';
 import type { SessionData, SessionUserResponse } from './session.model';
 import {
-  LEGACY_STORAGE_PREFIX,
-  SESSION_ENTRY_KEY,
-  SessionService,
-  sessionStorageKey,
-  type SessionUserReader,
+  LEGACY_STORAGE_PREFIX, SESSION_ENTRY_KEY, SessionService, sessionStorageKey, type SessionUserReader,
 } from './session.service';
 
-/**
- * The key the legacy pair composes — `prefix` `'mifosX'` with the entry name `sessionData`
- * (webstorage-configuration.js:3, SessionManager.js:20-23) — spelled out here because the exact stored
- * key string is the contract a legacy screen reads (AAP 0.3.4 claim 9). It is written as a literal
- * rather than taken from `sessionStorageKey()` so the test states the contract instead of restating
- * the implementation (AAP 0.9.4 row 7).
- */
+/** The composed legacy storage key, `prefix` `'mifosX'` + `sessionData` (webstorage-configuration.js:3): the exact string a legacy screen reads (AAP 0.3.4 claim 9). */
 const COMPOSED_KEY = 'mifosXsessionData';
 
 /** The bare key the library writes from release 0.11.0 on, which `read()` must accept too. */
@@ -77,25 +24,16 @@ const KEY_PARTS = ['Zm9v', 'YmFy', 'OnNlY3JldA'];
 /** The Fineract user id every fixture in this suite names. */
 const USER_ID = 42;
 
-/**
- * An empty value, named so the malformed-entry table below can seed one without writing a
- * credential-shaped literal: an entry whose key is empty is not a session (AAP 0.7.2, row
- * `SessionData`), and a reader must not mistake it for one.
- */
+/** An empty value. */
 const EMPTY_VALUE = '';
 
 /** The `username` the user menu shows, as `GET /users/{id}` returns it. */
 const USERNAME = 'mifos';
 
-/**
- * The legacy-shaped session fixture of AAP 0.10.3 criterion 2: exactly the three stored fields, with
- * the permission pair the legacy override test needs — `READ_CLIENT` held, `READ_LOAN` not.
- */
+/** The legacy-shaped session fixture of AAP 0.10.3 criterion 2: exactly the three stored fields. */
 function legacyFixture(): SessionData {
   return {
-    userId: USER_ID,
-    authenticationKey: KEY_PARTS.join(''),
-    userPermissions: ['READ_CLIENT', 'CREATE_CLIENT'],
+    userId: USER_ID, authenticationKey: KEY_PARTS.join(''), userPermissions: ['READ_CLIENT', 'CREATE_CLIENT'],
   };
 }
 
@@ -110,21 +48,13 @@ interface Harness {
   readonly permissions: PermissionsService;
 }
 
-/**
- * Builds `SessionService` with the two dependencies it injects: the document the storage is reached
- * through, and the permission gate it drives. Both are supplied as values so the harness keeps the
- * very gate the service talks to and can assert what the application's templates would see.
- */
+/** Builds `SessionService` with the two dependencies it injects: the document the storage is reached through, and the permission gate it drives. */
 function harnessFor(view: Document = document): Harness {
   const permissions = new PermissionsService();
   const injector = Injector.create({
-    providers: [
-      { provide: DOCUMENT, useValue: view },
-      { provide: PermissionsService, useValue: permissions },
-    ],
-  });
+    providers: [{ provide: DOCUMENT, useValue: view }, { provide: PermissionsService, useValue: permissions },
+    ], });
   const service = runInInjectionContext(injector, () => new SessionService());
-
   return { service, permissions };
 }
 
@@ -141,11 +71,7 @@ function recordingReader(response: SessionUserResponse, calls: number[]): Sessio
   };
 }
 
-/**
- * The served API host and root, written out exactly as `web-ng/src/assets/config.json` ships them, so the
- * request the second block expects is the URL the deployed application produces (AAP 0.4.4 decision 5).
- * No demo host appears here or anywhere else in the suite (Rule 2).
- */
+/** The served API host and root, written out exactly as `web-ng/src/assets/config.json` ships them. */
 const API_BASE_URL = 'https://localhost:8443';
 const API_PATH = '/fineract-provider/api/v1';
 const API_ROOT = `${API_BASE_URL}${API_PATH}`;
@@ -153,19 +79,10 @@ const API_ROOT = `${API_BASE_URL}${API_PATH}`;
 /** The one separator every composed URL is joined with. */
 const SEPARATOR = '/';
 
-/**
- * The resource path the reader asks the configuration for, named rather than written into an `apiUrl()`
- * call so the endpoint scan sees a constant instead of a new judged literal. What that path has to be is
- * stated independently by `EXPECTED_USERS_URL` below.
- */
+/** The resource path the reader asks the configuration for, named rather than written into an `apiUrl()` call so the endpoint scan sees a constant instead of a new judged literal. */
 const USERS_PATH = 'users';
 
-/**
- * The stub `apiUrl()`: the configuration owns the host and the API root, the caller owns the resource
- * path, and the two are joined as `AppConfigService.apiUrl()` documents — one `/` at the join, no other
- * rewriting — so a request this spec sees is the one the application sends. Typed as the slice of the
- * service it stands in for, so a changed signature fails the build here (Rule 1 clause 4).
- */
+/** The stub `apiUrl()`: the configuration owns the host and the API root, the caller owns the resource path, and the two are joined as `AppConfigService.apiUrl()` documents — one `/` at the join, no other rewriting — so a (Rule 1 clause 4). */
 const apiConfig: Pick<AppConfigService, 'apiUrl'> = {
   apiUrl: (path: string): string => `${API_ROOT}${SEPARATOR}${path}`,
 };
@@ -175,12 +92,7 @@ function usersUrl(userId: number): string {
   return [apiConfig.apiUrl(USERS_PATH), userId].join(SEPARATOR);
 }
 
-/**
- * The URL the contract fixes, stated here from this spec's own literals rather than taken from
- * `usersUrl()`: an expectation derived from the helper the reader uses would agree with whatever that
- * helper composes, and the endpoint's name and place in the path — `users` as a segment, the id after it
- * (AAP 0.7.3 W1) — would go unchecked.
- */
+/** The URL the contract fixes, stated here from this spec's own literals rather than taken from `usersUrl()`: an expectation derived from the helper the reader uses would agree with whatever that helper composes, and the (AAP 0.7.3). */
 const EXPECTED_USERS_URL = [API_ROOT, 'users', String(USER_ID)].join(SEPARATOR);
 
 /** Matches the restore's user read by method and path; its parameter set is asserted separately. */
@@ -193,11 +105,7 @@ function anyRequest(): boolean {
   return true;
 }
 
-/**
- * The `{id, username}` projection a `GET /users/{id}` answer carries (`session.model.ts`), or `false` for
- * anything else. The reader below parses the response body as `unknown` and narrows it here, which is how
- * this spec stays fully typed without a cast and without reading a member the contract omits.
- */
+/** The `{id, username}` projection a `GET /users/{id}` answer carries (`session.model.ts`), or `false` for anything else. */
 function isSessionUserResponse(value: unknown): value is SessionUserResponse {
   if (typeof value !== 'object' || value === null) {
     return false;
@@ -217,14 +125,7 @@ function projectionOf(response: HttpResponse<unknown>): SessionUserResponse {
   return response.body;
 }
 
-/**
- * The `GET /users/{id}` reader `restore()` receives, in the shape `SessionUserReader` declares and with the
- * semantics its production owner gives it (`auth.service.ts`, one of the seven files the lint gate leaves
- * free to hold `HttpClient`). It is built on `HttpHandler` — the chain `HttpClient` itself submits through,
- * interceptors and all — because `web-ng/eslint.config.js` restricts the `HttpClient` import to those seven
- * files and a spec is not one of them. The request the assertions below read is therefore the request the
- * transport really received, not a stand-in for it.
- */
+/** The `GET /users/{id}` reader `restore()` receives, in the shape `SessionUserReader` declares and with the semantics its production owner gives it (`auth.service.ts`, one of the seven files the lint gate leaves free to. */
 function httpReader(handler: HttpHandler, calls: number[]): SessionUserReader {
   return (userId: number): Observable<SessionUserResponse> => {
     calls.push(userId);
@@ -236,11 +137,7 @@ function httpReader(handler: HttpHandler, calls: number[]): SessionUserReader {
   };
 }
 
-/**
- * Entries that are present under the composed key and are not sessions. Each is a value some earlier
- * release could have left behind: a non-JSON string, JSON that is not an object, and an object whose
- * three fields are missing or carry the wrong type (AAP 0.7.2, row `SessionData`).
- */
+/** Entries that are present under the composed key and are not sessions (AAP 0.7.2). */
 const MALFORMED_ENTRIES: Array<[string, string]> = [
   ['a value that is not JSON', 'not a session'],
   ['a JSON array', '[1, 2, 3]'],
@@ -271,8 +168,7 @@ describe('SessionService', () => {
     expect(LEGACY_STORAGE_PREFIX).toBe('mifosX');
     expect(SESSION_ENTRY_KEY).toBe('sessionData');
     expect(sessionStorageKey()).toBe(COMPOSED_KEY);
-    // The optional parameters still concatenate, so the one expression AAP 0.9.4 row 7 allows to be
-    // corrected is the composition itself, not any of the reads, writes and removals around it.
+    // The optional parameters still concatenate, so the one expression AAP 0.9.4 row 7 allows to be corrected is the composition itself, not any of the reads, writes and removals around it.
     expect(sessionStorageKey('p', 'e')).toBe('pe');
     expect(sessionStorageKey('otherPrefix', SESSION_ENTRY_KEY)).toBe('otherPrefixsessionData');
   });
@@ -287,9 +183,7 @@ describe('SessionService', () => {
 
     const restored = await service.restore((userId: number) => {
       calls.push(userId);
-      // The session is published before the read, because the interceptor takes the
-      // `Authorization: Basic` key off `session()` for this very request (legacy sets the
-      // authorization before `userResource.get`, SessionManager.js:40-41).
+      // The session is published before the read, because the interceptor takes the `Authorization: Basic` key off `session()` for this very request (legacy sets the authorization before `userResource.get`.
       expect(service.session()).toEqual(fixture);
       return of(projection());
     });
@@ -298,8 +192,7 @@ describe('SessionService', () => {
     expect(calls).toEqual([USER_ID]);
     expect(permissions.can('READ_CLIENT')).toBe(true);
     expect(permissions.can('READ_LOAN')).toBe(false);
-    // The label the user menu shows comes from the projection, and the entry still holds exactly the
-    // three legacy fields.
+    // The label the user menu shows comes from the projection, and the entry still holds exactly the three legacy fields.
     expect(service.username()).toBe(USERNAME);
     expect(service.read()).toEqual(fixture);
 
@@ -312,8 +205,7 @@ describe('SessionService', () => {
   it('stores exactly one entry at mifosXsessionData holding only the three legacy fields', () => {
     const { service } = harnessFor();
     const fixture = legacyFixture();
-    // A caller's object may carry more than the entry does; the entry is serialised from these three
-    // fields alone (AAP 0.7.2), because a legacy screen reading it expects exactly this shape.
+    // A caller's object may carry more than the entry does; the entry is serialised from these three fields alone (AAP 0.7.2), because a legacy screen reading it expects exactly this shape.
     const withExtras: SessionData & { user: string } = { ...fixture, user: 'not part of the entry' };
 
     service.write(withExtras);
@@ -333,10 +225,7 @@ describe('SessionService', () => {
 
   it('stores and publishes nothing when the permission list is not an array', () => {
     const { service } = harnessFor();
-    // The shape a `POST /authentication` response carries when its `permissions` member is missing or
-    // mistyped. Rebuilding the permission list only after the entry had been written is how a partial
-    // or mistyped entry reached `localStorage` (cr3-F07), so the entry and the session are now built
-    // from one checked copy and the write is refused whole instead.
+    // The shape a `POST /authentication` response carries when its `permissions` member is missing or mistyped.
     const malformed = { ...legacyFixture(), userPermissions: 'READ_CLIENT' } as unknown as SessionData;
 
     expect(() => service.write(malformed)).toThrow(TypeError);
@@ -358,15 +247,13 @@ describe('SessionService', () => {
 
   it('sees an entry written before it was constructed, and puts it into effect on restore', async () => {
     const fixture = legacyFixture();
-    // The entry is written first, by a previous page load of either front end, and only then does the
-    // service exist — the state a reload of the application starts from.
+    // The entry is written first, by a previous page load of either front end, and only then does the service exist — the state a reload of the application starts from.
     seedEntry(JSON.stringify(fixture));
 
     const { service, permissions } = harnessFor();
 
     expect(service.read()).toEqual(fixture);
-    // Constructing the service publishes nothing: the entry predates it, and `restore()` is what puts a
-    // stored session into effect (AAP 0.7.1: `read()` reports, `restore()` publishes).
+    // Constructing the service publishes nothing: the entry predates it, and `restore()` is what puts a stored session into effect (AAP 0.7.1: `read()` reports, `restore()` publishes).
     expect(service.session()).toBeNull();
 
     await expect(service.restore()).resolves.toBe(true);
@@ -401,13 +288,10 @@ describe('SessionService', () => {
 
     // The composed key is read first, and a corrupted session beside a valid one is not a session.
     expect(service.read()).toBeNull();
-    // A read is not a repair: the legacy wrapper parses the entry and throws without writing, so the
-    // corrupt value stays under the composed key and no difference registered in AAP 0.10.5 lets this
-    // service delete it (Rule 1 clause 3).
+    // A read is not a repair: the legacy wrapper parses the entry and throws without writing, so the corrupt value stays under the composed key and no difference registered in AAP 0.10.5 lets this service delete it (Rule 1 (Rule 1 clause 3).
     expect(window.localStorage.getItem(COMPOSED_KEY)).toBe('not a session');
     expect(window.localStorage.getItem(BARE_KEY)).toBe(JSON.stringify(fixture));
-    // The valid entry under the other spelling is therefore unreachable for the life of the page, which
-    // is exactly what a legacy screen reading the same store would see.
+    // The valid entry under the other spelling is therefore unreachable for the life of the page, which is exactly what a legacy screen reading the same store would see.
     expect(service.read()).toBeNull();
   });
 
@@ -416,8 +300,7 @@ describe('SessionService', () => {
     seedEntry(raw);
 
     expect(service.read()).toBeNull();
-    // Nothing can read the value as a session, and nothing removes it either: a read of an entry that is
-    // not a session writes nothing, as legacy's does.
+    // Nothing can read the value as a session, and nothing removes it either: a read of an entry that is not a session writes nothing, as legacy's does.
     expect(window.localStorage.getItem(COMPOSED_KEY)).toBe(raw);
   });
 
@@ -442,8 +325,7 @@ describe('SessionService', () => {
     service.write(fixture);
 
     const restored = await service.restore(() =>
-      // The response's own permission list is what the legacy restore discards
-      // (SessionManager.js:41-43): the stored one is authoritative.
+      // The response's own permission list is what the legacy restore discards (SessionManager.js:41-43): the stored one is authoritative.
       of({ id: USER_ID, username: USERNAME, permissions: ['READ_LOAN'] }),
     );
 
@@ -465,8 +347,7 @@ describe('SessionService', () => {
     expect(restored).toBe(false);
     expect(window.localStorage.getItem(COMPOSED_KEY)).not.toBeNull();
     expect(service.read()).toEqual(fixture);
-    // Nothing is in effect: the entry is kept for the 401 path, the signals are empty and the gate is
-    // withdrawn, so a guard reading `session()` cannot treat this as a signed-in state.
+    // Nothing is in effect: the entry is kept for the 401 path, the signals are empty and the gate is withdrawn, so a guard reading `session()` cannot treat this as a signed-in state.
     expect(service.session()).toBeNull();
     expect(service.user()).toBeNull();
     expect(permissions.can('READ_CLIENT')).toBe(false);
@@ -479,8 +360,7 @@ describe('SessionService', () => {
     const pending = new Subject<SessionUserResponse>();
     const restore = service.restore(() => pending.asObservable());
 
-    // A login completes while the restore's `GET /users/{id}` read is still in flight: that session,
-    // not the failed one, owns the signals and the permission list afterwards.
+    // A login completes while the restore's `GET /users/{id}` read is still in flight: that session, not the failed one, owns the signals and the permission list afterwards.
     const replacement: SessionData = {
       userId: USER_ID + 1,
       authenticationKey: KEY_PARTS.join(''),
@@ -520,8 +400,7 @@ describe('SessionService', () => {
     laterAnswer.complete();
     await expect(laterRestore).resolves.toBe(true);
 
-    // The earlier session's answer arrives last and publishes nothing: its restore did not establish a
-    // session, so the earlier username and permission list cannot sit behind the later authorization.
+    // The earlier session's answer arrives last and publishes nothing: its restore did not establish a session, so the earlier username and permission list cannot sit behind the later authorization.
     earlierAnswer.next({ id: earlier.userId, username: USERNAME });
     earlierAnswer.complete();
     await expect(earlierRestore).resolves.toBe(false);
@@ -559,8 +438,7 @@ describe('SessionService', () => {
     service.clear();
 
     expect(window.localStorage.getItem(COMPOSED_KEY)).toBeNull();
-    // Both spellings are gone, so the store is empty rather than holding an entry under the other key
-    // that the next restore would read as a session.
+    // Both spellings are gone, so the store is empty rather than holding an entry under the other key that the next restore would read as a session.
     expect(window.localStorage.length).toBe(0);
     expect(service.session()).toBeNull();
     expect(service.user()).toBeNull();
@@ -575,9 +453,7 @@ describe('SessionService', () => {
   });
 
   it('round-trips the session in memory when the document has no storage', async () => {
-    // A document made without a browsing context is a real `Document` whose `defaultView` is null,
-    // which is the state the legacy wrapper answers with its memory fallback
-    // (webstorage-configuration.js:6-12).
+    // A document made without a browsing context is a real `Document` whose `defaultView` is null, which is the state the legacy wrapper answers with its memory fallback (webstorage-configuration.js:6-12).
     const noStorage = document.implementation.createHTMLDocument('storage-unavailable');
     const { service, permissions } = harnessFor(noStorage);
     const fixture = legacyFixture();
@@ -598,25 +474,7 @@ describe('SessionService', () => {
   });
 });
 
-/**
- * The projection `restore()` publishes when it drives a real transport (AAP 0.7.1,
- * `restore(): Promise<boolean>`; AAP 0.10.3 criterion 2's session round-trip).
- *
- * `SessionService` owns no `HttpClient`: the read arrives as a `SessionUserReader` from the service that
- * does own it, so the reader supplied here is a stand-in in exactly the shape that type declares, built
- * on `HttpHandler` — the chain `HttpClient` itself submits through — because the lint gate leaves only
- * the seven files AAP 0.14.1 names free to hold `HttpClient`, and a spec is not one of them. What this
- * block therefore proves is the restore's own behaviour over a real handler chain: that it resolves
- * `true`, puts the stored session in effect, publishes the account name the projection answered with
- * and keeps the stored permission list, and that the request it hands the transport is the shape its
- * reader composes — a bodiless `GET` with no query parameter.
- *
- * The production reader's own composition of the method, the `users/{id}` path, the empty parameter set
- * and the body, together with the `Authorization` and tenant headers the interceptor attaches to it, is
- * proven where that reader lives: `auth.service.spec.ts`, whose restore cases drive
- * `AuthService.restore()` — the very delegation the bootstrap initializer makes (AAP 0.10.1 W1;
- * `web-ng/src/app/app.config.ts`).
- */
+/** The projection `restore()` publishes when it drives a real transport (AAP 0.7.1, `restore(): Promise<boolean>`; AAP 0.10.3 criterion 2's session round-trip) (AAP 0.14.1, AAP 0.10.1). */
 describe('SessionService restore over HTTP', () => {
   let service: SessionService;
   let permissions: PermissionsService;
@@ -637,8 +495,7 @@ describe('SessionService restore over HTTP', () => {
   });
 
   afterEach(() => {
-    // Proves no request was left outstanding: a restore that read the user twice, or issued a call it
-    // never reported, fails here as well as in the case that made it.
+    // Proves no request was left outstanding: a restore that read the user twice, or issued a call it never reported, fails here as well as in the case that made it.
     httpMock.verify();
   });
 
@@ -661,8 +518,7 @@ describe('SessionService restore over HTTP', () => {
     const restored = service.restore(httpReader(handler, calls));
 
     const request = httpMock.expectOne(isUsersRequest);
-    // The id travels as a path segment, so the request carries no query parameter at all, and a bodiless
-    // GET is what the legacy `userResource.get({userId})` issues (SessionManager.js:41).
+    // The id travels as a path segment, so the request carries no query parameter at all, and a bodiless GET is what the legacy `userResource.get({userId})` issues (SessionManager.js:41).
     expect(request.request.method).toBe('GET');
     expect(request.request.params.keys()).toEqual([]);
     expect(request.request.body).toBeNull();
@@ -672,9 +528,7 @@ describe('SessionService restore over HTTP', () => {
     await expect(restored).resolves.toBe(true);
     expect(calls).toEqual([USER_ID]);
     expect(service.session()).toEqual(fixture);
-    // The label the user menu shows, and the permissions the gate answers. The response's list matches the
-    // stored one here; the cases below prove the stored list survives a response that omits it, and the
-    // mirroring case in the block above proves it wins when a response reports a different one.
+    // The label the user menu shows, and the permissions the gate answers.
     expect(service.username()).toBe(USERNAME);
     expect(permissions.can('READ_CLIENT')).toBe(true);
     httpMock.expectNone(anyRequest);
@@ -687,8 +541,7 @@ describe('SessionService restore over HTTP', () => {
 
     const restored = service.restore(httpReader(handler, calls));
 
-    // `permissions` is optional on `SessionUserResponse`, and the legacy restore keeps the stored list
-    // whatever the response reports (SessionManager.js:41-43).
+    // `permissions` is optional on `SessionUserResponse`, and the legacy restore keeps the stored list whatever the response reports (SessionManager.js:41-43).
     httpMock.expectOne(isUsersRequest).flush(projection());
 
     await expect(restored).resolves.toBe(true);

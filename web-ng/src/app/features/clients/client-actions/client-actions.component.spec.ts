@@ -29,79 +29,7 @@ import type {
 import type { ClientActionCommand } from '../client.models';
 import { CLIENT_ACTION_PERMISSIONS, ClientActionsComponent } from './client-actions.component';
 
-/**
- * Behaviour of the client lifecycle action screen at `#/client/:id/:action` — the five commands
- * `activate`, `close`, `reject`, `withdraw` and `reactivate`, each preceded by the datatable gate the
- * legacy controller runs first (AAP 0.7.1 Features row `clients`; AAP 0.7.3 row "Client actions";
- * AAP 0.7.4 action screens; AAP 0.11.1 "unit specs beside every component and service"; Rule 1
- * clause 8).
- *
- * What it pins is the request sequence and the body a command posts, because that order is the
- * contract the parity harness compares and every step of it is something a rewrite could reorder:
- *
- *  1. an `:action` segment that names no in-scope command renders the not-found state and issues no
- *     request at all — no gate, no template, no command (AAP 0.7.4 "unknown segment renders
- *     not-found with no request");
- *  2. the gate's `GET /entityDatatableChecks?limit=-1` is the first request of every command,
- *     exactly once, and nothing else is in flight until it answers — with the route's own `:id`
- *     segment handed on to the check's read of that client;
- *  3. a failed gate leaves the form unready, publishes Fineract's own message for a 4xx, publishes
- *     nothing for a 5xx or a transport failure — the interceptor raises that one notification, so
- *     painting it here as well would report one problem twice — and never reads the reason list, so
- *     no field is ever enabled against a check that did not answer;
- *  4. `close`, `reject` and `withdraw` each read `GET /clients/template?commandParam=<command>` once
- *     the gate has passed and offer the tenant's reasons in the server's order;
- *  5. `activate` and `reactivate` take no reason and therefore read no template at all;
- *  6. submitting `close` posts exactly one `POST /clients/{id}?command=close` whose body is the one
- *     date format, the active locale, the chosen date formatted in that pattern and the chosen reason
- *     id, and then returns to the record;
- *  7. a second submit while that command is in flight sends no second request, because the action
- *     endpoints are not idempotent (AAP 0.1.1 "one request per click");
- *  8. a refused command records a 4xx message verbatim, keeps every entered value and navigates
- *     nowhere (workflow W7), while the same rejection at a 5xx leaves that region empty for the same
- *     reason as the gate's;
- *  9. a `close` whose date is still empty posts nothing at all;
- * 10. the reason select of `close`, `reject` and `withdraw` announces no required constraint, because
- *     its control carries no validator and the screen posts the reason as chosen, while the date
- *     field beside it — whose control does carry one — announces the constraint Fineract enforces
- *     (Rule 1 clause 3; AAP 0.4.4 decision 6);
- * 11. all five commands issue that sequence and nothing else — gate, reason list where the command
- *     takes one, one command — which is the ordered traffic the parity harness compares (AAP 0.10.2);
- * 12. `activate` posts its activation date alone and `reactivate` its reactivation date alone: the
- *     form holds a `Date`, the service formats it with the payload's own pattern and locale at the
- *     boundary, and no reason member travels with either command (AAP 0.7.2 "Date handling").
- * 13. the submit control is gated on the command's own code — the code the `client/:id/:action` route
- *     declares and the code the record gates the entry that opens this screen with — so a user who
- *     lacks it sees the form and no control that posts it, and another command's code reveals
- *     nothing (AAP 0.1.1; Rule 1 clause 3, reproducing legacy's `has-permission` on that one button).
- *
- * **The request sequence is asserted without a render.** What this screen does — the gate's order,
- * the reason list, one command per click and the body it carries — lives entirely in the component
- * and the services it calls, so those cases mount the screen and read its signals and the recorded
- * traffic rather than a fixture. The cases that render exist to pin what only the template can show:
- * the form appears only after the gate — and, for a reason-taking command, the reason list — has
- * answered, with its primary button disabled while a command is in flight (AAP 0.7.4; AAP 0.1.1);
- * the required marker the reason select and the date field do or do not carry in `aria-required`;
- * the permission gate on that button, which hides it from a user who does not hold the command's own
- * code while leaving the fields and the cancel link in place (AAP 0.1.1); and the one failure region,
- * which shows a failed gate's own message above no form at all.
- *
- * **Providers.** Each case mounts the screen for its own URL, so the module is reset first and the
- * route stub is the one provider a case supplies: `ActivatedRoute.paramMap` emits the two segments
- * the case is about. The permission list is set on the real `PermissionsService` before the component
- * exists — the mounted command's own code, unless the case is about the gate itself — so the control
- * the directive gates answers as it does in the application rather than from a stub. The
- * configuration is loaded from a stubbed `fetch` before the component exists,
- * because every URL is composed from it, and the ngx-translate stack is registered with the legacy
- * captions the screen's copy resolves. The router is a spy over `navigate` — the screen owes the
- * router one navigation per landed command — and the two interceptors are the production error
- * mapping, so the rejection the component narrows is the type it narrows in the application
- * (AAP 0.4.2), and a recorder that writes each request's method and path down, which is what lets a
- * case assert the order of the calls rather than only their presence.
- *
- * The fixtures are synthetic: an invented client id, two invented reasons and messages quoted in the
- * shape the fork answers with. Nothing here logs a client id, a reason id or a body (Rule 1 clause 9).
- */
+/** Behaviour of the client lifecycle action screen at `#/client/:id/:action` — the five commands `activate`, `close`, `reject`, `withdraw` and `reactivate`, each preceded by the datatable gate the legacy controller runs (AAP 0.7.1, AAP 0.7.3, AAP 0.7.4, AAP 0.11.1). */
 
 /** The configuration the stubbed transport serves: the application's own documented default shape. */
 const SERVED_CONFIG = DEFAULT_APP_CONFIG;
@@ -121,20 +49,14 @@ const COMMANDS = [
   'reactivate',
 ] as const satisfies readonly ClientActionCommand[];
 
-/**
- * The three commands whose reason list comes from `GET /clients/template?commandParam=<command>`;
- * `activate` and `reactivate` read no template at all (AAP 0.7.3 row "Client actions").
- */
+/** The three commands whose reason list comes from `GET /clients/template?commandParam=<command>`; `activate` and `reactivate` read no template at all (AAP 0.7.3 row "Client actions"). */
 const REASON_COMMANDS = [
   'close',
   'reject',
   'withdraw',
 ] as const satisfies readonly ClientActionCommand[];
 
-/**
- * The body member each command carries its action date in, quoted from AAP 0.7.2 row
- * `ClientActionRequest`.
- */
+/** The body member each command carries its action date in, quoted from AAP 0.7.2 row `ClientActionRequest`. */
 const DATE_BODY_KEY: Readonly<Record<ClientActionCommand, string>> = {
   activate: 'activationDate',
   close: 'closureDate',
@@ -143,10 +65,7 @@ const DATE_BODY_KEY: Readonly<Record<ClientActionCommand, string>> = {
   reactivate: 'reactivationDate',
 };
 
-/**
- * The body member each command carries its reason id in, quoted from AAP 0.7.2 row
- * `ClientActionRequest`: the id is posted under the command's own member, never under another's.
- */
+/** The body member each command carries its reason id in, quoted from AAP 0.7.2 row `ClientActionRequest`: the id is posted under the command's own member, never under another's. */
 const REASON_BODY_KEY: Readonly<Record<(typeof REASON_COMMANDS)[number], string>> = {
   close: 'closureReasonId',
   reject: 'rejectionReasonId',
@@ -165,21 +84,13 @@ const CLIENT_URL = `${API_ROOT}/clients/${CLIENT_ID}`;
 /** Where the screen returns once a command lands. */
 const RECORD_ROUTE = ['/viewclient', CLIENT_ID];
 
-/**
- * The `:id` tail every per-client request ends with, taken from the client URL rather than spelled
- * again: the gate's check read addresses the same client the command does, so one composed URL is
- * what proves the segment reached both.
- */
+/** The `:id` tail every per-client request ends with, taken from the client URL rather than spelled again: the gate's check read addresses the same client the command does, so one composed URL is what proves the segment. */
 const CLIENT_SUFFIX: string = relativeUrl(CLIENT_URL).slice(-(CLIENT_ID.length + 1));
 
 /** The pattern every date-bearing body carries, spelled out as the contract fixes it. */
 const PAYLOAD_DATE_FORMAT = 'dd MMMM yyyy';
 
-/**
- * The legacy captions the screen's copy resolves, keyed exactly as the shipped flat translation
- * bundles key them. A key that did not resolve would render as itself, so serving the wording is what
- * proves the heading, the button, the date and reason labels and the not-found message resolve.
- */
+/** The legacy captions the screen's copy resolves, keyed exactly as the shipped flat translation bundles key them. */
 const TRANSLATIONS: Readonly<Record<string, string>> = {
   'label.anchor.activate': 'Activate',
   'label.anchor.close': 'Close',
@@ -199,10 +110,7 @@ const TRANSLATIONS: Readonly<Record<string, string>> = {
   'error.msg.resource.not.found': 'The requested resource is not available.',
 };
 
-/**
- * The tenant's configured closure reasons, in the order the template returns them: the ids are the
- * server's own, which is why the screen never invents one (AAP 0.7.3 row "Client actions").
- */
+/** The tenant's configured closure reasons, in the order the template returns them: the ids are the server's own, which is why the screen never invents one (AAP 0.7.3 row "Client actions"). */
 const REASONS: readonly SelectOption[] = [
   { id: 11, name: 'Client has moved away' },
   { id: 12, name: 'Other' },
@@ -211,10 +119,7 @@ const REASONS: readonly SelectOption[] = [
 /** The reason every submit case chooses: the first the tenant configured, as the select offers it. */
 const CHOSEN_REASON: SelectOption = REASONS[0];
 
-/**
- * The second reason the tenant configured: the one a case selects through the rendered control, so the
- * id a body carries is proven to be the option the operator picked rather than the first of the list.
- */
+/** The second reason the tenant configured: the one a case selects through the rendered control, so the id a body carries is proven to be the option the operator picked rather than the first of the list. */
 const OTHER_REASON: SelectOption = REASONS[1];
 
 /** The gate's answer for a tenant with no applicable check: nothing to read, so the gate passes. */
@@ -238,38 +143,23 @@ const GATE_FAILURE_MESSAGE = 'The datatables could not be read.';
 /** The message a refused command answers with, quoted from a real Fineract validation failure. */
 const COMMAND_FAILURE_MESSAGE = 'The closure date cannot be in the future.';
 
-/**
- * Installs the production mapping of a Fineract failure onto the test transport, so a rejection
- * arrives as the `ApiError` the component renders (AAP 0.4.2; workflow W7).
- */
+/** Installs the production mapping of a Fineract failure onto the test transport, so a rejection arrives as the `ApiError` the component renders (AAP 0.4.2; workflow W7). */
 const MAP_FINERACT_FAILURES: HttpInterceptorFn = (request, next) =>
   next(request).pipe(
     catchError((failure: HttpErrorResponse) => throwError(() => toApiError(failure))),
   );
 
-/**
- * The method and configuration-relative path of every request the screen has issued, in the order it
- * issued them. {@link show} empties it, so each case reads the sequence of its own screen alone.
- */
+/** The method and configuration-relative path of every request the screen has issued, in the order it issued them. {@link show} empties it, so each case reads the sequence of its own screen alone. */
 let recorded: string[] = [];
 
-/**
- * Records a request before the mapping interceptor answers it, which is what lets a case assert the
- * **relative order** of the gate, the reason list and the command rather than only their presence.
- */
+/** Records a request before the mapping interceptor answers it, which is what lets a case assert the **relative order** of the gate, the reason list and the command rather than only their presence. */
 const RECORD_REQUESTS: HttpInterceptorFn = (request, next) => {
   recorded.push(`${request.method} ${relativeUrl(request.urlWithParams)}`);
 
   return next(request);
 };
 
-/**
- * The configuration-relative path of one API URL, which is how a recorded request is spelled: the
- * host and the API path are the same for every call, so only the resource identifies it.
- *
- * @param url the absolute URL a request or a constant carries.
- * @returns the URL from its resource onwards, e.g. `/clients/2`.
- */
+/** The configuration-relative path of one API URL, which is how a recorded request is spelled: the host and the API path are the same for every call, so only the resource identifies it. @param url the absolute URL a. */
 function relativeUrl(url: string): string {
   return url.slice(API_ROOT.length);
 }
@@ -302,17 +192,7 @@ function isReasonCommand(command: ClientActionCommand): boolean {
   return command === 'close' || command === 'reject' || command === 'withdraw';
 }
 
-/**
- * The exact requests one command issues, in the order it must issue them: the datatable gate first,
- * then — for the three commands that take a reason — the template read, then the one command POST.
- *
- * Written as the legacy sequence rather than as the order this screen happens to run today, so a
- * rewrite that loads the reason list before the gate fails the case instead of quietly reordering the
- * traffic the parity harness compares (AAP 0.7.3 row "Client actions: datatable gate"; AAP 0.14.1).
- *
- * @param command the command whose sequence is expected.
- * @returns the method and path of each request, in order.
- */
+/** The exact requests one command issues, in the order it must issue them: the datatable gate first, then — for the three commands that take a reason — the template read, then the one command POST. Written as the legacy (AAP 0.7.3, AAP 0.14.1). */
 function expectedSequence(command: ClientActionCommand): readonly string[] {
   const gate = `GET ${relativeUrl(GATE_URL)}?limit=-1`;
   const post = `POST ${relativeUrl(CLIENT_URL)}?command=${command}`;
@@ -328,8 +208,7 @@ describe('ClientActionsComponent', () => {
   let httpMock: HttpTestingController;
   let navigate: Mock<(commands: readonly unknown[]) => Promise<boolean>>;
 
-  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines the
-  // cast to one line and keeps the DOM assertions type-checked (Rule 1 clause 4).
+  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines the cast to one line and keeps the DOM assertions type-checked (Rule 1 clause 4).
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
 
   /** The card's title, which is the current command's own legacy step title. */
@@ -351,13 +230,7 @@ describe('ClientActionsComponent', () => {
       : Array.from(select.options).map((option) => option.textContent?.trim() ?? '');
   }
 
-  /**
-   * The date control of the command a case is about: each command owns its own form, and each form
-   * its own date member, so a case edits exactly the control the current screen renders.
-   *
-   * @param command the command whose form is on screen.
-   * @returns that form's date control.
-   */
+  /** The date control of the command a case is about: each command owns its own form, and each form its own date member, so a case edits exactly the control the current screen renders. @param command the command whose form. */
   function dateControl(command: ClientActionCommand): FormControl<Date | null> {
     switch (command) {
       case 'activate':
@@ -373,13 +246,7 @@ describe('ClientActionsComponent', () => {
     }
   }
 
-  /**
-   * The reason control of the three commands that take one, or `null` for `activate` and
-   * `reactivate`, which render no select at all.
-   *
-   * @param command the command whose form is on screen.
-   * @returns that form's reason control, or `null` when the command posts no reason.
-   */
+  /** The reason control of the three commands that take one, or `null` for `activate` and `reactivate`, which render no select at all. @param command the command whose form is on screen. @returns that form's reason control. */
   function reasonControl(command: ClientActionCommand): FormControl<SelectValue | null> | null {
     switch (command) {
       case 'close':
@@ -404,41 +271,20 @@ describe('ClientActionsComponent', () => {
     return convertToParamMap({ id, action });
   }
 
-  /**
-   * The codes a user must hold to see the mounted command's submit control: the command's own code,
-   * or none when the `:action` segment names no command.
-   *
-   * Read from the component's own declaration rather than restated, so a case cannot pass by holding
-   * a code the screen does not actually gate on.
-   *
-   * @param action the `:action` segment the route delivers.
-   * @returns the codes that release the mounted command's submit control.
-   */
+  /** The codes a user must hold to see the mounted command's submit control: the command's own code, or none when the `:action` segment names no command. */
   function commandCodes(action: string): readonly string[] {
     const command = COMMANDS.find((entry): boolean => entry === action);
 
     return command === undefined ? [] : [CLIENT_ACTION_PERMISSIONS[command]];
   }
 
-  /**
-   * Mounts the screen for one `#/client/:id/:action` URL as a signed-in user holding the mounted
-   * command's code.
-   *
-   * The component's constructor resolves the segments and starts the gate, so the request a case
-   * expects is already in flight when this returns.
-   *
-   * @param action the `:action` segment the route delivers.
-   * @param id the `:id` segment the route delivers.
-   * @param granted the codes to hold instead of the mounted command's own, `[]` included — which is a
-   * signed-in user holding nothing and is how a case proves the submit gate.
-   */
+  /** Mounts the screen for one `#/client/:id/:action` URL as a signed-in user holding the mounted command's code. */
   async function show(
     action: string,
     id: string = CLIENT_ID,
     granted?: readonly string[],
   ): Promise<void> {
-    // Every case mounts the screen for its own URL, so the module is reset first: a module left
-    // instantiated by the previous case cannot take a new route stub.
+    // Every case mounts the screen for its own URL, so the module is reset first: a module left instantiated by the previous case cannot take a new route stub.
     TestBed.resetTestingModule();
 
     // The sequence a case asserts is its own screen's, so the recorder starts empty every time.
@@ -455,8 +301,7 @@ describe('ClientActionsComponent', () => {
       ],
     });
 
-    // The submit control is gated on the command's own code, so the permission list is what decides
-    // whether the rendered form is the one a permitted operator sees.
+    // The submit control is gated on the command's own code, so the permission list is what decides whether the rendered form is the one a permitted operator sees.
     TestBed.inject(PermissionsService).setPermissions(granted ?? commandCodes(action));
 
     await TestBed.inject(AppConfigService).load();
@@ -466,19 +311,12 @@ describe('ClientActionsComponent', () => {
     translate.use('en');
 
     httpMock = TestBed.inject(HttpTestingController);
-    // The component is mounted without a first render: every request it makes is issued from the
-    // constructor or from `submit`, so a case that only reads the sequence needs no fixture. The one
-    // case that renders does so itself, once it has answered the step it is about.
+    // The component is mounted without a first render: every request it makes is issued from the constructor or from `submit`, so a case that only reads the sequence needs no fixture.
     fixture = TestBed.createComponent(ClientActionsComponent);
     component = fixture.componentInstance;
   }
 
-  /**
-   * Lets the load sequence finish after a response was flushed.
-   *
-   * The sequence is a chain of promises rather than a zone task, so draining one macrotask is what
-   * guarantees every continuation it queued has run before the assertions read the signals.
-   */
+  /** Lets the load sequence finish after a response was flushed. The sequence is a chain of promises rather than a zone task, so draining one macrotask is what guarantees every continuation it queued has run before the. */
   async function settle(): Promise<void> {
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 0);
@@ -497,12 +335,7 @@ describe('ClientActionsComponent', () => {
     await settle();
   }
 
-  /**
-   * Mounts `command` and drives it to its ready form: the gate is answered first, then the reason list
-   * for the three commands that read one, which is the order the screen itself runs them in.
-   *
-   * @param command the command a case submits.
-   */
+  /** Mounts `command` and drives it to its ready form: the gate is answered first, then the reason list for the three commands that read one, which is the order the screen itself runs them in. @param command the command a. */
   async function showReady(command: ClientActionCommand): Promise<void> {
     await show(command);
     await passGate();
@@ -523,8 +356,7 @@ describe('ClientActionsComponent', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn<typeof fetch>(() => {
-        // `Response` stand-in: the three members `AppConfigService.fetchRawConfig` reads. The cast is
-        // the single boundary where the partial object becomes the response the service expects.
+        // `Response` stand-in: the three members `AppConfigService.fetchRawConfig` reads.
         const body = {
           ok: true,
           status: 200,
@@ -554,8 +386,7 @@ describe('ClientActionsComponent', () => {
     // Neither the gate nor a command reached the API: an unknown segment names nothing to check.
     expect(httpMock.match(isAnyRequest)).toHaveLength(0);
 
-    // The screen says so in the one failure region, translated from the legacy bundle's own key, and
-    // renders no field: there is no command to post (AAP 0.7.4).
+    // The screen says so in the one failure region, translated from the legacy bundle's own key, and renders no field: there is no command to post (AAP 0.7.4).
     fixture.detectChanges();
 
     expect(host().querySelector('.alert.alert-danger')?.textContent).toContain(
@@ -574,15 +405,13 @@ describe('ClientActionsComponent', () => {
     expect(gate.request.params.get('limit')).toBe('-1');
     expect(gate.request.body).toBeNull();
 
-    // Nothing else is in flight while the gate is outstanding: the reason list and the command both
-    // wait for it (AAP 0.7.3 row "Client actions: datatable gate").
+    // Nothing else is in flight while the gate is outstanding: the reason list and the command both wait for it (AAP 0.7.3 row "Client actions: datatable gate").
     expect(httpMock.match(isAnyRequest)).toHaveLength(0);
 
     gate.flush(NO_CHECKS);
     await settle();
 
-    // The gate ran once and is never re-run on submit, because a second call would be a request the
-    // legacy screen never makes; the only call left is the next step of this command, the reason list.
+    // The gate ran once and is never re-run on submit, because a second call would be a request the legacy screen never makes; the only call left is the next step of this command, the reason list.
     expect(httpMock.match(isGateRead)).toHaveLength(0);
 
     await answerTemplate('close');
@@ -600,16 +429,14 @@ describe('ClientActionsComponent', () => {
     await settle();
 
     expect(component.ready()).toBe(false);
-    // A 4xx is Fineract answering, so its own text reaches the screen verbatim (AAP 0.7.4; workflow
-    // W7).
+    // A 4xx is Fineract answering, so its own text reaches the screen verbatim (AAP 0.7.4; workflow W7).
     expect(component.error()).toBe(GATE_FAILURE_MESSAGE);
     expect(component.reasonOptions()).toEqual([]);
     // A failed gate is never treated as a pass: the reason list is not read at all.
     expect(httpMock.match(isTemplateRead('close'))).toHaveLength(0);
     expect(httpMock.match(isCommandPost)).toHaveLength(0);
 
-    // The region renders Fineract's own sentence exactly, and no form sits under it: a field enabled
-    // against a check that never answered is the sequence the legacy controller forbids (AAP 0.7.4).
+    // The region renders Fineract's own sentence exactly, and no form sits under it: a field enabled against a check that never answered is the sequence the legacy controller forbids (AAP 0.7.4).
     fixture.detectChanges();
 
     expect(host().querySelector('.alert.alert-danger')?.textContent?.trim()).toBe(
@@ -629,8 +456,7 @@ describe('ClientActionsComponent', () => {
       );
     await settle();
 
-    // One failure, one report: `fineract.interceptor.ts` raised the notification for a 5xx, so this
-    // region stays empty and the form stays unrendered (AAP 0.7.4).
+    // One failure, one report: `fineract.interceptor.ts` raised the notification for a 5xx, so this region stays empty and the form stays unrendered (AAP 0.7.4).
     expect(component.ready()).toBe(false);
     expect(component.error()).toBeNull();
     expect(httpMock.match(isTemplateRead('close'))).toHaveLength(0);
@@ -643,9 +469,7 @@ describe('ClientActionsComponent', () => {
     httpMock.expectOne(isGateRead).flush(null, { status: 0, statusText: 'Unknown Error' });
     await settle();
 
-    // Status `0` is the class's marker for "no HTTP answer": the interceptor notified it, and the
-    // failure's own message is Angular's, which names the configured API host (AAP 0.7.4; Rule 1
-    // clause 9).
+    // Status `0` is the class's marker for "no HTTP answer": the interceptor notified it, and the failure's own message is Angular's, which names the configured API host (AAP 0.7.4; Rule 1 clause 9).
     expect(component.ready()).toBe(false);
     expect(component.error()).toBeNull();
     expect(httpMock.match(isTemplateRead('close'))).toHaveLength(0);
@@ -695,9 +519,7 @@ describe('ClientActionsComponent', () => {
 
     expect(post.request.params.keys()).toEqual(['command']);
     expect(post.request.params.get('command')).toBe('close');
-    // The body is exactly what the service builds for a close: the pattern, the active language, the
-    // chosen day formatted in that pattern and the tenant's reason id — nothing else travels with it
-    // (AAP 0.7.2 row `ClientActionRequest`; Rule 1 clause 2).
+    // The body is exactly what the service builds for a close: the pattern, the active language, the chosen day formatted in that pattern and the tenant's reason id — nothing else travels with it (AAP 0.7.2 row (Rule 1 clause 2).
     expect(post.request.body).toEqual({
       dateFormat: PAYLOAD_DATE_FORMAT,
       locale: 'en',
@@ -722,8 +544,7 @@ describe('ClientActionsComponent', () => {
     component.submit();
     const post = httpMock.expectOne(isCommandPost);
 
-    // The guard's busy flag was set before the request was issued, so the re-entrant call is refused
-    // rather than queued: one click posts once (AAP 0.1.1; workflow W5).
+    // The guard's busy flag was set before the request was issued, so the re-entrant call is refused rather than queued: one click posts once (AAP 0.1.1; workflow W5).
     expect(component.guard.busy()).toBe(true);
 
     component.submit();
@@ -778,8 +599,7 @@ describe('ClientActionsComponent', () => {
       );
     await settle();
 
-    // The interceptor's notification is the one report of this failure, so the region stays empty
-    // while the entered values survive for the retry (AAP 0.7.4).
+    // The interceptor's notification is the one report of this failure, so the region stays empty while the entered values survive for the retry (AAP 0.7.4).
     expect(component.error()).toBeNull();
     expect(component.closeForm.controls.closureDate.value).toEqual(CLOSURE_DATE);
     expect(component.closeForm.controls.closureReasonId.value).toBe(CHOSEN_REASON.id);
@@ -794,8 +614,7 @@ describe('ClientActionsComponent', () => {
     component.submit();
 
     expect(httpMock.match(isCommandPost)).toHaveLength(0);
-    // The control is marked as touched, so the shared date field shows its required message rather
-    // than the screen appearing to ignore the click.
+    // The control is marked as touched, so the shared date field shows its required message rather than the screen appearing to ignore the click.
     expect(component.closeForm.controls.closureDate.touched).toBe(true);
     expect(navigate).not.toHaveBeenCalled();
   });
@@ -803,9 +622,7 @@ describe('ClientActionsComponent', () => {
   it('renders the form only after the gate and the reason list have answered', async () => {
     await show('close');
 
-    // The command's own title is on screen from the moment the route names it, but no field is: the
-    // gate has not answered, and a form enabled against a check that never ran is the sequence the
-    // legacy controller forbids (AAP 0.7.4; AAP 0.7.3 row "Client actions: datatable gate").
+    // The command's own title is on screen from the moment the route names it, but no field is: the gate has not answered, and a form enabled against a check that never ran is the sequence the legacy controller forbids (AAP (AAP 0.7.4, AAP 0.7.3).
     fixture.detectChanges();
 
     expect(panelTitle()).toBe(TRANSLATIONS['label.anchor.close']);
@@ -813,8 +630,7 @@ describe('ClientActionsComponent', () => {
     expect(saveButton()).toBeNull();
 
     await passGate();
-    // Still nothing to fill in: `close` posts a reason, so an empty picker would be a field the tenant
-    // has no option for (AAP 0.7.3 row "Client actions").
+    // Still nothing to fill in: `close` posts a reason, so an empty picker would be a field the tenant has no option for (AAP 0.7.3 row "Client actions").
     fixture.detectChanges();
 
     expect(host().querySelectorAll('form')).toHaveLength(0);
@@ -822,8 +638,7 @@ describe('ClientActionsComponent', () => {
     await answerTemplate('close');
     fixture.detectChanges();
 
-    // One form: the shared date field, the reason select behind its prompt carrying the tenant's
-    // reasons in the server's order, and the legacy submit button.
+    // One form: the shared date field, the reason select behind its prompt carrying the tenant's reasons in the server's order, and the legacy submit button.
     expect(host().querySelectorAll('form')).toHaveLength(1);
     expect(host().querySelectorAll('app-date-field input[type="date"]')).toHaveLength(1);
     expect(reasonOptionLabels()).toEqual([
@@ -832,14 +647,12 @@ describe('ClientActionsComponent', () => {
     ]);
     expect(saveButton()?.textContent?.trim()).toBe(TRANSLATIONS['label.button.save']);
     expect(saveButton()?.disabled).toBe(false);
-    // The way back to the record sits on the same row under the legacy cancel caption, and leaving the
-    // screen posts nothing, so it is a plain navigation rather than a second command.
+    // The way back to the record sits on the same row under the legacy cancel caption, and leaving the screen posts nothing, so it is a plain navigation rather than a second command.
     expect(host().querySelector('#cancel')?.textContent?.trim()).toBe(
       TRANSLATIONS['label.button.cancel'],
     );
 
-    // One click posts one command: while the request is in flight the primary button is disabled, so a
-    // second click cannot send a second action against a financial record (AAP 0.1.1).
+    // One click posts one command: while the request is in flight the primary button is disabled, so a second click cannot send a second action against a financial record (AAP 0.1.1).
     component.closeForm.controls.closureDate.setValue(CLOSURE_DATE);
     component.closeForm.controls.closureReasonId.setValue(CHOSEN_REASON.id);
     component.submit();
@@ -861,8 +674,7 @@ describe('ClientActionsComponent', () => {
    */
 
   it('hides the submit control from a user who does not hold the command’s code', async () => {
-    // A signed-in user holding no code at all: the form, its fields and the way back render, and the
-    // one control that posts the command does not.
+    // A signed-in user holding no code at all: the form, its fields and the way back render, and the one control that posts the command does not.
     await show('close', CLIENT_ID, []);
     await passGate();
     await answerTemplate('close');
@@ -879,15 +691,13 @@ describe('ClientActionsComponent', () => {
     await answerTemplate('close');
     fixture.detectChanges();
 
-    // Visible and enabled: the gate withholds the control rather than disabling it, which is what
-    // legacy's `has-permission` does to the same button.
+    // Visible and enabled: the gate withholds the control rather than disabling it, which is what legacy's `has-permission` does to the same button.
     expect(saveButton()?.style.display).toBe('');
     expect(saveButton()?.disabled).toBe(false);
   });
 
   it('does not reveal the submit control with another command’s code', async () => {
-    // The code of a command this screen is not showing: the record would offer that entry on its own
-    // action, and holding it says nothing about a closure (AAP 0.1.1).
+    // The code of a command this screen is not showing: the record would offer that entry on its own action, and holding it says nothing about a closure (AAP 0.1.1).
     await show('close', CLIENT_ID, [CLIENT_ACTION_PERMISSIONS.activate]);
     await passGate();
     await answerTemplate('close');
@@ -907,14 +717,11 @@ describe('ClientActionsComponent', () => {
       const reasonSelect = host().querySelector<HTMLSelectElement>('app-select-field select');
       const dateInput = host().querySelector<HTMLInputElement>('app-date-field input[type="date"]');
 
-      // The reason is posted as chosen — including nothing at all — and its control carries no
-      // validator, so the field must not announce a constraint this screen does not enforce
-      // (Rule 1 clause 3; AAP 0.4.4 decision 6).
+      // The reason is posted as chosen — including nothing at all — and its control carries no validator, so the field must not announce a constraint this screen does not enforce (Rule 1 clause 3; AAP 0.4.4 decision 6).
       expect(reasonSelect).not.toBeNull();
       expect(reasonSelect?.hasAttribute('aria-required')).toBe(false);
 
-      // The date control does carry `Validators.required`, so the one rule Fineract states is the one
-      // assistive technology is told about.
+      // The date control does carry `Validators.required`, so the one rule Fineract states is the one assistive technology is told about.
       expect(dateInput).not.toBeNull();
       expect(dateInput?.getAttribute('aria-required')).toBe('true');
     },
@@ -945,10 +752,7 @@ describe('ClientActionsComponent', () => {
       httpMock.expectOne(isCommandPost).flush({ resourceId: 2, clientId: 2 });
       await settle();
 
-      // The legacy sequence exactly — the datatable gate first, the reason list next where the
-      // command takes one, the command last — and nothing else: no second gate on submit, no second
-      // command from one click, no request the legacy screen never makes (AAP 0.7.3 row "Client
-      // actions: datatable gate"; AAP 0.14.1).
+      // The legacy sequence exactly — the datatable gate first, the reason list next where the command takes one, the command last — and nothing else: no second gate on submit, no second command from one click, no request the (AAP 0.7.3, AAP 0.14.1).
       expect(requestSequence()).toEqual(expectedSequence(command));
     },
   );
@@ -956,8 +760,7 @@ describe('ClientActionsComponent', () => {
   it('runs the gate for the client the route named, as the raw segment it delivered', async () => {
     await show('close');
 
-    // A tenant whose closure check applies to the client entity, so the gate reads that table for the
-    // client the URL named rather than stopping at the checks list.
+    // A tenant whose closure check applies to the client entity, so the gate reads that table for the client the URL named rather than stopping at the checks list.
     httpMock.expectOne(isGateRead).flush({
       totalFilteredRecords: 1,
       pageItems: [
@@ -970,8 +773,7 @@ describe('ClientActionsComponent', () => {
     });
     await settle();
 
-    // The gate's second call carries the `:id` segment as the route delivered it — `'2'`, not a
-    // parsed copy of it — and asks for the generic result set the legacy controller reads.
+    // The gate's second call carries the `:id` segment as the route delivered it — `'2'`, not a parsed copy of it — and asks for the generic result set the legacy controller reads.
     const table = httpMock.expectOne(
       (request) => request.method === 'GET' && request.url.endsWith(CLIENT_SUFFIX),
     );
@@ -997,10 +799,7 @@ describe('ClientActionsComponent', () => {
     const post = httpMock.expectOne(isCommandPost);
 
     expect(post.request.params.get('command')).toBe('activate');
-    // The body the service builds for an activation: the one date format, the active language and the
-    // chosen day in that pattern. The form holds a `Date` and the service converts it at the boundary
-    // (AAP 0.7.2 "Date handling"), so no formatted string is built in the template and the payload
-    // carries neither a reason nor a client id (Rule 1 clause 2).
+    // The body the service builds for an activation: the one date format, the active language and the chosen day in that pattern (AAP 0.7.2, Rule 1 clause 2).
     expect(post.request.body).toEqual({
       dateFormat: PAYLOAD_DATE_FORMAT,
       locale: 'en',
@@ -1016,8 +815,7 @@ describe('ClientActionsComponent', () => {
   it('posts the reactivation date with no reason and reads no reason list', async () => {
     await showReady('reactivate');
 
-    // A reactivation takes no reason, so it is the gate and the command alone: no template read, which
-    // is also why the screen renders no select.
+    // A reactivation takes no reason, so it is the gate and the command alone: no template read, which is also why the screen renders no select.
     const [gate] = expectedSequence('reactivate');
 
     expect(requestSequence()).toEqual([gate]);
@@ -1028,8 +826,7 @@ describe('ClientActionsComponent', () => {
     const post = httpMock.expectOne(isCommandPost);
 
     expect(post.request.params.get('command')).toBe('reactivate');
-    // The reactivation date and the format pair, and no reason member at all: the day the command
-    // takes effect is the whole body (AAP 0.7.2 row `ClientActionRequest`).
+    // The reactivation date and the format pair, and no reason member at all: the day the command takes effect is the whole body (AAP 0.7.2 row `ClientActionRequest`).
     expect(post.request.body).toEqual({
       dateFormat: PAYLOAD_DATE_FORMAT,
       locale: 'en',
@@ -1047,9 +844,7 @@ describe('ClientActionsComponent', () => {
     async (command) => {
       await showReady(command);
 
-      // One template read, for this command alone: each command's reasons come from its own
-      // `commandParam`, so a rejection screen reads the rejection list and no other (AAP 0.7.3 row
-      // "Client actions").
+      // One template read, for this command alone: each command's reasons come from its own `commandParam`, so a rejection screen reads the rejection list and no other (AAP 0.7.3 row "Client actions").
       expect(requestSequence().filter((entry) => entry.includes('commandParam'))).toEqual([
         `GET ${relativeUrl(TEMPLATE_URL)}?commandParam=${command}`,
       ]);
@@ -1059,15 +854,13 @@ describe('ClientActionsComponent', () => {
       const select = host().querySelector<HTMLSelectElement>('app-select-field select');
 
       expect(select).not.toBeNull();
-      // The prompt row, then the tenant's reasons in the order the template returned them: nothing
-      // sorted, filtered or renamed.
+      // The prompt row, then the tenant's reasons in the order the template returned them: nothing sorted, filtered or renamed.
       expect(reasonOptionLabels()).toEqual([
         TRANSLATIONS['label.select'],
         ...REASONS.map((reason) => reason.name),
       ]);
 
-      // Chosen through the control the operator sees, so the id the body carries is the option's own
-      // and keeps the number type the template sent rather than a stringified copy of it.
+      // Chosen through the control the operator sees, so the id the body carries is the option's own and keeps the number type the template sent rather than a stringified copy of it.
       if (select !== null) {
         select.value = select.options[select.options.length - 1].value;
         select.dispatchEvent(new Event('change'));
@@ -1082,8 +875,7 @@ describe('ClientActionsComponent', () => {
       const post = httpMock.expectOne(isCommandPost);
 
       expect(post.request.params.get('command')).toBe(command);
-      // The chosen reason's id, never a hard-coded one: the tenant configures these, so a screen that
-      // invented an id would post a reason the server does not know.
+      // The chosen reason's id, never a hard-coded one: the tenant configures these, so a screen that invented an id would post a reason the server does not know.
       expect(post.request.body[REASON_BODY_KEY[command]]).toBe(OTHER_REASON.id);
       expect(post.request.body[DATE_BODY_KEY[command]]).toBe(ACTION_DATE_AS_PAYLOAD);
 

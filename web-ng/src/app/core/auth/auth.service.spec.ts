@@ -4,7 +4,6 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-
 import { AppConfigService } from '../config/app-config.service';
 import { ApiError } from '../http/api-error';
 import { fineractInterceptor } from '../http/fineract.interceptor';
@@ -13,48 +12,9 @@ import { PermissionsService } from './permissions.service';
 import type { AuthResponse, SessionData, SessionUserResponse } from './session.model';
 import { SessionService, sessionStorageKey } from './session.service';
 
-/**
- * Contract and behaviour spec for `AuthService`, the application's only credential exchange and the
- * proof of workflow W1 (AAP 0.10.1: `POST /authentication`, then `GET /users/{id}`).
- *
- * It is the `HttpTestingController` contract test Rule 1 clause 8 asks for on both endpoints the login
- * uses, and the suite criterion 2's 90% gate over this file measures. Each test pins one contract:
- * - the login request is a `POST` to the configured `authentication` path carrying exactly the two
- *   submitted fields and no query parameter, with neither the authorization nor the tenant header set
- *   here, because the interceptor is the only place those are added (AAP 0.4.2);
- * - exactly one `GET` follows it, for the authenticated user's id, with no query parameter, and the
- *   session entry that becomes the shared login is recorded at the composed legacy key before it;
- * - the entry holds exactly the three legacy fields (AAP 0.7.2 row `SessionData`), the submitted
- *   password appears nowhere in it, and the bare key spelling is never written;
- * - a successful restore puts the session, the account name and the permission list in effect, for
- *   both the accessors and the signals a template reads;
- * - a restore that fails leaves the login successful and the gate closed — the path the prompt
- *   requires, because the entry is already written and the interceptor owns a 401;
- * - `restore()` is the call the bootstrap initializer makes (`web-ng/src/app/app.config.ts`, awaited
- *   before the router's first navigation), so it is the session-reload half of workflow W1
- *   (AAP 0.10.1): the stored entry's user is re-read with one bodiless `GET /users/{id}`, and the
- *   session, the account name and the permission list are in effect afterwards, with no second
- *   credential exchange;
- * - `restore()` with nothing stored resolves `false`, reaches no transport at all and leaves every
- *   accessor reporting the closed state;
- * - an authentication failure reaches the caller unchanged and writes no session;
- * - driven through the application's own interceptor, the login is tagged with the tenant header and
- *   no credential, the restore carries the key the login just stored, and a 401 reaches the caller as
- *   the `ApiError` whose message is Fineract's `defaultUserMessage` verbatim (AAP 0.4.2; workflow W1);
- * - the password-renewal and two-factor flags are received and acted on by no branch (AAP 0.10.5
- *   item 13);
- * - `logout()` removes both stored spellings and empties every accessor without a request.
- *
- * Security (Rule 1 clause 9, AAP 0.10.4): the stand-in password and authentication key are assembled
- * at run time from parts, so no credential-shaped literal reaches the source, and every assertion
- * compares values rather than printing them.
- */
+/** Contract and behaviour spec for `AuthService`, the application's only credential exchange and the proof of workflow W1 (AAP 0.10.1: `POST /authentication`, then `GET /users/{id}`). */
 
-/**
- * The served API host and root, written out exactly as `web-ng/src/assets/config.json` ships them, so
- * the requests this spec expects are the URLs the deployed application produces (AAP 0.4.4 decision
- * 5(a)). No demo host appears here (Rule 2).
- */
+/** The served API host and root, written out exactly as `web-ng/src/assets/config.json` ships them. */
 const API_BASE_URL = 'https://localhost:8443';
 const API_PATH = '/fineract-provider/api/v1';
 const API_ROOT = API_BASE_URL + API_PATH;
@@ -77,11 +37,7 @@ function usersUrl(userId: number | string): string {
 const USER_ID = 42;
 const USERNAME = 'mifos';
 
-/**
- * The stand-in password, joined from parts at run time. It is never a literal in this file and it is
- * asserted to be absent from the stored session, which is the property that matters: a login keeps no
- * copy of what was submitted.
- */
+/** The stand-in password, joined from parts at run time. It is never a literal in this file and it is asserted to be absent from the stored session. */
 const SECRET_PARTS = ['correct', 'horse', 'battery', 'staple'];
 
 /** The stand-in authentication key, joined from parts for the same reason as the password. */
@@ -90,11 +46,7 @@ const KEY_PARTS = ['Zm9v', 'YmFy', 'OnNlY3JldA'];
 /** The permissions Fineract returns on the fixture login, and the ones the gate must then answer. */
 const GRANTED: readonly string[] = ['READ_CLIENT', 'CREATE_CLIENT'];
 
-/**
- * The key the legacy pair composes — `mifosX` with `sessionData` — spelled out because the stored key
- * string is the contract a legacy screen reads (AAP 0.3.4 claim 9), and the bare spelling the newer
- * release writes, which this application never produces.
- */
+/** The composed legacy storage key, `mifosX` + `sessionData`: the string a legacy screen reads (AAP 0.3.4 claim 9); the bare spelling is never written. */
 const COMPOSED_KEY = 'mifosXsessionData';
 const BARE_KEY = 'sessionData';
 
@@ -106,12 +58,8 @@ function submittedPassword(): string {
 /** The `POST /authentication` answer the fixtures use, with the flags absent unless a test adds them. */
 function authResponse(overrides: Partial<AuthResponse> = {}): AuthResponse {
   return {
-    userId: USER_ID,
-    username: USERNAME,
-    base64EncodedAuthenticationKey: KEY_PARTS.join(''),
-    permissions: [...GRANTED],
-    ...overrides,
-  };
+    userId: USER_ID, username: USERNAME, base64EncodedAuthenticationKey: KEY_PARTS.join(''), permissions: [...GRANTED],
+    ...overrides, };
 }
 
 /** The `GET /users/{id}` as the restore reads it: the id and the account name, with no permission list. */
@@ -119,58 +67,27 @@ function projection(): SessionUserResponse {
   return { id: USER_ID, username: USERNAME };
 }
 
-/**
- * The message a login is refused with when its `POST /authentication` response cannot describe a
- * session, stated here from this spec's own reading of the contract — the login screen renders it, so
- * it is a value a user sees (AAP 0.14.1) — and carrying no member value the response sent.
- */
+/** The message a login is refused with when its `POST /authentication` response cannot describe a session. */
 const MALFORMED_RESPONSE_MESSAGE =
   'The authentication response did not carry a user id, an authentication key and a permission list, ' +
   'so no session was created.';
 
-/**
- * `POST /authentication` answers that cannot describe a session, each with the member it omits or
- * mistypes. The response is a network boundary, so a member copied out of it unchecked would either
- * persist a partial entry or reach the interceptor as `Authorization: Basic undefined` (cr3-F07;
- * AAP 0.7.2 row `AuthResponse`).
- */
-const MALFORMED_AUTHENTICATION_RESPONSES: Array<[string, Record<string, unknown>]> = [
-  [
+/** `POST /authentication` answers that cannot describe a session, each with the member it omits or mistypes. The response is a network boundary. */
+const MALFORMED_AUTHENTICATION_RESPONSES: Array<[string, Record<string, unknown>]> = [[
     'a response that omits the permission list',
-    { userId: USER_ID, username: USERNAME, base64EncodedAuthenticationKey: KEY_PARTS.join('') },
-  ],
-  [
-    'a response that omits the authentication key',
-    { userId: USER_ID, username: USERNAME, permissions: [...GRANTED] },
-  ],
-  [
-    'a response whose userId is a string',
-    {
-      userId: String(USER_ID),
-      username: USERNAME,
-      base64EncodedAuthenticationKey: KEY_PARTS.join(''),
-      permissions: [...GRANTED],
-    },
-  ],
-];
+    { userId: USER_ID, username: USERNAME, base64EncodedAuthenticationKey: KEY_PARTS.join('') }, ], [
+    'a response that omits the authentication key', { userId: USER_ID, username: USERNAME, permissions: [...GRANTED] },
+  ], ['a response whose userId is a string', {
+      userId: String(USER_ID), username: USERNAME, base64EncodedAuthenticationKey: KEY_PARTS.join(''),
+      permissions: [...GRANTED], }, ], ];
 
 /** The session entry the fixture login must record, exactly the three legacy fields. */
 function expectedSession(overrides: Partial<SessionData> = {}): SessionData {
   return {
-    userId: USER_ID,
-    authenticationKey: KEY_PARTS.join(''),
-    userPermissions: [...GRANTED],
-    ...overrides,
-  };
+    userId: USER_ID, authenticationKey: KEY_PARTS.join(''), userPermissions: [...GRANTED], ...overrides, };
 }
 
-/**
- * The stub `apiUrl()`: the service owns no host, so the configuration supplies one (AAP 0.4.2, Rule
- * 2). It composes exactly as `AppConfigService.apiUrl()` documents — base, path and resource joined
- * with one separator and no other rewriting — so the requests this spec sees are the ones the
- * application sends. Resolving the real configuration is proved in
- * `core/config/app-config.service.spec.ts`.
- */
+/** The stub `apiUrl()`: the service owns no host, so the configuration supplies one (AAP 0.4.2, Rule 2). */
 const apiConfig: Pick<AppConfigService, 'apiUrl'> = {
   apiUrl: (path: string): string => `${API_ROOT}${SEPARATOR}${path}`,
 };
@@ -190,11 +107,7 @@ interface LoginAnswers {
   readonly users?: (request: TestRequest) => void;
 }
 
-/**
- * Drives one whole login through the mock backend and resolves when `login()` does: the `POST` is
- * answered, the restore's `GET` that the service issues next is answered, and the promise is awaited.
- * The tick between the two answers lets the awaiting `login()` continue to the restore call.
- */
+/** Drives one whole login through the mock backend and resolves when `login()` does: the `POST` is answered, the restore's `GET` that the service issues next is answered, and the promise is awaited. */
 async function loginThrough(
   httpMock: HttpTestingController,
   service: AuthService,
@@ -236,8 +149,7 @@ describe('AuthService', () => {
     });
 
     service = TestBed.inject(AuthService);
-    // The two collaborators are the application's own: the session entry the login writes and the
-    // gate the restore publishes permissions through are what the screens then read (AAP 0.7.1).
+    // The two collaborators are the application's own: the session entry the login writes and the gate the restore publishes permissions through are what the screens then read (AAP 0.7.1).
     sessions = TestBed.inject(SessionService);
     permissions = TestBed.inject(PermissionsService);
     httpMock = TestBed.inject(HttpTestingController);
@@ -250,9 +162,7 @@ describe('AuthService', () => {
   });
 
   it('answers the accessors with no session in effect', () => {
-    // The state the login screen starts in: nothing stored, nothing in effect, and every accessor
-    // reporting the absence rather than an empty or stale session (AAP 0.1.1, a gate that fails
-    // closed).
+    // The state the login screen starts in: nothing stored, nothing in effect, and every accessor reporting the absence rather than an empty or stale session (AAP 0.1.1, a gate that fails closed).
     expect(service.user()).toBeNull();
     expect(service.session()).toBeNull();
     expect(service.isAuthenticated()).toBe(false);
@@ -266,16 +176,14 @@ describe('AuthService', () => {
 
     const authentication = httpMock.expectOne(byMethodAndUrl('POST', AUTHENTICATION_URL));
 
-    // Two body keys and no others: no tenant, no locale, no date, no remember-me flag (Rule 1 clause
-    // 2; AAP 0.7.3 row "W1 login and logout").
+    // Two body keys and no others: no tenant, no locale, no date, no remember-me flag (Rule 1 clause 2; AAP 0.7.3 row "W1 login and logout").
     expect(Object.keys(authentication.request.body as AuthenticationRequest)).toEqual(['username', 'password']);
     expect(authentication.request.body).toEqual({
       username: USERNAME,
       password: submittedPassword(),
     } satisfies AuthenticationRequest);
 
-    // No query parameter, and neither header this application sends is built here: the interceptor
-    // attaches both from the configuration and the session (AAP 0.4.2).
+    // No query parameter, and neither header this application sends is built here: the interceptor attaches both from the configuration and the session (AAP 0.4.2).
     expect(authentication.request.params.keys()).toEqual([]);
     expect(authentication.request.headers.has('Authorization')).toBe(false);
     expect(authentication.request.headers.has('Fineract-Platform-TenantId')).toBe(false);
@@ -298,9 +206,7 @@ describe('AuthService', () => {
   it('records the legacy session entry before the restore reads the user', async () => {
     expect(sessionStorageKey()).toBe(COMPOSED_KEY);
 
-    // Captured from inside the restore's own request, which is the moment the password must already
-    // be gone and the session must already be published: the interceptor sends the key it carries
-    // (AAP 0.4.2), so a write ordered after the read would leave the restore unauthenticated.
+    // Captured from inside the restore's own request, which is the moment the password must already be gone and the session must already be published: the interceptor sends the key it carries (AAP 0.4.2), so a write ordered.
     let entryDuringRestore: string | null = null;
     let sessionDuringRestore: SessionData | null = null;
 
@@ -316,8 +222,7 @@ describe('AuthService', () => {
     expect(entryDuringRestore).not.toBeNull();
     expect(sessionDuringRestore).toEqual(expectedSession());
 
-    // Exactly the three legacy fields, at the composed key, with the bare spelling never written
-    // (AAP 0.3.4 claim 9; AAP 0.7.2 row `SessionData`).
+    // Exactly the three legacy fields, at the composed key, with the bare spelling never written (AAP 0.3.4 claim 9; AAP 0.7.2 row `SessionData`).
     expect(storedSession()).toEqual(expectedSession());
     expect(sessions.read()).toEqual(expectedSession());
     expect(window.localStorage.getItem(BARE_KEY)).toBeNull();
@@ -351,9 +256,7 @@ describe('AuthService', () => {
   });
 
   it('keeps the login successful when the user projection cannot be read', async () => {
-    // The prompt's restore-false path: the entry is written, the projection read fails, and the login
-    // resolves rather than reporting a credential rejection that never happened. The gate is closed
-    // afterwards, which is the state a 401 settles for good.
+    // The prompt's restore-false path: the entry is written, the projection read fails, and the login resolves rather than reporting a credential rejection that never happened.
     await loginThrough(httpMock, service, {
       password: submittedPassword(),
       users: (request: TestRequest) => request.flush(
@@ -379,8 +282,7 @@ describe('AuthService', () => {
       { status: 401, statusText: 'Unauthorized' },
     );
 
-    // The failure reaches the caller as it arrived, so the login screen renders the server's own text
-    // and keeps the typed username (AAP 0.4.4 decision 6).
+    // The failure reaches the caller as it arrived, so the login screen renders the server's own text and keeps the typed username (AAP 0.4.4 decision 6).
     await expect(login).rejects.toMatchObject({ status: 401 });
 
     expect(storedSession()).toBeNull();
@@ -407,8 +309,7 @@ describe('AuthService', () => {
       expect(failure.status).toBe(200);
       expect(failure.validationErrors).toEqual([]);
 
-      // Nothing reached storage, no session is in effect and the restore read is never issued, which is
-      // what keeps a partial entry and `Authorization: Basic undefined` out of the application.
+      // Nothing reached storage, no session is in effect and the restore read is never issued, which is what keeps a partial entry and `Authorization: Basic undefined` out of the application.
       expect(window.localStorage.length).toBe(0);
       expect(service.session()).toBeNull();
       expect(service.isAuthenticated()).toBe(false);
@@ -423,24 +324,20 @@ describe('AuthService', () => {
       authentication: authResponse({ shouldRenewPassword: true, isTwoFactorAuthenticationRequired: true }),
     });
 
-    // No second exchange, no redirect and no message: both flags are out of scope and are read by no
-    // branch (AAP 0.9.2; AAP 0.10.5 item 13).
+    // No second exchange, no redirect and no message: both flags are out of scope and are read by no branch (AAP 0.9.2; AAP 0.10.5 item 13).
     expect(service.isAuthenticated()).toBe(true);
     expect(service.permissions()).toEqual(GRANTED);
     httpMock.expectNone(byMethodAndUrl('POST', AUTHENTICATION_URL));
   });
 
   it('resumes the stored legacy entry on restore, reading the user once with a bodiless GET', async () => {
-    // What a page reload, or a login on a legacy screen, leaves behind: the entry in storage and
-    // nothing in memory — the state the bootstrap initializer restores from before the router's first
-    // navigation (AAP 0.10.1 W1; `web-ng/src/app/app.config.ts`).
+    // What a page reload, or a login on a legacy screen, leaves behind: the entry in storage and nothing in memory — the state the bootstrap initializer restores from before the router's first navigation (AAP 0.10.1 W1.
     window.localStorage.setItem(COMPOSED_KEY, JSON.stringify(expectedSession()));
     expect(service.isAuthenticated()).toBe(false);
 
     const restored = service.restore();
 
-    // The reload is a read, not a second credential exchange: one bodiless `GET` for the stored id,
-    // with no query parameter (AAP 0.7.3 row "W1 login and logout"; Rule 1 clause 8).
+    // The reload is a read, not a second credential exchange: one bodiless `GET` for the stored id, with no query parameter (AAP 0.7.3 row "W1 login and logout"; Rule 1 clause 8).
     const users = httpMock.expectOne(byMethodAndUrl('GET', usersUrl(USER_ID)));
     expect(users.request.method).toBe('GET');
     expect(users.request.params.keys()).toEqual([]);
@@ -449,9 +346,7 @@ describe('AuthService', () => {
     users.flush(projection());
     await expect(restored).resolves.toBe(true);
 
-    // The state the restore publishes: the stored session, the account name the projection supplied
-    // and the stored permission list, for the accessors and the signals a template reads (AAP 0.7.1
-    // `restore(): Promise<boolean>`).
+    // The state the restore publishes: the stored session, the account name the projection supplied and the stored permission list, for the accessors and the signals a template reads (AAP 0.7.1 `restore(): Promise<boolean>`).
     expect(service.user()).toEqual(expectedSession());
     expect(service.session()).toEqual(expectedSession());
     expect(service.isAuthenticated()).toBe(true);
@@ -464,9 +359,7 @@ describe('AuthService', () => {
   });
 
   it('restores nothing when no entry is stored, and reaches no transport', async () => {
-    // A start with no entry — the first run after a logout, or a visitor arriving at the login screen —
-    // resolves `false`, so the initializer's awaited restore closes the gate instead of opening one
-    // over an empty session (AAP 0.10.1 W1; AAP 0.7.1).
+    // A start with no entry — the first run after a logout, or a visitor arriving at the login screen — resolves `false`, so the initializer's awaited restore closes the gate instead of opening one over an empty session (AAP (AAP 0.10.1, AAP 0.7.1).
     await expect(service.restore()).resolves.toBe(false);
 
     // Nothing at all reached the transport: with nothing stored there is no id to read a user for.
@@ -485,8 +378,7 @@ describe('AuthService', () => {
 
     service.logout();
 
-    // Both stored spellings go, so no later restore can sign the user back in, and every accessor
-    // reports the absence (AAP 0.4.2: the authorization disappears with the session).
+    // Both stored spellings go, so no later restore can sign the user back in, and every accessor reports the absence (AAP 0.4.2: the authorization disappears with the session).
     expect(window.localStorage.getItem(COMPOSED_KEY)).toBeNull();
     expect(window.localStorage.getItem(BARE_KEY)).toBeNull();
     expect(sessions.read()).toBeNull();
@@ -508,17 +400,10 @@ const TENANT_ID = 'default';
 const TENANT_HEADER = 'Fineract-Platform-TenantId';
 const AUTHORIZATION_HEADER = 'Authorization';
 
-/**
- * The refusal Fineract answers a bad credential exchange with, as the server sends it. The login screen
- * renders this text unchanged, so the case below compares it character for character — workflow W7's
- * rule applied to W1's refusal (AAP 0.4.4 decision 6).
- */
+/** The refusal Fineract answers a bad credential exchange with, as the server sends it (AAP 0.4.4). */
 const SERVER_MESSAGE = 'Invalid credentials';
 
-/**
- * The resolved configuration's shape, taken from the accessor that publishes it rather than declared a
- * second time here, so a member the interceptor starts reading fails the build in this spec as well.
- */
+/** The resolved configuration's shape, taken from the accessor that publishes it rather than declared a second time here, so a member the interceptor starts reading fails the build in this spec as well. */
 type ResolvedConfig = AppConfigService['config'];
 
 /** The configuration the interceptor reads: the tenant it stamps on every request, and the API root. */
@@ -535,22 +420,13 @@ function resolvedConfig(): ResolvedConfig {
   };
 }
 
-/**
- * The router surface the interceptor reads. A refused authentication navigates nowhere — the user is
- * already on the login screen — so this stand-in exists for the injection to resolve, and its `url`
- * keeps the interceptor's own redirect branch out of the way.
- */
+/** The router surface the interceptor reads. A refused authentication navigates nowhere — the user is already on the login screen — so this stand-in exists for the injection to resolve, and its `url` keeps the. */
 const routerStub = {
   url: '/login',
   navigate: (): Promise<boolean> => Promise.resolve(true),
 };
 
-/**
- * The `AppConfigService` surface the interceptor uses: the configuration signal it reads the tenant
- * from, and the composition every service shares. Resolving the real configuration is proved in
- * `core/config/app-config.service.spec.ts`; this stand-in joins base, root and path exactly as
- * `apiUrl()` documents, so the requests asserted here are the ones the application sends.
- */
+/** The `AppConfigService` surface the interceptor uses: the configuration signal it reads the tenant from, and the composition every service shares. */
 function interceptorConfig(): Pick<AppConfigService, 'apiUrl' | 'changes'> {
   const resolved = signal<ResolvedConfig | null>(resolvedConfig());
 
@@ -571,23 +447,12 @@ async function rejectionOf(pending: Promise<void>): Promise<unknown> {
   throw new Error('the login was expected to fail, but it resolved');
 }
 
-/**
- * Asserts that a login rejected with the one error type every Fineract failure becomes, and narrows it
- * so the cases below read its members without a cast (Rule 1 clause 4).
- */
+/** Asserts that a login rejected with the one error type every Fineract failure becomes, and narrows it so the cases below read its members without a cast (Rule 1 clause 4). */
 function assertApiError(failure: unknown): asserts failure is ApiError {
   expect(failure).toBeInstanceOf(ApiError);
 }
 
-/**
- * Workflow W1 behind the application's own HTTP interceptor (AAP 0.4.2; AAP 0.10.1 W1 "Outcome that
- * must match"; Rule 1 clauses 5 and 8).
- *
- * The block above runs without the interceptor on purpose: a request asserted there is
- * `AuthService`'s own contribution to the exchange. Here the interceptor is part of the system under
- * test, which is what makes the two headers and the mapped failure observable — the tenant header on
- * the login, the session's Basic key on the restore that follows it, and the `ApiError` a 401 becomes.
- */
+/** Workflow W1 behind the application's own HTTP interceptor (AAP 0.4.2; AAP 0.10.1 W1 "Outcome that must match"; Rule 1 clauses 5 and 8). */
 describe('AuthService through the application interceptor', () => {
   let service: AuthService;
   let httpMock: HttpTestingController;
@@ -626,8 +491,7 @@ describe('AuthService through the application interceptor', () => {
     await Promise.resolve();
 
     const users = httpMock.expectOne(byMethodAndUrl('GET', usersUrl(USER_ID)));
-    // The key the login just stored is the one the restore is authorised with: the interceptor reads it
-    // from the session, which is why the entry is written before this read (AAP 0.4.2).
+    // The key the login just stored is the one the restore is authorised with: the interceptor reads it from the session, which is why the entry is written before this read (AAP 0.4.2).
     expect(users.request.headers.get(AUTHORIZATION_HEADER)).toBe(`Basic ${KEY_PARTS.join('')}`);
     expect(users.request.headers.get(TENANT_HEADER)).toBe(TENANT_ID);
 
@@ -651,14 +515,12 @@ describe('AuthService through the application interceptor', () => {
     const failure = await rejectionOf(login);
 
     assertApiError(failure);
-    // Character for character, with no prefix, trim or translation: the login screen shows the
-    // server's own words and keeps the typed username (AAP 0.4.4 decision 6).
+    // Character for character, with no prefix, trim or translation: the login screen shows the server's own words and keeps the typed username (AAP 0.4.4 decision 6).
     expect(failure.message).toBe(SERVER_MESSAGE);
     expect(failure.status).toBe(401);
     expect(failure.validationErrors).toEqual([]);
 
-    // A refused exchange writes no session, leaves every accessor empty and is not followed by the
-    // restore read the interceptor would have attached a credential to.
+    // A refused exchange writes no session, leaves every accessor empty and is not followed by the restore read the interceptor would have attached a credential to.
     expect(window.localStorage.getItem(COMPOSED_KEY)).toBeNull();
     expect(service.isAuthenticated()).toBe(false);
     expect(service.user()).toBeNull();

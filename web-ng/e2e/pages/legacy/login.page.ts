@@ -1,47 +1,9 @@
-/**
- * Baseline page object for the legacy AngularJS application's login screen — the `legacy` project's
- * side of workflow W1 (log in and log out, AAP 0.10.1) and the screen of Figma node `1:5`
- * (AAP 0.2.1 Step 1).
- *
- * The route is `#/login` (AAP 0.8.2, `tools/parity/in-scope-routes.json`), and the design's login
- * form is the one `app/index.html` renders whenever no session exists — which is why the same screen
- * is also visible at `#/` / `#/home` (AAP 0.10.5 item 3 records those as the legacy dashboard paths).
- * `open()` accepts either reading and `readCurrentHash()` reports which one the build actually took;
- * this class never asserts it, because assertions belong to the specs under `web-ng/e2e/specs/`.
- *
- * **Entry URL (Rule 2).** Every navigation composes `LEGACY_URL` + `?baseApiUrl=` + `FINERACT_URL`
- * + `&tenantIdentifier=` + `TENANT_ID`. Without both query parameters the legacy app targets a public
- * demo host (app/scripts/initialTasks.js:5,33-44), which Rule 2 forbids; no host literal appears in
- * this file, and no Fineract path does either (Rule 1 clause 2).
- *
- * **Session storage open item (AAP 0.9.4 row 7).** Legacy writes its session with
- * `webStorage.add("sessionData", {userId, authenticationKey, userPermissions})` under the `mifosX`
- * prefix (app/scripts/services/SessionManager.js:20, app/scripts/webstorage-configuration.js:3), but
- * the bower `angular-webstorage` library is not vendored, so the serialised key string is known only
- * once a legacy login has been observed. `readSessionEntries()` therefore enumerates every key and
- * reports the shape it found: a hard-coded key would let both applications agree on a wrong one.
- *
- * **Security (Rule 1 clause 9).** The authentication key, the parsed session object, the raw stored
- * JSON and the password never leave this class: `readSessionEntries()` returns key names and booleans
- * only, `fillCredentials()` writes a password it never echoes, and `password` exists solely as a
- * parameter name.
- *
- * The legacy source tree is a read-only reference outside this checkout (clone at commit 45ec7b82),
- * so every locator and label below carries the legacy or AAP fact it derives from and must be
- * confirmed against the running legacy app.
- */
+/** Baseline page object for the legacy AngularJS application's login screen — the `legacy` project's side of workflow W1 (log in and log out, AAP 0.10.1) and the screen of Figma node `1:5` (AAP 0.2.1 Step 1) (AAP 0.8.2, AAP 0.10.5, Rule 2, Rule 1 clause 2). */
 import type { Locator, Page } from '@playwright/test';
 
 import { FINERACT_URL, LEGACY_URL, TENANT_ID } from '../../seed/fixtures';
 
-/**
- * One `localStorage` entry, described by its key and by the presence and type of the three fields the
- * legacy session carries (AAP 0.3.4 claim 9).
- *
- * Shape only, by design: the entry's values stay in the browser and never reach a test report
- * (Rule 1 clause 9). `web-ng/e2e/pages/next/login.page.ts` declares the identical interface, so one
- * spec can compare the two applications' session entries against the same type.
- */
+/** One `localStorage` entry, described by its key and by the presence and type of the three fields the legacy session carries (AAP 0.3.4 claim 9) (Rule 1 clause 9). */
 export interface SessionEntrySummary {
   /** The `localStorage` key exactly as the application wrote it. */
   key: string;
@@ -59,14 +21,7 @@ export interface SessionEntrySummary {
   userPermissionsIsArray: boolean;
 }
 
-/**
- * One option of the login screen's language switcher (`LanguageSwitcher`, AAP 0.2.3; design node
- * `1:5` shows the row "Change language:" plus its control).
- *
- * `value` is the language code a native `<select>` submits (e.g. `en`, `zh_CN`), as the legacy
- * `mifosX.models.Langs` entries carry it. The legacy switcher renders only the language name, so on
- * that side `value` repeats the label — see `readLanguages()`.
- */
+/** One option of the login screen's language switcher (`LanguageSwitcher`, AAP 0.2.3; design node `1:5` shows the row "Change language:" plus its control). */
 export interface LanguageOptionSummary {
   /** Code the switcher submits, or the visible label when the control exposes no code. */
   value: string;
@@ -74,58 +29,28 @@ export interface LanguageOptionSummary {
   label: string;
 }
 
-/**
- * What the login screen's submit control currently offers: `'absent'` when the screen renders no submit
- * control at all, `'hidden'` when it renders one that is not visible, `'disabled'` when it is visible
- * but cannot be clicked, and `'enabled'` when it can be clicked.
- *
- * `web-ng/e2e/pages/next/login.page.ts` declares the identical union on its own, the way both sides
- * declare `SessionEntrySummary` and `LanguageOptionSummary` independently, so one spec text drives both
- * projects and neither page object imports the other's types.
- */
+/** What the login screen's submit control currently offers: `'absent'` when the screen renders no submit control at all, `'hidden'` when it renders one that is not visible, `'disabled'` when it is visible but cannot be. */
 export type SubmitState = 'absent' | 'hidden' | 'disabled' | 'enabled';
 
 /** How long the login form is given to appear on a fresh navigation (AAP 0.10.1 W1). */
 const LOGIN_FORM_TIMEOUT_MS = 5_000;
 
-/**
- * Ceiling for the translation bundle a language change loads. Legacy fetches
- * `global-translations/locale-<code>.json` (AAP 0.3.4 claim 5) the first time a language is chosen
- * and serves it from cache afterwards, so a miss is normal and never an error.
- */
+/** Ceiling for the translation bundle a language change loads. Legacy fetches `global-translations/locale-<code>.json` (AAP 0.3.4 claim 5) the first time a language is chosen and serves it from cache afterwards, so a miss. */
 const LANGUAGE_BUNDLE_TIMEOUT_MS = 2_000;
 
-/**
- * Ceiling for the post-login landing. The page itself is small; the wait covers `GET /users/{id}`,
- * the session restore the legacy `SessionManager` runs before the shell renders (AAP 0.3.4 claim 9).
- */
+/** Ceiling for the post-login landing. The page itself is small; the wait covers `GET /users/{id}`, the session restore the legacy `SessionManager` runs before the shell renders (AAP 0.3.4 claim 9). */
 const LANDING_TIMEOUT_MS = 20_000;
 
 /** Ceiling for the navbar user menu to open, which legacy toggles on hover. */
 const USER_MENU_TIMEOUT_MS = 2_000;
 
-/**
- * The hashes a successful login can land on: `#/clients` per AAP 0.2.1 Step 1, `#/home` because
- * `MainController`'s `UserAuthenticationSuccessEvent` handler ends in
- * `location.path('/home').replace()` (app/scripts/controllers/main/MainController.js).
- */
+/** The hashes a successful login can land on: `#/clients` per AAP 0.2.1 Step 1, `#/home` because `MainController`'s `UserAuthenticationSuccessEvent` handler ends in `location.path('/home').replace()`. */
 const LANDING_HASH_PATTERN = /#\/(?:clients|home)/;
 
-/**
- * The translation bundle a language change loads, relative to the legacy root. Held without a
- * leading slash and matched against a response URL so that this file carries no URL literal:
- * `check:endpoints` scans `web-ng/e2e/` for those (AAP 0.10.4).
- */
+/** The translation bundle a language change loads, relative to the legacy root (AAP 0.10.4). */
 const LANGUAGE_BUNDLE_PATH = 'global-translations/locale-';
 
-/**
- * The language codes the legacy switcher offers, mapped to the names it renders.
- *
- * Transcribed from `app/scripts/models/Langs.js`, where `changeLang(lang, $event)` applies
- * `lang.code` while the menu shows `lang.name` — so the code a spec asks for is not in the DOM and
- * has to be resolved through this map. The names are legacy data, not tenant data (Rule 1 clause 9),
- * and a build whose list differs shows up as an unmatched option rather than as a silent pass.
- */
+/** The language codes the legacy switcher offers, mapped to the names it renders (Rule 1 clause 9). */
 const LEGACY_LANGUAGE_NAMES: ReadonlyMap<string, string> = new Map<string, string>([
   ['en', 'English'],
   ['fr', 'Français'],
@@ -146,10 +71,7 @@ const LEGACY_LANGUAGE_NAMES: ReadonlyMap<string, string> = new Map<string, strin
 /** The same codes as a lookup set, used to recognise which `<select>` is the language switcher. */
 const LEGACY_LANGUAGE_CODES: ReadonlySet<string> = new Set<string>(LEGACY_LANGUAGE_NAMES.keys());
 
-/**
- * Runs inside the page: the value of every `<option>` of the element, in document order, or `[]` when
- * the locator resolved to something other than a `<select>`.
- */
+/** Runs inside the page: the value of every `<option>` of the element, in document order, or `[]` when the locator resolved to something other than a `<select>`. */
 function readOptionValues(element: HTMLElement): string[] {
   if (!(element instanceof HTMLSelectElement)) {
     return [];
@@ -168,19 +90,7 @@ function readOptionSummaries(element: HTMLElement): LanguageOptionSummary[] {
   }));
 }
 
-/**
- * Runs inside the page: every `localStorage` entry's key and shape, and nothing else.
- *
- * The stored value is unmodelled legacy storage — `angular-webstorage` writes whatever the caller
- * passed, keyed by a prefix the library does not expose here — so it is parsed into `unknown` and
- * narrowed field by field (Rule 1 clause 4). A value that is not JSON object yields an entry with
- * every flag false and `userIdType` `'missing'`, which is the honest reading: no session fields were
- * found under that key. Only key names and booleans leave the page (Rule 1 clause 9).
- *
- * Like the family's other page-evaluated readers it declares no inner functions of its own, because a
- * transpiler that preserves function names (`keepNames`) would emit a helper call into the serialised
- * source that does not exist in the page: `userIdType` is therefore classified inline.
- */
+/** Runs inside the page: every `localStorage` entry's key and shape, and nothing else (Rule 1 clause 4, Rule 1 clause 9). */
 function summariseSessionEntries(): SessionEntrySummary[] {
   return Object.keys(window.localStorage).map((key): SessionEntrySummary => {
     let parsed: unknown = null;
@@ -217,13 +127,7 @@ function summariseSessionEntries(): SessionEntrySummary[] {
 }
 
 
-/**
- * Drives the legacy application's login screen: entry, credentials, language, landing, session shape
- * and sign-out (AAP 0.10.1 W1).
- *
- * Everything here is a locator or a typed reader — no assertion, and no filtering of what the baseline
- * renders: differences belong in the parity report (AAP 0.10.5), not in this page object.
- */
+/** Drives the legacy application's login screen: entry, credentials, language, landing, session shape and sign-out (AAP 0.10.1 W1) (AAP 0.10.5). */
 export class LoginPage {
   private readonly page: Page;
 
@@ -231,15 +135,7 @@ export class LoginPage {
     this.page = page;
   }
 
-  /**
-   * Opens the login screen (AAP 0.10.1 W1's entry step).
-   *
-   * Two readings of the entry path are in play: AAP 0.8.2 and `tools/parity/in-scope-routes.json`
-   * name a `login` route, while AAP 0.2.1 Step 1 records the login screen at `#/` — `app/index.html`
-   * shows that container whenever no session exists, and `routes.js` sends `/` to the dashboard. The
-   * `#/login` reading is tried first, the bare entry URL second, and only then does this throw,
-   * naming both. The settled hash is reported by `readCurrentHash()`, never asserted here.
-   */
+  /** Opens the login screen (AAP 0.10.1 W1's entry step). Two readings of the entry path are in play: AAP 0.8.2 and `tools/parity/in-scope-routes.json` name a `login` route, while AAP 0.2.1 Step 1 records the login screen at. */
   async open(): Promise<void> {
     await this.page.goto(this.entryUrl('#/login'));
     if (await this.waitForLoginForm()) {
@@ -258,14 +154,7 @@ export class LoginPage {
     );
   }
 
-  /**
-   * Switches the interface language (AAP 0.2.3 `LanguageSwitcher`; AAP 0.10.2 compares a non-English
-   * locale too), without navigating: legacy changes the active translation in place.
-   *
-   * A native `<select>` is driven directly. The legacy switcher is a `uib-dropdown` of language links
-   * instead (app/index.html), so it is opened, the entry for `code` is clicked, and the translation
-   * bundle that change loads is awaited with a ceiling a cached bundle is allowed to exceed.
-   */
+  /** Switches the interface language (AAP 0.2.3 `LanguageSwitcher`; AAP 0.10.2 compares a non-English locale too), without navigating: legacy changes the active translation in place. */
   async selectLanguage(code: string): Promise<void> {
     const bundle = this.awaitLanguageBundle(code);
     const select = await this.resolveLanguageSelect();
@@ -297,13 +186,7 @@ export class LoginPage {
     await bundle;
   }
 
-  /**
-   * The language switcher's options in document order (AAP 0.2.3 `LanguageSwitcher`).
-   *
-   * A native `<select>` reports its `value`/`label` pairs. The legacy switcher renders the language
-   * name only — the code lives in the controller, not the DOM — so there `value` repeats the label,
-   * which is why `selectLanguage()` resolves a code through `LEGACY_LANGUAGE_NAMES`.
-   */
+  /** The language switcher's options in document order (AAP 0.2.3 `LanguageSwitcher`). */
   async readLanguages(): Promise<LanguageOptionSummary[]> {
     const select = await this.resolveLanguageSelect();
     if (select !== null) {
@@ -319,16 +202,9 @@ export class LoginPage {
     });
   }
 
-  /**
-   * Types the credentials into the login form (AAP 0.10.1 W1).
-   *
-   * The username field's existing value is overwritten, never blanked beforehand: legacy keeps the
-   * typed username after a rejected login and clears only the password (`LoginFormController` on
-   * `UserAuthenticationFailureEvent`). Neither value is echoed anywhere (Rule 1 clause 9).
-   */
+  /** Types the credentials into the login form (AAP 0.10.1 W1). The username field's existing value is overwritten, never blanked beforehand: legacy keeps the typed username after a rejected login and clears only the (Rule 1 clause 9). */
   async fillCredentials(username: string, password: string): Promise<void> {
-    // Both fields are resolved through the ordered chain `resolveLoginField()` documents: the legacy
-    // `name` attribute, the design's translated placeholder, the design's label, then control order.
+    // Both fields are resolved through the ordered chain `resolveLoginField()` documents: the legacy `name` attribute, the design's translated placeholder, the design's label, then control order.
     const usernameField = await this.resolveLoginField(
       [
         'input[name="username"]',
@@ -346,13 +222,7 @@ export class LoginPage {
     await passwordField.fill(password);
   }
 
-  /**
-   * Clicks the form's primary submit — the one full-width "Sign In" button of AAP 0.2.3 `LoginForm`.
-   *
-   * `click()` waits for the button to be visible and enabled, which is the only guard added: legacy
-   * swaps it for a "loading..." primary button while `POST /authentication` is in flight, so a second
-   * click waits for the first submission to finish instead of sending a second request.
-   */
+  /** Clicks the form's primary submit — the one full-width "Sign In" button of AAP 0.2.3 `LoginForm`. */
   async submit(): Promise<void> {
     await this.submitButton().click();
   }
@@ -364,15 +234,7 @@ export class LoginPage {
     await this.waitForLanding();
   }
 
-  /**
-   * Waits for the landing screen — the destination of AAP 0.10.1 W1's login step.
-   *
-   * The primary signal is the hash: `#/clients` per AAP 0.2.1 Step 1, or `#/home`, because
-   * `MainController`'s `UserAuthenticationSuccessEvent` handler ends in
-   * `location.path('/home').replace()` and AAP 0.10.5 item 3 records `/` and `/home` as the legacy
-   * dashboard paths. A build that lands anywhere else is recognised by the signed-in navbar's global
-   * search control, which the anonymous screen does not render (AAP 0.2.3 `GlobalSearch`).
-   */
+  /** Waits for the landing screen — the destination of AAP 0.10.1 W1's login step (AAP 0.2.1, AAP 0.10.5, AAP 0.2.3). */
   async waitForLanding(): Promise<void> {
     const onLandingHash = await this.page
       .waitForURL(LANDING_HASH_PATTERN, { timeout: LANDING_TIMEOUT_MS })
@@ -390,24 +252,7 @@ export class LoginPage {
     );
   }
 
-  /**
-   * What the baseline screen's submit control currently is, in the four readings a caller can tell
-   * apart: `'absent'` when the screen renders no submit control at all, `'hidden'` when it renders one
-   * that is not visible, `'disabled'` when it is visible but cannot be clicked, and `'enabled'` when it
-   * can be clicked.
-   *
-   * The four readings exist because the answer after a successful login differs per side, and each is
-   * its own application's behaviour — Rule 1 clause 3, "match legacy behaviour; don't improve it". The
-   * legacy screen never unmounts its form: `app/index.html` keeps the `LoginFormController` container in
-   * the DOM under `data-ng-hide="currentSession.user != null"`, so its submit is present but `'hidden'`
-   * once a session exists, while the new application unmounts its login component and reads `'absent'`.
-   * The same screen also hides the submit and shows a "loading..." primary button while a login is in
-   * flight (`data-ng-show="!load"` on the submit, `data-ng-show="load"` on the loading one), which is a
-   * `'hidden'` reading inside a session-less form; a form carrying no submit at all is `'absent'`.
-   *
-   * The answer is typed by {@link SubmitState} — no `any`, no cast, no `as` (Rule 1 clause 4) — and the
-   * control is the one {@link submit} clicks.
-   */
+  /** What the baseline screen's submit control currently is, in the four readings a caller can tell apart: `'absent'` when the screen renders no submit control at all, `'hidden'` when it renders one that is not visible (Rule 1 clause 3, Rule 1 clause 4). */
   async readSubmitState(): Promise<SubmitState> {
     const button = this.submitButton();
     if ((await button.count()) === 0) {
@@ -419,16 +264,7 @@ export class LoginPage {
     return (await button.isDisabled()) ? 'disabled' : 'enabled';
   }
 
-  /**
-   * The login form's error text, trimmed, or `''` when none is shown — the failure path of
-   * AAP 0.10.1 W1.
-   *
-   * The region is `div.alert.alert-danger` inside the login container, shown by
-   * `ng-show="authenticationFailed"` and carrying the translated `error.login.failed` ("Invalid
-   * credentials. Please try again." in `locale-en`, app/index.html). The design draws no error region
-   * at rest (AAP 0.2.1 Step 1), so `''` is the ordinary answer, and reading it needs no navigation:
-   * the form stays where the rejected attempt left it.
-   */
+  /** The login form's error text, trimmed, or `''` when none is shown — the failure path of AAP 0.10.1 W1 (AAP 0.2.1). */
   async readFormError(): Promise<string> {
     const alert = this.page
       .locator('.container[data-ng-controller="LoginFormController"] .alert.alert-danger')
@@ -444,29 +280,12 @@ export class LoginPage {
     return this.page.evaluate(() => window.location.hash);
   }
 
-  /**
-   * Every `localStorage` entry's key and shape, after a login or a sign-out (AAP 0.10.1 W1: the entry
-   * is present after login and gone after logout; AAP 0.3.4 claim 9 fixes the three session fields).
-   *
-   * Keys are enumerated rather than looked up, because the exact key string the bower
-   * `angular-webstorage` writes is an open item (AAP 0.9.4 row 7) and a hard-coded one would let both
-   * applications agree on a wrong value. Only the key and booleans are returned: the authentication
-   * key, the parsed session object, the raw JSON and the array contents stay in the browser
-   * (Rule 1 clause 9).
-   */
+  /** Every `localStorage` entry's key and shape, after a login or a sign-out (AAP 0.10.1 W1: the entry is present after login and gone after logout; AAP 0.3.4 claim 9 fixes the three session fields) (AAP 0.9.4, Rule 1 clause 9). */
   async readSessionEntries(): Promise<SessionEntrySummary[]> {
     return this.page.evaluate(summariseSessionEntries);
   }
 
-  /**
-   * Signs out through the navbar user menu (AAP 0.10.1 W1's last step) and waits for the login form.
-   *
-   * Legacy opens that menu on hover (`ng-mouseenter` sets `li.user.status.isopen` on `li#user-menu`),
-   * so hovering is tried first and the menu's own toggle is clicked when the entry stays hidden. The
-   * click ends in `logout()`, which clears the session and routes to `#/` (MainController.js), where
-   * `app/index.html` shows the login container again; a build that lands elsewhere is sent to
-   * `#/login` once before this throws.
-   */
+  /** Signs out through the navbar user menu (AAP 0.10.1 W1's last step) and waits for the login form. */
   async signOut(): Promise<void> {
     await this.userMenu.hover();
     if (!(await this.waitForVisible(this.signOutEntry, USER_MENU_TIMEOUT_MS))) {
@@ -480,25 +299,12 @@ export class LoginPage {
     await this.gotoHash('#/login', this.loginForm);
   }
 
-  /**
-   * The design's login form: the `form.form` that owns the `#login-button` submit.
-   *
-   * AAP 0.2.1 Step 1 and AAP 0.2.3 `LoginForm` describe this markup — `.form-control` fields under
-   * uppercase `USERNAME` / `PASSWORD` labels, and one full-width `.btn.btn-primary` reading "Sign In"
-   * — and `app/index.html` carries it. The `#/login` route renders `app/views/login.html`, a second,
-   * minimal form (`#loginButton`, no `.form-control`), and `app/index.html` keeps `<div ng-view>`
-   * beside the design's form, so both can be in the DOM at once; the hyphenated id separates them.
-   * Confirm when the legacy app runs.
-   */
+  /** The design's login form: the `form.form` that owns the `#login-button` submit (AAP 0.2.1, AAP 0.2.3). */
   private get loginForm(): Locator {
     return this.page.locator('form.form').filter({ has: this.page.locator('button#login-button') });
   }
 
-  /**
-   * The legacy language switcher group: a `uib-dropdown` button beside `ul.lang-dropdown`
-   * (app/index.html; the row the design labels "Change language:", locale-en
-   * `label.input.changelanguage`). Confirm when the legacy app runs.
-   */
+  /** The legacy language switcher group: a `uib-dropdown` button beside `ul.lang-dropdown` (app/index.html; the row the design labels "Change language:", locale-en `label.input.changelanguage`). */
   private get legacyLanguageGroup(): Locator {
     return this.page
       .locator('div.btn-group[uib-dropdown]')
@@ -515,10 +321,7 @@ export class LoginPage {
     return this.legacyLanguageGroup.locator('ul.lang-dropdown li a');
   }
 
-  /**
-   * The navbar user menu (`li#user-menu`, app/views/_topnavbar.html), which opens on hover or on a
-   * click of its toggle. Confirm when the legacy app runs.
-   */
+  /** The navbar user menu (`li#user-menu`, app/views/_topnavbar.html), which opens on hover or on a click of its toggle. */
   private get userMenu(): Locator {
     return this.page.locator('#user-menu');
   }
@@ -528,26 +331,17 @@ export class LoginPage {
     return this.userMenu.locator('a#user-dropdown, a[uib-dropdown-toggle]').first();
   }
 
-  /**
-   * The menu's sign-out entry: `a#logout`, labelled "Sign Out" (locale-en `label.anchor.logout`) and
-   * wired to `logout()`. Confirm when the legacy app runs.
-   */
+  /** The menu's sign-out entry: `a#logout`, labelled "Sign Out" (locale-en `label.anchor.logout`) and wired to `logout()`. */
   private get signOutEntry(): Locator {
     return this.page.locator('#logout');
   }
 
-  /**
-   * The signed-in navbar's global search input (`input#search`, AAP 0.2.3 `GlobalSearch`), rendered
-   * only once a session exists, which makes it the landing fallback `waitForLanding()` uses.
-   */
+  /** The signed-in navbar's global search input (`input#search`, AAP 0.2.3 `GlobalSearch`), rendered only once a session exists, which makes it the landing fallback `waitForLanding()` uses. */
   private get globalSearch(): Locator {
     return this.page.locator('input#search');
   }
 
-  /**
-   * The legacy entry URL for an optional hash, carrying both query parameters the legacy app needs to
-   * reach the Blitzy Fineract backend rather than a public demo host (Rule 2; AAP 0.3.4).
-   */
+  /** The legacy entry URL for an optional hash, carrying both query parameters the legacy app needs to reach the Blitzy Fineract backend rather than a public demo host (Rule 2; AAP 0.3.4). */
   private entryUrl(hash?: string): string {
     return (
       `${LEGACY_URL}/?baseApiUrl=${encodeURIComponent(FINERACT_URL)}` +
@@ -555,18 +349,7 @@ export class LoginPage {
     );
   }
 
-  /**
-   * Navigates to a fragment of the loaded app — or opens {@link entryUrl} when the page is not on it
-   * yet — keeping the query string, and waits for the destination's root locator.
-   *
-   * The jump is resolved against the page's own address, never with a fragment-only argument:
-   * Playwright resolves such an argument against the configured `baseURL`, which replaces the address
-   * with `LEGACY_URL`, discards both entry query parameters, and leaves the legacy app addressing a
-   * host that is not `FINERACT_URL` (Rule 2; app/scripts/initialTasks.js:25-44). When the AngularJS
-   * router does not react to the fragment change, assigning `window.location.hash` is the same event
-   * a link click produces, so the router picks it up; the root locator then has to appear or this
-   * throws, rather than returning on a screen that never arrived.
-   */
+  /** Navigates to a fragment of the loaded app — or opens {@link entryUrl} when the page is not on it yet — keeping the query string, and waits for the destination's root locator (Rule 2). */
   private async gotoHash(hash: string, root: Locator): Promise<void> {
     const current = this.page.url();
     if (current.startsWith(LEGACY_URL)) {
@@ -583,15 +366,7 @@ export class LoginPage {
     await root.first().waitFor({ state: 'visible' });
   }
 
-  /**
-   * The first of `candidates` that resolves to a visible field inside the login form.
-   *
-   * The order is chosen for stability: the legacy `name` attribute is language-independent, the
-   * design's placeholder is rendered from the active translation (so it disappears in another locale
-   * — AAP 0.2.3 `LoginForm`), the label beside `#uid` / `#pwd` is the design's uppercase text, and the
-   * form's own `.form-control` order is the last resort. A miss names the field and the selectors
-   * tried, never a typed value (Rule 1 clause 9).
-   */
+  /** The first of `candidates` that resolves to a visible field inside the login form (AAP 0.2.3, Rule 1 clause 9). */
   private async resolveLoginField(candidates: readonly string[], fieldName: string): Promise<Locator> {
     for (const candidate of candidates) {
       const field = this.loginForm.locator(candidate).first();
@@ -605,14 +380,7 @@ export class LoginPage {
     );
   }
 
-  /**
-   * The `<select>` that is the language switcher, or `null` when the screen carries none.
-   *
-   * The legacy login screen has no `<select>` at all, so this is the design reading of AAP 0.2.3
-   * `LanguageSwitcher` and the control the new application renders. A `<select>` qualifies only when
-   * one of its option values is a language code, which keeps an unrelated select from being taken for
-   * the switcher.
-   */
+  /** The `<select>` that is the language switcher, or `null` when the screen carries none (AAP 0.2.3). */
   private async resolveLanguageSelect(): Promise<Locator | null> {
     const selects = this.page.locator('select');
     const total = await selects.count();
@@ -631,11 +399,7 @@ export class LoginPage {
     return this.loginForm.locator('button.btn.btn-primary').first();
   }
 
-  /**
-   * Starts waiting for the translation bundle a language change loads and never rejects: the bundle
-   * is fetched once per language and served from cache afterwards, so an expired wait is an expected
-   * outcome rather than a failure, and the change applies either way.
-   */
+  /** Starts waiting for the translation bundle a language change loads and never rejects: the bundle is fetched once per language and served from cache afterwards, so an expired wait is an expected outcome rather than a. */
   private awaitLanguageBundle(code: string): Promise<void> {
     return this.page
       .waitForResponse((response) => response.url().includes(`${LANGUAGE_BUNDLE_PATH}${code}.json`), {

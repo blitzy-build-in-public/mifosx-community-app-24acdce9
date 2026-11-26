@@ -6,24 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RepaymentPeriod, RepaymentSchedule } from '../../loan.models';
 import { LoanScheduleComponent } from './loan-schedule.component';
 
-/**
- * Behavioural spec for the individual-loan record's repayment-schedule table (AAP 0.7.1
- * "`LoanViewComponent` with `LoanScheduleComponent`"; AAP 0.7.4). It pins the four things a reader of
- * that table depends on, each against the rendered DOM (Rule 1 clause 8):
- *
- * - one row per `RepaymentPeriod` of the `RepaymentSchedule`, in the server's order and under the
- *   eight columns the record page declares (AAP 0.10.2: the array order is meaningful);
- * - both wire date shapes render at the shared `dd MMMM yyyy` pattern, never as a raw triple, an ISO
- *   string or `Invalid Date` (AAP 0.7.2 "Date handling");
- * - every amount prints the payload's own figure — unsummed, unrounded, unrelabelled — which is what
- *   keeps the table in step with `GET /loans/{id}?associations=all` (Rule 1 clause 3);
- * - a `null` schedule and one with no periods both render the shared explicit empty state and no
- *   error, never a table (AAP 0.7.4 "States every list and record screen must implement").
- *
- * No request is asserted here: the component issues none — `loan.service.ts` reads the record and this
- * component only projects the schedule it is handed — so no HTTP provider is registered and the
- * injector below is the translate stack plus the locale and nothing else (Rule 1 clause 5, Rule 2).
- */
+/** Behavioural spec for the individual-loan record's repayment-schedule table (AAP 0.7.1 "`LoanViewComponent` with `LoanScheduleComponent`"; AAP 0.7.4) (Rule 1 clause 8, AAP 0.10.2, AAP 0.7.2, Rule 1 clause 3). */
 
 /** Language the spec serves its labels in. */
 const SPEC_LANG = 'en';
@@ -61,23 +44,13 @@ const EMPTY_STATE_KEY = 'label.nodata';
 /** The message that key resolves to in the in-memory bundle. */
 const EMPTY_STATE_TEXT = 'No repayment schedule is available.';
 
-/**
- * The in-memory bundle: the nine keys the template uses and nothing else, so a key the legacy bundle
- * would not hold renders as itself and fails the assertion reading the label it feeds (AAP 0.10.2).
- */
+/** The in-memory bundle: the nine keys the template uses and nothing else, so a key the legacy bundle would not hold renders as itself and fails the assertion reading the label it feeds (AAP 0.10.2). */
 const TRANSLATIONS: Readonly<Record<string, string>> = {
   ...COLUMN_LABELS,
   [EMPTY_STATE_KEY]: EMPTY_STATE_TEXT,
 };
 
-/**
- * A complete `RepaymentPeriod`: every member the model declares is supplied, so a member it gains
- * later breaks this factory at compile time instead of passing silently (Rule 1 clause 4).
- *
- * `periodNumber` is the period the row numbers, or `null` for the disbursement pseudo-period the fork
- * sends without a `period` member at all — the spread inside it then leaves that key out rather than
- * supplying a substitute number for it (see `RepaymentPeriod`).
- */
+/** A complete `RepaymentPeriod`: every member the model declares is supplied, so a member it gains later breaks this factory at compile time instead of passing silently (Rule 1 clause 4). */
 function makePeriod(
   overrides: Partial<RepaymentPeriod> = {},
   periodNumber: number | null = 1,
@@ -115,12 +88,7 @@ function makeSchedule(periods: readonly RepaymentPeriod[]): RepaymentSchedule {
   };
 }
 
-/**
- * A `RepaymentPeriod` as the wire sends the schedule's leading row: the fork's disbursement
- * pseudo-period carries no `period` member (see `RepaymentPeriod`), so the object is built without
- * that key rather than with a substitute. It is assignable as a period because the model declares the
- * member optional, which is the statement this helper keeps honest.
- */
+/** A `RepaymentPeriod` as the wire sends the schedule's leading row: the fork's disbursement pseudo-period carries no `period` member (see `RepaymentPeriod`), so the object is built without that key rather than with a. */
 function makeUnnumberedPeriod(overrides: Partial<RepaymentPeriod> = {}): RepaymentPeriod {
   return makePeriod(overrides, null);
 }
@@ -133,8 +101,7 @@ function textOf(element: Element | null): string {
 describe('LoanScheduleComponent', () => {
   /** The fixture's host element, the root every query below starts from. */
   function hostOf(fixture: ComponentFixture<LoanScheduleComponent>): HTMLElement {
-    // `ComponentFixture.nativeElement` is loosely typed by Angular; narrowing it once here keeps every
-    // element these helpers return an `HTMLElement` and confines the cast to one boundary (Rule 1 c. 4).
+    // `ComponentFixture.nativeElement` is loosely typed by Angular; narrowing it once here keeps every element these helpers return an `HTMLElement` and confines the cast to one boundary (Rule 1 c. 4).
     return fixture.nativeElement as HTMLElement;
   }
 
@@ -168,12 +135,7 @@ describe('LoanScheduleComponent', () => {
     return bodyRows(host).map((row) => cellsOf(row).map((cell) => textOf(cell)));
   }
 
-  /**
-   * Renders the table bound to `schedule`. The input is set before the first change detection, then
-   * the fixture is stabilised and checked again: `TranslatePipe` is impure, so a header label is read
-   * through the template on every pass and the assertions must follow the pass that resolves the
-   * bundle rather than the one that renders the markup.
-   */
+  /** Renders the table bound to `schedule`. The input is set before the first change detection, then the fixture is stabilised and checked again: `TranslatePipe` is impure, so a header label is read through the template on. */
   async function render(schedule: RepaymentSchedule | null): Promise<ComponentFixture<LoanScheduleComponent>> {
     const fixture = TestBed.createComponent(LoanScheduleComponent);
 
@@ -186,8 +148,7 @@ describe('LoanScheduleComponent', () => {
   }
 
   beforeEach(async () => {
-    // `provideTranslateService()` registers the translate stack with no-op loading, so nothing is
-    // fetched and the labels are the in-memory bundle served below (Rule 1 clause 5).
+    // `provideTranslateService()` registers the translate stack with no-op loading, so nothing is fetched and the labels are the in-memory bundle served below (Rule 1 clause 5).
     await TestBed.configureTestingModule({
       imports: [LoanScheduleComponent],
       providers: [
@@ -256,16 +217,9 @@ describe('LoanScheduleComponent', () => {
     expect(rows[1]).toEqual(['1', '21 November 2026', '05 December 2026', '100', '10', '0', '110', '990']);
   });
 
-  /**
-   * Locks down contract-loan-period-required-false: the fork's leading disbursement pseudo-period
-   * carries no `period` member, so the model declares it optional and the table keys its rows by
-   * position — two unnumbered rows in one schedule would otherwise repeat the same absent key — while
-   * the period cell prints what the payload sent, which for those rows is nothing.
-   */
+  /** Locks down contract-loan-period-required-false: the fork's leading disbursement pseudo-period carries no `period` member, so the model declares it optional and the table keys its rows by position — two unnumbered rows. */
   it('renders an unnumbered disbursement row with an empty period cell, one row per period', async () => {
-    // Angular reports a duplicated track key through `console.warn` in dev mode and renders on, so the
-    // console is the observable a positional track has to keep quiet: `track row.period` emits NG0955
-    // for the two unnumbered rows below once they are reconciled.
+    // Angular reports a duplicated track key through `console.warn` in dev mode and renders on, so the console is the observable a positional track has to keep quiet: `track row.period` emits NG0955 for the two unnumbered.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const periods: readonly RepaymentPeriod[] = [
       makeUnnumberedPeriod({ dueDate: [2026, 11, 24], totalDueForPeriod: 0 }),
@@ -278,13 +232,11 @@ describe('LoanScheduleComponent', () => {
 
     // One row per period row the payload carried, two of which carry no period number.
     expect(rows).toHaveLength(4);
-    // The unnumbered rows print an empty cell — no 0, no dash, no renumbering of the periods below
-    // them — and the numbered rows keep their own numbers in the server's order (Rule 1 clause 3).
+    // The unnumbered rows print an empty cell — no 0, no dash, no renumbering of the periods below them — and the numbered rows keep their own numbers in the server's order (Rule 1 clause 3).
     expect(rows.map((cells) => cells[0])).toEqual(['', '1', '', '2']);
     expect(rows.filter((cells) => cells[0] === '')).toHaveLength(2);
 
-    // The same rows handed over as a new array: the collection is reconciled, which is where a
-    // duplicated key is reported, and the table still holds one row per period.
+    // The same rows handed over as a new array: the collection is reconciled, which is where a duplicated key is reported, and the table still holds one row per period.
     fixture.componentRef.setInput('schedule', makeSchedule([...periods]));
     fixture.detectChanges();
     await fixture.whenStable();
@@ -295,9 +247,7 @@ describe('LoanScheduleComponent', () => {
   });
 
   it('renders both Fineract date shapes at the shared dd MMMM yyyy pattern', async () => {
-    // The two shapes `FineractDate` declares: the `[year, month, day]` triple and the `'yyyy-MM-dd'`
-    // string. Neither may reach the DOM — the shared display pattern is what a reader sees
-    // (AAP 0.7.2 "Date handling").
+    // The two shapes `FineractDate` declares: the `[year, month, day]` triple and the `'yyyy-MM-dd'` string (AAP 0.7.2).
     const host = hostOf(
       await render(makeSchedule([makePeriod({ fromDate: [2026, 11, 21], dueDate: '1988-03-14' })])),
     );
@@ -338,8 +288,7 @@ describe('LoanScheduleComponent', () => {
     expect(cells[5]).toBe('0');
     expect(cells[6]).toBe('456.78');
     expect(cells[7]).toBe('1,234.5');
-    // The total is the server's own figure, not principal plus interest, and the principal cell holds
-    // its own member rather than that total (Rule 1 clause 3: match legacy, do not improve on it).
+    // The total is the server's own figure, not principal plus interest, and the principal cell holds its own member rather than that total (Rule 1 clause 3: match legacy, do not improve on it).
     expect(cells[6]).not.toBe('4,010');
     expect(cells[3]).not.toBe('456.78');
   });

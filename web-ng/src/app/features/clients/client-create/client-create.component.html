@@ -1,33 +1,4 @@
-<!--
-  The create-client screen (`#/createclient`): the office and staff pickers the template fills, the
-  individual client's name fields, the two optional codes, the active/activation-date pair and the
-  submission date, above the cancel and submit controls (AAP 0.7.3 row "W2 create and activate
-  client"; AAP 0.7.4 screens; AAP 0.8.2 route `createclient`).
-
-  Every visual value comes from the global Bootstrap 3 layer `web-ng/src/styles.scss` compiles, so
-  this file carries no style, no colour and no pixel: `.container-fluid` and `.row`/`.col-md-*` are
-  the page and its grid, `.panel`/`.panel-heading`/`.panel-body` the white card with its shadow and
-  no border stroke, `.form-group`/`.control-label` the field layout,
-  `.form-control` the legacy fixed-height input, `.checkbox` the boxed choice, `.btn.btn-primary` the brand fill and
-  `.alert.alert-danger` the failure banner (Rule 1 clause 6; AAP 0.5.2). `span.required` is the
-  legacy marker rule in `app/styles-dev/main/components/_content.scss`, consumed in place.
-
-  Field ids and `name` attributes are the legacy form's own (`officeId`, `staffId`, `firstname`,
-  `lastname`, `externalId`, `mobileNo`, `activeCheckbox`, `activationDate`, `submittedon`,
-  `save2`, `cancel2` — `app/views/clients/createclient.html`), so the parity harness addresses the
-  same controls on both applications and a label's `for` points at the control it names.
-
-  Captions and options are the legacy bundle's keys and the Fineract template's own lists: no label
-  and no option is written into this file. The required marker is rendered where this template owns
-  the `<label>`; on the fields `app-select-field` and `app-date-field` render, `[required]` carries
-  the state to assistive technology because those components own their own label markup.
-
-  The two validation messages are bundle keys as well — the name rule's
-  `validation.msg.client.name.cannot.start.specialchar.ornumber` and the mobile rule's
-  `label.mustbenumeric` — each in the `.help-block` the field's `.has-error` state opens, and only one
-  of a field's messages is on screen at a time, so each input's `aria-describedby` names the one
-  showing and nothing else.
--->
+<!-- The create-client screen (`#/createclient`): the office and staff pickers the template fills, the individual client's name fields, the two optional codes, the active/activation-date pair and the submission date, above (AAP 0.7.3, AAP 0.7.4, AAP 0.8.2, Rule 1 clause 6). -->
 <section class="container-fluid">
   <div class="row">
     <div class="col-md-12">
@@ -36,11 +7,7 @@
           <h3 class="panel-title">{{ 'label.heading.createclient' | translate }}</h3>
         </div>
         <div class="panel-body">
-          <!--
-            Fineract's own failure text, verbatim and unmoved by any prefix: a failed template read
-            or a rejected create. `role="alert"` announces it without a focus change, and the form
-            below keeps every entered value (AAP 0.7.4; AAP 0.14.1 "errors are values").
-          -->
+          <!-- Fineract's own failure text, verbatim and unmoved by any prefix: a failed template read or a rejected create (AAP 0.7.4, AAP 0.14.1). -->
           @if (error(); as message) {
             <div class="alert alert-danger" role="alert">{{ message }}</div>
           }
@@ -52,11 +19,7 @@
                   <label class="control-label" for="officeId">
                     {{ 'label.input.office' | translate }}<span class="required">*</span>
                   </label>
-                  <!--
-                    No `label` input: this template renders the `<label for>` above, so the select is
-                    named by it and the field adds no second name of its own. The office list is the
-                    template's, in its order, and a change re-reads the template for that office.
-                  -->
+                  <!-- No `label` input: this template renders the `<label for>` above, so the select is named by it and the field adds no second name of its own. -->
                   <app-select-field
                     inputId="officeId"
                     [control]="form.controls.officeId"
@@ -66,9 +29,7 @@
                 </div>
                 <div class="col-md-6">
                   <label class="control-label" for="staffId">{{ 'label.input.staff' | translate }}</label>
-                  <!-- Optional: Fineract assigns no staff to a client whose officer the operator left
-                       unset, and the prompt row returns the picker to empty, as the legacy chosen
-                       control's prompt does. -->
+                  <!-- Optional: Fineract assigns no staff to a client whose officer the operator left unset, and the prompt row returns the picker to empty, as the legacy chosen control's prompt does. -->
                   <app-select-field
                     inputId="staffId"
                     [control]="form.controls.staffId"
@@ -100,8 +61,7 @@
                         {{ 'label.requiredfield' | translate }}
                       </span>
                     }
-                    <!-- The legacy form's own name rule and its message: a name may not start with a
-                         digit or a special character (`app/views/clients/createclient.html`). -->
+                    <!-- The legacy form's own name rule and its message: a name may not start with a digit or a special character (`app/views/clients/createclient.html`). -->
                     @if (showsPatternError(form.controls.firstname)) {
                       <span id="firstname-pattern-error" class="help-block">
                         {{ 'validation.msg.client.name.cannot.start.specialchar.ornumber' | translate }}
@@ -144,9 +104,7 @@
                 <div class="col-md-6">
                   <div class="form-group" [class.has-error]="showsError(form.controls.mobileNo)">
                     <label class="control-label" for="mobileNo">{{ 'label.input.mobilenumber' | translate }}</label>
-                    <!-- The legacy form's own numeric rule with its `label.mustbenumeric` message,
-                         carried as it stands (Rule 1 clause 3). The control stays a plain text input,
-                         as the legacy one is (Rule 1 clause 6). -->
+                    <!-- The legacy form's own numeric rule with its `label.mustbenumeric` message, carried as it stands (Rule 1 clause 3) (Rule 1 clause 6). -->
                     <input
                       id="mobileNo"
                       name="mobileNo"
@@ -175,12 +133,7 @@
               <div class="row">
                 <div class="col-md-6">
                   <div class="form-group">
-                    <!--
-                      One label, wrapping the control it names, so the box reads as "Active" and the
-                      parity harness can address it through `#activeCheckbox` or that label. The
-                      legacy row is additionally gated on `ACTIVATE_CLIENT`; this screen is gated once,
-                      per route, on `CREATE_CLIENT`, so the box is not separately hidden here.
-                    -->
+                    <!-- One label, wrapping the control it names, so the box reads as "Active" and the parity harness can address it through `#activeCheckbox` or that label. -->
                     <div class="checkbox">
                       <label for="activeCheckbox">
                         <input id="activeCheckbox" name="active" type="checkbox" formControlName="active" />
@@ -190,11 +143,7 @@
                   </div>
                 </div>
                 <div class="col-md-6">
-                  <!--
-                    The activation date exists only while the client is to be created active, which is
-                    what legacy's `setChoice()` shows: an inactive client has no activation date, and
-                    the body leaves the member out entirely.
-                  -->
+                  <!-- The activation date exists only while the client is to be created active, which is what legacy's `setChoice()` shows: an inactive client has no activation date, and the body leaves the member out entirely. -->
                   @if (isActive()) {
                     <label class="control-label" for="activationDate">{{ 'label.input.activationdate' | translate }}</label>
                     <app-date-field inputId="activationDate" [control]="form.controls.activationDate" />
@@ -216,11 +165,7 @@
                   <button id="cancel2" type="button" class="btn btn-default" (click)="cancel()">
                     {{ 'label.button.cancel' | translate }}
                   </button>
-                  <!--
-                    Disabled while a post is in flight: `POST /clients` is not idempotent, so the
-                    guard's busy signal is the one thing that keeps a second click from creating a
-                    second client (AAP 0.1.1; AAP 0.14.1).
-                  -->
+                  <!-- Disabled while a post is in flight: `POST /clients` is not idempotent, so the guard's busy signal is the one thing that keeps a second click from creating a second client (AAP 0.1.1; AAP 0.14.1). -->
                   <button id="save2" type="submit" class="btn btn-primary" [disabled]="guard.busy()">
                     {{ 'label.button.save' | translate }}
                   </button>

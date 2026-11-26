@@ -1,15 +1,8 @@
 @if (items().length > 0) {
-  <!-- The trail is the bare `.breadcrumb` list and nothing more, as legacy renders it
-       (`app/views/clients/clients.html` opens with the list, with no landmark around it). Rule 1
-       clause 3 forbids a deliberate difference from legacy that is not registered in the plan, and
-       AAP 0.10.5 registers none for this component, so no navigation landmark and no ARIA
-       attribute is added here. The `.breadcrumb` class carries the whole visual treatment. -->
+  <!-- The trail is the bare `.breadcrumb` list and nothing more, as legacy renders it (`app/views/clients/clients.html` opens with the list, with no landmark around it) (Rule 1 clause 3, AAP 0.10.5). -->
   <ol class="breadcrumb">
     @for (item of items(); track $index) {
-      <!-- The last crumb is the current page, marked the one way legacy marks it: Bootstrap 3's
-           `.breadcrumb > .active` class, which legacy writes as `<li class="active">` and which is
-           the only rule that gives the current crumb its non-link colour. Earlier crumbs carry no
-           state at all. -->
+      <!-- The last crumb is the current page, marked the one way legacy marks it: Bootstrap 3's `.breadcrumb > .active` class, which legacy writes as `<li class="active">` and which is the only rule that gives the current crumb. -->
       <li [class.active]="$last">{{ item.label }}</li>
     }
   </ol>

@@ -1,45 +1,6 @@
-<!--
-  The individual client record (`#/viewclient/:id`): the record header, the two-tab strip, the
-  joined action row, the tab body and the right-hand profile card (AAP 0.7.4 "Client view
-  (`#/viewclient/:id`)"; AAP 0.8.2 feature route `viewclient/:id`; Figma file
-  `DKm5TBFbXypfqyx4xUdhBw`, flow "Sign in and open a client record", step 3 of 3, screen `1:4`).
-
-  Every visual value comes from the global Bootstrap 3 layer `web-ng/src/styles.scss` compiles, so
-  this file carries no style, no colour and no pixel: `.container-fluid` and `.row`/`.col-md-*` are
-  the page and its grid, `.panel`/`.panel-body` the white square record card with its shadow,
-  `.nav-tabs` the strip, `.alert.alert-danger` the failure and not-found banners, and `.fa` the
-  Font Awesome 4 glyphs (Rule 1 clause 6; AAP 0.5.2). The blocks the record composes —
-  `app-record-header`, `app-tab-strip`, `app-action-button-group`, `app-client-summary`,
-  `app-client-accounts`, `app-client-identifiers` and `app-profile-card` — own their own markup and
-  take the loaded record, its id or its action descriptors as an input.
-
-  Four states, in the order a viewer meets them. While the record read is outstanding nothing is
-  painted: the design carries no spinner, skeleton or placeholder (AAP 0.2.4). A 404, or a route
-  with no id, paints the not-found message in place of the record and leaves the shell usable. Any
-  other 4xx paints Fineract's own message verbatim above a record that stays usable. A 5xx or
-  transport failure paints nothing here, because the interceptor has already raised exactly one
-  notification for it (AAP 0.7.4; AAP 0.4.2).
-
-  Nothing on this screen posts anything: the record read is the screen's one request, and every
-  action is a `routerLink` the action group renders, gated entry by entry on the permission legacy's
-  own `clientStatus.js` gives that action (Rule 1 clauses 2, 3 and 5). No
-  client id, record body, message or credential is interpolated beyond the ids the routes need
-  (Rule 1 clause 9).
-
-  Every action descriptor and both tab inputs bind `clientId()`, the id the URL names now, because
-  the router reuses this component when the URL moves from one `#/viewclient/{id}` to another: the
-  component resets and re-reads on each route emission, so the links can never point at the client
-  the screen has moved away from.
--->
+<!-- The individual client record (`#/viewclient/:id`): the record header, the two-tab strip, the joined action row, the tab body and the right-hand profile card (AAP 0.7.4 "Client view (`#/viewclient/:id`)"; AAP 0.8.2 (Rule 1 clause 6, AAP 0.5.2, AAP 0.2.4, AAP 0.4.2). -->
 <div class="container-fluid">
-  <!--
-    The record's own trail: the client's office name and the separator the design shows after it.
-    The shell renders a crumb only from a route's static `data['breadcrumb']`, which this record's
-    route deliberately does not declare, so exactly one trail is ever on screen and it describes the
-    client being looked at rather than the route that reached it — legacy's record template does the
-    same with `{{client.officeName}}` (`app/views/clients/viewclient.html:2-5`; AAP 0.7.4). An empty
-    value renders no trail at all, so a loading or failed read leaves none behind.
-  -->
+  <!-- The record's own trail: the client's office name and the separator the design shows after it (AAP 0.7.4). -->
   @if (officeCrumb(); as crumb) {
     <nav aria-label="Breadcrumb">
       <ol class="breadcrumb">
@@ -53,22 +14,12 @@
       @if (loading()) {
         <!-- Nothing yet: the record is not half-painted and no empty state is claimed. -->
       } @else if (notFound()) {
-        <!--
-          No such client: the message replaces the record entirely, with no card, no tab strip and
-          no action row, so no control is offered against a record that was never read. Both strings
-          are keys the shipped legacy bundles carry, so the missing-translation handler never has to
-          humanise one.
-        -->
+        <!-- No such client: the message replaces the record entirely, with no card, no tab strip and no action row, so no control is offered against a record that was never read. -->
         <div class="alert alert-danger" role="alert">
           <strong>{{ notFoundHeadingKey | translate }}</strong>{{ ' ' }}<span>{{ notFoundMessageKey | translate }}</span>
         </div>
       } @else {
-        <!--
-          The one failure this screen renders itself: a 4xx other than 404, in the server's own
-          words and with no pipe, because it is Fineract's text and not a key. It stands outside the
-          record branch because a read that was refused leaves no record to paint, and its message
-          is still what the user must read (AAP 0.7.4; workflow W7's rule).
-        -->
+        <!-- The one failure this screen renders itself: a 4xx other than 404, in the server's own words and with no pipe, because it is Fineract's text and not a key (AAP 0.7.4). -->
         @if (clientError(); as failure) {
           <div class="alert alert-danger" role="alert">{{ failure.message }}</div>
         }
@@ -84,42 +35,18 @@
 
               <div class="row">
                 <div class="col-md-12">
-                  <!--
-                    The design's joined action row, rendered by `app-action-button-group` from the
-                    descriptors `actionButtons()` builds: `Edit`, `New Loan`, `New Saving` and `Close`
-                    in the group and the four lifecycle commands in its `More` menu, which is the
-                    arrangement AAP 0.7.4 records. The group owns that markup — the joined
-                    `.btn-group`, the `More` menu with its Angular open state and each entry's own
-                    permission gate — while this record owns which actions exist and where they lead,
-                    so the ids in their hrefs are the ones the URL names now. Client charges,
-                    transfer, staff assignment, signature and avatar controls are deliberately absent:
-                    they belong to out-of-scope migration units (AAP 0.10.5 items 5 and 7).
-                  -->
+                  <!-- The design's joined action row, rendered by `app-action-button-group` from the descriptors `actionButtons()` builds: `Edit`, `New Loan`, `New Saving` and `Close` in the group and the four lifecycle commands in its (AAP 0.7.4, AAP 0.10.5). -->
                   <app-action-button-group [actions]="actionButtons()" />
                 </div>
               </div>
 
-              <!--
-                The tab body: the `General` tab's summary and accounts table on the left, the
-                profile card on the right, as the design lays the record out. The accounts section
-                heading is the caller's, because `app-client-accounts` renders the card body alone.
-                Switching tabs paints the other section and leaves the record header, the strip and
-                the action row in place.
-              -->
+              <!-- The tab body: the `General` tab's summary and accounts table on the left, the profile card on the right, as the design lays the record out. -->
               <div class="row">
                 <div class="col-md-9">
                   @if (activeTabId() === 'general') {
                     <app-client-summary [client]="record" />
                     <hr />
-                    <!--
-                      The section heading `app-client-accounts` deliberately leaves to its caller,
-                      set at the weight the legacy record gives the same heading: legacy wraps its
-                      accounts heading in `<strong>` (`app/views/clients/viewclient.html:326-327`),
-                      and Bootstrap's own `h4` would otherwise paint 500 where the record's
-                      card-title token carries 700. `<strong>` supplies that weight from the element
-                      itself, so no class, rule or inline style is added for it (Rule 1 clauses 3
-                      and 6).
-                    -->
+                    <!-- The section heading `app-client-accounts` deliberately leaves to its caller, set at the weight the legacy record gives the same heading: legacy wraps its accounts heading in `<strong>`. -->
                     <h4><strong>{{ accountsHeadingKey | translate }}</strong></h4>
                     <app-client-accounts [clientId]="clientId()" />
                   } @else {
@@ -127,8 +54,7 @@
                   }
                 </div>
                 <div class="col-md-3">
-                  <!-- The card's own rows and, under its `Performance History` sub-heading, the rows
-                       whose values the client payload does not carry. -->
+                  <!-- The card's own rows and, under its `Performance History` sub-heading, the rows whose values the client payload does not carry. -->
                   <app-profile-card
                     [displayName]="record.displayName"
                     [fields]="profileFields()"

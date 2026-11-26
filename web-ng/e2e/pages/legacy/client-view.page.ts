@@ -1,41 +1,9 @@
-/**
- * Baseline page object for the legacy AngularJS application's single-client record: route
- * `#/viewclient/:id` (app/scripts/routes.js:85), served from `LEGACY_URL`.
- *
- * Workflows it serves (AAP 0.10.1): **W3**, which searches for a client and reads the record's
- * details, accounts and identifiers back from `GET /clients/{id}`, `GET /clients/{id}/accounts` and
- * `GET /clients/{id}/identifiers`; and the entry points of **W4** ("New Loan", routed to
- * `#/newclientloanaccount/:clientId`) and **W8** ("New Saving", routed to
- * `#/new_client_saving_application/:clientId`). Every Fineract call behind those readings is observed
- * by the network capture, never by this file: no Fineract address and no API call appears here
- * (Rule 1 clause 2).
- *
- * Entry URL (Rule 2): the harness may open the legacy app only through
- * `${LEGACY_URL}/?baseApiUrl=${FINERACT_URL}&tenantIdentifier=${TENANT_ID}`. Without both query
- * parameters the legacy app falls back to a public demo host, which Rule 2 forbids, so `entryUrl()`
- * builds that address and `gotoHash()` keeps it on every later in-app jump.
- *
- * Legacy-only tabs and actions are reported unfiltered (Rule 1 clause 3). The record still renders
- * Family Members, Documents, Notes and Credit Report, and actions such as "New Charge",
- * "Transfer Client", "Assign Staff" and the signature entries, none of which the new application
- * renders. They stay in every read so `report/parity-report.ts` can record them as
- * `intentional-diff` against AAP 0.10.5 items 5-8; filtering them out here would delete that
- * evidence.
- *
- * The legacy source tree is a read-only reference outside this checkout, so each selector below names
- * the legacy markup it comes from and the AAP section it serves, and must be confirmed against the
- * running legacy app.
- */
+/** Baseline page object for the legacy AngularJS application's single-client record: route `#/viewclient/:id` (app/scripts/routes.js:85), served from `LEGACY_URL` (AAP 0.10.1, Rule 1 clause 2, Rule 2, Rule 1 clause 3). */
 import type { Locator, Page } from '@playwright/test';
 
 import { FINERACT_URL, LEGACY_URL, TENANT_ID } from '../../seed/fixtures';
 
-/**
- * The record header's identity, as AAP 0.10.1 W3 compares it against the API's answer.
- *
- * Declared identically by the sibling `pages/next/client-view.page.ts` so one spec type-checks
- * against both page objects.
- */
+/** The record header's identity, as AAP 0.10.1 W3 compares it against the API's answer. */
 export interface ClientViewHeader {
   /** Client name the record title renders (`displayName` in the API's answer). */
   displayName: string;
@@ -63,8 +31,7 @@ export interface AccountRow {
   balance: string;
 }
 
-/** One row of the Identities tab's identifier table (AAP 0.10.1 W3, from
- * `GET /clients/{id}/identifiers`). */
+/** One row of the Identities tab's identifier table (AAP 0.10.1 W3, from `GET /clients/{id}/identifiers`). */
 export interface IdentifierRow {
   /** Document type as rendered, e.g. `National Id`. */
   documentType: string;
@@ -74,41 +41,22 @@ export interface IdentifierRow {
   statusClass: string;
 }
 
-/**
- * AAP 0.2.3 `Breadcrumb`: `<ul class="breadcrumb">` holding the client's office and, when one is
- * assigned, its staff member (app/views/clients/viewclient.html:2-5). The `/` the design node `1:4`
- * shows between the two is a generated CSS divider, not text.
- */
+/** AAP 0.2.3 `Breadcrumb`: `<ul class="breadcrumb">` holding the client's office and, when one is assigned, its staff member (app/views/clients/viewclient.html:2-5). */
 const BREADCRUMB = '.breadcrumb';
 
-/**
- * AAP 0.2.3 `RecordHeader`: the record's title block `<h3 class="client-title">`
- * (app/views/clients/viewclient.html:168).
- */
+/** AAP 0.2.3 `RecordHeader`: the record's title block `<h3 class="client-title">` (app/views/clients/viewclient.html:168). */
 const RECORD_HEADER = '.client-title';
 
 /** The 24px bold client name inside the record header: `<strong>{{client.displayName}}</strong>`. */
 const RECORD_TITLE = `${RECORD_HEADER} strong`;
 
-/**
- * The record's status marker: `<i class="fa fa-circle {{client.status.code | StatusLookup}}">`
- * (app/views/clients/viewclient.html:169). A colour dot with a tooltip and no text, which is why
- * AAP 0.10.5 item 11 forbids reading a textual status anywhere.
- */
+/** The record's status marker: `<i class="fa fa-circle {{client.status.code | StatusLookup}}">` (app/views/clients/viewclient.html:169) (AAP 0.10.5). */
 const STATUS_DOT = `${RECORD_HEADER} i.fa-circle`;
 
-/**
- * The inline metadata run of the record header — its last `<small>`, rendering
- * `Client Number: {accountNo} | External ID: {externalId} | Staff: {staffName}`. An optional
- * substatus `<small>` precedes it, so the metadata is always the last one.
- */
+/** The inline metadata run of the record header — its last `<small>`, rendering `Client Number: {accountNo} | External ID: {externalId} | Staff: {staffName}`. */
 const RECORD_METADATA = `${RECORD_HEADER} > small:last-child`;
 
-/**
- * AAP 0.2.3 `TabStrip`: the `<ul class="nav nav-tabs">` that `uib-tabset` renders (angular-bootstrap
- * 1.3.2), holding the record's tabs — General, Identities, Documents, Notes and Credit Report on the
- * legacy app, of which only General and Identities are in scope for the new one.
- */
+/** AAP 0.2.3 `TabStrip`: the `<ul class="nav nav-tabs">` that `uib-tabset` renders (angular-bootstrap 1.3.2), holding the record's tabs — General, Identities, Documents, Notes and Credit Report on the legacy app, of which. */
 const TAB_STRIP = '.nav-tabs';
 
 /** The pane container `uib-tabset` renders beside the strip: `<div class="tab-content"><div class="tab-pane">`. */
@@ -117,50 +65,27 @@ const TAB_PANEL = '.tab-content .tab-pane';
 /** The active tab's link, used to tell a tab switch from a click that landed on the wrong tab. */
 const ACTIVE_TAB = `${TAB_STRIP} li.active > a`;
 
-/**
- * AAP 0.2.3 `ActionButtonGroup`: the joined primary-button group of the record
- * (`<div class="col-md-11 col-sm-11 btn-group row pull-right">`, app/views/clients/viewclient.html:183)
- * inside the active tab pane, together with the `More` dropdown it contains.
- */
+/** AAP 0.2.3 `ActionButtonGroup`: the joined primary-button group of the record (`<div class="col-md-11 col-sm-11 btn-group row pull-right">`, app/views/clients/viewclient.html:183) inside the active tab pane, together. */
 const ACTION_GROUP = `${TAB_PANEL}.active .btn-group`;
 
 /** The `More` dropdown's menu: `<ul class="dropdown dropdown-menu dropdown-menu-right">`. */
 const ACTION_MENU = '.dropdown-menu';
 
-/**
- * Tab labels as the legacy English translations render them: `label.heading.general` = "General" and
- * `label.heading.identities` = "Identities" (app/global-translations/locale-en.json). The harness runs
- * the legacy app in English (`LOCALE` in the fixtures), so these are the rendered labels.
- * Confirm against the running legacy app.
- */
+/** Tab labels as the legacy English translations render them: `label.heading.general` = "General" and `label.heading.identities` = "Identities" (app/global-translations/locale-en.json). */
 const GENERAL_TAB = 'General';
 const IDENTITIES_TAB = 'Identities';
 
-/**
- * Action labels as the legacy English translations render them: `label.button.more` = "More",
- * `label.button.newloan` = "New Loan" and `label.button.newsaving` = "New Saving"
- * (app/scripts/models/clientStatus.js:90-110 and app/global-translations/locale-en.json). Confirm
- * against the running legacy app.
- */
+/** Action labels as the legacy English translations render them: `label.button.more` = "More", `label.button.newloan` = "New Loan" and `label.button.newsaving` = "New Saving" (app/scripts/models/clientStatus.js:90-110 and. */
 const MORE_LABEL = 'More';
 const NEW_LOAN_LABEL = 'New Loan';
 const NEW_SAVING_LABEL = 'New Saving';
 
-/**
- * Hash prefixes of the routes the record's actions lead to: `location.path('/viewloanaccount/' + id)`
- * in app/scripts/controllers/client/ViewClientController.js:145, and the action hrefs of
- * app/scripts/models/clientStatus.js. Each is the destination `start*()` and `openLoanAccount()`
- * wait for.
- */
+/** Hash prefixes of the routes the record's actions lead to: `location.path('/viewloanaccount/' + id)` in app/scripts/controllers/client/ViewClientController.js:145, and the action hrefs of. */
 const LOAN_ACCOUNT_ROUTE = '#/viewloanaccount/';
 const NEW_LOAN_ROUTE = '#/newclientloanaccount/';
 const NEW_SAVING_ROUTE = '#/new_client_saving_application/';
 
-/**
- * How long a hash jump is given to take effect before the helper drives `location.hash` directly.
- * The AngularJS router reacts to the browser's `hashchange` on the next digest, so a same-document
- * jump issued from outside the application can need a nudge.
- */
+/** How long a hash jump is given to take effect before the helper drives `location.hash` directly. */
 const HASH_SETTLE_TIMEOUT_MS = 2_000;
 
 /** Collapses the whitespace AngularJS leaves between interpolations, then trims. */
@@ -168,12 +93,7 @@ function normalize(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
 
-/**
- * Splits the record's inline metadata — `Client Number: … | External ID: … | Staff: …` — into its
- * three runs. Each run is matched by its label first and by its position second, so a locale whose
- * label text differs still yields the three values in their documented order. A run with no value
- * yields `''`, never a placeholder (AAP 0.2.1 Step 3).
- */
+/** Splits the record's inline metadata — `Client Number: … | External ID: … | Staff: …` — into its three runs (AAP 0.2.1). */
 function parseClientMetadata(text: string): { clientNumber: string; externalId: string; staff: string } {
   const runs = text
     .split('|')
@@ -193,24 +113,7 @@ function parseClientMetadata(text: string): { clientNumber: string; externalId: 
   };
 }
 
-/**
- * Runs inside the legacy page, so it references nothing from module scope — Playwright serialises
- * the function and evaluates it in the document.
- *
- * It declares no inner functions of its own for the same reason: a transpiler that preserves
- * function names (`keepNames`) would emit a helper call into the serialised source, and that helper
- * does not exist in the page. Anonymous callbacks are safe; named bindings are not.
- *
- * Reads the General tab's account tables into {@link AccountRow}s (AAP 0.10.1 W3). A row qualifies
- * when its table carries an `Account Number` header (`label.heading.accnum`), which is what keeps
- * the upcoming-charges and collateral tables of the same area out, and its account family is taken
- * from the route the row itself links to: a row whose cells route to a loan account is a loan row,
- * one that routes to a savings account is a savings row, anything else is `other`. The balance is
- * the column whose header names it, so the loan table's "Loan Balance" and the savings table's
- * "Balance" both resolve. The status is read from the marker's `class` attribute and never from its
- * text (AAP 0.10.5 item 11). Rows hidden by `ng-show` never reach this function: the locator filters
- * them out, because the two loan tables and the two savings tables are alternated by it.
- */
+/** Runs inside the legacy page, so it references nothing from module scope — Playwright serialises the function and evaluates it in the document (AAP 0.10.1, AAP 0.10.5). */
 function readAccountRows(rows: Element[]): (AccountRow | null)[] {
   const amountLike = /^-?[\d,]+(?:\.\d+)?$/;
   const results: (AccountRow | null)[] = [];
@@ -277,15 +180,7 @@ function readAccountRows(rows: Element[]): (AccountRow | null)[] {
   return results;
 }
 
-/**
- * Runs inside the legacy page, so it references nothing from module scope.
- *
- * Reads the Identities tab's identifier table into {@link IdentifierRow}s (AAP 0.10.1 W3). Columns
- * are located by their headers — `ID`, `Type`, `Status` — so a table whose columns shift still reads
- * correctly, with the legacy positions as the fallback. The status is read from the `class` attribute
- * of the status cell or of its element child: the legacy app renders a translated status word there
- * with no class, so this legitimately yields `''` and the parity report compares it as such.
- */
+/** Runs inside the legacy page, so it references nothing from module scope (AAP 0.10.1). */
 function readIdentifierRows(rows: Element[]): (IdentifierRow | null)[] {
   const results: (IdentifierRow | null)[] = [];
   for (const element of rows) {
@@ -324,49 +219,29 @@ function readIdentifierRows(rows: Element[]): (IdentifierRow | null)[] {
   return results;
 }
 
-/**
- * The legacy application's single-client record (`#/viewclient/:id`).
- *
- * Typed readers only: no assertion, no `expect`, and no Fineract call of its own, so the same spec
- * can measure this baseline and the new application's record with one set of comparisons
- * (AAP 0.10.1 W3, 0.10.2).
- */
+/** The legacy application's single-client record (`#/viewclient/:id`) (AAP 0.10.1). */
 export class ClientViewPage {
   private readonly page: Page;
 
-  /** @param page The page of the `legacy` Playwright project, already authenticated by the login
-   * page object — the record requires a session because every read is a Fineract call. */
+  /** @param page The page of the `legacy` Playwright project, already authenticated by the login page object — the record requires a session because every read is a Fineract call. */
   constructor(page: Page) {
     this.page = page;
   }
 
-  /**
-   * Opens the record of `clientId` (AAP 0.10.1 W3) — the entry point of W4 and W8 as well, because
-   * the "New Loan" and "New Saving" actions live on this screen — and waits for the record header,
-   * which the profile card, the tab strip and the action group all settle after.
-   */
+  /** Opens the record of `clientId` (AAP 0.10.1 W3) — the entry point of W4 and W8 as well, because the "New Loan" and "New Saving" actions live on this screen — and waits for the record header, which the profile card, the. */
   async open(clientId: number): Promise<void> {
     await this.gotoHash(`#/viewclient/${clientId}`);
     await this.recordHeader().waitFor({ state: 'visible' });
   }
 
-  /**
-   * The breadcrumb text the record renders (AAP 0.2.1 Step 3 shows "Head Office /"). Only text is
-   * returned: the `/` in the design is a CSS divider on the strip, not part of the content, so the
-   * value is the office name and, for a staffed client, the staff member's name after it.
-   */
+  /** The breadcrumb text the record renders (AAP 0.2.1 Step 3 shows "Head Office /"). */
   async readBreadcrumb(): Promise<string> {
     const breadcrumb = this.page.locator(BREADCRUMB).first();
     await breadcrumb.waitFor({ state: 'visible' });
     return normalize(await breadcrumb.innerText());
   }
 
-  /**
-   * The record header (AAP 0.10.1 W3, AAP 0.2.1 Step 3): the bold client name, the status dot's
-   * class attribute, and the inline client number, external id and staff member. The status is
-   * never read as text — the design shows a colour dot with no label (AAP 0.10.5 item 11) — and a
-   * metadata run with no value yields `''` rather than a placeholder.
-   */
+  /** The record header (AAP 0.10.1 W3, AAP 0.2.1 Step 3): the bold client name, the status dot's class attribute, and the inline client number, external id and staff member (AAP 0.10.5). */
   async readHeader(): Promise<ClientViewHeader> {
     await this.recordHeader().waitFor({ state: 'visible' });
     const displayName = await this.page.locator(RECORD_TITLE).first().innerText();
@@ -382,11 +257,7 @@ export class ClientViewPage {
     };
   }
 
-  /**
-   * Every tab label the record renders, in DOM order (AAP 0.2.3 `TabStrip`). On the legacy app that
-   * includes the out-of-scope Family Members, Documents, Notes and Credit Report tabs, which are
-   * reported as they are (Rule 1 clause 3; AAP 0.10.5 item 6).
-   */
+  /** Every tab label the record renders, in DOM order (AAP 0.2.3 `TabStrip`) (Rule 1 clause 3, AAP 0.10.5). */
   async readTabs(): Promise<string[]> {
     const tabs = this.page.locator(`${TAB_STRIP} a`);
     await tabs.first().waitFor({ state: 'visible' });
@@ -394,11 +265,7 @@ export class ClientViewPage {
     return labels.map(normalize).filter((label) => label.length > 0);
   }
 
-  /**
-   * Selects the tab labelled `label` and waits for it to become the active tab, so the caller reads
-   * the pane that click switched to. Whether a tab is active in the first place is the spec's
-   * comparison to make, not this page object's (AAP 0.2.3 `TabStrip`).
-   */
+  /** Selects the tab labelled `label` and waits for it to become the active tab, so the caller reads the pane that click switched to (AAP 0.2.3). */
   async selectTab(label: string): Promise<void> {
     await this.tabLink(label).click();
     await this.page
@@ -406,14 +273,7 @@ export class ClientViewPage {
       .waitFor({ state: 'visible' });
   }
 
-  /**
-   * Every action label the record renders (AAP 0.2.3 `ActionButtonGroup`): the joined buttons of the
-   * active tab, then the entries of the `More` menu. The legacy-only actions — "New Charge",
-   * "Transfer Client", "Assign Staff", the signature entries and the rest — are included as
-   * rendered, because AAP 0.10.5 items 5-8 records them as `intentional-diff` and filtering them
-   * would remove that evidence (Rule 1 clause 3). The menu is opened to read its entries and closed
-   * again, so the screen is left as it was found.
-   */
+  /** Every action label the record renders (AAP 0.2.3 `ActionButtonGroup`): the joined buttons of the active tab, then the entries of the `More` menu (AAP 0.10.5, Rule 1 clause 3). */
   async readActionLabels(): Promise<string[]> {
     const group = this.actionGroup();
     await group.waitFor({ state: 'visible' });
@@ -426,11 +286,7 @@ export class ClientViewPage {
     return [...buttons, ...entries];
   }
 
-  /**
-   * Opens the `More` menu of the action group and waits for it to be visible (AAP 0.2.3
-   * `ActionButtonGroup`). The legacy toggle is a `uib-dropdown` whose menu Bootstrap reveals from
-   * its parent's `open` class.
-   */
+  /** Opens the `More` menu of the action group and waits for it to be visible (AAP 0.2.3 `ActionButtonGroup`). */
   async openActionMenu(): Promise<void> {
     const menu = this.actionMenu().first();
     if ((await this.actionMenu().count()) === 0) {
@@ -442,11 +298,7 @@ export class ClientViewPage {
     await menu.waitFor({ state: 'visible' });
   }
 
-  /**
-   * Clicks the action whose rendered text is `label`, whether it is one of the joined buttons or an
-   * entry of the `More` menu (AAP 0.2.3 `ActionButtonGroup`). No assertion is made and no route is
-   * waited for: where the action leads belongs to the workflow that invoked it (W2, W5, W8).
-   */
+  /** Clicks the action whose rendered text is `label`, whether it is one of the joined buttons or an entry of the `More` menu (AAP 0.2.3 `ActionButtonGroup`). */
   async startAction(label: string): Promise<void> {
     const button = this.labelled(this.actionGroup(), label);
     if ((await button.count()) > 0) {
@@ -456,9 +308,7 @@ export class ClientViewPage {
     await this.openActionMenu();
     const entry = this.labelled(this.actionMenu(), label);
     if ((await entry.count()) === 0) {
-      // `readActionLabels()` names every action the record offers — the joined buttons as well as the
-      // menu's entries — and leaves the menu closed, which is the state a miss should leave the record
-      // in. The next application's `startAction` names the same list in its own message.
+      // `readActionLabels()` names every action the record offers — the joined buttons as well as the menu's entries — and leaves the menu closed, which is the state a miss should leave the record in.
       const known = await this.readActionLabels();
       throw new Error(
         `"${label}" is neither a button nor a "More" entry of this client record. ` +
@@ -468,12 +318,7 @@ export class ClientViewPage {
     await entry.first().click();
   }
 
-  /**
-   * The General tab's account rows (AAP 0.10.1 W3, from `GET /clients/{id}/accounts`). The tab is
-   * activated first because the accounts tables live on it, and `[]` is returned when the client has
-   * no account table at all — the design's own raster shows the empty work area, so an empty answer
-   * is a legitimate state of this screen rather than an error.
-   */
+  /** The General tab's account rows (AAP 0.10.1 W3, from `GET /clients/{id}/accounts`). */
   async readAccounts(): Promise<AccountRow[]> {
     await this.showTab(GENERAL_TAB);
     const rows = this.page.locator('table tr').filter({ visible: true });
@@ -482,11 +327,7 @@ export class ClientViewPage {
     return read.filter((row): row is AccountRow => row !== null);
   }
 
-  /**
-   * Opens the loan account whose account number is `accountNo` and waits for the loan record's
-   * route (AAP 0.10.1 W5 and W6 reach the loan record this way). The legacy rows carry no link: the
-   * route is issued from the row's own click handler, so the account-number cell is what is clicked.
-   */
+  /** Opens the loan account whose account number is `accountNo` and waits for the loan record's route (AAP 0.10.1 W5 and W6 reach the loan record this way). */
   async openLoanAccount(accountNo: string): Promise<void> {
     await this.showTab(GENERAL_TAB);
     const row = this.page
@@ -498,11 +339,7 @@ export class ClientViewPage {
     await this.hashStartsWith(LOAN_ACCOUNT_ROUTE);
   }
 
-  /**
-   * The Identities tab's identifier rows (AAP 0.10.1 W3, from `GET /clients/{id}/identifiers`). The
-   * tab is activated first, as `readAccounts()` does for General, and `[]` is returned when the
-   * client has no identifier — the legacy table is hidden until the tab's request answers with rows.
-   */
+  /** The Identities tab's identifier rows (AAP 0.10.1 W3, from `GET /clients/{id}/identifiers`). */
   async readIdentifiers(): Promise<IdentifierRow[]> {
     await this.showTab(IDENTITIES_TAB);
     const rows = this.page.locator(`${TAB_PANEL}.active table tr`).filter({ visible: true });
@@ -511,50 +348,30 @@ export class ClientViewPage {
     return read.filter((row): row is IdentifierRow => row !== null);
   }
 
-  /**
-   * Starts a new loan application from the record and waits for its route
-   * (AAP 0.10.1 W4; `#/newclientloanaccount/:clientId`).
-   */
+  /** Starts a new loan application from the record and waits for its route (AAP 0.10.1 W4; `#/newclientloanaccount/:clientId`). */
   async startNewLoan(): Promise<void> {
     await this.startAction(NEW_LOAN_LABEL);
     await this.hashStartsWith(NEW_LOAN_ROUTE);
   }
 
-  /**
-   * Starts a new savings application from the record and waits for its route
-   * (AAP 0.10.1 W8; `#/new_client_saving_application/:clientId`).
-   */
+  /** Starts a new savings application from the record and waits for its route (AAP 0.10.1 W8; `#/new_client_saving_application/:clientId`). */
   async startNewSaving(): Promise<void> {
     await this.startAction(NEW_SAVING_LABEL);
     await this.hashStartsWith(NEW_SAVING_ROUTE);
   }
 
-  /**
-   * The record header locator: the title block the whole screen settles behind
-   * (AAP 0.2.3 `RecordHeader`). Confirm against the running legacy app.
-   */
+  /** The record header locator: the title block the whole screen settles behind (AAP 0.2.3 `RecordHeader`). */
   private recordHeader(): Locator {
     return this.page.locator(RECORD_HEADER).first();
   }
 
-  /**
-   * The address the harness opens the legacy app at (Rule 2): `LEGACY_URL` with the two query
-   * parameters that make it talk to this run's Fineract — without them the legacy app resolves a
-   * public demo host, which Rule 2 forbids — plus `hash` when a route is asked for.
-   */
+  /** The address the harness opens the legacy app at (Rule 2): `LEGACY_URL` with the two query parameters that make it talk to this run's Fineract — without them the legacy app resolves a public demo host, which Rule 2. */
   private entryUrl(hash?: string): string {
     const query = `?baseApiUrl=${encodeURIComponent(FINERACT_URL)}&tenantIdentifier=${encodeURIComponent(TENANT_ID)}`;
     return hash === undefined ? `${LEGACY_URL}/${query}` : `${LEGACY_URL}/${query}${hash}`;
   }
 
-  /**
-   * Moves the loaded legacy app to `hash`, keeping the query parameters of {@link entryUrl} (Rule 2).
-   *
-   * The jump is resolved against the page's own address rather than the configured base URL, because
-   * a base-URL-relative jump would drop those parameters. If the AngularJS router does not react to
-   * the same-document jump, `location.hash` is set directly, which raises the `hashchange` it
-   * listens for, and a failure after that names the hash the app is actually showing.
-   */
+  /** Moves the loaded legacy app to `hash`, keeping the query parameters of {@link entryUrl} (Rule 2). */
   private async gotoHash(hash: string): Promise<void> {
     const current = this.page.url();
     if (current.startsWith(LEGACY_URL)) {
@@ -588,11 +405,7 @@ export class ClientViewPage {
     await this.page.waitForFunction((wanted: string) => window.location.hash.startsWith(wanted), prefix);
   }
 
-  /**
-   * Makes the tab labelled `label` the active one, unless it already is (AAP 0.2.3 `TabStrip`). The
-   * readers call it before reading a pane's content, because `uib-tabset` keeps every pane in the
-   * document and only the active one is visible.
-   */
+  /** Makes the tab labelled `label` the active one, unless it already is (AAP 0.2.3 `TabStrip`). */
   private async showTab(label: string): Promise<void> {
     const active = this.page.locator(`${ACTIVE_TAB}:text-is(${JSON.stringify(label)})`);
     if ((await active.count()) > 0) return;
@@ -604,10 +417,7 @@ export class ClientViewPage {
     return this.page.locator(`${TAB_STRIP} a:text-is(${JSON.stringify(label)})`).first();
   }
 
-  /**
-   * The record's joined action group: the primary-button group of the active tab
-   * (AAP 0.2.3 `ActionButtonGroup`). Confirm against the running legacy app.
-   */
+  /** The record's joined action group: the primary-button group of the active tab (AAP 0.2.3 `ActionButtonGroup`). */
   private actionGroup(): Locator {
     return this.page.locator(ACTION_GROUP).filter({ visible: true }).first();
   }
@@ -617,10 +427,7 @@ export class ClientViewPage {
     return this.actionGroup().locator(ACTION_MENU);
   }
 
-  /**
-   * The `More` dropdown's toggle. `uib-dropdown` marks its toggle with `dropdown-toggle`; a build
-   * that does not leaves the rendered label as the only handle.
-   */
+  /** The `More` dropdown's toggle. `uib-dropdown` marks its toggle with `dropdown-toggle`; a build that does not leaves the rendered label as the only handle. */
   private async moreToggle(): Promise<Locator> {
     const toggle = this.actionGroup().locator('.dropdown-toggle').filter({ visible: true });
     if ((await toggle.count()) > 0) return toggle.first();

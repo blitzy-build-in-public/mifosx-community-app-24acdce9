@@ -1,32 +1,4 @@
-/**
- * The harness's own tests for `e2e/report/difference-register.ts` — the deliberate-difference register
- * AAP 0.10.5 requires and acceptance criterion 4 has a human read.
- *
- * Why this file exists. AAP 0.10.5 registers the sixteen deliberate differences from legacy, and
- * criterion 4 requires a reader to find every one of them in `web-ng/parity-report.json` with its
- * reason. The register carries the two plan statements this run reads more narrowly than the plan wrote
- * them — AAP 0.10.5 item 15's default dates and AAP 0.10.1's W2 client-template read — because both
- * were settled by reading the shipped code and the archived legacy screens rather than by choosing a
- * behaviour here, and until this module existed each reading lived only in a comment beside the code
- * that implements it. A register nothing checks is a register that drifts: a reading deleted from the
- * list, retitled, emptied of its authority, or a section that stops being rendered into the report
- * would leave criterion 4's reader with no statement to compare against the run, and no gate would say
- * so.
- *
- * What is pinned here: both readings exist and every member of each is a non-empty statement; the
- * rendered lines carry the section heading, the table's four column headings and one row per reading
- * holding that reading's own `where` and `delivered` text; the item-15 row states the template-seeded
- * disbursement and repayment dates and that the application issues no business-date request; the W2 row
- * states that the plain client record read is what the parity spec asserts; and `renderMarkdown` places
- * the whole section between the intentional-differences section and the failures section of a minimal
- * in-memory report, whose JSON carries the same list under `differenceRegister`.
- *
- * These are the harness's tests, not the Playwright workflow specs: they run under the `web-ng-harness`
- * vitest project (`e2e/vitest.config.ts`, `npm run test:harness`) in a plain Node environment, and they
- * write no file, start no browser and call no backend. Every expectation is written against the two
- * modules' real exports; the one cast is the parsed JSON of a report built here in memory, which is the
- * documented boundary where a document arrives untyped (Rule 1 clause 4).
- */
+/** The harness's own tests for `e2e/report/difference-register.ts` — the deliberate-difference register AAP 0.10.5 requires and acceptance criterion 4 has a human read (AAP 0.10.1, Rule 1 clause 4). */
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -44,11 +16,7 @@ import {
 /** The section heading the report renders the register under, and the line a reader looks for. */
 const REGISTER_HEADING = '## Deliberate-difference register (AAP 0.10.5)';
 
-/**
- * A header holding every `ReportHeader` field, with addresses that name no Fineract endpoint: the
- * register's section is what is under test here, so the run's own provenance is only required to be
- * present and typed.
- */
+/** A header holding every `ReportHeader` field, with addresses that name no Fineract endpoint: the register's section is what is under test here, so the run's own provenance is only required to be present and typed. */
 const HEADER: ReportHeader = {
   environment: 'codespaces',
   backendRemote: 'Blitzy-Sandbox/blitzy-fineract',
@@ -143,8 +111,7 @@ describe('the rendered register', () => {
     expect(rows).toHaveLength(DIFFERENCE_REGISTER_READINGS.length);
     for (const row of rows) {
       expect(row).not.toContain('\n');
-      // Four cells hold five unescaped pipes: a pipe written inside a reading arrives escaped, so the
-      // row keeps its column count however the reading's own text is worded.
+      // Four cells hold five unescaped pipes: a pipe written inside a reading arrives escaped, so the row keeps its column count however the reading's own text is worded.
       expect(row.match(/(?<!\\)\|/g) ?? []).toHaveLength(5);
     }
   });

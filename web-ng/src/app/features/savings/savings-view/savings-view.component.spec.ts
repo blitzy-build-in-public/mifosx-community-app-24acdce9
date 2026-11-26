@@ -33,50 +33,7 @@ import type { SavingsAccount } from '../savings.models';
 import { SavingsService } from '../savings.service';
 import { SavingsViewComponent } from './savings-view.component';
 
-/**
- * Behaviour of the savings record — `#/viewsavingaccount/:id`, the last screen of workflow W8 (AAP 0.9.1
- * scope group 4; AAP 0.10.1 W8 row; AAP 0.7.1 Features row `savings`).
- *
- * It pins the things the record exists to do and that a rewrite would get wrong:
- *
- *  1. the loaded account renders its number, its product, its three balances and its transaction rows,
- *     from exactly one read of `SavingsService.get(id)` — the `GET /savingsaccounts/{id}?associations=all`
- *     answer that carries all of them (AAP 0.7.3 W8 row);
- *  2. the four action links are addressed at the account the route names, each gated on the single
- *     permission code the record declares (AAP 0.7.1 row `hasPermission`; AAP 0.9.1 item 1);
- *  3. a 404, and a route that names no account at all, put the record into its not-found state: the
- *     card replaces the record inside a shell whose `router-outlet` stays on screen, and no request is
- *     made for a route with no id (AAP 0.7.4 state rules);
- *  4. every emission of `route.paramMap` re-reads the account it names, so an in-place move from one
- *     record URL to another replaces the previous account, its balances and its action links instead of
- *     leaving them on screen and issuing no request — and an answer for the account the URL has left is
- *     discarded rather than painted (the reuse fix `loan-edit`, `client-actions` and `loan-view` carry);
- *  5. the record's remaining states are pinned rather than assumed: the transactions table carries the
- *     four columns of the record with the server's own figures, an account whose payload carries no
- *     transaction renders the shared explicit empty state and no error, the status is one colour swatch
- *     carrying no word (AAP 0.10.5 item 11), and a 5xx or a transport failure is left to the
- *     interceptor's single notification with no second copy painted here (AAP 0.4.2, AAP 0.7.4);
- *  6. the record issues one request and announces nothing itself in every branch: `SavingsService.get`
- *     alone, no other member of the family's service, no business-date read and no
- *     `NotificationService.show` (AAP 0.4.2, AAP 0.10.5 item 15).
- *
- * **What is stubbed, and why.** Only the two collaborations a unit test cannot own: `SavingsService`,
- * whose endpoint-level contract belongs to `savings.service.spec.ts`, and `PermissionsService`, which
- * reads the session a unit test has no business assembling — the same substitution
- * `navbar.component.spec.ts` makes for the same directive. Every other member of the service is a spy,
- * so a screen that reached one of them would be caught rather than silently served. The translation
- * stack is stubbed at the `TranslatePipe` surface, so a caption renders its own key and no bundle has to
- * be fetched. A rejected read reaches the component as `ApiError` because
- * `core/http/fineract.interceptor.ts` maps it there (AAP 0.4.2), and the failures below are built with
- * the production mapper `toApiError` from a real `HttpErrorResponse`.
- *
- * `SavingsViewShellHostComponent` is the second mounting: the record inside the shell's
- * `<router-outlet>`, so the not-found case can show the record replaced in place while the page the
- * user navigates from is still there. The permission stub answers `has()` — the member
- * `HasPermissionDirective` actually asks — where the folder brief names `can()`, and the status mapper
- * the record uses is `toSavingsStatusKey` where the brief names `toStatusKey`; neither name exists in
- * this repository, and the record's own header records the same two corrections.
- */
+/** Behaviour of the savings record — `#/viewsavingaccount/:id`, the last screen of workflow W8 (AAP 0.9.1 scope group 4; AAP 0.10.1 W8 row; AAP 0.7.1 Features row `savings`) (AAP 0.7.3, AAP 0.7.4, AAP 0.10.5, AAP 0.4.2). */
 
 /** The account every case opens, as the `:id` segment delivers it. */
 const ACCOUNT_ID = '41';
@@ -97,12 +54,7 @@ const ACCOUNT: SavingsAccount = {
   savingsProductName: 'Parity Savings',
   status: { id: 300, code: 'savingsAccountStatusType.active', value: 'Active' },
   summary: { accountBalance: 800, totalDeposits: 1000, totalWithdrawals: 200 },
-  // The payload's own order, newest first, exactly as `GET /savingsaccounts/{id}?associations=all`
-  // answers it: the withdrawal the W8 workflow makes after the deposit comes first. The two rows also
-  // carry the wire's two date shapes — the `[year, month, day]` triple the fork actually sends and the
-  // `'yyyy-MM-dd'` string `fromFineractDate` accepts beside it — so the table case exercises both, and
-  // the withdrawal's amount is positive because the server sends it unsigned with the type carrying the
-  // direction (Rule 1 clause 3: the record paints what arrived, it does not invent a sign).
+  // The payload's own order, newest first, exactly as `GET /savingsaccounts/{id}?associations=all` answers it: the withdrawal the W8 workflow makes after the deposit comes first (Rule 1 clause 3).
   transactions: [
     {
       id: 92,
@@ -121,10 +73,7 @@ const ACCOUNT: SavingsAccount = {
   ],
 };
 
-/**
- * The account the second route emission names: every printed value differs from {@link ACCOUNT}, so a
- * screen that kept the first record — or its action links — is caught.
- */
+/** The account the second route emission names: every printed value differs from {@link ACCOUNT}, so a screen that kept the first record — or its action links — is caught. */
 const SECOND_ACCOUNT: SavingsAccount = {
   id: 47,
   accountNo: '000000047',
@@ -137,11 +86,7 @@ const SECOND_ACCOUNT: SavingsAccount = {
   transactions: [],
 };
 
-/**
- * An account as the fork answers one whose deposit and withdrawal totals stand at zero: the summary
- * carries `accountBalance` and leaves both totals out altogether (`SavingsSummary`), so the record
- * has to read each absent member as the zero it means rather than printing a blank cell.
- */
+/** An account as the fork answers one whose deposit and withdrawal totals stand at zero: the summary carries `accountBalance` and leaves both totals out altogether (`SavingsSummary`), so the record has to read each absent. */
 const BALANCE_ONLY_ACCOUNT: SavingsAccount = {
   ...ACCOUNT,
   accountNo: '000000045',
@@ -155,38 +100,22 @@ const NOT_FOUND_MESSAGE = 'The requested resource is not available.';
 /** The message a refused read answers with, compared character for character below. */
 const REFUSED_MESSAGE = 'The savings account could not be read for this user.';
 
-/**
- * The text a 5xx answers with. The record never paints it: the interceptor has already raised that
- * failure's one notification (AAP 0.4.2), so a second copy on the page would report it twice.
- */
+/** The text a 5xx answers with. The record never paints it: the interceptor has already raised that failure's one notification (AAP 0.4.2), so a second copy on the page would report it twice. */
 const SERVER_FAILURE_MESSAGE = 'The request could not be processed because an internal error occurred.';
 
 /** The text a transport failure (`status` 0) answers with; it is the interceptor's to announce too. */
 const TRANSPORT_FAILURE_MESSAGE = 'Http failure response for an unreachable Fineract host.';
 
-/**
- * The day both fixture transactions fall on, built part by part so it is local midnight everywhere.
- * Both the payload and the expectation below derive from it, so the assertion states the fixture's own
- * day rather than a string the component might have produced by accident.
- */
+/** The day both fixture transactions fall on, built part by part so it is local midnight everywhere. */
 const TRANSACTION_DAY = new Date(2026, 10, 24);
 
-/**
- * The date cell the table must render for each fixture row: the shared display pattern, formatted the
- * way the record's `DatePipe` formats it. The locale is the pipe's own default `LOCALE_ID`, so the
- * expectation cannot drift from what the record paints.
- */
+/** The date cell the table must render for each fixture row: the shared display pattern, formatted the way the record's `DatePipe` formats it. */
 const TRANSACTION_DAY_AS_SHOWN = formatDate(TRANSACTION_DAY, DISPLAY_DATE_FORMAT, 'en-US');
 
 /** The read this screen makes of its family's service, so a case can answer it and count the calls. */
 type AccountRead = (id: number | string) => Observable<SavingsAccount>;
 
-/**
- * The half of `PermissionsService` the `hasPermission` directive asks, with the legacy algebra for
- * `ALL_FUNCTIONS` and a leading `!`, and a spy over every question so a case can state which code the
- * record declared. `has()` is the member the shipped directive calls; the folder brief names `can()`,
- * which this repository does not have.
- */
+/** The half of `PermissionsService` the `hasPermission` directive asks, with the legacy algebra for `ALL_FUNCTIONS` and a leading `!`, and a spy over every question so a case can state which code the record declared. */
 class PermissionsStub implements Pick<PermissionsService, 'has'> {
   private readonly granted: WritableSignal<readonly string[]> = signal<readonly string[]>([]);
 
@@ -217,17 +146,10 @@ interface NotificationStub {
   readonly show: Mock<(kind: NotificationKind, message: string) => void>;
 }
 
-/**
- * One `SavingsService` member the record must never reach, stubbed as a spy so a call would be
- * observable rather than a missing-method failure that a case could mistake for correct behaviour.
- */
+/** One `SavingsService` member the record must never reach, stubbed as a spy so a call would be observable rather than a missing-method failure that a case could mistake for correct behaviour. */
 type UnreachedCall = Mock<(...args: readonly unknown[]) => Observable<unknown>>;
 
-/**
- * The five members of the family's service the record page does not call: the template read and the
- * application belong to the new-application screen, the lifecycle actions to the action screens, and
- * the transaction template and posting to the deposit and withdrawal screen (AAP 0.7.3 W8 row).
- */
+/** The five members of the family's service the record page does not call: the template read and the application belong to the new-application screen, the lifecycle actions to the action screens, and the transaction (AAP 0.7.3). */
 interface UnreachedSavingsMethods {
   readonly template: UnreachedCall;
   readonly create: UnreachedCall;
@@ -247,12 +169,7 @@ function unreachedSavingsMethods(): UnreachedSavingsMethods {
   };
 }
 
-/**
- * The record mounted inside the signed-in shell: the layout renders a `<router-outlet>` beside the page
- * a user is on, and the not-found case needs both on screen at once to show that the record is replaced
- * in place rather than the page being torn down (AAP 0.7.4). Nothing else about the shell is
- * reproduced, because the shell's own behaviour belongs to `shell.component.spec.ts`.
- */
+/** The record mounted inside the signed-in shell: the layout renders a `<router-outlet>` beside the page a user is on, and the not-found case needs both on screen at once to show that the record is replaced in place rather (AAP 0.7.4). */
 @Component({
   selector: 'app-savings-view-shell-host',
   imports: [RouterOutlet, SavingsViewComponent],
@@ -261,10 +178,7 @@ function unreachedSavingsMethods(): UnreachedSavingsMethods {
 })
 class SavingsViewShellHostComponent {}
 
-/**
- * The ngx-translate surface this screen touches: the `translate()` signal `TranslatePipe` 18 resolves
- * its keys through. Nothing here reaches the network.
- */
+/** The ngx-translate surface this screen touches: the `translate()` signal `TranslatePipe` 18 resolves its keys through. */
 interface TranslateStub {
   readonly currentLang: Signal<string>;
   instant(key: string): string;
@@ -284,10 +198,7 @@ function translateStub(): TranslateStub {
   };
 }
 
-/**
- * An observable a case settles by hand, so one route's answer can be held open while the URL moves on —
- * the order in which a superseded read answers last.
- */
+/** An observable a case settles by hand, so one route's answer can be held open while the URL moves on — the order in which a superseded read answers last. */
 function deferredResponse<T>(): { readonly response: Observable<T>; resolve(value: T): void } {
   let settle: ((value: T) => void) | null = null;
 
@@ -318,8 +229,7 @@ describe('SavingsViewComponent', () => {
   let permissions: PermissionsStub;
   let routeParams: BehaviorSubject<ParamMap>;
 
-  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines the
-  // cast to one line and keeps the DOM assertions type-checked (Rule 1 clause 4).
+  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines the cast to one line and keeps the DOM assertions type-checked (Rule 1 clause 4).
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
 
   /** The route stub's parameter map for the `:id` segment a case is about. */
@@ -348,11 +258,7 @@ describe('SavingsViewComponent', () => {
     );
   }
 
-  /**
-   * The transactions table's column captions, in the order the record renders them. The translation
-   * stub answers each key with the key itself, so a caption is the legacy `label.heading.*` key the
-   * bundle defines and a column that lost its caption would be visible here.
-   */
+  /** The transactions table's column captions, in the order the record renders them. */
   function transactionCaptions(): readonly string[] {
     const table = host().querySelector('#savings-transactions');
 
@@ -377,12 +283,7 @@ describe('SavingsViewComponent', () => {
     fixture.detectChanges();
   }
 
-  /**
-   * The providers both mountings share: the record's two stubbed collaborations, the translation
-   * surface behind `TranslatePipe`, and a router so `routerLink` renders a real `href`. A
-   * `NotificationService` stub stands in for the interceptor's own collaborator, so a case can state
-   * that the record raised no notice rather than infer it from the absence of a widget.
-   */
+  /** The providers both mountings share: the record's two stubbed collaborations, the translation surface behind `TranslatePipe`, and a router so `routerLink` renders a real `href`. */
   function providers(): (Provider | EnvironmentProviders)[] {
     return [
       provideRouter([]),
@@ -394,16 +295,7 @@ describe('SavingsViewComponent', () => {
     ];
   }
 
-  /**
-   * Mounts the record for one `#/viewsavingaccount/:id` URL and renders it once.
-   *
-   * The component's constructor subscribes to the route's parameters, so the first emission and its read
-   * happen as the component is created. The subject backing the route is recreated per case, so one
-   * case's emissions cannot reach the next.
-   *
-   * @param id the `:id` segment, or `null` for a route that carries none.
-   * @param read the answer `SavingsService.get` gives for this case.
-   */
+  /** Mounts the record for one `#/viewsavingaccount/:id` URL and renders it once. */
   async function show(id: string | null, read: AccountRead = () => of(ACCOUNT)): Promise<void> {
     TestBed.resetTestingModule();
     readAccount.mockReset();
@@ -422,19 +314,13 @@ describe('SavingsViewComponent', () => {
     await settle();
   }
 
-  /**
-   * Moves the mounted record to another URL the way the router does when only the `:id` segment changes:
-   * the same component instance stays on screen and the parameter map emits again.
-   */
+  /** Moves the mounted record to another URL the way the router does when only the `:id` segment changes: the same component instance stays on screen and the parameter map emits again. */
   async function navigateTo(id: string): Promise<void> {
     routeParams.next(paramMapFor(id));
     await settle();
   }
 
-  /**
-   * The production mapping of a Fineract failure onto `ApiError`, so a rejected read reaches the
-   * component as the type it catches in the application (AAP 0.4.2).
-   */
+  /** The production mapping of a Fineract failure onto `ApiError`, so a rejected read reaches the component as the type it catches in the application (AAP 0.4.2). */
   function failure(status: number, message: string): ApiError {
     return toApiError(new HttpErrorResponse({ status, error: { defaultUserMessage: message } }));
   }
@@ -472,18 +358,13 @@ describe('SavingsViewComponent', () => {
       ACCOUNT.transactions.length,
     );
 
-    // Every action link is addressed at the account the route names, in the order the record renders
-    // them; which of them a user may see is the permission case below.
+    // Every action link is addressed at the account the route names, in the order the record renders them; which of them a user may see is the permission case below.
     expect(actionLinks().map((link) => link.getAttribute('href'))).toEqual(
       ACTION_SEGMENTS.map((segment) => `/savingaccount/${ACCOUNT_ID}/${segment}`),
     );
   });
 
-  /**
-   * Locks down contract-savings-totals-required-false: the fork omits a zero `totalDeposits` and
-   * `totalWithdrawals` from the account summary, so the record reads each absent member as `0`
-   * instead of piping an absent value through `number` and painting a blank cell.
-   */
+  /** Locks down contract-savings-totals-required-false: the fork omits a zero `totalDeposits` and `totalWithdrawals` from the account summary, so the record reads each absent member as `0` instead of piping an absent value. */
   it('renders a deposit and withdrawal total the fork left out as 0, and the balance it sent', async () => {
     await show(ACCOUNT_ID, () => of(BALANCE_ONLY_ACCOUNT));
 
@@ -491,8 +372,7 @@ describe('SavingsViewComponent', () => {
       ['label.heading.accnum', BALANCE_ONLY_ACCOUNT.accountNo],
       ['label.heading.product', BALANCE_ONLY_ACCOUNT.savingsProductName],
       ['label.heading.status', ''],
-      // The balance is the figure the payload carried, so the two zeros below are the absent totals
-      // and not a cell rendering nothing at all (Rule 1 clause 3).
+      // The balance is the figure the payload carried, so the two zeros below are the absent totals and not a cell rendering nothing at all (Rule 1 clause 3).
       ['label.heading.currentBalance', '1,250'],
       ['label.heading.totaldeposits', '0'],
       ['label.totalwithdarawals', '0'],
@@ -527,9 +407,7 @@ describe('SavingsViewComponent', () => {
   it('renders the transaction table with its four columns and one row per transaction', async () => {
     await show(ACCOUNT_ID);
 
-    // The four columns of the record's transactions table, in the order they are painted. The keys are
-    // the legacy `label.heading.*` captions the bundles define, so a column that lost its heading is
-    // visible here.
+    // The four columns of the record's transactions table, in the order they are painted.
     expect(transactionCaptions()).toEqual([
       'label.heading.date',
       'label.heading.type',
@@ -537,11 +415,7 @@ describe('SavingsViewComponent', () => {
       'label.heading.balance',
     ]);
 
-    // Every cell is the payload's own, in the payload's order: the date through the shared display
-    // pattern, the row's type text verbatim, the amount exactly as reported — the withdrawal's 200 is
-    // not turned into a negative the server never sent — and the server's running balance, nothing
-    // sorted, recomputed or reordered (Rule 1 clause 3; AAP 0.10.1 W8's 1,000 deposit and 200
-    // withdrawal leaving 800).
+    // Every cell is the payload's own, in the payload's order: the date through the shared display pattern, the row's type text verbatim, the amount exactly as reported — the withdrawal's 200 is not turned into a negative the (Rule 1 clause 3, AAP 0.10.1).
     expect(transactionCells()).toEqual([
       [TRANSACTION_DAY_AS_SHOWN, 'Withdrawal', '200', '800'],
       [TRANSACTION_DAY_AS_SHOWN, 'Deposit', '1,000', '1,000'],
@@ -560,8 +434,7 @@ describe('SavingsViewComponent', () => {
     expect(indicator?.classList.contains('status-active')).toBe(true);
     expect(swatches[0]?.textContent?.trim()).toBe('');
 
-    // The server's own status word is on the payload and is deliberately not painted, and no tooltip or
-    // accessible name turns the colour back into a word (AAP 0.10.5 item 11, Rule 1 clause 3).
+    // The server's own status word is on the payload and is deliberately not painted, and no tooltip or accessible name turns the colour back into a word (AAP 0.10.5 item 11, Rule 1 clause 3).
     const summary = host().querySelector('.savings-summary');
 
     expect(summary?.textContent ?? '').not.toContain(ACCOUNT.status.value);
@@ -574,8 +447,7 @@ describe('SavingsViewComponent', () => {
     const section = host().querySelector('.savings-transactions');
 
     expect(component.transactionRows()).toEqual([]);
-    // The shared explicit empty state sits inside the section's own body, and no table claims rows there
-    // are none of; an empty list is not a failure, so nothing in the section is an alert (AAP 0.7.4).
+    // The shared explicit empty state sits inside the section's own body, and no table claims rows there are none of; an empty list is not a failure, so nothing in the section is an alert (AAP 0.7.4).
     expect(section?.querySelector('app-empty-state')?.textContent?.trim()).toBe('label.nodata');
     expect(section?.querySelector('table')).toBeNull();
     expect(section?.querySelector('.alert')).toBeNull();
@@ -590,17 +462,14 @@ describe('SavingsViewComponent', () => {
   ])('leaves a %i failure to the interceptor’s one notification', async (status, message) => {
     await show(ACCOUNT_ID, () => throwError(() => failure(status, message)));
 
-    // The record keeps the failure it was given and paints neither a second copy of its message nor a
-    // not-found state: a 5xx and a transport failure belong to the interceptor's one notice, so a screen
-    // that repeated them would report one problem twice (AAP 0.4.2, AAP 0.7.4, AAP 0.14.2).
+    // The record keeps the failure it was given and paints neither a second copy of its message nor a not-found state: a 5xx and a transport failure belong to the interceptor's one notice, so a screen that repeated them would (AAP 0.4.2, AAP 0.7.4, AAP 0.14.2).
     expect(component.error()?.status).toBe(status);
     expect(component.clientError()).toBeNull();
     expect(component.notFound()).toBe(false);
     expect(component.account()).toBeNull();
     expect(host().querySelector('.alert-danger')).toBeNull();
     expect(host().textContent ?? '').not.toContain(message);
-    // The page stays mounted with nothing of a record that never arrived on it, so the shell the record
-    // sits in is still usable.
+    // The page stays mounted with nothing of a record that never arrived on it, so the shell the record sits in is still usable.
     expect(host().querySelector('.container-fluid')).not.toBeNull();
     expect(host().querySelector('.savings-summary')).toBeNull();
     expect(component.loading()).toBe(false);
@@ -617,9 +486,7 @@ describe('SavingsViewComponent', () => {
     async (_label: string, read: AccountRead) => {
       await show(ACCOUNT_ID, read);
 
-      // One request per navigation, made through the family's service and through no other member of it:
-      // the record composes no URL, posts nothing, opens no template and reads no business date
-      // (AAP 0.4.2, AAP 0.10.5 item 15, Rule 1 clause 5).
+      // One request per navigation, made through the family's service and through no other member of it: the record composes no URL, posts nothing, opens no template and reads no business date (AAP 0.4.2, AAP 0.10.5 item 15 (Rule 1 clause 5).
       expect(readAccount.mock.calls).toEqual([[ACCOUNT_ID]]);
       expect(unreached.template).not.toHaveBeenCalled();
       expect(unreached.create).not.toHaveBeenCalled();
@@ -634,16 +501,14 @@ describe('SavingsViewComponent', () => {
   it('declares one permission code for every action and hides the links without removing them', async () => {
     await show(ACCOUNT_ID);
 
-    // Every gate on the page asks the record's own single code, and asks about nothing else — the plan
-    // supplies no per-action code for this family (AAP 0.7.1, AAP 0.9.1 item 1).
+    // Every gate on the page asks the record's own single code, and asks about nothing else — the plan supplies no per-action code for this family (AAP 0.7.1, AAP 0.9.1 item 1).
     expect(component.actionPermission).toBe('READ_SAVINGSACCOUNT');
     expect(permissions.has.mock.calls.length).toBeGreaterThanOrEqual(ACTION_SEGMENTS.length);
     expect(
       permissions.has.mock.calls.every(([code]) => code === component.actionPermission),
     ).toBe(true);
 
-    // The gate fails closed and hides in place: the four links stay in the document carrying an inline
-    // `display: none`, which is how the legacy directive hides a control rather than removing it.
+    // The gate fails closed and hides in place: the four links stay in the document carrying an inline `display: none`, which is how the legacy directive hides a control rather than removing it.
     permissions.grant([]);
     fixture.detectChanges();
 
@@ -682,8 +547,7 @@ describe('SavingsViewComponent', () => {
     expect(page.querySelector('.savings-summary')).toBeNull();
     expect(page.querySelector('.savings-transactions')).toBeNull();
     expect(page.textContent ?? '').not.toContain(ACCOUNT.accountNo);
-    // …and the outlet the shell navigates through is still there, so the record is replaced in place
-    // rather than the page being torn down (AAP 0.7.4).
+    // …and the outlet the shell navigates through is still there, so the record is replaced in place rather than the page being torn down (AAP 0.7.4).
     expect(page.querySelector('router-outlet')).not.toBeNull();
   });
 
@@ -746,8 +610,7 @@ describe('SavingsViewComponent', () => {
       String(id) === SECOND_ACCOUNT_ID ? second.response : first.response,
     );
 
-    // The first account's read is still unanswered when the URL moves to the second account, which is
-    // what a move between two record URLs produces when the earlier response is the slower one.
+    // The first account's read is still unanswered when the URL moves to the second account, which is what a move between two record URLs produces when the earlier response is the slower one.
     routeParams.next(paramMapFor(SECOND_ACCOUNT_ID));
     await fixture.whenStable();
 
@@ -757,8 +620,7 @@ describe('SavingsViewComponent', () => {
     expect(component.account()?.id).toBe(SECOND_ACCOUNT.id);
     expect(component.loading()).toBe(false);
 
-    // The earlier answer lands last. It is dropped rather than painted, so account 41's figures and
-    // links can never appear under account 47's URL.
+    // The earlier answer lands last. It is dropped rather than painted, so account 41's figures and links can never appear under account 47's URL.
     first.resolve(ACCOUNT);
     await settle();
 

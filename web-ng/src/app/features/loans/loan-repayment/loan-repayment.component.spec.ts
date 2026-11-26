@@ -5,100 +5,31 @@ import { provideRouter, Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import { Observable, of, Subject, throwError } from 'rxjs';
 import { beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest';
-
 import { ApiError, toApiError } from '../../../core/http/api-error';
 import type { LoanActionResult, LoanTransactionTemplate, OptionItem } from '../loan.models';
 import { LoanService, type LoanRepaymentInput } from '../loan.service';
 import { LoanRepaymentComponent } from './loan-repayment.component';
 
-/**
- * Behaviour of the repayment screen — workflow W6 of the Agent Action Plan, mounted at
- * `#/loanaccount/:id/repayment` by `LoanActionComponent` (AAP 0.7.3 row "W6 repayment"; AAP 0.7.4 "the
- * action screens … are single-purpose forms"; AAP 0.14.1 "each screen lands with at least one
- * behavioural spec").
- *
- * It pins the eight things the screen exists to do and that a rewrite would get wrong:
- *
- *  1. the seed: the template's payment types in the payload's order with the first preselected, the
- *     template's amount and the template's date, which are the values legacy's own repayment form is
- *     seeded from (Rule 1 clause 3);
- *  2. the id change: `LoanActionComponent` re-binds `[loanId]` on the same component instance, so a
- *     move between two loans' repayment routes must leave none of the previous loan's amount or payment
- *     type behind — a figure from the loan the URL has left would otherwise be posted against the loan
- *     it names now;
- *  3. the superseded answer: a read for the loan the URL has left is discarded even when it answers
- *     last, so it can neither seed nor fail the form that belongs to another loan;
- *  4. no added validation: a template that offers no payment types leaves the payment-type control valid
- *     and posts a body without that member, because legacy's repayment select carries no `required`
- *     marker and Fineract accepts a repayment without one (Rule 1 clause 3; AAP 0.7.2);
- *  5. the write: the POST carries the values the form holds, the date as the `Date` the field keeps and
- *     no `dateFormat`/`locale` — the service writes those at the boundary (Rule 1 clause 2) — and a
- *     booked repayment returns to the record;
- *  6. one click, one request: the submit trigger is disabled while the POST is in flight and a second
- *     click sends nothing, because Fineract's action endpoints are not idempotent (AAP 0.1.1, 0.14.1);
- *  7. the failure: Fineract's own message is rendered character for character with every entered value
- *     kept and no second message raised (AAP 0.7.4), so a rejected amount is corrected in place;
- *  8. the 404: the template read answering 404 replaces the form with the not-found message (AAP 0.7.4).
- *
- * Two expectations of the plan's first draft of this spec are deliberately not asserted, because the
- * shipped screen does not have them. The amount is seeded from the repayment transaction template's own
- * `amount` and not derived from a `repaymentSchedule`, and the screen takes no `schedule` input and
- * issues no record read: the legacy repayment action screen reads its template and nothing else, so a
- * record read here would be a request the baseline never sends (Rule 1 clauses 2 and 3), and the
- * amount's value is still asserted against a fixture constant rather than a literal written into the
- * spec. The not-found guarantee the schedule read was meant to cover is asserted against the read this
- * screen really makes.
- *
- * **What is stubbed, and why.** Only the collaborations a unit test cannot own: `LoanService`, whose
- * endpoint-level contract — method, path, query parameters and the `dateFormat`/`locale` members of the
- * body — belongs to `loan.service.spec.ts`, and the translation stack, which is asked for display text
- * only. The date and select controls are the shipped shared components, the submit guard is the
- * application's own, and the router is a real `provideRouter([])`, so the cancel link renders the href
- * the application would render.
- */
+/** Behaviour of the repayment screen — workflow W6, mounted by `LoanActionComponent` at `#/loanaccount/:id/repayment` (AAP 0.7.3 "W6 repayment"; AAP 0.7.4): the template's payment types, amount and date seed the form, a re-bound `[loanId]` replaces them, one click sends one POST, and a rejected amount renders Fineract's own sentence with every entered value kept. */
 
-/** The loan the screen is opened for: the `:id` of `#/loanaccount/:id/repayment`. */
 const LOAN_ID = '5';
-
-/** The loan a second binding of the same component moves the screen to. */
 const SECOND_LOAN_ID = '6';
-
-/** The payment types the first loan's template offers, deliberately out of alphabetical order. */
 const PAYMENT_TYPES: readonly OptionItem[] = [
   { id: 3, name: 'Repayment Adjustment Refund' },
   { id: 1, name: 'Money Transfer' },
 ];
-
-/** The payload's option names, in payload order. */
 const PAYMENT_TYPE_NAMES: readonly string[] = PAYMENT_TYPES.map((option) => option.name);
-
-/** The first option, which is the one the screen preselects — legacy's own default. */
 const FIRST_PAYMENT_TYPE = PAYMENT_TYPES[0];
-
-/** The amount the first loan's template offers: its next period's total due. */
 const TEMPLATE_AMOUNT = 466.67;
-
-/** The date the first loan's template defaults to, in the `[year, month, day]` shape Fineract sends. */
 const TEMPLATE_DATE = new Date(2026, 11, 24);
-
-/**
- * The payload the screen's one read answers with: the three members it seeds from, in the shape
- * `GET /loans/{id}/transactions/template?command=repayment` returns.
- */
 const TEMPLATE: LoanTransactionTemplate = {
   paymentTypeOptions: PAYMENT_TYPES,
   date: [2026, 12, 24],
   amount: TEMPLATE_AMOUNT,
   loanId: 5,
 };
-
-/** The second loan's amount: the unpaid remainder of its next period, which shares no figure with the first. */
 const SECOND_TEMPLATE_AMOUNT = 75;
-
-/** The second loan's payment type, which shares neither id nor name with the first loan's. */
 const SECOND_PAYMENT_TYPE: OptionItem = { id: 7, name: 'Second Loan Payment' };
-
-/** The second loan's payload, dated in the `yyyy-MM-dd` string shape Fineract also sends. */
 const SECOND_TEMPLATE: LoanTransactionTemplate = {
   paymentTypeOptions: [SECOND_PAYMENT_TYPE],
   date: '2027-01-15',
@@ -106,49 +37,23 @@ const SECOND_TEMPLATE: LoanTransactionTemplate = {
   loanId: 6,
 };
 
-/**
- * A payload that offers no payment type at all, the case in which the legacy form posts a repayment
- * with no `paymentTypeId` member (AAP 0.7.2 `LoanRepaymentRequest`).
- */
+// A template offering no payment type leaves the control valid and posts a body without the member: legacy's repayment select carries no `required` marker and Fineract accepts a repayment without one (Rule 1 clause 3; AAP 0.7.2 `LoanRepaymentRequest`).
 const NO_PAYMENT_TYPE_TEMPLATE: LoanTransactionTemplate = {
   date: [2026, 12, 24],
   amount: 100,
 };
-
-/** The result the POST answers with; the screen reads it only to know the write landed. */
 const ACTION_RESULT: LoanActionResult = { resourceId: 5 };
-
-/** The amount the user types over the seeded figure, distinct from every template's own value. */
 const ENTERED_AMOUNT = 200.25;
-
-/** The date the user records the repayment on, distinct from the template's default. */
 const ENTERED_DATE = new Date(2026, 11, 28);
-
-/** The payment type the user picks over the first option the seed preselects. */
 const ENTERED_PAYMENT_TYPE: OptionItem = PAYMENT_TYPES[1];
-
-/** The note the user attaches to the repayment; the body carries it trimmed. */
 const ENTERED_NOTE = 'Paid at the branch counter';
-
-/**
- * The sentence Fineract answers a rejected repayment with, rendered character for character: the same
- * rule workflow W7 asserts, applied to the one write this screen makes (Rule 1 clause 3; AAP 0.7.4).
- */
 const SERVER_MESSAGE = 'The transaction amount cannot be greater than the outstanding loan balance.';
-
-/** `LoanService` as this screen uses it: the one template read and the one write, both stubbed. */
 interface LoanServiceStub {
   readonly actionTemplate: Mock<
     (id: number | string, command: 'disburse' | 'repayment') => Observable<LoanTransactionTemplate>
   >;
   readonly repay: Mock<(id: number | string, body: LoanRepaymentInput) => Observable<LoanActionResult>>;
 }
-
-/**
- * The ngx-translate surface this screen touches: the `translate()` signal `TranslatePipe` resolves its
- * keys through and the two change streams a component in this family subscribes to. Nothing here
- * reaches the network.
- */
 interface TranslateStub {
   readonly currentLang: Signal<string>;
   instant(key: string): string;
@@ -156,8 +61,6 @@ interface TranslateStub {
   readonly onLangChange: Observable<unknown>;
   readonly onTranslationChange: Observable<unknown>;
 }
-
-/** Builds the translation stub the TestBed provides; every key resolves to itself. */
 function translateStub(): TranslateStub {
   return {
     currentLang: signal('en').asReadonly(),
@@ -167,21 +70,14 @@ function translateStub(): TranslateStub {
     onTranslationChange: new Observable<never>(),
   };
 }
-
-/**
- * An observable a case settles by hand, so one loan's answer can be held open while the URL moves to
- * another loan — the order in which a superseded read answers last.
- */
 function deferredResponse<T>(): { readonly response: Observable<T>; resolve(value: T): void } {
   let settle: ((value: T) => void) | null = null;
-
   const response = new Observable<T>((subscriber) => {
     settle = (value: T): void => {
       subscriber.next(value);
       subscriber.complete();
     };
   });
-
   return {
     response,
     resolve(value: T): void {
@@ -198,81 +94,44 @@ describe('LoanRepaymentComponent', () => {
   let component: LoanRepaymentComponent;
   let loan: LoanServiceStub;
   let navigate: MockInstance<Router['navigate']>;
-
-  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines the
-  // cast to one line and keeps the DOM assertions type-checked (Rule 1 clause 4).
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
-
-  /** The rendered text of the host, whitespace-collapsed for a stable containment test. */
   function renderedText(): string {
     return (host().textContent ?? '').replace(/\s+/g, ' ').trim();
   }
-
-  /** The payment-type select the shared field renders. */
   function paymentSelect(): HTMLSelectElement | null {
     const element: unknown = host().querySelector('app-select-field select');
-
     return element instanceof HTMLSelectElement ? element : null;
   }
-
-  /** The amount field's own input, which renders the seeded figure. */
   function amountInput(): HTMLInputElement | null {
     const element: unknown = host().querySelector('#transactionAmount');
-
     return element instanceof HTMLInputElement ? element : null;
   }
-
-  /** The date field's own input, which renders the seeded date as `yyyy-MM-dd`. */
   function dateInput(): HTMLInputElement | null {
     const element: unknown = host().querySelector('#transactionDate');
-
     return element instanceof HTMLInputElement ? element : null;
   }
-
-  /** The visible option texts of the picker, in render order. */
   function optionTexts(select: HTMLSelectElement): string[] {
     return Array.from(select.options).map((option) => (option.textContent ?? '').trim());
   }
-
-  /** The text of the option the picker currently shows as chosen, or `null` when it shows none. */
   function selectedText(select: HTMLSelectElement): string | null {
     return select.selectedIndex < 0 ? null : (select.options[select.selectedIndex]?.textContent ?? '').trim();
   }
-
-  /** The form the screen renders, which is what a click on the footer's submit trigger submits. */
   function formElement(): HTMLFormElement | null {
     const element: unknown = host().querySelector('form');
-
     return element instanceof HTMLFormElement ? element : null;
   }
-
-  /** The primary control that submits the form, whose disabled state is the submit guard's. */
   function submitTrigger(): HTMLButtonElement | null {
     const element: unknown = host().querySelector('button[type=submit]');
-
     return element instanceof HTMLButtonElement ? element : null;
   }
-
-  /** How many times `needle` occurs in `text`, so one message can be told from two. */
   function occurrences(text: string, needle: string): number {
     return text.split(needle).length - 1;
   }
-
-  /** Lets the screen's read answer and the first paint show it. */
   async function settle(): Promise<void> {
     await Promise.resolve();
     await fixture.whenStable();
     fixture.detectChanges();
   }
-
-  /**
-   * Mounts the screen for one loan and renders it once.
-   *
-   * The `loanId` input is set before the first change detection: the component reads it inside an
-   * effect, and a required input that has no value yet would throw when that effect runs.
-   *
-   * @param id the loan the screen is opened for.
-   */
   async function show(id: string): Promise<void> {
     fixture = TestBed.createComponent(LoanRepaymentComponent);
     component = fixture.componentInstance;
@@ -280,24 +139,15 @@ describe('LoanRepaymentComponent', () => {
     fixture.detectChanges();
     await settle();
   }
-
-  /**
-   * Moves the mounted screen to another loan the way the router does when only the `:id` segment
-   * changes: the same component instance stays on screen and `LoanActionComponent` re-binds the input.
-   *
-   * @param id the loan the URL names now.
-   */
   async function moveTo(id: string): Promise<void> {
     fixture.componentRef.setInput('loanId', id);
     fixture.detectChanges();
     await settle();
   }
-
   beforeEach(() => {
     loan = { actionTemplate: vi.fn(), repay: vi.fn() };
     loan.actionTemplate.mockReturnValue(of(TEMPLATE));
     loan.repay.mockReturnValue(of(ACTION_RESULT));
-
     TestBed.configureTestingModule({
       imports: [LoanRepaymentComponent],
       providers: [
@@ -306,101 +156,66 @@ describe('LoanRepaymentComponent', () => {
         { provide: TranslateService, useValue: translateStub() },
       ],
     });
-
-    // The real router is the one the template's `routerLink` needs, so the navigation a success makes
-    // is spied on it rather than replaced by a stub.
     navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
   });
-
   it('seeds the form from the loan’s repayment template, first payment type included', async () => {
     await show(LOAN_ID);
 
-    // One read, for the loan the input names and the repayment command: this screen issues no record
-    // read, so the schedule is not its source (Rule 1 clauses 2 and 3).
+// One read, for the loan the input names and the repayment command: this screen issues no record read, because the legacy repayment action reads its template and nothing else, so the schedule is never its source (Rule 1 clauses 2 and 3).
     expect(loan.actionTemplate.mock.calls).toEqual([[LOAN_ID, 'repayment']]);
     expect(component.notFound()).toBe(false);
     expect(component.error()).toBeNull();
-
-    // The picker offers the payload's options in the payload's order, and the first of them is the
-    // control's value — the default legacy's repayment form applies.
     expect(component.paymentTypeOptions().map((option) => option.id)).toEqual(
       PAYMENT_TYPES.map((option) => option.id),
     );
     expect(component.form.controls.paymentTypeId.value).toBe(FIRST_PAYMENT_TYPE.id);
-
-    // The amount and the date are the template's own, and the fields render them.
     expect(component.form.controls.transactionAmount.value).toBe(TEMPLATE_AMOUNT);
     expect(component.form.controls.transactionDate.value).toEqual(TEMPLATE_DATE);
     expect(amountInput()?.value).toBe(String(TEMPLATE_AMOUNT));
     expect(dateInput()?.value).toBe('2026-12-24');
-
     const select = paymentSelect();
-
     expect(select).not.toBeNull();
-    // No blank row: legacy renders a plain `ng-options` select with no empty option.
     expect(optionTexts(select as HTMLSelectElement)).toEqual(PAYMENT_TYPE_NAMES);
     expect(selectedText(select as HTMLSelectElement)).toBe(FIRST_PAYMENT_TYPE.name);
   });
-
   it('re-seeds the form when the loan id changes, keeping nothing of the previous loan', async () => {
     loan.actionTemplate.mockImplementation((id) =>
       of(String(id) === SECOND_LOAN_ID ? SECOND_TEMPLATE : TEMPLATE),
     );
-
     await show(LOAN_ID);
-
     expect(component.form.controls.transactionAmount.value).toBe(TEMPLATE_AMOUNT);
-
     await moveTo(SECOND_LOAN_ID);
-
-    // One read per binding, addressed by the id the input now holds.
     expect(loan.actionTemplate.mock.calls).toEqual([
       [LOAN_ID, 'repayment'],
       [SECOND_LOAN_ID, 'repayment'],
     ]);
-    // Nothing of the first loan survives the move: neither its amount nor its payment type, which is
-    // the figure a stale form would otherwise post against the second loan.
     expect(component.form.controls.transactionAmount.value).toBe(SECOND_TEMPLATE_AMOUNT);
     expect(component.form.controls.paymentTypeId.value).toBe(SECOND_PAYMENT_TYPE.id);
     expect(component.form.controls.transactionDate.value).toEqual(new Date(2027, 0, 15));
     expect(component.paymentTypeOptions().map((option) => option.id)).toEqual([
       SECOND_PAYMENT_TYPE.id,
     ]);
-
     const select = paymentSelect();
-
     expect(select).not.toBeNull();
     expect(optionTexts(select as HTMLSelectElement)).toEqual([SECOND_PAYMENT_TYPE.name]);
     expect(optionTexts(select as HTMLSelectElement)).not.toContain(FIRST_PAYMENT_TYPE.name);
     expect(selectedText(select as HTMLSelectElement)).toBe(SECOND_PAYMENT_TYPE.name);
     expect(amountInput()?.value).toBe(String(SECOND_TEMPLATE_AMOUNT));
   });
-
   it('discards a superseded template answer that lands after the URL moved on', async () => {
     const first = deferredResponse<LoanTransactionTemplate>();
     const second = deferredResponse<LoanTransactionTemplate>();
-
     loan.actionTemplate.mockImplementation((id) =>
       String(id) === SECOND_LOAN_ID ? second.response : first.response,
     );
-
     await show(LOAN_ID);
-
-    // The first loan's read is still unanswered when the URL moves to the second loan, which is what a
-    // move between two repayment routes produces when the earlier response is the slower one.
     await moveTo(SECOND_LOAN_ID);
-
     second.resolve(SECOND_TEMPLATE);
     await settle();
-
     expect(component.form.controls.transactionAmount.value).toBe(SECOND_TEMPLATE_AMOUNT);
     expect(component.form.controls.paymentTypeId.value).toBe(SECOND_PAYMENT_TYPE.id);
-
-    // The earlier answer lands last. It is dropped rather than painted, so the first loan's figures can
-    // never be posted against the second loan.
     first.resolve(TEMPLATE);
     await settle();
-
     expect(component.form.controls.transactionAmount.value).toBe(SECOND_TEMPLATE_AMOUNT);
     expect(component.form.controls.paymentTypeId.value).toBe(SECOND_PAYMENT_TYPE.id);
     expect(component.paymentTypeOptions().map((option) => option.id)).toEqual([
@@ -409,51 +224,31 @@ describe('LoanRepaymentComponent', () => {
     expect(component.notFound()).toBe(false);
     expect(component.error()).toBeNull();
   });
-
   it('leaves the payment type valid and posts no payment-type member when the template offers none', async () => {
     loan.actionTemplate.mockReturnValue(of(NO_PAYMENT_TYPE_TEMPLATE));
-
     await show(LOAN_ID);
-
-    // No validator was added to the payment type, so a template that offers none leaves the form
-    // valid: the only required members are the date and the amount (Rule 1 clause 3; AAP 0.7.2).
     expect(component.form.controls.paymentTypeId.value).toBeNull();
     expect(component.form.controls.paymentTypeId.valid).toBe(true);
     expect(component.form.valid).toBe(true);
     expect(paymentSelect()?.options.length).toBe(0);
-
     await component.submit();
-
-    // The POST is still issued — never refused client-side by a rule legacy does not have — and the
-    // body carries no `paymentTypeId`, which is the body the legacy form posts with an empty list.
     expect(loan.repay).toHaveBeenCalledTimes(1);
     expect(loan.repay).toHaveBeenCalledWith(LOAN_ID, {
       transactionDate: TEMPLATE_DATE,
       transactionAmount: NO_PAYMENT_TYPE_TEMPLATE.amount,
     });
-
     const [, postedBody] = loan.repay.mock.calls[0];
-
     expect(Object.keys(postedBody)).not.toContain('paymentTypeId');
     expect(navigate).toHaveBeenCalledWith(['/viewloanaccount', LOAN_ID]);
   });
-
   it('posts the repayment the form holds and returns to the record', async () => {
     await show(LOAN_ID);
-
-    // Every seeded value is replaced by one the user entered, so the body proves the POST carries what
-    // the form holds rather than the template's defaults that happened to be on screen.
     component.form.controls.transactionDate.setValue(ENTERED_DATE);
     component.form.controls.transactionAmount.setValue(ENTERED_AMOUNT);
     component.form.controls.paymentTypeId.setValue(ENTERED_PAYMENT_TYPE.id);
     component.form.controls.note.setValue(`  ${ENTERED_NOTE}  `);
     fixture.detectChanges();
-
     await component.submit();
-
-    // One POST for the loan the input names, carrying exactly the four members the form produced: the
-    // date as the `Date` the field keeps, the amount and the payment type as the user left them, and
-    // the note trimmed of the padding the field held.
     expect(loan.repay.mock.calls).toEqual([
       [
         LOAN_ID,
@@ -465,62 +260,40 @@ describe('LoanRepaymentComponent', () => {
         },
       ],
     ]);
-
     const [, postedBody] = loan.repay.mock.calls[0];
 
-    // The date never travels as a formatted string, and the two members that carry the format are the
-    // service's to write at the boundary: their absence here is what keeps that boundary from drifting
-    // into the component (Rule 1 clause 2; AAP 0.7.2 "Date handling").
+// The date never travels as a formatted string: `dateFormat` and `locale` are the service's to write at the boundary, and their absence here is what keeps that boundary from drifting into the component (Rule 1 clause 2; AAP 0.7.2 "Date handling").
     expect(postedBody.transactionDate).toBeInstanceOf(Date);
     expect(Object.keys(postedBody)).not.toContain('dateFormat');
     expect(Object.keys(postedBody)).not.toContain('locale');
-
-    // The record the repayment was booked on, not the action screen: legacy returns to
-    // `#/viewloanaccount/:id`, where the transaction appears and the balance reflects it.
     expect(navigate).toHaveBeenCalledTimes(1);
     expect(navigate).toHaveBeenCalledWith(['/viewloanaccount', LOAN_ID]);
     expect(component.error()).toBeNull();
   });
-
   it('sends one repayment per submit and disables the trigger while the POST is in flight', async () => {
     const pending = new Subject<LoanActionResult>();
-
     loan.repay.mockReturnValue(pending.asObservable());
-
     await show(LOAN_ID);
-
     const form = formElement();
-
     expect(form).not.toBeNull();
     expect(submitTrigger()).not.toBeNull();
     expect(submitTrigger()?.disabled).toBe(false);
-
-    // The first click, dispatched at the form the trigger submits, holds its POST open: that is the
-    // state a slow Fineract leaves the screen in.
     form?.dispatchEvent(new Event('submit', { cancelable: true }));
     fixture.detectChanges();
-
     expect(component.guard.busy()).toBe(true);
     expect(submitTrigger()?.disabled).toBe(true);
-
-    // The second click while the first is in flight sends nothing: Fineract's action endpoints are not
-    // idempotent, so one click has to mean one request (AAP 0.1.1, AAP 0.14.1).
     form?.dispatchEvent(new Event('submit', { cancelable: true }));
     await settle();
-
     expect(loan.repay).toHaveBeenCalledTimes(1);
-
     pending.next(ACTION_RESULT);
     pending.complete();
     await settle();
     await settle();
-
     expect(component.guard.busy()).toBe(false);
     expect(submitTrigger()?.disabled).toBe(false);
     expect(navigate).toHaveBeenCalledTimes(1);
     expect(component.error()).toBeNull();
   });
-
   it('renders the server’s rejection verbatim and keeps every value the user entered', async () => {
     loan.repay.mockReturnValue(
       throwError(() =>
@@ -532,31 +305,19 @@ describe('LoanRepaymentComponent', () => {
         ),
       ),
     );
-
     await show(LOAN_ID);
-
     component.form.controls.transactionDate.setValue(ENTERED_DATE);
     component.form.controls.transactionAmount.setValue(ENTERED_AMOUNT);
     component.form.controls.paymentTypeId.setValue(ENTERED_PAYMENT_TYPE.id);
     component.form.controls.note.setValue(ENTERED_NOTE);
     fixture.detectChanges();
-
     await component.submit();
     await settle();
-
-    // The server's own sentence, character for character: no prefix, no translation, no wrapper
-    // (Rule 1 clause 3; AAP 0.7.4).
     expect(component.error()?.message).toBe(SERVER_MESSAGE);
     expect(host().querySelector('.alert.alert-danger')?.textContent?.trim()).toBe(SERVER_MESSAGE);
-
-    // One message, not two: the notification the interceptor owns is not raised for a 4xx, and this
-    // screen renders no notification of its own, so the sentence appears exactly once.
     expect(host().querySelectorAll('.alert').length).toBe(1);
     expect(host().querySelector('app-notification')).toBeNull();
     expect(occurrences(renderedText(), SERVER_MESSAGE)).toBe(1);
-
-    // The form survives with every entered value, which is what lets a rejected figure be corrected in
-    // place instead of retyped.
     expect(formElement()).not.toBeNull();
     expect(amountInput()?.value).toBe(String(ENTERED_AMOUNT));
     expect(dateInput()?.value).toBe('2026-12-28');
@@ -564,22 +325,16 @@ describe('LoanRepaymentComponent', () => {
     expect(component.form.controls.paymentTypeId.value).toBe(ENTERED_PAYMENT_TYPE.id);
     expect(component.form.controls.note.value).toBe(ENTERED_NOTE);
     expect(component.notFound()).toBe(false);
-
-    // Nothing was booked and the screen stayed where it was.
     expect(navigate).not.toHaveBeenCalled();
   });
-
   it('renders the not-found state in place of the form when the template answers 404', async () => {
     loan.actionTemplate.mockReturnValue(
       throwError(() => new ApiError('The loan does not exist.', 404)),
     );
-
     await show(LOAN_ID);
-
     expect(component.notFound()).toBe(true);
     expect(component.error()).toBeNull();
     expect(renderedText()).toContain('error.msg.resource.not.found');
-    // Nothing can be posted against a loan the server says is not there.
     expect(formElement()).toBeNull();
     expect(loan.repay).not.toHaveBeenCalled();
   });

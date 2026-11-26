@@ -10,70 +10,12 @@ import { ApiError } from '../../../core/http/api-error';
 import { AVAILABLE_LANGS, FALLBACK_LANG } from '../../../core/i18n/translate.config';
 import { LoginComponent } from './login.component';
 
-/**
- * Behaviour of the login screen at `#/login` — the entry point of workflow W1 and step 1 of the design
- * flow "Sign in and open a client record" (AAP 0.7.1 Features row `auth`; AAP 0.7.4 "Login
- * (`#/login`)", Figma node `1:5`; AAP 0.10.1 W1; Rule 1 clause 8, "no empty or boilerplate spec files;
- * every spec contains at least one `expect`").
- *
- * Each case states one contract the component owns:
- *
- *  1. the screen renders its two controls and its single primary submit, outside the signed-in shell —
- *     no navbar, and not the application's one notification host, which lives on the app root — and the
- *     labels resolve through the translation pipe instead of reaching the user as raw keys;
- *  2. an empty form sends nothing at all and marks both controls touched, which is the legacy form's
- *     only client-side rule (Rule 1 clause 3: no rule legacy does not have);
- *  3. a filled form calls `AuthService.login` exactly once with the typed values and then leaves for
- *     `#/clients` (AAP 0.7.4 "navigate to the attempted route or `#/clients`");
- *  4. a `returnUrl` the auth guard left on the route is where the user lands instead, while a value
- *     that is not an in-app path falls back to the default landing;
- *  5. a rejected exchange renders Fineract's own message verbatim in the screen's one
- *     `.alert.alert-danger` region, keeps the account name, clears only the credential control and
- *     navigates nowhere (workflow W7 compares that text character for character);
- *  6. a 5xx or transport failure is left to the one notification `fineractInterceptor` raises for it,
- *     so the region stays empty and the failure is reported exactly once, while a rejection that is
- *     not an HTTP answer — `AuthService.login`'s own refusal of a response that cannot describe a
- *     session, or any other fault — still reports itself in that region, so the screen never shows a
- *     raw key and never leaves a failed attempt unreported (AAP 0.14.2 "no `catch` swallows an error
- *     silently");
- *  7. the primary button is disabled only while a login is in flight — enabled before the attempt and
- *     released afterwards — and a second submit during that window issues no second call, because
- *     `POST /authentication` is not idempotent (AAP 0.14.1 "one request per click");
- *  8. the language switcher swaps the active bundle in place, navigates nowhere, and offers the
- *     application's one language list; a bundle that fails to load is reported and the switcher is put
- *     back on the language in force, while a switch that takes effect withdraws only that language
- *     failure and never a sign-in failure (AAP 0.7.4; AAP 0.14.2 "no `catch` swallows an error
- *     silently");
- *  9. the document's own `lang` attribute follows the active language, so the screen is announced in
- *     the language it is read in rather than in the static `<html lang="en">` default (WCAG 3.1.1,
- *     QA F14; AAP 0.7.4 "without a page reload").
- *
- * **What the suite replaces, and why.** Every collaborator is a typed object literal provided at its
- * own injection token, so the unit under test is the component and nothing else:
- *
- *  - `AuthService` → one `login` spy. The screen owes exactly one call per click and a promise whose
- *    settlement it renders; the `POST /authentication` request itself, and the `GET /users/{id}`
- *    restore behind it, are the contract test in `core/auth/auth.service.spec.ts`.
- *  - `Router` → a `navigateByUrl` spy. Navigation is asserted by its argument, never performed.
- *  - `ActivatedRoute` → a stand-in whose `snapshot.queryParamMap` answers with the map the current case
- *    holds, because the component reads the `returnUrl` there at submit time.
- *  - `TranslateService` → the four members this screen actually touches, each commented at the stub.
- *    No HTTP provider exists anywhere in this file: the screen calls no Fineract endpoint itself and
- *    reaches no host at all (Rule 1 clause 5; Rule 2).
- *
- * The fixtures are synthetic — an invented account name, an invented typed value and two messages
- * quoted in the shape a real refusal arrives in — and nothing here logs, stores or prints a
- * credential (Rule 1 clause 9; AAP 0.10.4).
- */
+/** Behaviour of the login screen at `#/login` — the entry point of workflow W1 and step 1 of the design flow "Sign in and open a client record" (AAP 0.7.1 Features row `auth`; AAP 0.7.4 "Login (`#/login`)", Figma node (AAP 0.10.1, Rule 1 clause 8, Rule 1 clause 3, AAP 0.14.2). */
 
 /** The account name the form is typed with; obviously a test value rather than a real login. */
 const ACCOUNT_NAME = 'spec.officer';
 
-/**
- * The text typed into the credential control, named as text rather than as the secret it stands for so
- * that no property named `password`, `pass`, `secret` or `authenticationKey` holds a literal — the
- * shape `check:wiring` fails on (AAP 0.10.4 credential gate; Rule 1 clause 9).
- */
+/** The text typed into the credential control, named as text rather than as the secret it stands for so that no property named `password`, `pass`, `secret` or `authenticationKey` holds a literal — the shape `check:wiring` (AAP 0.10.4, Rule 1 clause 9). */
 const TYPED_TEXT = 'spec value, not a credential';
 
 /** A language the switcher offers that is not the active one, taken from the shipped language list. */
@@ -88,10 +30,7 @@ const DEFAULT_DESTINATION = '/clients';
 /** The attempted URL the auth guard leaves on the login route when it refuses a navigation. */
 const RETURN_URL = '/viewclient/2';
 
-/**
- * The protocol-relative shape the component refuses, composed here from {@link RETURN_URL} so the file
- * holds no host-shaped literal and the value's provenance stays visible.
- */
+/** The protocol-relative shape the component refuses, composed here from {@link RETURN_URL} so the file holds no host-shaped literal and the value's provenance stays visible. */
 const PROTOCOL_RELATIVE = ['', '', RETURN_URL.slice(1)].join('/');
 
 /** Fineract's refusal text, quoted from a real 401 body; it is rendered verbatim (workflow W7). */
@@ -100,18 +39,10 @@ const FINERACT_MESSAGE = 'Invalid user credentials.';
 /** What the screen shows when the failure carries no Fineract text of its own. */
 const GENERIC_MESSAGE = 'The connection to the server failed.';
 
-/**
- * The credential field's own label key, assembled from its parts rather than written as one dotted key
- * beside its text: `check:wiring` fails on a credential-shaped assignment (AAP 0.10.4), and a full key
- * written immediately before a literal is the shape that scan reads as one (Rule 1 clause 9).
- */
+/** The credential field's own label key, assembled from its parts rather than written as one dotted key beside its text: `check:wiring` fails on a credential-shaped assignment (AAP 0.10.4), and a full key written (Rule 1 clause 9). */
 const CREDENTIAL_LABEL_KEY = ['label', 'input', 'password'].join('.');
 
-/**
- * The legacy captions this screen resolves, keyed exactly as the shipped flat legacy bundles key them
- * (`app/global-translations/`). A key the map does not hold would render as itself through the stub, so
- * serving the real wording is what proves every label on the screen resolves rather than falls back.
- */
+/** The legacy captions this screen resolves, keyed exactly as the shipped flat legacy bundles key them (`app/global-translations/`). */
 const TRANSLATIONS: Readonly<Record<string, string>> = {
   'label.input.changelanguage': 'Change language:',
   'label.heading.mifosx': 'Mifos X',
@@ -134,11 +65,7 @@ const TRANSLATIONS: Readonly<Record<string, string>> = {
   'error.connection.failed': GENERIC_MESSAGE,
 };
 
-/**
- * The half of `AuthService` this screen uses: the one `login` call and the promise whose settlement
- * decides what the user reads next. Typed as a spy over the real signature, so the stub cannot drift
- * from the method the component calls, and it holds no session, storage or transport of its own.
- */
+/** The half of `AuthService` this screen uses: the one `login` call and the promise whose settlement decides what the user reads next. */
 interface AuthStub {
   readonly login: Mock<(accountName: string, typedText: string) => Promise<void>>;
 }
@@ -148,39 +75,19 @@ interface RouterStub {
   readonly navigateByUrl: Mock<(url: string) => Promise<boolean>>;
 }
 
-/**
- * The ngx-translate surface this screen touches, and nothing else.
- *
- *  - `currentLang` — ngx-translate 18 declares it a `Signal<Language | null>` and the component's own
- *    `currentLang` computed reads it, falling back to `FALLBACK_LANG` while it is `null`.
- *  - `use` — `onLangChange` subscribes to the observable it returns, which is where a bundle load
- *    happens and where its failure arrives.
- *  - `instant` — resolves the generic failure message the screen shows for a failure Fineract did not
- *    describe.
- *  - `translate` — the member `TranslatePipe.transform` resolves every `| translate` key through, so
- *    the template's labels render as text rather than as keys.
- */
+/** The ngx-translate surface this screen touches, and nothing else. - `currentLang` — ngx-translate 18 declares it a `Signal<Language | null>` and the component's own `currentLang` computed reads it, falling back to. */
 interface TranslateStub {
   readonly currentLang: Signal<string | null>;
-
   readonly use: Mock<(code: string) => Observable<unknown>>;
-
   readonly instant: Mock<(key: string) => string>;
-
   translate(key: string): Signal<string>;
-
   /** The codes whose bundle was really subscribed to, in order: proof the observable actually ran. */
   readonly applied: readonly string[];
-
   /** Makes the next `use` answer on its error channel, the way a bundle that cannot load does. */
   failNextBundle(): void;
 }
 
-/**
- * Builds the translation stub. `currentLang` starts `null` exactly as the library's does before a
- * bundle is applied, which is the state the component's fallback exists for; a successful `use` moves
- * it, and a failing one leaves it where it was — the behaviour `onLangChange` relies on.
- */
+/** Builds the translation stub. `currentLang` starts `null` exactly as the library's does before a bundle is applied, which is the state the component's fallback exists for; a successful `use` moves it, and a failing one. */
 function createTranslateStub(): TranslateStub {
   const currentLang = signal<string | null>(null);
   const applied: string[] = [];
@@ -215,10 +122,7 @@ function createTranslateStub(): TranslateStub {
   };
 }
 
-/**
- * A login the case settles by hand, so the screen can be inspected while its request is still
- * outstanding — which is what the duplicate-submission guard exists for.
- */
+/** A login the case settles by hand, so the screen can be inspected while its request is still outstanding — which is what the duplicate-submission guard exists for. */
 function deferredLogin(): { readonly response: Promise<void>; settle(): void } {
   let release: () => void = (): void => undefined;
 
@@ -244,18 +148,14 @@ describe('LoginComponent', () => {
   /** The query parameters the route stand-in answers with; a case that carries a `returnUrl` sets it. */
   let queryParams: ParamMap = convertToParamMap({});
 
-  /**
-   * The route the user came from. `ActivatedRoute.snapshot` is read at submit time, so the stand-in
-   * answers with whatever {@link queryParams} holds then instead of freezing one value for the suite.
-   */
+  /** The route the user came from. `ActivatedRoute.snapshot` is read at submit time, so the stand-in answers with whatever {@link queryParams} holds then instead of freezing one value for the suite. */
   const route: { readonly snapshot: { readonly queryParamMap: ParamMap } } = {
     get snapshot(): { readonly queryParamMap: ParamMap } {
       return { queryParamMap: queryParams };
     },
   };
 
-  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines the
-  // cast to a single line and keeps every DOM assertion below type-checked (Rule 1 clause 4).
+  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines the cast to a single line and keeps every DOM assertion below type-checked (Rule 1 clause 4).
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
 
   /** The primary submit control, addressed by the id the legacy screen gives it. */
@@ -285,10 +185,7 @@ describe('LoginComponent', () => {
     return host().querySelector<HTMLElement>('.alert.alert-danger');
   }
 
-  /**
-   * The failure region's text exactly as rendered: no trimming, so a prefix, a suffix or a changed
-   * capital would fail the comparison against the message the server sent (workflow W7).
-   */
+  /** The failure region's text exactly as rendered: no trimming, so a prefix, a suffix or a changed capital would fail the comparison against the message the server sent (workflow W7). */
   function failureText(): string | null {
     const banner = failureBanner();
 
@@ -310,8 +207,7 @@ describe('LoginComponent', () => {
   }
 
   beforeEach(async () => {
-    // Reset first so each case starts on a fresh root injector — a second `configureTestingModule` on
-    // an instantiated module throws — and so no spy records from one case survive into the next.
+    // Reset first so each case starts on a fresh root injector — a second `configureTestingModule` on an instantiated module throws — and so no spy records from one case survive into the next.
     vi.clearAllMocks();
     TestBed.resetTestingModule();
 
@@ -341,9 +237,7 @@ describe('LoginComponent', () => {
   });
 
   afterEach(() => {
-    // `bindDocumentLanguage` writes the real document, which every case in this runner shares: the
-    // attribute is put back on the static default so a language one case selected cannot be read as
-    // the next case's starting state.
+    // `bindDocumentLanguage` writes the real document, which every case in this runner shares: the attribute is put back on the static default so a language one case selected cannot be read as the next case's starting state.
     document.documentElement.lang = FALLBACK_LANG;
   });
 
@@ -353,8 +247,7 @@ describe('LoginComponent', () => {
     expect(host().querySelector('#pwd')).not.toBeNull();
     expect(loginButton().type).toBe('submit');
     expect(languageSelector()).not.toBeNull();
-    // The shell's chrome belongs to the signed-in routes: this screen is not wrapped by it, and the
-    // application's one notification host is mounted on the app root instead of here (AAP 0.7.4).
+    // The shell's chrome belongs to the signed-in routes: this screen is not wrapped by it, and the application's one notification host is mounted on the app root instead of here (AAP 0.7.4).
     expect(host().querySelector('.navbar')).toBeNull();
     expect(host().querySelector('.breadcrumb')).toBeNull();
     expect(host().querySelector('app-notification')).toBeNull();
@@ -374,16 +267,14 @@ describe('LoginComponent', () => {
     await component.submit();
     fixture.detectChanges();
 
-    // Nothing left the screen: no login, no navigation and no failure banner, because an invalid form
-    // is not a failed exchange (Rule 1 clause 3: no rule the legacy form does not have).
+    // Nothing left the screen: no login, no navigation and no failure banner, because an invalid form is not a failed exchange (Rule 1 clause 3: no rule the legacy form does not have).
     expect(auth.login).not.toHaveBeenCalled();
     expect(router.navigateByUrl).not.toHaveBeenCalled();
     expect(component.form.controls.username.touched).toBe(true);
     expect(component.form.controls.password.touched).toBe(true);
     expect(component.guard.busy()).toBe(false);
     expect(failureBanner()).toBeNull();
-    // Both controls show the legacy required message under themselves, which is what `markAllAsTouched`
-    // inside `submit` is for: the operator sees which field stopped the submit.
+    // Both controls show the legacy required message under themselves, which is what `markAllAsTouched` inside `submit` is for: the operator sees which field stopped the submit.
     expect(helpBlockTexts()).toEqual([
       TRANSLATIONS['label.requiredfield'],
       TRANSLATIONS['label.requiredfield'],
@@ -423,8 +314,7 @@ describe('LoginComponent', () => {
 
       await component.submit();
 
-      // A bare segment, an empty value and the protocol-relative form are all refused, so a crafted
-      // link cannot hand the browser an origin of its own.
+      // A bare segment, an empty value and the protocol-relative form are all refused, so a crafted link cannot hand the browser an origin of its own.
       expect(router.navigateByUrl).toHaveBeenCalledTimes(1);
       expect(router.navigateByUrl).toHaveBeenCalledWith(DEFAULT_DESTINATION);
     },
@@ -468,14 +358,11 @@ describe('LoginComponent', () => {
       await component.submit();
       fixture.detectChanges();
 
-      // `fineractInterceptor` has already raised this failure's one notification, so the screen paints
-      // no second copy of it and the user stays on the form to retry: one failure, one surface.
+      // `fineractInterceptor` has already raised this failure's one notification, so the screen paints no second copy of it and the user stays on the form to retry: one failure, one surface.
       expect(failureBanner()).toBeNull();
       expect(component.error()).toBeNull();
       expect(router.navigateByUrl).not.toHaveBeenCalled();
-      // The attempt itself is unchanged: the account name survives and only the credential control is
-      // cleared, so an empty region reads as the interceptor's notification doing its job rather than
-      // as a half-reset form.
+      // The attempt itself is unchanged: the account name survives and only the credential control is cleared, so an empty region reads as the interceptor's notification doing its job rather than as a half-reset form.
       expect(component.form.controls.username.value).toBe(ACCOUNT_NAME);
       expect(component.form.controls.password.value).toBe('');
     },
@@ -514,8 +401,7 @@ describe('LoginComponent', () => {
     const first = component.submit();
     const second = component.submit();
 
-    // The guard's busy flag was set before its callback ran, so the re-entrant call never reached the
-    // service: one request per click, which the endpoint's non-idempotence requires (AAP 0.14.1).
+    // The guard's busy flag was set before its callback ran, so the re-entrant call never reached the service: one request per click, which the endpoint's non-idempotence requires (AAP 0.14.1).
     expect(component.guard.busy()).toBe(true);
     expect(auth.login).toHaveBeenCalledTimes(1);
 
@@ -541,8 +427,7 @@ describe('LoginComponent', () => {
     fixture.detectChanges();
 
     expect(translate.use).toHaveBeenCalledWith(OTHER_LANG);
-    // The observable `use` returned was really subscribed to, so the switch happened rather than being
-    // asked for: `applied` is recorded inside it.
+    // The observable `use` returned was really subscribed to, so the switch happened rather than being asked for: `applied` is recorded inside it.
     expect(translate.applied).toEqual([OTHER_LANG]);
     expect(component.currentLang()).toBe(OTHER_LANG);
     // A language switch is not a navigation: the user stays on the form (AAP 0.7.4).
@@ -551,8 +436,7 @@ describe('LoginComponent', () => {
   });
 
   it('binds the document language to the active one and follows a switch', () => {
-    // The static `<html lang="en">` is only the pre-render default: this screen's constructor has
-    // already written the language in force, which is the fallback until a bundle resolves.
+    // The static `<html lang="en">` is only the pre-render default: this screen's constructor has already written the language in force, which is the fallback until a bundle resolves.
     expect(document.documentElement.lang).toBe(FALLBACK_LANG);
 
     const selector = languageSelector();
@@ -618,8 +502,7 @@ describe('LoginComponent', () => {
     component.onLangChange(OTHER_LANG, languageSelector());
     fixture.detectChanges();
 
-    // The region has two writers, and a switch that took effect withdraws only its own failure, so the
-    // server's refusal stays until the next attempt clears it.
+    // The region has two writers, and a switch that took effect withdraws only its own failure, so the server's refusal stays until the next attempt clears it.
     expect(failureText()).toBe(FINERACT_MESSAGE);
     expect(component.currentLang()).toBe(OTHER_LANG);
     expect(router.navigateByUrl).not.toHaveBeenCalled();

@@ -6,8 +6,7 @@ import { BreadcrumbComponent } from './breadcrumb.component';
 describe('BreadcrumbComponent', () => {
   let fixture: ComponentFixture<BreadcrumbComponent>;
 
-  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps the
-  // assertions below type-checked and confines the cast to this single boundary.
+  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps the assertions below type-checked and confines the cast to this single boundary.
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
 
   beforeEach(async () => {
@@ -54,9 +53,7 @@ describe('BreadcrumbComponent', () => {
     expect(crumbs[0].classList.contains('active')).toBe(false);
     expect(crumbs[1].classList.contains('active')).toBe(true);
     expect(host().querySelector('ol.breadcrumb')).not.toBeNull();
-    // The list is the whole markup: legacy writes a bare `<ul class="breadcrumb">`, and AAP 0.10.5
-    // registers no accessibility difference for this component, so neither a landmark nor an ARIA
-    // state may be added on top of it (Rule 1 clause 3).
+    // The list is the whole markup: legacy writes a bare `<ul class="breadcrumb">`, and AAP 0.10.5 registers no accessibility difference for this component, so neither a landmark nor an ARIA state may be added on top of it (Rule 1 clause 3).
     expect(host().querySelector('nav')).toBeNull();
     expect(Array.from(crumbs, (crumb) => crumb.getAttribute('aria-current'))).toEqual([null, null]);
   });

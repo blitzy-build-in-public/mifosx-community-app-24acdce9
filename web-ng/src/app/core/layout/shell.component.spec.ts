@@ -17,60 +17,7 @@ import type { SessionData, SessionUserResponse } from '../auth/session.model';
 import { SessionService } from '../auth/session.service';
 import { ShellComponent } from './shell.component';
 
-/**
- * Behavioural spec for `ShellComponent` — AAP 0.2.3's `AppShell` row, AAP 0.7.1's `ShellComponent`
- * contract and AAP 0.8.2's "Shell and navigation", and the consumer that makes `IdleService` live:
- * AAP 0.1.1's first functional requirement ("a session with a 30-minute idle timeout, a 10-second
- * warning before logout and a 15-minute keepalive") is only delivered when this component starts,
- * resets and stops that clock and renders its warning.
- *
- * It discharges AAP 0.11.1 (a unit spec beside every component) and Rule 1 clause 8 (no spec without
- * an `expect`). Each test states one contract the component owns:
- *
- * - it renders the three hosts — the navbar, the breadcrumb and the routed outlet — and the outlet
- *   sits beside the breadcrumb's page container rather than inside it, so the screen's own
- *   `.container-fluid` is not doubled;
- * - the navbar's account name is the `userName` input when the shell is given one and the
- *   `SessionService.user` projection otherwise;
- * - none of the out-of-scope chrome is rendered — no rail, no hamburger, no notification bell and no
- *   Accounting, Reports or Admin destination (AAP 0.10.5 item 8);
- * - the idle clock starts while a session is in effect, stops when it clears, and refuses to re-arm
- *   for a document event dispatched with no session behind it;
- * - every document event ng-idle counted as activity reaches the clock — a key, a click and a touch at
- *   once, and pointer movement through a one-second throttle, so a burst of `mousemove` events re-arms
- *   the clock once and the first event of the next window re-arms it again (QA report F11);
- * - `warning$` raises the alert without ending the session, and "Stay signed in" dismisses it and
- *   re-arms the clock;
- * - the warning's sentence and its action resolve through the active bundle, so a language switch
- *   re-renders them in the new language with no navigation (AAP 0.1.1 requirement 1, AAP 0.7.4);
- * - activity dismisses a showing warning with the same reset;
- * - `timeout$` logs out and returns to `/login`, in that order;
- * - `ngOnDestroy` stops the clock and leaves no listener behind;
- * - the trail is the `breadcrumb` input when one is supplied and the active route's translated
- *   `data['breadcrumb']` keys otherwise, re-derived on the next navigation and empty when the route
- *   declares none;
- * - the trail follows the active language, so a switch re-resolves it with no navigation (AAP 0.7.4,
- *   AAP 0.9.1 item 1);
- * - the document's own `lang` attribute follows the active language too, so the signed-in interface is
- *   announced in the language it is read in (WCAG 3.1.1, QA F14).
- *
- * Providers and what their absence proves. `AuthService`, `IdleService` and `SessionService` are
- * replaced by stubs typed against the real classes, so none of the three can drift and the suite
- * drives the clock's contracts rather than real 30-minute timers. The `SessionService` stub publishes
- * the `GET /users/{id}` projection the navbar falls back to, which is the one member of that service
- * the shell reads; the service's own storage round trip is `session.service.spec.ts`'s contract.
- * There is no HTTP provider anywhere in the suite and no `HttpClient` import: the shell issues no
- * request, so an attempt to reach Fineract from it would fail with NG0201 rather than passing
- * silently (Rule 1 clause 5, Rule 2). The router is the real one over an empty route table — its
- * `RouterLink` and `RouterOutlet` need the router's own providers — with `navigate`, `events` and
- * `routerState` replaced, which is the same set of inputs a hand-written stub would supply. The
- * translation service is the real one, because the navbar renders through `TranslatePipe`, which
- * reads bundles rather than a single `instant()` call.
- *
- * Security (Rule 1 clause 9, AAP 0.10.4): the suite constructs no session entry and names no bearer
- * secret. Nothing stored, submitted or logged is invented here: the only session value is the
- * presence the idle gate tests for null.
- */
+/** Behavioural spec for `ShellComponent` — AAP 0.2.3's `AppShell` row, AAP 0.7.1's `ShellComponent` contract and AAP 0.8.2's "Shell and navigation", and the consumer that makes `IdleService` live: AAP 0.1.1's first (AAP 0.11.1, Rule 1 clause 8, AAP 0.10.5, AAP 0.7.4). */
 
 /** The Fineract user id every fixture in this suite names. */
 const USER_ID = 42;
@@ -81,12 +28,7 @@ const ACCOUNT_NAME = 'mifos';
 /** The account name a host supplies through the shell's `userName` input, distinct from the above. */
 const SUPPLIED_NAME = 'supplied-by-shell';
 
-/**
- * Stand-in for the shipped bundles: one distinct value per key, so an assertion can tell which key
- * produced which text and can never pass on a raw dotted key. Test input only — it adds no locale
- * file and reproduces no shipped translation text (Rule 1 clause 6). The first block is what the
- * navbar and the global search control render; the second is the breadcrumb trail this suite drives.
- */
+/** Stand-in for the shipped bundles: one distinct value per key, so an assertion can tell which key produced which text and can never pass on a raw dotted key (Rule 1 clause 6). */
 const SPEC_BUNDLE: Record<string, string> = {
   'label.anchor.clients': 'Clients',
   'label.anchor.logout': 'Logout',
@@ -103,12 +45,7 @@ const SPEC_BUNDLE: Record<string, string> = {
   'label.button.stay.signed.in': 'Stay signed in',
 };
 
-/**
- * The bundle the language-switch cases activate: every key of {@link SPEC_BUNDLE} with a different
- * value for the ones a switch has to re-resolve, so text that stayed in the previous language is
- * visible instead of looking identical. Test input only, written for this suite: it reproduces no
- * shipped translation text and adds no locale file (Rule 1 clause 6).
- */
+/** The bundle the language-switch cases activate: every key of {@link SPEC_BUNDLE} with a different value for the ones a switch has to re-resolve, so text that stayed in the previous language is visible instead of looking (Rule 1 clause 6). */
 const SPEC_BUNDLE_FR: Record<string, string> = {
   ...SPEC_BUNDLE,
   'label.heading.clients': 'Liste des clients',
@@ -123,36 +60,19 @@ const BASE_LANG = 'en';
 /** The language a switch activates; one the application's own list offers (AAP 0.7.4). */
 const SWITCHED_LANG = 'fr';
 
-/**
- * The window in which one pointer event may re-arm the idle clock, as `ShellComponent` documents it
- * (QA report F11). Stated here rather than imported, because the constant is private to the component:
- * a longer window would stop the case below from re-arming on a second event, and a shorter one from
- * suppressing the events inside the first window, so a change to it fails here.
- */
+/** The window in which one pointer event may re-arm the idle clock, as `ShellComponent` documents it (QA report F11). */
 const POINTER_THROTTLE_MS = 1_000;
 
 /** The instant the pointer-throttle cases start their fake clock at: the epoch, so any value works. */
 const START_OF_WINDOW = new Date(0);
 
-/**
- * The value `AuthService.session()` reports while a session is in effect.
- *
- * The shell asks that signal one question — whether a session exists — and reads none of its
- * members, so this fixture carries the user id and stops there: no authentication key, no permission
- * list and no credential is invented for the suite (Rule 1 clause 9). The cast states exactly that
- * and is this suite's one boundary value (Rule 1 clause 4); a component that started reading the
- * entry's members would have to be given them here.
- */
+/** The value `AuthService.session()` reports while a session is in effect (Rule 1 clause 9, Rule 1 clause 4). */
 const SESSION_EFFECTIVE = { userId: USER_ID } as unknown as SessionData;
 
-/**
- * A matched route node as the shell walks it: the two members the breadcrumb derivation reads out of
- * the router's snapshot tree, and nothing else.
- */
+/** A matched route node as the shell walks it: the two members the breadcrumb derivation reads out of the router's snapshot tree, and nothing else. */
 interface RouteNode {
   /** The route's static `data`, which may declare `breadcrumb`. */
   readonly data: Record<string, unknown>;
-
   /** The route the walk continues into. */
   readonly firstChild: RouteNode | null;
 }
@@ -162,25 +82,12 @@ function routeNode(data: Record<string, unknown>, firstChild: RouteNode | null =
   return { data, firstChild };
 }
 
-/**
- * Wraps a route tree as the router state the shell reads. `ActivatedRouteSnapshot` carries the
- * router's internal matching state and cannot be assembled by hand, so the fixture is a plain object
- * given the type at this one boundary (Rule 1 clause 4), the way `auth.guard.spec.ts` supplies its
- * own route fixture.
- */
+/** Wraps a route tree as the router state the shell reads. `ActivatedRouteSnapshot` carries the router's internal matching state and cannot be assembled by hand, so the fixture is a plain object given the type at this one (Rule 1 clause 4). */
 function routerStateFor(root: RouteNode): RouterState {
   return { snapshot: { root } } as unknown as RouterState;
 }
 
-/**
- * The half of `AuthService` the shell and its navbar read: the session signal the idle gate follows,
- * the account name the navbar falls back to, and the logout the timeout performs. `logout` records the
- * call and clears the signal, as the real one does.
- *
- * The fallback name stays `null` for the whole suite, so the label the shell renders can only come
- * from the value it hands the navbar — which is what lets the label case prove the shell's own
- * `SessionService.user` projection rather than the navbar's independent fallback.
- */
+/** The half of `AuthService` the shell and its navbar read: the session signal the idle gate follows, the account name the navbar falls back to, and the logout the timeout performs. */
 class AuthStub implements Pick<AuthService, 'session' | 'logout'> {
   private readonly current = signal<SessionData | null>(null);
 
@@ -206,10 +113,7 @@ class AuthStub implements Pick<AuthService, 'session' | 'logout'> {
   }
 }
 
-/**
- * The half of `IdleService` the shell drives, with spies for the three commands and subjects for the
- * two emissions, so a test decides exactly when the warning and the timeout arrive.
- */
+/** The half of `IdleService` the shell drives, with spies for the three commands and subjects for the two emissions, so a test decides exactly when the warning and the timeout arrive. */
 class IdleStub implements Pick<IdleService, 'start' | 'stop' | 'reset' | 'warning$' | 'timeout$'> {
   /** The warning the real clock emits `warningSeconds` before the idle duration elapses. */
   readonly warning$ = new Subject<void>();
@@ -227,15 +131,7 @@ class IdleStub implements Pick<IdleService, 'start' | 'stop' | 'reset' | 'warnin
   readonly reset = vi.fn((): void => undefined);
 }
 
-/**
- * The half of `SessionService` the shell reads: the `GET /users/{id}` projection its `displayName`
- * falls back to when the hosting route supplies no `userName`.
- *
- * A stub rather than the real service, because publishing a projection is all this suite needs from
- * it, and the real one reaches that state only through a stored session entry — which would put a
- * fabricated session and its credential in this file (Rule 1 clause 9). The service's own round trip
- * is `session.service.spec.ts`'s contract.
- */
+/** The half of `SessionService` the shell reads: the `GET /users/{id}` projection its `displayName` falls back to when the hosting route supplies no `userName` (Rule 1 clause 9). */
 class SessionsStub implements Pick<SessionService, 'user'> {
   private readonly current = signal<SessionUserResponse | null>(null);
 
@@ -259,8 +155,7 @@ describe('ShellComponent', () => {
   let destroyed: boolean;
   let translate: TranslateService;
 
-  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps the
-  // assertions below type-checked and confines the boundary to this line (Rule 1 clause 4).
+  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps the assertions below type-checked and confines the boundary to this line (Rule 1 clause 4).
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
 
   /** The rendered element with the given selector, or a named failure when nothing matches it. */
@@ -298,8 +193,7 @@ describe('ShellComponent', () => {
   }
 
   beforeEach(() => {
-    // Reset first so each test starts on a fresh root injector and no previous fixture's listeners
-    // or signals reach it.
+    // Reset first so each test starts on a fresh root injector and no previous fixture's listeners or signals reach it.
     TestBed.resetTestingModule();
     auth = new AuthStub();
     idle = new IdleStub();
@@ -342,9 +236,7 @@ describe('ShellComponent', () => {
       destroyShell();
     }
 
-    // `bindDocumentLanguage` writes the real document, which every case in this runner shares: the
-    // attribute is put back on the static default so one case's switch cannot be read as the next
-    // case's starting state.
+    // `bindDocumentLanguage` writes the real document, which every case in this runner shares: the attribute is put back on the static default so one case's switch cannot be read as the next case's starting state.
     document.documentElement.lang = BASE_LANG;
   });
 
@@ -357,13 +249,11 @@ describe('ShellComponent', () => {
     expect(content.querySelector('app-breadcrumb')).not.toBeNull();
     expect(content.querySelector('router-outlet')).not.toBeNull();
 
-    // The initial state, before any navigation: the first snapshot declares no `breadcrumb`, so the
-    // trail is empty — which a component that rendered a fixed crumb could not reproduce.
+    // The initial state, before any navigation: the first snapshot declares no `breadcrumb`, so the trail is empty — which a component that rendered a fixed crumb could not reproduce.
     expect(fixture.componentInstance.breadcrumbItems()).toEqual([]);
     expect(host().querySelector('ol.breadcrumb')).toBeNull();
 
-    // Each screen template opens its own `.container-fluid`, so the outlet must not sit inside the
-    // breadcrumb's container: a second wrapper would double the page gutters.
+    // Each screen template opens its own `.container-fluid`, so the outlet must not sit inside the breadcrumb's container: a second wrapper would double the page gutters.
     expect(find<HTMLElement>('.content-wrapper > .container-fluid').contains(find('router-outlet'))).toBe(
       false,
     );
@@ -376,17 +266,14 @@ describe('ShellComponent', () => {
     expect(host().querySelector('.fa-bell')).toBeNull();
     expect(host().querySelector('#leftnav')).toBeNull();
 
-    // Every destination behind those controls — Accounting, Reports, Admin and the rail's modules —
-    // stays on the legacy application during cutover, so no rendered link may lead to one of them
-    // (AAP 0.10.5 item 8).
+    // Every destination behind those controls — Accounting, Reports, Admin and the rail's modules — stays on the legacy application during cutover, so no rendered link may lead to one of them (AAP 0.10.5 item 8).
     const destinations = Array.from(
       host().querySelectorAll('a'),
       (link: HTMLAnchorElement): string =>
         `${link.getAttribute('href') ?? ''} ${link.textContent ?? ''}`.toLowerCase(),
     );
 
-    // Asserted non-empty first, so the absence below is the shell's in-scope links being checked
-    // rather than a template that rendered no link at all.
+    // Asserted non-empty first, so the absence below is the shell's in-scope links being checked rather than a template that rendered no link at all.
     expect(destinations.length).toBeGreaterThan(0);
 
     expect(
@@ -451,14 +338,12 @@ describe('ShellComponent', () => {
       document.dispatchEvent(new Event(activity));
     }
 
-    // The immediate events are never throttled: a click has to dismiss the warning and restart the
-    // whole window on the spot, however recently the previous one happened (AAP 0.1.1 requirement 1).
+    // The immediate events are never throttled: a click has to dismiss the warning and restart the whole window on the spot, however recently the previous one happened (AAP 0.1.1 requirement 1).
     expect(idle.reset).toHaveBeenCalledTimes(5);
   });
 
   it('re-arms the clock once for a burst of pointer events, and again in the next window', () => {
-    // Only `Date` is faked: the throttle reads `Date.now()`, and nothing else in the shell should lose
-    // its own timers to a fake clock.
+    // Only `Date` is faked: the throttle reads `Date.now()`, and nothing else in the shell should lose its own timers to a fake clock.
     vi.useFakeTimers({ toFake: ['Date'] });
 
     try {
@@ -466,8 +351,7 @@ describe('ShellComponent', () => {
       auth.signIn();
       createShell();
 
-      // The first pointer event of the window re-arms the clock, from a clock that reads zero — which
-      // is what the handler's `-Infinity` starting point is for.
+      // The first pointer event of the window re-arms the clock, from a clock that reads zero — which is what the handler's `-Infinity` starting point is for.
       document.dispatchEvent(new Event('mousemove'));
       expect(idle.reset).toHaveBeenCalledTimes(1);
 
@@ -483,8 +367,7 @@ describe('ShellComponent', () => {
       document.dispatchEvent(new Event('wheel'));
       expect(idle.reset).toHaveBeenCalledTimes(1);
 
-      // The first pointer event of the next window re-arms it again, so a pointer that keeps moving
-      // keeps the session alive.
+      // The first pointer event of the next window re-arms it again, so a pointer that keeps moving keeps the session alive.
       vi.setSystemTime(new Date(START_OF_WINDOW.getTime() + POINTER_THROTTLE_MS));
       document.dispatchEvent(new Event('mousemove'));
       expect(idle.reset).toHaveBeenCalledTimes(2);
@@ -522,8 +405,7 @@ describe('ShellComponent', () => {
       SPEC_BUNDLE['label.button.stay.signed.in'],
     );
 
-    // The switch a navbar or login switcher performs: no `NavigationEnd` is emitted and nothing is
-    // navigated to, so a warning hardcoded in English would stay in English here (AAP 0.7.4).
+    // The switch a navbar or login switcher performs: no `NavigationEnd` is emitted and nothing is navigated to, so a warning hardcoded in English would stay in English here (AAP 0.7.4).
     await firstValueFrom(translate.use(SWITCHED_LANG));
     fixture.detectChanges();
 
@@ -535,8 +417,7 @@ describe('ShellComponent', () => {
     expect(find<HTMLButtonElement>('.alert-warning button').textContent?.trim()).toBe(
       SPEC_BUNDLE_FR['label.button.stay.signed.in'],
     );
-    // Still the same warning about the same session: a switch re-renders the copy, it does not end
-    // the session or dismiss the alert.
+    // Still the same warning about the same session: a switch re-renders the copy, it does not end the session or dismiss the alert.
     expect(auth.logout).not.toHaveBeenCalled();
     expect(host().querySelector('.alert.alert-warning')).not.toBeNull();
   });
@@ -595,8 +476,7 @@ describe('ShellComponent', () => {
     document.dispatchEvent(new KeyboardEvent('keydown'));
     expect(idle.reset).not.toHaveBeenCalled();
 
-    // The throttled pointer listener is removed with the same reference the constructor added, so a
-    // destroyed shell cannot re-arm a later session's clock through it either.
+    // The throttled pointer listener is removed with the same reference the constructor added, so a destroyed shell cannot re-arm a later session's clock through it either.
     document.dispatchEvent(new Event('mousemove'));
     document.dispatchEvent(new Event('wheel'));
     expect(idle.reset).not.toHaveBeenCalled();
@@ -637,8 +517,7 @@ describe('ShellComponent', () => {
     createShell();
     expect(crumbLabels()).toEqual([SPEC_BUNDLE['label.heading.clients']]);
 
-    // A switch and nothing else: no `NavigationEnd` is emitted anywhere in this case, and nothing is
-    // navigated to — which is exactly the state a navbar or login switch produces (AAP 0.7.4).
+    // A switch and nothing else: no `NavigationEnd` is emitted anywhere in this case, and nothing is navigated to — which is exactly the state a navbar or login switch produces (AAP 0.7.4).
     await firstValueFrom(translate.use(SWITCHED_LANG));
     fixture.detectChanges();
 
@@ -666,8 +545,7 @@ describe('ShellComponent', () => {
     await firstValueFrom(translate.use(SWITCHED_LANG));
     fixture.detectChanges();
 
-    // The keys come from the route and the text from the bundle, so a switch translates every crumb
-    // without re-reading the tree: order and count are unchanged (AAP 0.2.3 `Breadcrumb` items).
+    // The keys come from the route and the text from the bundle, so a switch translates every crumb without re-reading the tree: order and count are unchanged (AAP 0.2.3 `Breadcrumb` items).
     expect(crumbLabels()).toEqual([
       SPEC_BUNDLE_FR['label.heading.viewclient'],
       SPEC_BUNDLE_FR['label.heading.clients'],
@@ -677,8 +555,7 @@ describe('ShellComponent', () => {
   it('binds the document language to the active one and follows a switch', async () => {
     createShell();
 
-    // The static `<html lang="en">` in `src/index.html` is only the pre-render default; the shell
-    // writes the language actually in force as it is constructed.
+    // The static `<html lang="en">` in `src/index.html` is only the pre-render default; the shell writes the language actually in force as it is constructed.
     expect(document.documentElement.lang).toBe(BASE_LANG);
 
     await firstValueFrom(translate.use(SWITCHED_LANG));
@@ -697,8 +574,7 @@ describe('ShellComponent', () => {
     createShell();
     expect(fixture.componentInstance.breadcrumbItems()).toEqual([{ label: 'Clients list' }]);
 
-    // The login route declares no `breadcrumb`, so leaving the record for it must clear the trail
-    // rather than leave the previous screen's crumb behind.
+    // The login route declares no `breadcrumb`, so leaving the record for it must clear the trail rather than leave the previous screen's crumb behind.
     routerRoot = routeNode({}, routeNode({}));
     events.next(new NavigationEnd(1, '/login', '/login'));
     fixture.detectChanges();

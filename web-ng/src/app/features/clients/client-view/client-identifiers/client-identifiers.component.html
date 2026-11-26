@@ -1,30 +1,7 @@
-<!--
-  `Identities` tab of the individual client record (`#/viewclient/:id`): the client's identity
-  documents, read-only, in the design's four-column order (AAP 0.7.1 row `clients`, AAP 0.7.3 row
-  "W3 search and view client", AAP 0.7.4 "Client view").
-
-  This file contributes only the table, the alert region or the empty state. The parent record page
-  owns the card, the heading and the work area around it, so no panel, wrapper, stylesheet, inline
-  style or colour appears here; the table's header band, rules and type come from the global legacy
-  Bootstrap 3 layer (Rule 1 clause 6).
-
-  Four exhaustive, mutually exclusive branches, in the order a viewer meets them, so nothing of the
-  client the section was previously bound to can survive a change of client:
-  - a load in flight renders nothing at all: the design has no spinner or progress indicator, and the
-    previous client's documents must never stand under the new client's record;
-  - a failed read renders Fineract's own message, verbatim, in an alert region — for a 4xx the only
-    failure `core/http/fineract.interceptor.ts` does not notify, because it raises its single
-    notification for status `0` and `>= 500` alone — and never the empty state, which would claim the
-    client has no identity document when its documents were never read;
-  - a successful load that returned nothing renders the shared explicit empty state and no error;
-  - a load with rows renders them in the order the endpoint returned them, with no sort, filter,
-    pager, row action or add/edit/delete control, because the legacy tab offers none and this
-    migration adds no capability legacy lacks (Rule 1 clause 3; AAP 0.10.5 item 6).
--->
+<!-- `Identities` tab of the individual client record (`#/viewclient/:id`): the client's identity documents, read-only, in the design's four-column order (AAP 0.7.1 row `clients`, AAP 0.7.3 row "W3 search and view client" (AAP 0.7.4, Rule 1 clause 6, Rule 1 clause 3, AAP 0.10.5). -->
 @if (loading()) {
 } @else if (failed()) {
-  <!-- A 5xx or a transport fault leaves the message empty, so this branch paints nothing and the
-       notification the interceptor already raised stays the one report of that failure. -->
+  <!-- A 5xx or a transport fault leaves the message empty, so this branch paints nothing and the notification the interceptor already raised stays the one report of that failure. -->
   @if (errorMessage(); as message) {
     <div class="alert alert-danger" role="alert">{{ message }}</div>
   }
@@ -35,12 +12,7 @@
     <thead>
       <tr>
         <th scope="col">{{ 'label.input.documenttype' | translate }}</th>
-        <!-- `label.heading.id` is the key the legacy identifiers table heads this column with
-             ("ID" in `app/global-translations/locale-en.json`), where the column carries
-             `document.documentKey`; no locale bundle defines a document-key key, so the
-             document-key column takes the key the legacy table itself uses. The key is present in
-             31 of the 32 bundles, and the missing-translation handler keeps a gap from reaching the
-             screen as a raw dotted key. -->
+        <!-- `label.heading.id` is the key the legacy identifiers table heads this column with ("ID" in `app/global-translations/locale-en.json`), where the column carries `document.documentKey`; no locale bundle defines a. -->
         <th scope="col">{{ 'label.heading.id' | translate }}</th>
         <th scope="col">{{ 'label.heading.description' | translate }}</th>
         <th scope="col">{{ 'label.heading.status' | translate }}</th>

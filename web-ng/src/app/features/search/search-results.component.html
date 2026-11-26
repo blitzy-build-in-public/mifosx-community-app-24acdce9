@@ -1,123 +1,33 @@
-<!--
-  The global search results screen (AAP 0.7.1 Features row `search`; AAP 0.7.3 row "Shell: global
-  search"; AAP 0.8.2 route `search/:query`; AAP 0.7.4 states; AAP 0.11.1 row for this folder).
-
-  Markup. One Bootstrap 3 card, opened in the screen's own page container — `.container-fluid` >
-  `.row` > `.col-md-12` — because the shell leaves the page container to the screen: it wraps only
-  the breadcrumb in a `.container-fluid` of its own and renders the routed view bare
-  (`core/layout/shell.component.html:50-59`, "its own cards, and its own page container where it
-  needs one"), and every sibling screen opens the same three-element wrapper (`client-list:48`,
-  `client-edit:38`, `client-view:34`, `loan-view:108`, `loan-action:46`, `savings-view:63`,
-  `savings-action:32`, `not-found:25`). Without it the card paints flush to the viewport edges.
-  The body holds the failure region, the truncation notice, the results and the explicit empty
-  state, in that order.
-
-  What each result block carries. `app/views/search/glresults.html:9-65` renders the answer as a
-  list of `.blockquoteresult` blocks and nothing else, and this screen reproduces that list rather
-  than a table: per result the name as the link to the record, then legacy's `| #<accountNo>`
-  segment, then a line break, then `<Entity>: <family> | <Office|Client>: <parentName>`. The
-  account-number segment is printed by the families that carry one — `CLIENT` and `LOAN` — and never
-  by a client matched by one of its identifiers, which legacy prints without one. The parent label is
-  the family's own: a `CLIENT` result's `parentName` is the client's office, while a
-  `CLIENTIDENTIFIER` and a `LOAN` carry the owning client's name, so the first prints
-  `label.heading.office` and the other two `label.heading.client`. The blocks keep the server's
-  order, no field legacy does not render is added, and there is no trailing action link: the name is
-  the affordance, and no legacy locale bundle carries a key for a separate "view" link, so one would
-  reach the user as a humanised key rather than as legacy's wording (Rule 1 clauses 3 and 6). A
-  value the payload did not carry renders as nothing — no zero, dash, placeholder or invented word
-  (Rule 1 clause 3).
-
-  Legacy's card carries no title, so neither does this one: the shell's breadcrumb names the screen
-  and the navbar owns the search field, while a heading echoing the query would be a restatement the
-  legacy results list never painted (Rule 1 clause 3; AAP 0.10.5's register holds no entry for one).
-
-  Every visual value comes from the global classes of `web-ng/src/styles.scss`: `.panel` the white
-  square card with its shadow and no border stroke, `.panel-body` its body, `.blockquoteresult` the
-  spacing and inset the legacy results list carried
-  (`app/styles-dev/main/components/_report.scss:154`), `.alert.alert-danger` the failure banner and
-  `.text-danger` the truncation notice. This file therefore declares no stylesheet, no inline style
-  and no colour of its own (Rule 1 clause 6; AAP 0.2.2, AAP 0.2.3, AAP 0.5.3).
-
-  The 200-record notice. Legacy keeps an answer of 200 results or fewer and, for a longer one, keeps
-  its first 201 — `data.slice(0, 201)` — while showing the bundle's own
-  `label.search.query.matched.results.exceeds.max.length` above them
-  (`app/scripts/controllers/main/SearchController.js:10-18`; `app/views/search/glresults.html:5`;
-  `app/global-translations/locale-en.json:678`). The cut is the component's, applied to the raw answer
-  before projection so an unmodelled result is dropped after it exactly as legacy renders after its
-  own slice, and this template renders only the flag the cut raises. That flag follows the length
-  legacy tests before it slices, so an answer of 200 results or fewer and an empty or blank query
-  render no notice, while an answer of 201 keeps all its rows and already shows it (Rule 1
-  clause 3).
-
-  Which rows offer the link. `[hasPermission]` hides its host with `display: none`, so gating the
-  anchor around the result's name alone would erase the name for a user without that family's read
-  permission. The name is therefore rendered twice, once inside the gated anchor and once in a gated
-  plain-text span, so exactly one of the two is visible: a permitted user gets the link, and an
-  unpermitted one still sees the result while being offered no control that would open a record the
-  backend refuses (AAP 0.9.1 item 1 - action links are permission-gated, and the gate fails closed).
-  The gate is never on the block, which would take the whole result away.
-
-  No status field of any kind, no toolbar, pager, scope control, spinner, export or bulk affordance,
-  and no link to any out-of-scope module: legacy's results list renders none of them, the navbar owns
-  the search itself, and a control that navigates or opens nothing would be a broken affordance
-  (Rule 1 clause 3; AAP 0.2.4 records that the design carries no loader asset; AAP 0.9.2, AAP 0.10.5
-  items 3-9).
--->
+<!-- The global search results screen (AAP 0.7.1 Features row `search`; AAP 0.7.3 row "Shell: global search"; AAP 0.8.2 route `search/:query`; AAP 0.7.4 states; AAP 0.11.1 row for this folder) (Rule 1 clause 3, AAP 0.10.5, Rule 1 clause 6, AAP 0.2.2). -->
 <div class="container-fluid">
   <div class="row">
     <div class="col-md-12">
       <div class="panel panel-default">
         <div class="panel-body">
-          <!-- Fineract's own failure text for a 4xx, verbatim and untranslated, above whatever is
-               already rendered: a failed search leaves the screen mounted and the previous results
-               standing, while a 5xx or a transport failure is reported by the interceptor alone, so
-               no alert is painted for it (AAP 0.7.4). The region is announced because it appears
-               after the user's action. -->
+          <!-- Fineract's own failure text for a 4xx, verbatim and untranslated, above whatever is already rendered: a failed search leaves the screen mounted and the previous results standing, while a 5xx or a transport failure is (AAP 0.7.4). -->
           @if (error(); as message) {
             <div class="alert alert-danger" id="search-results-error" role="alert">{{ message }}</div>
           }
 
-          <!-- The bundle's own truncation notice, above the blocks the answer was cut to: a search
-               of more than 200 results shows its first 201 and says so
-               (`app/views/search/glresults.html:5`, whose string
-               `label.search.query.matched.results.exceeds.max.length` reads "This query shows only
-               the first 200 records."). The cut and the flag are the component's, and the flag follows
-               legacy's own test of the answer's length before the cut: an answer of 200 results or
-               fewer, and an empty or blank query, paint nothing here, while an answer of 201 already
-               raises the notice with all its rows kept (Rule 1 clause 3).
-               The colour is the product stylesheet's, Bootstrap 3's own `.text-danger`, so no value
-               is declared in this markup (Rule 1 clause 6). -->
+          <!-- The bundle's own truncation notice, above the blocks the answer was cut to: a search of more than 200 results shows its first 201 and says so (`app/views/search/glresults.html:5`, whose string (Rule 1 clause 3, Rule 1 clause 6). -->
           @if (exceedsMaxLength()) {
             <p class="text-danger" id="search-results-truncated">{{ 'label.search.query.matched.results.exceeds.max.length' | translate }}</p>
           }
 
-          <!-- Three mutually exclusive states. Before the first response nothing is painted. A
-               completed search that matched nothing renders the explicit empty state and no error; a
-               failed one never reaches it, because `isEmpty` is false whenever the attempt failed,
-               whether or not that failure carried text this screen may show (AAP 0.7.4). The wording
-               is the legacy bundle's own `label.nodatafound` - the message the legacy results list
-               printed - because no legacy locale file carries a search-specific no-results key, and
-               an invented one would surface the missing-translation handler's humanised fragment
-               instead (Rule 1 clauses 3 and 6). -->
+          <!-- Three mutually exclusive states. Before the first response nothing is painted (AAP 0.7.4). -->
           @if (isEmpty()) {
             <app-empty-state id="search-results-empty" [message]="'label.nodatafound' | translate" />
           } @else if (rows().length > 0) {
-            <!-- Legacy's results list itself: one `.blockquoteresult` block per result, carrying the
-                 name as the link, the account number where the family has one, and the entity and
-                 parent line below it. The id marks the rendered answer. -->
+            <!-- Legacy's results list itself: one `.blockquoteresult` block per result, carrying the name as the link, the account number where the family has one, and the entity and parent line below it. -->
             <div id="search-results">
-              <!-- Tracked by the result's own entity key, so a re-run of the search reuses the blocks
-                   it can and the loop never falls back to the index. -->
+              <!-- Tracked by the result's own entity key, so a re-run of the search reuses the blocks it can and the loop never falls back to the index. -->
               @for (row of rows(); track row.key) {
                 <div class="blockquoteresult">
                   <a [routerLink]="row.link" [hasPermission]="row.permission">{{ row.name }}</a>
                   <span [hasPermission]="'!' + row.permission">{{ row.name }}</span>
                   @if (row.printsAccountNo) {&nbsp;|&nbsp;#{{ row.accountNo }}}
                   <br />
-                  <!-- The family in the legacy bundles' own words ("Client", "Loan"), never the
-                       API's untranslated discriminator, and the parent named by the label its own
-                       family uses: a client's office, or the owning client of a loan or of an
-                       identifier match. -->
+                  <!-- The family in the legacy bundles' own words ("Client", "Loan"), never the API's untranslated discriminator, and the parent named by the label its own family uses: a client's office, or the owning client of a loan or of. -->
                   <strong>{{ 'label.heading.entity' | translate }}</strong>:{{ entityLabelKey[row.kind] | translate }}&nbsp;|&nbsp;<strong>{{ row.parentLabelKey | translate }}</strong>:{{ row.parentName }}
                 </div>
               }

@@ -12,45 +12,19 @@ import { DEFAULT_APP_CONFIG, type AppConfig } from './core/config/app-config.mod
 import { AppConfigService } from './core/config/app-config.service';
 import { APP_CONFIG } from './core/config/app-config.token';
 
-/**
- * Behaviour of the application's composition root (AAP 0.4.3 rows 1, 4 and 7; AAP 0.8.2 "Application
- * entry and configuration"; AAP 0.3.4 claim 9; AAP 0.11.1 row `app.config.ts`).
- *
- * `appConfig` is the only place the router, the HTTP client with its one interceptor, the translation
- * stack and the start-up sequence are declared, so what these tests assert is exactly what the
- * application cannot do without: the configuration is resolved and published on `APP_CONFIG` before
- * anything reads it, the interceptor is on the client every service injects, the translation stack is
- * installed, the location strategy is the hash one the legacy URL scheme needs, and a stored legacy
- * session is resumed through `GET /users/{id}` at start-up.
- *
- * The suite composes its injector from `appConfig.providers` itself rather than from a parallel list,
- * so a provider removed from the composition root fails here.
- */
+/** Behaviour of the composition root (AAP 0.4.3 rows 1, 4 and 7; AAP 0.8.2 "Application entry and configuration"; AAP 0.3.4 claim 9; AAP 0.11.1 row `app.config.ts`): what the application cannot do without - the. */
 
-/**
- * The configuration the stubbed `assets/config.json` serves. It differs from `DEFAULT_APP_CONFIG` in
- * the two members the start-up read is responsible for delivering, so a value read here can only have
- * come through `AppConfigService.load()` and the `APP_CONFIG` factory, never from the build-time
- * default (Rule 1 clause 9: it carries no credential and no real tenant).
- */
+/** The configuration the stubbed `assets/config.json` serves: it differs from `DEFAULT_APP_CONFIG` in the two members the start-up read delivers, so a value read here can only have come through `AppConfigService.load()` and never from the build-time default (it carries no credential and no real tenant, Rule 1 clause 9). */
 const SERVED_CONFIG: AppConfig = {
   ...DEFAULT_APP_CONFIG,
   tenantId: 'spec-tenant',
   idleMinutes: 7,
 };
 
-/**
- * The authentication key a stored session carries in these tests, assembled from parts rather than
- * written as one literal: it is a fixture, not a credential, and the project's credential gate rejects
- * a property named `authenticationKey` that is assigned a string literal (AAP 0.10.4).
- */
+/** The authentication key a stored session carries in these tests, assembled from parts because it is a fixture and not a credential: the credential gate rejects a property named `authenticationKey` assigned a string literal (AAP 0.10.4). */
 const SPEC_AUTHENTICATION_KEY: string = ['spec', 'session', 'key'].join('-');
 
-/**
- * A `Response` stand-in carrying what `AppConfigService.fetchRawConfig` reads, so the configuration
- * read runs against the same shape the browser's own response has. The cast is the one boundary where
- * the partial object becomes the `Response` the service expects (Rule 1 clause 4).
- */
+/** A `Response` stand-in carrying what `AppConfigService.fetchRawConfig` reads, so the read runs against the shape the browser's own response has; the cast is the one boundary where the partial object becomes that `Response` (Rule 1 clause 4). */
 function servedResponse(): Promise<Response> {
   const body = {
     ok: true,
@@ -62,12 +36,7 @@ function servedResponse(): Promise<Response> {
   return Promise.resolve(body as unknown as Response);
 }
 
-/**
- * Composes a fresh injector from the application's own providers, with the HTTP backend replaced by
- * the testing one so a request can be observed instead of sent.
- *
- * @param extra additional providers a case needs, applied after the application's own.
- */
+/** Composes a fresh injector from the application's own providers, with the HTTP backend replaced by the testing one so a request can be observed instead of sent; the extra providers a case needs follow the application's own. */
 function configureApplication(extra: readonly Provider[] = []): void {
   vi.stubGlobal(
     'fetch',
@@ -76,21 +45,11 @@ function configureApplication(extra: readonly Provider[] = []): void {
 
   TestBed.configureTestingModule({ providers: [...appConfig.providers, ...extra, provideHttpClientTesting()] });
 
-  // Every case starts as a visitor who has never signed in. The unit-test environment is one jsdom
-  // shared by the whole suite, so another spec file can leave the legacy session entry in
-  // `localStorage`; a start-up that found one would block on the resume read only the last case below
-  // answers, which is why the store is emptied through the service that owns its key (AAP 0.3.4
-  // claim 9).
+  // Every case starts as a visitor who has never signed in: the unit-test environment is one jsdom shared by the whole suite, so another spec file can leave the legacy session entry in `localStorage`, and a start-up that found one would block on the resume read only the last case answers. The store is emptied through the service that owns its key (AAP 0.3.4 claim 9).
   TestBed.inject(SessionService).clear();
 }
 
-/**
- * Runs the application's registered initializers in order and awaits them, which is what Angular does
- * before the router's first navigation. Each one runs inside the TestBed's injection context, the way
- * `bootstrapApplication` runs it, because the initializer resolves its services with `inject()`.
- * `TestBed` does not run the initializers on its own, so a case that needs start-up to have happened
- * calls this.
- */
+/** Runs the application's registered initializers in order and awaits them, as Angular does before the router's first navigation, each inside the TestBed's injection context the way `bootstrapApplication` runs it, because the initializer resolves its services with `inject()`. */
 async function runStartUp(): Promise<void> {
   await TestBed.inject(ApplicationInitStatus).donePromise;
 }
@@ -118,9 +77,7 @@ describe('appConfig', () => {
 
     await runStartUp();
 
-    // `HttpHandler` rather than `HttpClient`: web-ng/eslint.config.js restricts the `HttpClient` import
-    // to the seven Fineract URL-owning files, and `HttpHandler` is the handler `provideHttpClient`
-    // resolves *after* the interceptor chain, so a request sent here passes through the same chain.
+    // `HttpHandler` rather than `HttpClient`: web-ng/eslint.config.js restricts the `HttpClient` import to the seven Fineract URL-owning files, and `HttpHandler` is what `provideHttpClient` resolves *after* the interceptor chain, so this request passes through the same chain.
     const handler = TestBed.inject(HttpHandler);
     const http = TestBed.inject(HttpTestingController);
 
@@ -154,16 +111,14 @@ describe('appConfig', () => {
   it('resumes a stored legacy session through GET /users/{id} before the first navigation', async () => {
     configureApplication();
 
-    // The entry a previous visit left behind (AAP 0.3.4 claim 9: `mifosX` + `sessionData` carrying
-    // the user id, the authentication key and the permission list).
+    // The entry a previous visit left behind (AAP 0.3.4 claim 9: `mifosX` + `sessionData`, carrying the user id, the authentication key and the permission list).
     TestBed.inject(SessionService).write({
       userId: 2,
       authenticationKey: SPEC_AUTHENTICATION_KEY,
       userPermissions: ['READ_CLIENT'],
     });
 
-    // Start-up is awaited only after its request has been answered: the restore blocks on the
-    // projection read, exactly as it does in the browser.
+    // Start-up is awaited only after its request has been answered: the restore blocks on the projection read, exactly as it does in the browser.
     const startUp = runStartUp();
 
     // One macrotask lets the configuration read resolve and the restore issue its request.

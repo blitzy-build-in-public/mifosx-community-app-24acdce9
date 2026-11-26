@@ -4,32 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { DateFieldComponent } from './date-field.component';
 
-/**
- * Behavioural spec for `DateFieldComponent`, the native control that replaces the legacy jQuery
- * datepicker (AAP 0.2.3 component inventory row `DateField`; AAP 0.5.4 gaps inventory row "Date
- * picker"; AAP 0.10.5 item 1).
- *
- * Each assertion states a contract the component owns:
- * - the Bootstrap 3 form markup it renders, with no stylesheet or inline style of its own;
- * - two-way binding of `Date | null` through its `DateInputValueAccessor`, in local time;
- * - the `.has-error` rule and its exact bounds — invalid *and* (touched or dirty) — so the field
- *   stops being marked once it is valid again;
- * - `required` as accessibility output only, so the browser never blocks a submission that
- *   Fineract alone decides (Rule 1 clause 3; AAP 0.4.4 behavioural inheritance);
- * - the accessible name: `ariaLabel` names the control exactly while no visible `<label>` renders,
- *   so a visible label always supplies the name and is never overridden (WCAG label in name);
- * - the disabled state arriving from the control, never from the template;
- * - one stable id per instance, so every `<label for>` points at exactly one input.
- *
- * The element helpers narrow with `instanceof` rather than with a cast:
- * `ComponentFixture.nativeElement` and `querySelector` are loosely typed, so narrowing them is
- * what keeps the rest of each test type-checked. A helper that throws when the element is missing,
- * or is of another type, turns a broken template into a named failure where the template broke
- * instead of an `undefined` surfacing further down the test. The strict build (Rule 1 clause 4) and
- * the pinned lint set permit both `as` and `!` — sibling specs here use them and lint clean — but
- * neither is used in this file, deliberately, because either would suppress the failure the
- * narrowing reports.
- */
+/** Behavioural spec for `DateFieldComponent`, the native control that replaces the legacy jQuery datepicker (AAP 0.2.3 component inventory row `DateField`; AAP 0.5.4 gaps inventory row "Date picker"; AAP 0.10.5 item 1) (Rule 1 clause 3, AAP 0.4.4, Rule 1 clause 4). */
 
 /** The root form group, or a named failure when the template rendered none. */
 function formGroupOf(fixture: ComponentFixture<DateFieldComponent>): HTMLElement {
@@ -67,12 +42,7 @@ function dateValueOf(control: FormControl<Date | null>): Date {
   return value;
 }
 
-/**
- * An invalid, empty control of the kind a parent form owns: the field itself never adds a
- * validator (it only displays the verdict), so the spec supplies the one that makes the control
- * invalid. Errors set by hand with `setErrors` would not survive the binding, because Angular
- * revalidates the control when the `[formControl]` input is first set up.
- */
+/** An invalid, empty control of the kind a parent form owns: the field itself never adds a validator (it only displays the verdict), so the spec supplies the one that makes the control invalid. Errors set by hand with `setErrors` would not survive the binding, because Angular revalidates the control when the `[formControl]` input is first set up. */
 function invalidControl(): FormControl<Date | null> {
   return new FormControl<Date | null>(null, Validators.required);
 }
@@ -131,8 +101,7 @@ describe('DateFieldComponent', () => {
     input.value = '2026-11-05';
     input.dispatchEvent(new Event('input'));
 
-    // Read through the local calendar fields: `toISOString` converts to UTC and moves the day
-    // backwards in every timezone west of Greenwich, hiding exactly the bug the accessor prevents.
+    // Read through the local calendar fields: `toISOString` converts to UTC and moves the day backwards in every timezone west of Greenwich, hiding exactly the bug the accessor prevents.
     const picked = dateValueOf(control);
     expect(picked.getFullYear()).toBe(2026);
     expect(picked.getMonth()).toBe(10);
@@ -159,25 +128,14 @@ describe('DateFieldComponent', () => {
     fixture.detectChanges();
 
     const input = dateInput();
-    // A conforming `input[type=date]` sanitises '2026-02-30' to the empty string, so the parser can
-    // only be reached with it programmatically: assigning `input.value` would be sanitised away, so
-    // the element's own `value` property is redefined before the event is dispatched.
-    Object.defineProperty(input, 'value', {
-      configurable: true,
-      writable: true,
-      value: '2026-02-30',
-    });
+    // A conforming `input[type=date]` sanitises '2026-02-30' to the empty string, so the parser can only be reached with it programmatically: assigning `input.value` would be sanitised away, so the element's own `value` property is redefined before the event is dispatched.
+    Object.defineProperty(input, 'value', { configurable: true, writable: true, value: '2026-02-30', });
     input.dispatchEvent(new Event('input'));
 
     expect(control.value).toBeNull();
 
-    // The same path still takes a day that exists, as that local-midnight `Date`, so the assertion
-    // above cannot pass by rejecting every value the element reports.
-    Object.defineProperty(input, 'value', {
-      configurable: true,
-      writable: true,
-      value: '2026-11-05',
-    });
+    // The same path still takes a day that exists, as that local-midnight `Date`, so the assertion above cannot pass by rejecting every value the element reports.
+    Object.defineProperty(input, 'value', { configurable: true, writable: true, value: '2026-11-05', });
     input.dispatchEvent(new Event('input'));
 
     const picked = dateValueOf(control);
@@ -262,38 +220,19 @@ describe('DateFieldComponent', () => {
     expect(labelOf(fixture).getAttribute('for')).toBe(dateInput().id);
   });
 
-  /**
-   * The accessible-name rule, as the two name-bearing inputs vary: `ariaLabel` alone names the
-   * control, a visible `label` names it and suppresses the attribute (WCAG label in name, so a caller
-   * supplying both never overrides its own visible text), and neither supplied leaves the shipped
-   * legacy markup — an unnamed control with no attribute at all — exactly as it was.
-   */
+  /** The accessible-name rule, as the two name-bearing inputs vary: `ariaLabel` alone names the control, a visible `label` names it and suppresses the attribute (WCAG label in name, so a caller supplying both never overrides its own visible text), and neither supplied leaves the shipped legacy markup — an unnamed control with no attribute at all — exactly as it was. */
   const accessibleNameCases: readonly {
     readonly scenario: string;
     readonly label?: string;
     readonly ariaLabel?: string;
     readonly visibleLabel: boolean;
     readonly accessibleName: string | null;
-  }[] = [
-    {
-      scenario: 'names the input from ariaLabel while rendering no visible label',
-      ariaLabel: 'Submitted on',
-      visibleLabel: false,
-      accessibleName: 'Submitted on',
-    },
-    {
-      scenario: 'lets a visible label supply the name and renders no aria-label beside it',
-      label: 'Submitted on',
-      ariaLabel: 'Submission date',
-      visibleLabel: true,
-      accessibleName: null,
-    },
-    {
-      scenario: 'renders neither a label nor an aria-label when neither input is supplied',
-      visibleLabel: false,
-      accessibleName: null,
-    },
-  ];
+  }[] = [{
+      scenario: 'names the input from ariaLabel while rendering no visible label', ariaLabel: 'Submitted on', visibleLabel: false,
+      accessibleName: 'Submitted on', }, {
+      scenario: 'lets a visible label supply the name and renders no aria-label beside it', label: 'Submitted on',
+      ariaLabel: 'Submission date', visibleLabel: true, accessibleName: null, }, {
+      scenario: 'renders neither a label nor an aria-label when neither input is supplied', visibleLabel: false, accessibleName: null, }, ];
 
   it.each(accessibleNameCases)('$scenario', ({ label, ariaLabel, visibleLabel, accessibleName }) => {
     if (label !== undefined) {
@@ -328,8 +267,7 @@ describe('DateFieldComponent', () => {
 
   it('takes the disabled state from the control alone', () => {
     fixture.detectChanges();
-    // `disabled` is a reflected property, so both states are read through it: the template binds no
-    // disabled attribute, and the element stays enabled until the control itself disables it.
+    // `disabled` is a reflected property, so both states are read through it: the template binds no disabled attribute, and the element stays enabled until the control itself disables it.
     expect(dateInput().disabled).toBe(false);
 
     control.disable();

@@ -1,25 +1,6 @@
-/**
- * Legacy-only page-object helper for the `chosen` dropdown widget of the legacy AngularJS application.
- *
- * Legacy templates mark each dropdown with the `chosen` attribute (app/views/clients/createclient.html
- * and its siblings) and the plugin replaces the `<select>` with markup of its own. The new application
- * uses a native `<select>` instead (AAP 0.10.5 item 2), so this helper is deliberately legacy-only:
- * there is no counterpart under `pages/next/`, and only `clients.page.ts`, `loans.page.ts` and
- * `savings.page.ts` import it.
- *
- * Everything here drives the plugin the legacy page loads from app/scripts/modules/ through
- * app/scripts/loader.js (AAP 0.3.4, Chosen v1.0.0). The legacy source tree is a read-only reference
- * outside this checkout, so every selector, class and event below carries the fact it comes from and
- * must be confirmed against the running legacy app.
- */
+/** Legacy-only chosen-widget helper: legacy templates mark each dropdown with the `chosen` attribute and the plugin replaces the `<select>`, while the new app renders a native one (AAP 0.10.5 item 2), so no `pages/next/` (AAP 0.3.4). */
 import type { Locator, Page } from '@playwright/test';
-
-/**
- * One option of the `<select>` underneath the chosen widget.
- *
- * Exported so the legacy page objects can describe a dropdown without touching the plugin, and so the
- * shape is available to the `next` side if a screen ever compares labels against it.
- */
+/** One option of the `<select>` underneath the chosen widget, so a page object can describe a dropdown. */
 export interface ChosenOption {
   /** The `<option>` value, which is what the legacy form posts to Fineract. */
   value: string;
@@ -27,48 +8,16 @@ export interface ChosenOption {
   label: string;
 }
 
-/**
- * The container chosen builds beside the `<select>`.
- *
- * Chosen v1.0.0 inserts it with `form_field_jq.hide().after(this.container)`, so the widget is the
- * select's next sibling while the select itself is hidden. Confirm against the running legacy app.
- */
+/** The container chosen builds beside the `<select>`, which v1.0.0 inserts as its next sibling and hides. */
 const CHOSEN_CONTAINER = 'xpath=following-sibling::div[contains(@class,"chosen-container")]';
-
-/**
- * The anchor that renders the current selection inside the widget.
- *
- * Chosen v1.0.0 single-select markup is `<a class="chosen-single">…</a>`. Confirm against the running
- * legacy app.
- */
+/** The anchor that renders the current selection inside the widget: Chosen v1.0.0's `<a class="chosen-single">`. */
 const CHOSEN_SINGLE = 'a.chosen-single';
-
-/**
- * The label element inside that anchor.
- *
- * Chosen v1.0.0 renders `<a class="chosen-single"><span>label</span><div><b></b></div></a>`, where the
- * `<div><b></b></div>` is the caret; only the `<span>` carries the selection. Confirm against the
- * running legacy app.
- */
+/** The `<span>` inside that anchor: it alone carries the selection, the `<div><b></b></div>` beside it is the caret. */
 const CHOSEN_SINGLE_LABEL = 'a.chosen-single span';
-
-/**
- * One selectable row in the open dropdown.
- *
- * Chosen v1.0.0 renders `<ul class="chosen-results">` holding one `<li class="active-result">` per
- * selectable option (a disabled option gets `disabled-result` instead and is not selectable), each with
- * its option's text. Confirm against the running legacy app.
- */
+/** One selectable row in the open dropdown: `<li class="active-result">`; a disabled option is `disabled-result`. */
 const CHOSEN_RESULT = '.chosen-results li.active-result';
-
-/**
- * How long the widget is given to repaint its label after it is told the `<select>` changed, before
- * this helper drives the widget itself. AngularJS digests the dispatched `change` asynchronously, so
- * the label can lag the select by a tick; a miss is expected on builds that repaint only from the
- * plugin's own state, and sends the caller down the fallback path rather than failing.
- */
+/** Redraw allowance after a dispatched `change`: AngularJS digests asynchronously, so a miss drives the widget itself. */
 const WIDGET_REDRAW_TIMEOUT_MS = 2_000;
-
 /** What driving the `<select>` inside the page reported back, kept serialisable for the page boundary. */
 type SelectOutcome =
   | {
@@ -80,15 +29,7 @@ type SelectOutcome =
   | { readonly status: 'not-select'; readonly selectName: string; readonly labels: readonly string[] }
   | { readonly status: 'missing'; readonly selectName: string; readonly labels: readonly string[] }
   | { readonly status: 'ambiguous'; readonly selectName: string; readonly labels: readonly string[] };
-
-/**
- * Runs inside the legacy page, so it references nothing from module scope — Playwright serialises the
- * function and evaluates it in the document.
- *
- * Selects the `<option>` whose trimmed, case-insensitive label matches `optionText`, reporting the
- * selection to AngularJS and to the plugin, and describes what it found so the caller can verify the
- * rendered result and raise a message naming the options instead of the markup.
- */
+/** Runs inside the legacy page: selects the `<option>` whose trimmed, lower-cased label matches, tells AngularJS and the plugin, and reports what it found. */
 function selectOptionText(element: HTMLElement, optionText: string): SelectOutcome {
   if (!(element instanceof HTMLSelectElement)) {
     return { status: 'not-select', selectName: element.tagName.toLowerCase(), labels: [] };
@@ -105,13 +46,9 @@ function selectOptionText(element: HTMLElement, optionText: string): SelectOutco
   const [option] = candidates;
   option.selected = true;
   element.value = option.value;
-  // AngularJS's ng-model updates from a bubbling `change`, which is what makes the legacy form carry
-  // the new value into its payload.
+  // ng-model updates from a bubbling `change`, which is what carries the new value into the legacy form's payload.
   element.dispatchEvent(new Event('change', { bubbles: true }));
-  // Chosen repaints its own widget only when the `$` function it depends on is told the select changed.
-  // This calls the copy the legacy page has already loaded and adds no dependency of its own (Rule 1
-  // clause 7). `$` carries no typings for this project, so `window` is narrowed at this documented
-  // boundary (Rule 1 clause 4).
+  // Chosen repaints its widget only when the legacy page's own `$` is told the select changed, and that copy is already loaded (Rule 1 clause 7) (Rule 1 clause 4).
   const host = window as unknown as {
     $?: (element: Element) => { trigger?: (event: string) => void } | undefined;
   };
@@ -120,35 +57,23 @@ function selectOptionText(element: HTMLElement, optionText: string): SelectOutco
   return { status: 'selected', selectName, label: option.text.trim(), labels };
 }
 
-/**
- * Runs inside the legacy page: the label of every `<option>` in document order, or `null` when the
- * locator resolved to something other than a `<select>`.
- */
+/** Runs inside the legacy page: the label of every `<option>` in order, or `null` when the locator is not a `<select>`. */
 function readOptionLabels(element: HTMLElement): string[] | null {
   if (!(element instanceof HTMLSelectElement)) return null;
   return Array.from(element.options).map((option) => option.text.trim());
 }
 
-/**
- * Runs inside the legacy page: the label the widget displays, read from the anchor's `<span>` and never
- * from the caret beside it.
- */
+/** Runs inside the legacy page: the label the widget displays, read from the anchor's `<span>`, never the caret. */
 function readSingleLabel(element: HTMLElement): string {
-  // Chosen v1.0.0 keeps `chosen-default` on the anchor for as long as the anchor shows the plugin's
-  // placeholder rather than an option (single_set_selected_text), so that state is no selection at all.
-  // Confirm against the running legacy app.
+  // `chosen-default` stays on the anchor while it shows the plugin's placeholder, so that state is no selection at all.
   if (element.classList.contains('chosen-default')) return '';
   const label = element.querySelector('span');
   return label === null ? '' : (label.textContent ?? '').trim();
 }
 
-/**
- * Runs inside the legacy page: whether the plugin has its dropdown open.
- */
+/** Runs inside the legacy page: whether the plugin has its dropdown open. */
 function isDropOpen(element: HTMLElement): boolean {
-  // Chosen v1.0.0's results_show adds `chosen-with-drop` to the container and results_hide removes it,
-  // and it is the container class that the plugin's stylesheet reveals the dropdown from. Confirm
-  // against the running legacy app.
+  // results_show adds `chosen-with-drop` to the container and results_hide removes it; the dropdown shows from it.
   return element.classList.contains('chosen-with-drop');
 }
 
@@ -167,10 +92,8 @@ async function readWidgetLabel(select: Locator): Promise<string> {
 /** Whether the widget displays `label` on its anchor, allowing one bounded window for it to repaint. */
 async function widgetShows(select: Locator, label: string): Promise<boolean> {
   if (label === '') return (await readWidgetLabel(select)) === '';
-  // Scoped to the anchor's label element and exact, so an open dropdown listing the same text in its
-  // result rows cannot be mistaken for the widget's rendered selection.
-  const shown = select
-    .locator(CHOSEN_CONTAINER)
+  // Scoped to the anchor's label and exact, so a result row of the same text cannot be read as the rendered selection.
+  const shown = select.locator(CHOSEN_CONTAINER)
     .locator(`${CHOSEN_SINGLE_LABEL}:text-is(${JSON.stringify(label)})`);
   return shown.first().waitFor({ state: 'visible', timeout: WIDGET_REDRAW_TIMEOUT_MS }).then(
     () => true,
@@ -180,30 +103,16 @@ async function widgetShows(select: Locator, label: string): Promise<boolean> {
 
 /** Opens the widget's dropdown, whichever click the plugin's current state needs. */
 async function openChosenDrop(widget: Locator, selectName: string): Promise<void> {
-  // Chosen toggles the dropdown on every mousedown inside the container, so a single click on the
-  // anchor is the user's own way of opening it.
+  // Chosen toggles the dropdown on every mousedown in the container, so a click on the anchor opens it the user's way.
   await widget.locator(CHOSEN_SINGLE).click();
   if (await widget.evaluate(isDropOpen)) return;
-  // The click landed while the plugin already held the field active and closed the dropdown instead;
-  // a click on the container itself reopens it.
+  // The click landed while the plugin held the field active and closed the dropdown; a click on the container reopens it.
   await widget.click();
   if (await widget.evaluate(isDropOpen)) return;
   throw new Error(`The chosen dropdown on ${selectName} did not open.`);
 }
 
-/**
- * Selects the option of a legacy chosen dropdown by its visible label.
- *
- * The real `<select>` is set first and AngularJS and the plugin are told about it; the label the widget
- * renders is then verified, and when it still shows the previous label the dropdown is driven the way a
- * user drives it. Throws when the label matches no option or more than one, and when the widget cannot
- * be made to display the selection — naming the requested text and the available labels, never page
- * markup.
- *
- * @param page The legacy page, used to close the dropdown this helper may have opened.
- * @param select Locator for the legacy `<select>` the chosen widget wraps.
- * @param optionText The option's visible label, matched trimmed and case-insensitively.
- */
+/** Selects a legacy chosen dropdown option by its visible label, verifying the widget's rendered label and driving the dropdown as a user would; a failure names the options, never page markup. */
 export async function chooseOption(page: Page, select: Locator, optionText: string): Promise<void> {
   const outcome = await select.evaluate(selectOptionText, optionText);
   if (outcome.status === 'not-select') {
@@ -238,13 +147,7 @@ export async function chooseOption(page: Page, select: Locator, optionText: stri
   );
 }
 
-/**
- * The visible labels of every option the legacy chosen dropdown offers, in document order.
- *
- * @param page Kept so every helper in this module takes the same arguments; the labels come from the
- * options the widget wraps.
- * @param select Locator for the legacy `<select>` the chosen widget wraps.
- */
+/** The visible labels of every option the legacy chosen dropdown offers, in document order. */
 export async function readChosenOptions(page: Page, select: Locator): Promise<string[]> {
   const labels = await select.evaluate(readOptionLabels);
   if (labels === null) {
@@ -253,16 +156,7 @@ export async function readChosenOptions(page: Page, select: Locator): Promise<st
   return labels;
 }
 
-/**
- * The label the legacy chosen widget displays, or `''` when no option is selected.
- *
- * Reports what the widget renders rather than what the `<select>` holds, which is what {@link chooseOption}
- * verifies after each of its two phases.
- *
- * @param page Kept so every helper in this module takes the same arguments; the label is read from the
- * widget beside `select`.
- * @param select Locator for the legacy `<select>` the chosen widget wraps.
- */
+/** The label the legacy chosen widget displays, or `''` when nothing is selected: what it renders, not the `<select>`. */
 export async function readChosenSelection(page: Page, select: Locator): Promise<string> {
   return readWidgetLabel(select);
 }

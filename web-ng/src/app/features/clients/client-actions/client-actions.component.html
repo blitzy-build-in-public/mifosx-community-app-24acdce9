@@ -1,43 +1,9 @@
-<!--
-  The client lifecycle action screen (`#/client/:id/:action`): a single-purpose form for exactly one
-  of the five commands `activate`, `close`, `reject`, `withdraw` and `reactivate`, with the way back
-  to the record and nothing else (AAP 0.7.4 screens; AAP 0.8.2 route `client/:id/:action`).
-
-  Every visual value comes from the global Bootstrap 3 layer `web-ng/src/styles.scss` compiles, so
-  this file carries no style, no colour and no pixel: `.container-fluid` and `.row`/`.col-md-*` are
-  the page and its grid, `.panel`/`.panel-heading`/`.panel-title`/`.panel-body` the white square card
-  with its shadow, its 18px title and its 13px body, `.btn.btn-primary` the brand fill with its white
-  label, `.btn.btn-default` the cancel control and `.alert.alert-danger` the failure banner (Rule 1
-  clause 6; AAP 0.5.2). The fields are the shared `app-date-field` and `app-select-field`, which own
-  their `.form-group`, `.control-label`, `.form-control` and `.has-error` markup; this template adds
-  no `.form-group` of its own, because a second one would nest two groups and break the 34px control
-  metrics the design measures.
-
-  One `@if` branch per command, each with its own `<form>`: the commands post different bodies — a
-  date alone, a date with a reason, or a date on the reactivation form — so a single form would have
-  to render fields the current command does not send. No `novalidate` attribute is written:
-  `FormGroupDirective` adds it, which is exactly what the shared date and select fields rely on to
-  keep the browser from blocking a submission that Fineract alone decides.
-
-  Captions are the legacy bundle's own keys, translated here, and the reason options are the Fineract
-  template's own list in the server's order (AAP 0.7.1; AAP 0.4.4 decision 6). Nothing else is
-  interpolated: no payload, no header, no client id and no reason object reaches the page, and the one
-  untranslated string is Fineract's own failure message (Rule 1 clause 9).
-
-  Deliberately absent, because this screen reproduces the legacy form and the shell owns all chrome:
-  the breadcrumb and the datatable step wizard, its "proceed" button, the transfer, staff, savings and
-  note fields that belong to actions this migration does not deliver, every confirmation step and any
-  success message (Rule 1 clause 3; AAP 0.9.2; AAP 0.10.5).
--->
+<!-- The client lifecycle action screen (`#/client/:id/:action`): a single-purpose form for exactly one of the five commands `activate`, `close`, `reject`, `withdraw` and `reactivate`, with the way back to the record and (AAP 0.7.4, AAP 0.8.2, Rule 1 clause 6, AAP 0.5.2). -->
 <div class="container-fluid">
   <div class="row">
     <div class="col-md-12">
       <div class="panel panel-default">
-        <!--
-          The command's own title, the legacy step title (`label.anchor.<command>`). It renders as soon
-          as the route names a command — while the gate is still answering — and not at all for an
-          unknown command, which has no action to name.
-        -->
+        <!-- The command's own title, the legacy step title (`label.anchor.<command>`). -->
         @if (headingKey(); as title) {
           <div class="panel-heading">
             <h3 class="panel-title">{{ title | translate }}</h3>
@@ -45,32 +11,18 @@
         }
 
         <div class="panel-body">
-          <!--
-            Unknown `:action` segment: neither the gate nor the command ran, so nothing but this one
-            message renders — no form, no field, no button and no second alert. Both strings are keys
-            the legacy bundles carry, so the missing-translation handler never has to humanise one.
-          -->
+          <!-- Unknown `:action` segment: neither the gate nor the command ran, so nothing but this one message renders — no form, no field, no button and no second alert. -->
           @if (notFound()) {
             <div class="alert alert-danger" role="alert">
               <strong>{{ notFoundHeadingKey | translate }}</strong>{{ ' ' }}<span>{{ notFoundMessageKey | translate }}</span>
             </div>
           } @else {
-            <!--
-              The one failure region, above the form: Fineract's own message for a 4xx, verbatim and
-              with no pipe because it is the server's own text. A failed gate, a failed reason-list
-              read and a rejected command all report a 4xx here, and the form below keeps every
-              entered value (AAP 0.4.4 decision 6; workflow W7). A transport failure and a 5xx leave
-              this region empty, because `core/http/fineract.interceptor.ts` has already raised the
-              one notification that carries them (AAP 0.7.4).
-            -->
+            <!-- The one failure region, above the form: Fineract's own message for a 4xx, verbatim and with no pipe because it is the server's own text (AAP 0.4.4, AAP 0.7.4). -->
             @if (error(); as message) {
               <div class="alert alert-danger" role="alert">{{ message }}</div>
             }
 
-            <!--
-              The form renders only once the gate — and, for close, reject and withdraw, the reason
-              list — has resolved, so no field is ever enabled against a check that did not answer.
-            -->
+            <!-- The form renders only once the gate — and, for close, reject and withdraw, the reason list — has resolved, so no field is ever enabled against a check that did not answer. -->
             @if (ready()) {
               @if (command(); as activeCommand) {
                 @if (activeCommand === 'activate') {
@@ -89,16 +41,7 @@
                     <div class="row">
                       <div class="col-md-offset-5 col-md-7">
                         <a id="cancel" class="btn btn-default" [routerLink]="['/viewclient', clientId()]">{{ cancelKey | translate }}</a>
-                        <!--
-                          The submit is gated on the command's own code, reproducing the
-                          `has-permission` attribute legacy binds to its own submit button, which
-                          names `taskPermissionName` there (`app/views/clients/clientactions.html`).
-                          The code is the one the route declared for this URL and the one the record
-                          gated the entry that opened it on, all read from
-                          `CLIENT_ACTION_PERMISSIONS` (AAP 0.1.1). Only the button carries the gate:
-                          legacy renders the fields and the cancel link for every user who reaches
-                          the form, and this screen reproduces that (Rule 1 clause 3).
-                        -->
+                        <!-- The submit is gated on the command's own code, reproducing the `has-permission` attribute legacy binds to its own submit button, which names `taskPermissionName` there (`app/views/clients/clientactions.html`) (AAP 0.1.1, Rule 1 clause 3). -->
                         <button id="save" type="submit" class="btn btn-primary" [disabled]="guard.busy()" [hasPermission]="actionPermission()">
                           {{ submitKey() | translate }}
                         </button>
@@ -213,12 +156,7 @@
                 }
 
                 @if (activeCommand === 'reactivate') {
-                  <!--
-                    `POST /clients/{id}?command=reactivate` carries a reactivation date, so this screen
-                    renders the field the legacy form renders under `label.input.reactivationdate`
-                    instead of a confirm-only step: a screen without it would post a body the server
-                    refuses, and the legacy screen offers no such step either (Rule 1 clause 3).
-                  -->
+                  <!-- `POST /clients/{id}?command=reactivate` carries a reactivation date, so this screen renders the field the legacy form renders under `label.input.reactivationdate` instead of a confirm-only step: a screen without it (Rule 1 clause 3). -->
                   <form [formGroup]="reactivateForm" (ngSubmit)="submit()">
                     <div class="row">
                       <div class="col-md-6">

@@ -1,51 +1,4 @@
-<!--
-  The individual-loan repayment form — workflow W6 of the Agent Action Plan, mounted at
-  `#/loanaccount/:id/repayment` by `LoanActionComponent` (AAP 0.7.3 row "W6 repayment", AAP 0.7.4
-  "the action screens … are single-purpose forms rendered in the same card, each with a primary
-  submit and a cancel that returns to the record"). The card below is the screen's own card:
-  `LoanActionComponent` renders this component directly in its `.col-md-12` grid column for this
-  mode, so the one `.panel` here is the one card the action screen shows and no card is nested
-  inside another (AAP 0.7.4).
-
-  Every visual value comes from the global Bootstrap 3 layer `web-ng/src/styles.scss` compiles, so
-  this file carries no style, no colour and no pixel of its own: `.panel`/`.panel-heading`/
-  `.panel-body`/`.panel-footer` are the card, `.form-horizontal`/`.form-group`/
-  `.control-label`/`.col-md-*` the form layout, `.form-control` the 34px control, `.has-error` and
-  `.help-block` Bootstrap's invalid-field treatment, `.alert.alert-danger` the failure banner and
-  `.btn.btn-primary`/`.btn.btn-default` the two footer controls (Rule 1 clause 6; AAP 0.5.2,
-  AAP 0.5.4). `.panel-default` is deliberately not applied, as
-  `features/clients/client-view/profile-card` records for the whole family: `styles.scss` clears
-  Bootstrap's panel border and keeps the heading band white, so that class would only re-introduce
-  a colour the design does not show. The two shared fields bring their own Bootstrap markup:
-  `app-date-field` renders the native `input[type=date]` that replaces the legacy jQuery datepicker
-  and `app-select-field` the native `<select>` that replaces `chosen` (AAP 0.10.5 items 1 and 2),
-  which is why neither is wrapped in a `.form-group` here — each already renders one.
-
-  **What is rendered, and what is deliberately not.** The four fields are the legacy repayment
-  form's own and nothing besides: transaction date, amount, payment type and an optional note
-  (`app/views/loans/loanaccountactions.html`, the repayment action). There is no confirmation step,
-  no adjustment, no transaction reference, no added explanatory copy and no disabled-by-default
-  amount, and the amount input carries no `min`, no `max` and no `pattern`: Fineract alone decides
-  whether a figure is acceptable, and its message is what the user reads (Rule 1 clause 3;
-  AAP 0.4.4 decision 6). The amount is not written into the markup either — the component seeds the
-  control from the repayment transaction template's own `amount`, so there is one writer of that value.
-
-  **Captions.** Every string is a key from the shipped legacy bundles, verified against
-  `locale-en.json` of the reference clone, and none is written out here. The card title is
-  `label.heading.loanrepayments` because that is the key the legacy repayment screen heads itself
-  with ("Loan Repayments"); `label.heading.repayment` exists but reads "Repayment Amount", which is a
-  field label rather than this screen's title. The payment-type select renders the template's own
-  option names and no prompt row, which is what legacy's `ng-options` select offers: it opens on the
-  first option the component preselects, exactly as legacy preselects it. The footer's primary control
-  is `label.button.save` — legacy's own submit caption ("Submit" in en). No field prints an id, a body
-  or session material (Rule 1 clause 9).
-
-  **Assistive technology.** The invalid amount field is announced through `aria-invalid` and a
-  `help-block` it is pointed at by `aria-describedby`, and it declares `aria-required` rather than the
-  native `required` attribute, so the browser never blocks a submission Fineract must see (the same
-  rule the two shared fields follow). The `*` marker is the legacy required marker the sibling forms
-  render.
--->
+<!-- The individual-loan repayment form — workflow W6 — mounted at `#/loanaccount/:id/repayment` by `LoanActionComponent`, whose `.col-md-12` grid column this component is rendered in, so the one `.panel` here is the one (AAP 0.7.3, AAP 0.7.4, Rule 1 clause 6, AAP 0.5.2). -->
 @let amount = form.controls.transactionAmount;
 @let amountInvalid = amount.invalid && (amount.touched || amount.dirty);
 
@@ -55,42 +8,20 @@
   </div>
 
   @if (notFound()) {
-    <!--
-      A 404 replaces the form rather than joining the error region: the loan the screen was opened on
-      does not exist or is not visible to this user, so there is nothing to repay and no field worth
-      keeping. The wording is the not-found screen's own body key, reused verbatim so the application
-      has one not-found sentence and not two (AAP 0.7.4).
-    -->
+    <!-- A 404 replaces the form rather than joining the error region: the loan the screen was opened on does not exist or is not visible to this user, so there is nothing to repay and no field worth keeping. The wording is the not-found screen's own body key, reused verbatim so the application has one not-found sentence and not two (AAP 0.7.4). -->
     <div class="panel-body">
       <div class="text-center text-muted">{{ 'error.msg.resource.not.found' | translate }}</div>
     </div>
   } @else {
     <div class="panel-body">
-      <!--
-        Fineract's own failure text, verbatim and unmoved by any prefix or capitalisation: a rejected
-        repayment posts back the server's `defaultUserMessage` unchanged, and the form beside it keeps
-        every entered value (AAP 0.7.4; AAP 0.14.1 "errors are values"). `role="alert"` announces it
-        without a focus change. This is the screen's only error region — the interceptor already raised
-        a notification for a 5xx or a network failure, so a failure produces one message and not two.
-      -->
+      <!-- Fineract's own failure text, verbatim and unmoved by any prefix or capitalisation: a rejected repayment posts back the server's `defaultUserMessage` unchanged, and the form beside it keeps every entered value (AAP 0.7.4; AAP 0.14.1 "errors are values"). `role="alert"` announces it without a focus change, and this is the screen's only error region — the interceptor already raised a notification for a 5xx or a network failure, so a failure produces one message and not two. -->
       @if (error(); as apiError) {
         <div class="alert alert-danger" role="alert">{{ apiError.message }}</div>
       }
 
       <form class="form-horizontal" id="loanRepaymentForm" [formGroup]="form" (ngSubmit)="submit()" novalidate>
-        <!--
-          The form is rendered at once, not withheld while the seed reads are in flight: legacy shows
-          the same empty controls and fills them as its template answers, so gating them would be a
-          change from the screen being replaced (Rule 1 clause 3). The controls are empty until this
-          loan's own template answers: the component empties them before every read, so a figure typed
-          or seeded for the loan the URL has left is gone by the time the new loan's seeds arrive.
-        -->
-        <!--
-          The date field renders its own `.form-group`, `.control-label` and `input[type=date]`, and
-          `inputId` is the id that input and its label share, so the harness addresses `#transactionDate`
-          on both applications. `[required]` marks the label for assistive technology; it adds no
-          validator, because the validator set is the component's (Rule 1 clause 3).
-        -->
+        <!-- The form is rendered at once, not withheld while the seed reads are in flight: legacy shows the same empty controls and fills them as its template answers, so gating them would be a change from the screen being replaced (Rule 1 clause 3). The controls are empty until this loan's own template answers, because the component empties them before every read, so a figure typed or seeded for the loan the URL has left is gone by the time the new loan's seeds arrive. -->
+        <!-- The date field renders its own `.form-group`, `.control-label` and `input[type=date]`, and `inputId` is the id that input and its label share, so the harness addresses `#transactionDate` on both applications; `[required]` marks the label for assistive technology and adds no validator, because the validator set is the component's (Rule 1 clause 3). -->
         <app-date-field
           inputId="transactionDate"
           [control]="form.controls.transactionDate"
@@ -98,12 +29,7 @@
           [required]="true"
         />
 
-        <!--
-          The amount the repayment books, seeded by the component from the repayment transaction
-          template's own `amount` and left editable exactly as legacy leaves it. `step="0.01"` is the
-          browser's own increment for a money figure; `novalidate` on the form keeps it from ever
-          blocking a submit.
-        -->
+        <!-- The amount the repayment books, seeded by the component from the repayment transaction template's own `amount` and left editable exactly as legacy leaves it; `step="0.01"` is the browser's own increment for a money figure, and `novalidate` on the form keeps it from ever blocking a submit. -->
         <div class="form-group" [class.has-error]="amountInvalid">
           <label class="col-md-3 control-label" for="transactionAmount">
             {{ 'label.input.transactionamount' | translate }}<span class="required">*</span>
@@ -125,16 +51,7 @@
           </div>
         </div>
 
-        <!--
-          The payment types are the transactions template's own list, in the server's order, with no
-          sorting, filtering, relabelling or synthesised option — the component hands them over as
-          received and this template adds nothing to them, opening the select on the first option it
-          preselects (Rule 1 clauses 2 and 3). No `placeholder` and no `required` is bound here:
-          legacy renders a plain `ng-options` select with no empty option and no required marker, so
-          a blank row or an app-side "required field" message would be an affordance and a rule legacy
-          does not have — one that would also refuse a repayment Fineract accepts without a payment
-          type. The `*` marker stays on the date and the amount, the two fields legacy does require.
-        -->
+        <!-- The payment types are the transactions template's own list, in the server's order, with no sorting, filtering, relabelling or synthesised option — the component hands them over as received and this template adds. -->
         <app-select-field
           inputId="paymentTypeId"
           [control]="form.controls.paymentTypeId"
@@ -142,13 +59,7 @@
           [label]="'label.input.paymenttype' | translate"
         />
 
-        <!--
-          Optional: the component sends `note` only when its trimmed value carries text, so an
-          untouched field adds no member the legacy body lacks (Rule 1 clause 2). `rows="2"` is the
-          legacy textarea's own height. The label carries no `required` marker, which is how the
-          legacy form tells an optional field from a required one — it has no optional-field class,
-          and no `not-required` class exists in the legacy tree to reintroduce one.
-        -->
+        <!-- Optional: the component sends `note` only when its trimmed value carries text, so an untouched field adds no member the legacy body lacks (Rule 1 clause 2); `rows="2"` is the legacy textarea's own height, and the label carries no `required` marker, which is how the legacy form tells an optional field from a required one. -->
         <div class="form-group">
           <label class="col-md-3 control-label" for="note">{{ 'label.input.note' | translate }}</label>
           <div class="col-md-4">
@@ -159,12 +70,7 @@
     </div>
 
     <div class="panel-footer">
-      <!--
-        Cancel posts nothing and returns to the record through the router, never `window.location`
-        (Rule 1 clause 5). The primary control is associated with the form above through its `form`
-        attribute, which is what lets it stay a real `type="submit"` inside the card's own footer
-        instead of a click handler imitating one.
-      -->
+      <!-- Cancel posts nothing and returns to the record through the router, never `window.location` (Rule 1 clause 5); the primary control is associated with the form above through its `form` attribute, which is what lets it stay a real `type="submit"` inside the card's own footer instead of a click handler imitating one. -->
       <a class="btn btn-default" [routerLink]="['/viewloanaccount', loanId()]">{{ 'label.button.cancel' | translate }}</a>
       <button type="submit" class="btn btn-primary" form="loanRepaymentForm" [disabled]="guard.busy()">
         {{ 'label.button.save' | translate }}

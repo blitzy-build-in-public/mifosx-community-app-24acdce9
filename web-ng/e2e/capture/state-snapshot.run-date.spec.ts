@@ -1,51 +1,17 @@
-/**
- * The harness's own tests for the one read `e2e/capture/state-snapshot.ts` makes outside `readJson`:
- * the tenant business date that becomes the run date (Rule 1 clause 2; AAP 0.9.4 row 9).
- *
- * Why this file exists. `captureState()` resolves its run date by calling the seed module's
- * `readBusinessDate()`, which sends the session headers with its request. That call was the one read in
- * the module with no wrapping of its own, so a transport-level failure escaped as Playwright's own
- * error — whose message is the API call log, `Authorization: Basic <key>` and
- * `Fineract-Platform-TenantId` included — into whatever logged it: a failing spec's output, the parity
- * report writer or CI. That is exactly the Rule 1 clause 9 breach this module's contract exists to
- * prevent, and nothing in `npm test` reaches the module, so it survived the harness suite. The spec
- * below pins the wrapping for both ways the read can fail, and pins the absence of header text, session
- * key and Playwright failure text in what is thrown.
- *
- * How it runs without a backend. A loopback stub answers `POST /authentication` and then fails the
- * business-date read the way the defect was reproduced: by destroying the socket (no HTTP response at
- * all, the case that leaked) or with `HTTP 500`. The module reads `FINERACT_URL` at import, so each test
- * stubs the environment, resets the module registry and imports a fresh copy — which is also what gives
- * every test an empty run-date cache, so the read really is attempted.
- *
- * These are the harness's tests, not the Playwright workflow specs: they run under the
- * `web-ng-harness` vitest project (`e2e/vitest.config.ts`, `npm run test:harness`) in a plain Node
- * environment and need no browser, no Fineract and no legacy host.
- */
+/** The harness's own tests for the one read `e2e/capture/state-snapshot.ts` makes outside `readJson`: the tenant business date that becomes the run date (Rule 1 clause 2; AAP 0.9.4 row 9) (Rule 1 clause 9). */
 import { createServer } from 'node:http';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
-/**
- * The stub's user name and login value. `fixtures.ts` reads the pair from `E2E_USER` and
- * `E2E_PASSWORD`, and the stub accepts any pair, so these name the stub's own inputs and are not a
- * credential (AAP 0.10.4's credential gate).
- */
+/** The stub's user name and login value: `fixtures.ts` reads the pair from `E2E_USER` and `E2E_PASSWORD`, the stub accepts any pair, so these name the stub's own inputs and are not a credential (AAP 0.10.4's credential gate). */
 const STUB_USER = 'stub-user';
 const STUB_LOGIN = 'stub-login';
-
-/**
- * The session key the stub answers with, assembled from parts so no scanner reads the result as a real
- * credential (AAP 0.10.4). The assertions below require the thrown message never to carry it.
- */
+/** The session key the stub answers with, assembled from parts so no scanner reads the result as a real credential (AAP 0.10.4); the assertions below require the thrown message never to carry it. */
 const STUB_SESSION_KEY = ['RkFLRS1TRVNT', 'SU9OLUtFWS1GT1It', 'UkVQUk8='].join('');
-
 /** The tenant this run uses: the default, so the tenant header the module sends is predictable. */
 const STUB_TENANT = 'default';
-
 /** How the stub fails the business-date read — the two failure modes the finding and its expectation name. */
 type FailureMode = 'no-response' | 'refused';
-
 /** One row of the table below: how the stub fails, the status that must surface, and the label. */
 interface FailureCase {
   /** Shape of the stub's failure. */
@@ -68,19 +34,12 @@ const CASES: FailureCase[] = [
     label: 'the business-date read is answered with HTTP 500',
   },
 ];
-
 /** The stub backend every test talks to, and the base address `FINERACT_URL` is pointed at. */
 let stub: Server;
 let stubUrl: string;
-
 /** The failure the next business-date read meets; armed by each test before it imports the module. */
 let failureMode: FailureMode = 'no-response';
-
-/**
- * Answers the credential exchange, then fails the business-date read the way {@link failureMode} names.
- * Any other call is a request this spec does not expect, so it is refused with `404` rather than
- * mistaken for one of the two the module makes.
- */
+/** Answers the credential exchange, then fails the business-date read the way {@link failureMode} names; any other call is a request this spec does not expect, so it is refused with `404` rather than mistaken for one of the two the module makes. */
 function handleStubRequest(request: IncomingMessage, response: ServerResponse): void {
   const url = request.url ?? '';
   if (request.method === 'POST' && url.endsWith('/authentication')) {
@@ -106,16 +65,7 @@ function handleStubRequest(request: IncomingMessage, response: ServerResponse): 
   response.writeHead(404, { 'Content-Type': 'application/json' });
   response.end(JSON.stringify({ developerMessage: 'the stub holds no such resource' }));
 }
-
-/**
- * Imports a fresh copy of the capture module against the stub, with the failure mode armed.
- *
- * The module's dependency chain reads `FINERACT_URL`, the credentials and the tenant at import, so the
- * environment is stubbed and the registry reset first.
- *
- * @param mode How the stub will fail the business-date read.
- * @returns The module namespace, whose `StateSnapshotError` is the class the module's own throws use.
- */
+/** Imports a fresh copy of the capture module against the stub with the failure mode armed — the module's dependency chain reads `FINERACT_URL`, the credentials and the tenant at import, so the environment is stubbed and the registry reset first. @returns The module namespace, whose `StateSnapshotError` is the class the module's own throws use. */
 async function importCaptureModuleAgainstStub(
   mode: FailureMode,
 ): Promise<typeof import('./state-snapshot')> {

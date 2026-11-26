@@ -5,56 +5,16 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { PermissionsService } from '../core/auth/permissions.service';
 import { HasPermissionDirective } from './has-permission.directive';
 
-/**
- * Behavioural spec for `HasPermissionDirective`, the template-side permission gate the app shell's
- * navigation and action buttons hang off (AAP 0.7.1 row "`hasPermission` directive"; AAP 0.9.1
- * item 1; AAP 0.1.1 fail-closed requirement; AAP 0.3.4 claim 12 legacy semantics).
- *
- * Each test states one contract the directive owns:
- * - a gated element is hidden by inline `display` and stays in the document, never removed;
- * - a permission held before the first render shows it immediately, with no flash of a hidden
- *   control that has to be re-enabled later;
- * - `ALL_FUNCTIONS` shows any non-negated code;
- * - a leading `!` inverts the question, in both directions;
- * - an empty, whitespace-only or bare-`!` code fails closed, leaving the element hidden, and stays
- *   hidden even while `ALL_FUNCTIONS` grants every code — the directive's own blank-code
- *   precondition, not the service's answer, is what keeps a nameless gate shut;
- * - a permission granted after the first render reveals the element, which is the only proof that
- *   the directive tracks the permissions signal rather than reading it once;
- * - with no session present the element stays hidden for a requested code and for a negated one
- *   alike, because the service it asks fails closed, and the negated element is revealed only once
- *   a session exists and the signed-in user genuinely lacks the code.
- *
- * The permission algebra is not this directive's, so the suite supplies it at the real token. The
- * stub below reproduces the two states `core/auth/permissions.service.ts` answers from: while no
- * session is present it answers `false` to every question, a negated one included; once a session is
- * present it answers from the granted list, with `ALL_FUNCTIONS` granting every code and a leading
- * `!` inverting the question. The service's `ALL_FUNCTIONS_READ` wildcard is outside what these
- * cases ask about, so the stub does not model it. The stub is typed against the real class — the
- * `can`/`has` pair the directive calls — so the two cannot drift. The real service is never
- * instantiated here: it reads the session, which a unit test has no business assembling.
- *
- * The host component holds the bound code in a signal because the application runs zoneless
- * (AAP 0.4.1), where a plain field would not mark the host view for refresh and a rebound code could
- * never reach the directive.
- */
+/** Behavioural spec for `HasPermissionDirective`, the template-side permission gate the app shell's navigation and action buttons hang off (AAP 0.7.1 row "`hasPermission` directive"; AAP 0.9.1 item 1; AAP 0.1.1 fail-closed (AAP 0.3.4, AAP 0.4.1). */
 
 /** The permission Fineract returns to a user who may do everything; spelled out, not imported. */
 const ALL_FUNCTIONS = 'ALL_FUNCTIONS';
 
-/**
- * The permission answers `PermissionsService` gives in the state a test puts it in — none while no
- * session is present, and the legacy answers for the list, `!` and `ALL_FUNCTIONS` once one is —
- * replacing the real service only for this suite.
- */
+/** The permission answers `PermissionsService` gives in the state a test puts it in — none while no session is present, and the legacy answers for the list, `!` and `ALL_FUNCTIONS` once one is — replacing the real service. */
 class PermissionsStub implements Pick<PermissionsService, 'can' | 'has'> {
   private readonly granted = signal<readonly string[]>([]);
 
-  /**
-   * True once a login has supplied a list, false before that and again after `clear()`, exactly as
-   * the real service's own gate holds it: a session that never arrived is not a user who holds
-   * nothing.
-   */
+  /** True once a login has supplied a list, false before that and again after `clear()`, exactly as the real service's own gate holds it: a session that never arrived is not a user who holds nothing. */
   private readonly sessionPresent = signal(false);
 
   /** Plain membership; `ALL_FUNCTIONS` grants every code, as it does in legacy. */
@@ -107,11 +67,7 @@ class PermissionHostComponent {
   readonly key = signal('CLIENT_VIEW');
 }
 
-/**
- * The rendered button with the given id, or a named failure when the host template rendered none.
- * Narrowing with `instanceof` keeps the loosely typed `ComponentFixture.nativeElement` out of the
- * assertions and confines the boundary to this one helper.
- */
+/** The rendered button with the given id, or a named failure when the host template rendered none. */
 function buttonWithId(fixture: ComponentFixture<PermissionHostComponent>, id: string): HTMLElement {
   const element: unknown = fixture.nativeElement.querySelector(`#${id}`);
   if (!(element instanceof HTMLElement)) {
@@ -125,9 +81,7 @@ describe('HasPermissionDirective', () => {
   let fixture: ComponentFixture<PermissionHostComponent>;
 
   beforeEach(() => {
-    // Reset first so each test starts on a fresh root injector: a permission granted by one test
-    // must never reach the next, and a second `configureTestingModule` on an instantiated module
-    // throws.
+    // Reset first so each test starts on a fresh root injector: a permission granted by one test must never reach the next, and a second `configureTestingModule` on an instantiated module throws.
     TestBed.resetTestingModule();
     stub = new PermissionsStub();
     TestBed.configureTestingModule({
@@ -138,8 +92,7 @@ describe('HasPermissionDirective', () => {
   });
 
   it('hides the gated element without removing it while no permission is held', () => {
-    // Hidden by the constructor, before the code is bound or any verdict exists: a gated control is
-    // never painted in the window where its permission is still unknown.
+    // Hidden by the constructor, before the code is bound or any verdict exists: a gated control is never painted in the window where its permission is still unknown.
     const gated = buttonWithId(fixture, 'gated');
     expect(gated.style.display).toBe('none');
 
@@ -204,9 +157,7 @@ describe('HasPermissionDirective', () => {
   });
 
   it('keeps a blank code hidden even while ALL_FUNCTIONS grants every code', () => {
-    // `ALL_FUNCTIONS` answers true for any code the service is asked about, so the directive's own
-    // blank-code precondition is what keeps a nameless gate shut here: the element must stay hidden
-    // rather than inherit a blanket grant.
+    // `ALL_FUNCTIONS` answers true for any code the service is asked about, so the directive's own blank-code precondition is what keeps a nameless gate shut here: the element must stay hidden rather than inherit a blanket.
     stub.grant([ALL_FUNCTIONS]);
     fixture.detectChanges();
 
@@ -231,10 +182,7 @@ describe('HasPermissionDirective', () => {
 
     expect(gated.style.display).toBe('');
 
-    // A second grant holding something else entirely: the element closes again, so the verdict
-    // follows the code this host bound rather than the arrival of any permission list, and a
-    // directive that revealed on any change would fail here. No other case withdraws a permission
-    // this way — the negated case drops the list to empty, and the last one ends in a logout.
+    // A second grant holding something else entirely: the element closes again, so the verdict follows the code this host bound rather than the arrival of any permission list, and a directive that revealed on any change would.
     stub.grant(['UPDATE_CLIENT']);
     fixture.detectChanges();
 
@@ -242,9 +190,7 @@ describe('HasPermissionDirective', () => {
   });
 
   it('hides both elements while no session is present and reveals only the negated one once one is', () => {
-    // No session has ever been granted, and the service's answer here is the fail-closed one: every
-    // question is false, a negated code included, so neither element may be revealed. The stub
-    // reproduces that answer rather than deriving the negated question from the empty list.
+    // No session has ever been granted, and the service's answer here is the fail-closed one: every question is false, a negated code included, so neither element may be revealed.
     fixture.detectChanges();
 
     const gated = buttonWithId(fixture, 'gated');
@@ -254,16 +200,14 @@ describe('HasPermissionDirective', () => {
     expect(negated.style.display).toBe('none');
     expect(negated.isConnected).toBe(true);
 
-    // A session with an empty list is a different state: the signed-in user genuinely lacks
-    // READ_CLIENT, so the negated gate opens while the plain one stays shut.
+    // A session with an empty list is a different state: the signed-in user genuinely lacks READ_CLIENT, so the negated gate opens while the plain one stays shut.
     stub.grant([]);
     fixture.detectChanges();
 
     expect(negated.style.display).toBe('');
     expect(gated.style.display).toBe('none');
 
-    // A logout or a 401 withdraws the session again, and the gate closes on both shapes: the
-    // signed-out answer is not merely the one a stub starts in.
+    // A logout or a 401 withdraws the session again, and the gate closes on both shapes: the signed-out answer is not merely the one a stub starts in.
     stub.clear();
     fixture.detectChanges();
 

@@ -5,26 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SelectFieldComponent, type SelectOption, type SelectValue } from './select-field.component';
 
-/**
- * Options in the shape a Fineract `template` endpoint returns them, with deliberately out-of-order
- * ids: the spec proves the received order survives rendering and that the caller receives the
- * option's id rather than its position in the list.
- */
-const OFFICES: readonly SelectOption[] = [
-  { id: 3, name: 'Head Office' },
-  { id: 1, name: 'Branch One' },
-  { id: 2, name: 'Branch Two' },
-];
+/** Options in the shape a Fineract `template` endpoint returns them, with deliberately out-of-order ids: the spec proves the received order survives rendering and that the caller receives the option's id rather than its position in the list. */
+const OFFICES: readonly SelectOption[] = [{ id: 3, name: 'Head Office' }, { id: 1, name: 'Branch One' }, { id: 2, name: 'Branch Two' }, ];
 
-/**
- * Two options a feature service can hand in with one id, because `shared/` cannot enforce uniqueness
- * on a caller's `number | string` id: the rendered rows must stay one per entry, in order, and each
- * option must still write its own id to the control.
- */
-const DUPLICATE_ID_OPTIONS: readonly SelectOption[] = [
-  { id: 7, name: 'Branch Seven' },
-  { id: 7, name: 'Branch Seven (archived)' },
-];
+/** Two options a feature service can hand in with one id, because `shared/` cannot enforce uniqueness on a caller's `number | string` id: the rendered rows must stay one per entry, in order, and each option must still write its own id to the control. */
+const DUPLICATE_ID_OPTIONS: readonly SelectOption[] = [{ id: 7, name: 'Branch Seven' }, { id: 7, name: 'Branch Seven (archived)' }, ];
 
 /** The inputs a test overrides; every other input keeps the component's own default. */
 interface FieldInputs {
@@ -35,10 +20,7 @@ interface FieldInputs {
   readonly required?: boolean;
 }
 
-/**
- * Reads the component's single `<select>`. The cast is the test-DOM boundary: `ComponentFixture`
- * exposes `nativeElement` untyped, and everything reached below it is narrowed by its own check.
- */
+/** Reads the component's single `<select>`. The cast is the test-DOM boundary: `ComponentFixture` exposes `nativeElement` untyped, and everything reached below it is narrowed by its own check. */
 function renderedSelect(fixture: ComponentFixture<SelectFieldComponent>): HTMLSelectElement {
   const select = (fixture.nativeElement as HTMLElement).querySelector('select');
 
@@ -76,12 +58,7 @@ function promptOption(select: HTMLSelectElement): HTMLOptionElement {
   return prompt;
 }
 
-/**
- * Chooses the option carrying `name` the way a user does: by position plus the `change` event
- * `SelectControlValueAccessor` listens to. The option's DOM `value` string is deliberately never
- * written or asserted on — `[ngValue]` gives each option an index-based value, so it says nothing
- * about the id the caller's control receives.
- */
+/** Chooses the option carrying `name` the way a user does: by position plus the `change` event `SelectControlValueAccessor` listens to. The option's DOM `value` string is deliberately never written or asserted on — `[ngValue]` gives each option an index-based value, so it says nothing about the id the caller's control receives. */
 function chooseOption(select: HTMLSelectElement, name: string): void {
   const index = optionTexts(select).indexOf(name);
 
@@ -100,10 +77,7 @@ function selectedText(select: HTMLSelectElement): string | undefined {
 
 describe('SelectFieldComponent', () => {
   beforeEach(async () => {
-    await TestBed.configureTestingModule({
-      imports: [SelectFieldComponent],
-      providers: [provideZonelessChangeDetection()],
-    }).compileComponents();
+    await TestBed.configureTestingModule({ imports: [SelectFieldComponent], providers: [provideZonelessChangeDetection()], }).compileComponents();
   });
 
   afterEach(() => {
@@ -112,10 +86,7 @@ describe('SelectFieldComponent', () => {
   });
 
   /** Renders the field with the inputs every caller supplies, then applies the overrides. */
-  function createField(
-    control: FormControl<SelectValue | null>,
-    inputs: FieldInputs = {},
-  ): ComponentFixture<SelectFieldComponent> {
+  function createField(control: FormControl<SelectValue | null>, inputs: FieldInputs = {}, ): ComponentFixture<SelectFieldComponent> {
     const fixture = TestBed.createComponent(SelectFieldComponent);
 
     fixture.componentRef.setInput('options', inputs.options ?? OFFICES);
@@ -140,13 +111,8 @@ describe('SelectFieldComponent', () => {
     return fixture;
   }
 
-  /**
-   * Collects every `valueChange` emission, so a case can assert both the selection the field reports
-   * and that a path which publishes nothing really stayed silent.
-   */
-  function recordValueChanges(
-    fixture: ComponentFixture<SelectFieldComponent>,
-  ): (SelectValue | null)[] {
+  /** Collects every `valueChange` emission, so a case can assert both the selection the field reports and that a path which publishes nothing really stayed silent. */
+  function recordValueChanges(fixture: ComponentFixture<SelectFieldComponent>, ): (SelectValue | null)[] {
     const emitted: (SelectValue | null)[] = [];
 
     fixture.componentInstance.valueChange.subscribe((value) => emitted.push(value));
@@ -162,19 +128,14 @@ describe('SelectFieldComponent', () => {
     expect(select.options).toHaveLength(OFFICES.length);
     expect(optionTexts(select)).toEqual(['Head Office', 'Branch One', 'Branch Two']);
 
-    // The Bootstrap 3 markup is the control's whole look, so it is part of what renders here:
-    // `.form-control` is what gives the native select its 34px height and #E0E0E0 border (AAP 0.5.2
-    // "`SelectFieldComponent` wrapping native `<select>` with `.form-control`", AAP 0.5.3 control
-    // height, Rule 1 clause 6), and `.form-group` is the element the `.has-error` state lands on.
+    // The Bootstrap 3 markup is the control's whole look, so it is part of what renders here: `.form-control` is what gives the native select its 34px height and #E0E0E0 border (AAP 0.5.2, AAP 0.5.3 control height, Rule 1 clause 6), and `.form-group` is the element the `.has-error` state lands on.
     expect(select.classList.contains('form-control')).toBe(true);
     expect(group.classList.contains('form-group')).toBe(true);
     expect(select.parentElement).toBe(group);
   });
 
   it('renders both options that share one id, in order, and writes each id to the control', () => {
-    // Angular reports a duplicated track key through `console.warn` in dev mode and renders on, so
-    // the console is the observable a positional track has to keep quiet: `track option.id` emits
-    // NG0955 here, once per duplicated key.
+    // Angular reports a duplicated track key through `console.warn` in dev mode and renders on, so the console is the observable a positional track has to keep quiet: `track option.id` emits NG0955 here, once per duplicated key.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     const control = new FormControl<SelectValue | null>(null);
@@ -210,8 +171,7 @@ describe('SelectFieldComponent', () => {
     expect(select.options).toHaveLength(OFFICES.length + 1);
     expect(optionTexts(select)[0]).toBe('Select an office');
 
-    // The prompt carries visible text, which is exactly what makes chosen render a legacy prompt as an
-    // ordinary results row: it stays selectable after a value exists, so a user can clear the field.
+    // The prompt carries visible text, which is exactly what makes chosen render a legacy prompt as an ordinary results row: it stays selectable after a value exists, so a user can clear the field.
     expect(promptOption(select).disabled).toBe(false);
 
     chooseOption(select, 'Branch Two');
@@ -247,16 +207,7 @@ describe('SelectFieldComponent', () => {
     expect(JSON.stringify({ officeId: control.value })).toBe('{"officeId":3}');
   });
 
-  /**
-   * The contract the loan screens bind: the field publishes the selection itself, so no consumer
-   * depends on the host element's DOM `change` event. `chooseOption` dispatches a non-bubbling
-   * `change` on the `<select>`, which reaches only the listeners on that element — the value
-   * accessor's and this component's — so an emission here can only come from the field's own
-   * contract (AAP 0.2.3 row `SelectField`).
-   *
-   * It also pins the order those two listeners share: a stale emission would report the previous
-   * selection, or `null` on the first pick, because the control would not have been written yet.
-   */
+  /** The contract the loan screens bind: the field publishes the selection itself, so no consumer depends on the host element's DOM `change` event (AAP 0.2.3). */
   it('publishes the newly chosen id, never the previous selection, when the select changes', () => {
     const control = new FormControl<SelectValue | null>(null);
     const fixture = createField(control);
@@ -395,39 +346,19 @@ describe('SelectFieldComponent', () => {
     expect(label?.getAttribute('for')).toBe(renderedSelect(labelled).id);
   });
 
-  /**
-   * The accessible-name rule, stated exactly as the sibling `shared/date-field` spec states it since
-   * both fields sit on the same forms: `ariaLabel` alone names the control, a visible `label` names it
-   * and suppresses the attribute (WCAG label in name, so a caller supplying both never overrides its
-   * own visible text), and neither supplied leaves the shipped legacy markup — an unnamed control
-   * with no attribute at all — exactly as it was.
-   */
+  /** The accessible-name rule, stated exactly as the sibling `shared/date-field` spec states it since both fields sit on the same forms: `ariaLabel` alone names the control, a visible `label` names it and suppresses the attribute (WCAG label in name, so a caller supplying both never overrides its own visible text), and neither supplied leaves the shipped legacy markup — an unnamed control with no attribute at all — exactly as it was. */
   const accessibleNameCases: readonly {
     readonly scenario: string;
     readonly label?: string;
     readonly ariaLabel?: string;
     readonly visibleLabel: boolean;
     readonly accessibleName: string | null;
-  }[] = [
-    {
-      scenario: 'names the select from ariaLabel while rendering no visible label',
-      ariaLabel: 'Office',
-      visibleLabel: false,
-      accessibleName: 'Office',
-    },
-    {
-      scenario: 'lets a visible label supply the name and renders no aria-label beside it',
-      label: 'Office',
-      ariaLabel: 'Reporting office',
-      visibleLabel: true,
-      accessibleName: null,
-    },
-    {
-      scenario: 'renders neither a label nor an aria-label when neither input is supplied',
-      visibleLabel: false,
-      accessibleName: null,
-    },
-  ];
+  }[] = [{
+      scenario: 'names the select from ariaLabel while rendering no visible label', ariaLabel: 'Office', visibleLabel: false,
+      accessibleName: 'Office', }, {
+      scenario: 'lets a visible label supply the name and renders no aria-label beside it', label: 'Office', ariaLabel: 'Reporting office',
+      visibleLabel: true, accessibleName: null, }, {
+      scenario: 'renders neither a label nor an aria-label when neither input is supplied', visibleLabel: false, accessibleName: null, }, ];
 
   it.each(accessibleNameCases)('$scenario', ({ label, ariaLabel, visibleLabel, accessibleName }) => {
     const fixture = createField(new FormControl<SelectValue | null>(null), { label, ariaLabel });

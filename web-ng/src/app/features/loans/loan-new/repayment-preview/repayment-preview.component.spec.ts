@@ -6,59 +6,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RepaymentPeriod, RepaymentSchedule } from '../../loan.models';
 import { RepaymentPreviewComponent } from './repayment-preview.component';
 
-/**
- * Behavioural spec for the loan application's repayment schedule preview: the table the applicant
- * reads after `POST /loans?command=calculateLoanSchedule` returns before anything is submitted
- * (AAP 0.7.1 Features row `loans` — "`LoanNewComponent` (with `RepaymentPreviewComponent`)";
- * AAP 0.7.4 "`#/newclientloanaccount/:clientId` presents the product and terms fields from the loan
- * template with a 'Preview schedule' action that posts `calculateLoanSchedule` and renders the
- * returned periods as a table").
- *
- * It serves AAP 0.11.1 (unit specs beside every component), AAP 0.14.1 ("each screen lands with at
- * least one behavioural spec") and AAP 0.14.2 ("no spec without an `expect`"; Rule 1 clause 8: no
- * empty or boilerplate spec file).
- *
- * The four behaviours pinned here are the folder contract, and each is a statement about the
- * rendered DOM rather than about the component's `protected` members, because the DOM is what the
- * applicant and the parity run observe (Rule 1 clause 8):
- * - one row per period, under the eight columns the record page's schedule table uses;
- * - the server's order is kept — the array is a sequence, and re-sorting it would describe a
- *   schedule Fineract did not calculate (Rule 1 clause 3, match legacy rather than improve it);
- * - a period date reads `dd MMMM yyyy`, the pattern `DISPLAY_DATE_FORMAT` declares, so a change to
- *   that shared constant breaks this spec loudly instead of silently changing what users see
- *   (AAP 0.7.2 "Date handling");
- * - a `null` schedule and a schedule with no periods both render the shared explicit empty state
- *   and no error, and the table and the empty state never appear together (AAP 0.7.4 "States every
- *   list and record screen must implement").
- *
- * No endpoint is asserted here: the preview owns no request — `loan.service.ts` posts
- * `calculateLoanSchedule` and `loan-new` calls it — so the contract test for that endpoint lives in
- * `loan.service.spec.ts`, the file held to the 90% `web-ng-services` gate. This component is bound
- * straight to a `schedule` input, which is why it is read through a fixture and not through a
- * router navigation (AAP 0.14.2 "tests in proportion to the behaviour").
- *
- * Figma provenance: none. The design covers the login screen, the clients list and the client
- * record only (AAP 0.2.1), so this folder matches no design node and no visual assertion belongs in
- * this spec (AAP 0.2.4).
- */
+/** Behavioural spec for the loan application's repayment schedule preview: the table the applicant reads after `POST /loans?command=calculateLoanSchedule` returns before anything is submitted (AAP 0.7.1 Features row (AAP 0.7.4, AAP 0.11.1, AAP 0.14.1, AAP 0.14.2). */
 
 /** Language the spec serves its labels in, matching `AppConfig.locale` for the fixture. */
 const SPEC_LANG = 'en';
 
-/**
- * Locale `DatePipe` and `DecimalPipe` format with. Pinned so month names, thousands separators and
- * the decimal point are the assertions below, on any host, under any default locale.
- */
+/** Locale `DatePipe` and `DecimalPipe` format with. Pinned so month names, thousands separators and the decimal point are the assertions below, on any host, under any default locale. */
 const SPEC_LOCALE = 'en-US';
 
-/**
- * The eight header keys the template translates, in render order, read from
- * `repayment-preview.component.html`.
- *
- * They are the legacy bundle's own keys, matched column for column to the record page's schedule
- * table (`loan-view/loan-schedule`): the period number, the period's start, its due date, and the
- * five money columns.
- */
+/** The eight header keys the template translates, in render order, read from `repayment-preview.component.html`. */
 const COLUMN_KEYS: readonly string[] = [
   'label.heading.no',
   'label.heading.fromdate',
@@ -88,33 +44,13 @@ const EMPTY_STATE_KEY = 'label.nodata';
 /** The message the empty state renders once that key resolves. */
 const EMPTY_STATE_TEXT = 'No repayment schedule has been calculated.';
 
-/**
- * The in-memory translation bundle.
- *
- * It covers the nine keys the template uses — the eight headers and the no-data label — and nothing
- * else, so serving it is what proves the template's keys are the ones the legacy bundle must hold:
- * a renamed key would render as itself and fail every assertion that reads the label it feeds
- * (AAP 0.10.2 "every label resolves").
- */
+/** The in-memory translation bundle. It covers the nine keys the template uses — the eight headers and the no-data label — and nothing else, so serving it is what proves the template's keys are the ones the legacy bundle (AAP 0.10.2). */
 const TRANSLATIONS: Readonly<Record<string, string>> = {
   ...COLUMN_LABELS,
   [EMPTY_STATE_KEY]: EMPTY_STATE_TEXT,
 };
 
-/**
- * A complete `RepaymentPeriod`, with every member the model declares supplied on purpose: a member
- * the model gains later breaks this factory at compile time instead of passing silently, which is
- * the point of filling it here rather than in each test (Rule 1 clause 4).
- *
- * The defaults are one plausible period of the fixed-data `Parity Loan` — principal 5,000 over 12
- * monthly repayments at flat 12% per year — so a test states only the members it is about. Dates are
- * the two wire shapes a Fineract response uses: the `'yyyy-MM-dd'` string and the
- * `[year, month, day]` triple.
- *
- * `periodNumber` is the period the row numbers, or `null` for the disbursement pseudo-period the fork
- * sends without a `period` member at all — the spread inside it then leaves that key out rather than
- * supplying a substitute number for it (see `RepaymentPeriod`).
- */
+/** A complete `RepaymentPeriod`, with every member the model declares supplied on purpose: a member the model gains later breaks this factory at compile time instead of passing silently, which is the point of filling it (Rule 1 clause 4). */
 function makePeriod(
   overrides: Partial<RepaymentPeriod> = {},
   periodNumber: number | null = 1,
@@ -138,11 +74,7 @@ function makePeriod(
   };
 }
 
-/**
- * A complete `RepaymentSchedule`: its ordered periods plus every total the model declares, supplied
- * for the same reason as `makePeriod` — the totals are optional on the wire, and the preview renders
- * none of them, so their presence here proves the table shows the periods and not a computed total.
- */
+/** A complete `RepaymentSchedule`: its ordered periods plus every total the model declares, supplied for the same reason as `makePeriod` — the totals are optional on the wire, and the preview renders none of them, so their. */
 function makeSchedule(periods: readonly RepaymentPeriod[]): RepaymentSchedule {
   return {
     periods,
@@ -155,36 +87,22 @@ function makeSchedule(periods: readonly RepaymentPeriod[]): RepaymentSchedule {
   };
 }
 
-/**
- * A `RepaymentPeriod` as the wire sends the preview's leading row: the fork's disbursement
- * pseudo-period carries no `period` member (see `RepaymentPeriod`), so the object is built without
- * that key rather than with a substitute. It is assignable as a period because the model declares the
- * member optional, which is the statement this helper keeps honest.
- */
+/** A `RepaymentPeriod` as the wire sends the preview's leading row: the fork's disbursement pseudo-period carries no `period` member (see `RepaymentPeriod`), so the object is built without that key rather than with a. */
 function makeUnnumberedPeriod(overrides: Partial<RepaymentPeriod> = {}): RepaymentPeriod {
   return makePeriod(overrides, null);
 }
 
-/**
- * An element's text with runs of whitespace collapsed to one space and the ends trimmed, so the
- * template's own indentation cannot mislead an assertion.
- */
+/** An element's text with runs of whitespace collapsed to one space and the ends trimmed, so the template's own indentation cannot mislead an assertion. */
 function textOf(element: Element | null): string {
   return (element?.textContent ?? '').replace(/\s+/g, ' ').trim();
 }
 
 describe('RepaymentPreviewComponent', () => {
-  // The spec deliberately registers no HTTP provider, no HTTP testing controller and no routing: the
-  // preview is a pure projection of its input, so the injector below is the translate stack and the
-  // locale and nothing more. A component that reached the network would fail to construct here rather
-  // than the assertion being relaxed to accommodate it, and no backend is contacted by anything in
-  // this file (Rule 1 clause 5, Rule 1 clause 8, Rule 2).
+  // The spec deliberately registers no HTTP provider, no HTTP testing controller and no routing: the preview is a pure projection of its input, so the injector below is the translate stack and the locale and nothing more (Rule 1 clause 5, Rule 1 clause 8, Rule 2).
 
   /** The fixture's host element, the root the queries below start from. */
   function hostOf(fixture: ComponentFixture<RepaymentPreviewComponent>): HTMLElement {
-    // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps every
-    // element the helpers return an `HTMLElement` and confines the cast to this single boundary
-    // (Rule 1 clause 4).
+    // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps every element the helpers return an `HTMLElement` and confines the cast to this single boundary (Rule 1 clause 4).
     return fixture.nativeElement as HTMLElement;
   }
 
@@ -218,14 +136,7 @@ describe('RepaymentPreviewComponent', () => {
     return host.querySelector<HTMLElement>('app-empty-state#repayment-preview-empty');
   }
 
-  /**
-   * Renders the component bound to `schedule`.
-   *
-   * The input is set before the first change detection, then the fixture is stabilised and checked
-   * again: `TranslatePipe` is impure, so a header label is read through the template on every change
-   * detection pass, and the assertions must follow the pass that resolves the bundle rather than the
-   * one that renders the markup.
-   */
+  /** Renders the component bound to `schedule`. The input is set before the first change detection, then the fixture is stabilised and checked again: `TranslatePipe` is impure, so a header label is read through the template. */
   async function render(
     schedule: RepaymentSchedule | null,
   ): Promise<ComponentFixture<RepaymentPreviewComponent>> {
@@ -240,8 +151,7 @@ describe('RepaymentPreviewComponent', () => {
   }
 
   beforeEach(async () => {
-    // `provideTranslateService()` registers the translate stack with its no-op loader, so nothing is
-    // fetched: the labels are the in-memory bundle served below (Rule 1 clause 5).
+    // `provideTranslateService()` registers the translate stack with its no-op loader, so nothing is fetched: the labels are the in-memory bundle served below (Rule 1 clause 5).
     await TestBed.configureTestingModule({
       imports: [RepaymentPreviewComponent],
       providers: [
@@ -282,8 +192,7 @@ describe('RepaymentPreviewComponent', () => {
   });
 
   it('keeps the period order the server sent instead of sorting it', async () => {
-    // Out of numeric order on purpose: the array is the schedule's sequence, and the preview is not
-    // allowed to reorder what Fineract calculated (Rule 1 clause 3).
+    // Out of numeric order on purpose: the array is the schedule's sequence, and the preview is not allowed to reorder what Fineract calculated (Rule 1 clause 3).
     const fixture = await render(
       makeSchedule([
         makePeriod({ period: 3 }),
@@ -295,16 +204,9 @@ describe('RepaymentPreviewComponent', () => {
     expect(renderedCells(hostOf(fixture)).map((cells) => cells[0])).toEqual(['3', '1', '2']);
   });
 
-  /**
-   * Locks down contract-loan-period-required-false: the fork's leading disbursement pseudo-period
-   * carries no `period` member, so the model declares it optional and the preview keys its rows by
-   * position — two unnumbered rows in one schedule would otherwise repeat the same absent key — while
-   * the period cell prints what the payload sent, which for those rows is nothing.
-   */
+  /** Locks down contract-loan-period-required-false: the fork's leading disbursement pseudo-period carries no `period` member, so the model declares it optional and the preview keys its rows by position — two unnumbered rows. */
   it('renders an unnumbered disbursement row with an empty period cell, one row per period', async () => {
-    // Angular reports a duplicated track key through `console.warn` in dev mode and renders on, so the
-    // console is the observable a positional track has to keep quiet: `track period.period` emits
-    // NG0955 for the two unnumbered rows below once they are reconciled.
+    // Angular reports a duplicated track key through `console.warn` in dev mode and renders on, so the console is the observable a positional track has to keep quiet: `track period.period` emits NG0955 for the two unnumbered.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const periods: readonly RepaymentPeriod[] = [
       makeUnnumberedPeriod({ dueDate: '2026-11-24' }),
@@ -317,13 +219,11 @@ describe('RepaymentPreviewComponent', () => {
 
     // One row per period row the payload carried, two of which carry no period number.
     expect(rows).toHaveLength(4);
-    // The unnumbered rows print an empty cell — no 0, no dash, no renumbering of the periods below
-    // them — and the numbered rows keep their own numbers in the server's order (Rule 1 clause 3).
+    // The unnumbered rows print an empty cell — no 0, no dash, no renumbering of the periods below them — and the numbered rows keep their own numbers in the server's order (Rule 1 clause 3).
     expect(rows.map((cells) => cells[0])).toEqual(['', '1', '', '2']);
     expect(rows.filter((cells) => cells[0] === '')).toHaveLength(2);
 
-    // The same rows handed over as a new array: the collection is reconciled, which is where a
-    // duplicated key is reported, and the table still holds one row per period.
+    // The same rows handed over as a new array: the collection is reconciled, which is where a duplicated key is reported, and the table still holds one row per period.
     fixture.componentRef.setInput('schedule', makeSchedule([...periods]));
     fixture.detectChanges();
     await fixture.whenStable();
@@ -334,9 +234,7 @@ describe('RepaymentPreviewComponent', () => {
   });
 
   it('renders a period date as dd MMMM yyyy', async () => {
-    // The two shapes a Fineract response sends a date in, both accepted by `fromFineractDate`: the
-    // `'yyyy-MM-dd'` string, and the `[year, month, day]` triple with a one-based month. The model
-    // types these members as `FineractDate`, so those are the shapes the preview has to parse.
+    // The two shapes a Fineract response sends a date in, both accepted by `fromFineractDate`: the `'yyyy-MM-dd'` string, and the `[year, month, day]` triple with a one-based month.
     const fixture = await render(
       makeSchedule([makePeriod({ fromDate: [2026, 11, 21], dueDate: '2026-12-05' })]),
     );
@@ -347,8 +245,7 @@ describe('RepaymentPreviewComponent', () => {
   });
 
   it('renders a period date the wire parser rejects as an empty cell, never an invalid date', async () => {
-    // A response value that names no calendar day — here a string with no `yyyy-MM-dd` date part,
-    // which `fromFineractDate` rejects — must leave the cell empty rather than print `Invalid Date`.
+    // A response value that names no calendar day — here a string with no `yyyy-MM-dd` date part, which `fromFineractDate` rejects — must leave the cell empty rather than print `Invalid Date`.
     const fixture = await render(makeSchedule([makePeriod({ fromDate: 'not-a-date' })]));
     const [cells] = renderedCells(hostOf(fixture));
 
@@ -371,17 +268,13 @@ describe('RepaymentPreviewComponent', () => {
     );
     const [cells] = renderedCells(hostOf(fixture));
 
-    // Grouping and the payload's own fraction digits, with no forced decimals: the default `number`
-    // pipe the record page's schedule table and legacy's own `number` filter use, so 5000 reads
-    // 5,000 here exactly as it does there (Rule 1 clause 3, AAP 0.10.2 "displayed data ... and their
-    // formatting").
+    // Grouping and the payload's own fraction digits, with no forced decimals: the default `number` pipe the record page's schedule table and legacy's own `number` filter use, so 5000 reads 5,000 here exactly as it does there (Rule 1 clause 3, AAP 0.10.2).
     expect(cells[3]).toBe('1,234.5');
     expect(cells[4]).toBe('65.5');
     expect(cells[5]).toBe('25');
     expect(cells[6]).toBe('5,000');
 
-    // The total is the server's figure, not the sum of its parts: 1,234.5 + 65.5 + 25 is 1,325, and
-    // the outstanding cell holds its own payload value rather than a running balance.
+    // The total is the server's figure, not the sum of its parts: 1,234.5 + 65.5 + 25 is 1,325, and the outstanding cell holds its own payload value rather than a running balance.
     expect(cells[6]).not.toBe('1,325');
     expect(cells[7]).toBe('8,765.43');
   });

@@ -1,77 +1,4 @@
-/**
- * AAP 0.11.1 row 52 `chain-w2-w4-w5-w6`, AAP 0.10.3 criterion 12 — the end-to-end proof of the
- * migration: W2 (create and activate a client) → W4 (submit an individual loan application after
- * previewing its schedule) → W5 (approve and disburse) → W6 (repay the first period) in **one run**
- * against the real Blitzy Fineract, with the fixed data of AAP 0.10.1.
- *
- * The three facts the run must leave behind, and the last three assertions of the test:
- *
- * 1. the W2 client is `Active`;
- * 2. the W5 loan is `Active`;
- * 3. the loan's outstanding balance equals its total expected repayment minus the first repayment
- *    schedule period's total due — the identity AAP 0.10.1 W6 defines, read back through
- *    `GET /loans/{id}?associations=all` rather than inferred from a screen.
- *
- * **Self-sufficient.** This spec creates its own `Parity Client`, its own loan, and performs its own
- * approval, disbursal and repayment, so it reads no record another spec created and shares no id with
- * one. Playwright orders files alphabetically, so `chain-…` runs **first** in each project: the `next`
- * project starts from a freshly seeded database with an empty client list, while the `legacy` project
- * may already see the seed's own clients (the seed writes them for the baseline screenshots), and a
- * database another run has already written to holds whatever that run left. Stage 1 therefore accepts
- * every one of those states: rows are accepted when each names the client it stands for, and an empty
- * list is accepted when it renders the explicit empty state and no error. What makes the record this
- * spec then acts on unambiguous is not the list's contents but the address it was given: the client id
- * is taken from the record route the create form lands on, and every later step uses that id. The
- * client id and the loan id it generates are carried across the four stages in typed locals: never a
- * literal, never a file, never a generated value written to disk (AAP 0.10.2 compares generated ids by
- * their role in the sequence).
- *
- * **Verdicts belong to the fixture.** `runWorkflow('CHAIN', …)` in `../fixtures/parity-fixture` records
- * one `WorkflowRecord` per project and workflow, writes the masked capture and the end state, and
- * decides: a body that returns is `pass`; a body that throws on `legacy` is `legacy-broken` — the
- * archived baseline may no longer be drivable, and that must never fail `npm run e2e` (AAP 0.10.1;
- * AAP 0.10.3 criterion 3) — while the same throw on `next` is `fail` and is rethrown unchanged. This
- * file never converts a baseline failure into a pass and never skips itself (Rule 1 clause 8): it is
- * criterion 12's evidence and stays a full four-stage chain.
- *
- * **What is asserted, per stage, before the next stage begins.** Exposure of the ordered API calls
- * (method, templated path, `?command=`, query parameters, body fields, `dateFormat`, `locale` and the
- * tenant and credential headers' presence) from the live capture (AAP 0.10.2), and the backend end
- * state read through the API after each stage: client `Pending` then `Active` on the run date, loan
- * submitted with a 5,000 principal and no transactions, then approved and disbursed `Active` with the
- * outstanding balance equal to the total expected repayment, then repaid so that it drops by exactly
- * the first period's total due. Screens are driven only through the page objects of the running side
- * (Rule 2), and screenshots are evidence rather than criteria, so none is taken here.
- *
- * **This spec asserts no captured response status, and that is a scope decision.** The capture records the
- * HTTP status of every exchange it observes, a POST included: `capture/network-capture.ts` assigns the
- * response's own status in its `response` listener, and `0` is kept only for a request that never received an
- * answer. Proving this spec's contracts through method, templated path, `?command=`, query parameters, body
- * fields and header presence — together with the end state read back over the API after each stage — is
- * therefore a choice this file makes about what the chain proves, not a limitation of the capture.
- * `w5-approve-disburse.spec.ts`, `w6-repayment.spec.ts` and `w7-validation-error.spec.ts` do assert the
- * captured status of the POSTs they issue, and a capture that recorded `0` for them would fail those specs.
- *
- * **The one place this spec branches on the front end.** It follows AAP 0.10.5 items 1 and 2: the legacy
- * forms take the `Date` objects their jQuery datepicker reads and name their office by its label,
- * while the new app's native date input takes a `yyyy-mm-dd` string and its select takes the option's
- * own value. A union call would demand a value satisfying both, which no date does, so each form fill
- * branches once on `pages.uiProject`; every other call is made on the union directly. Nothing else is
- * side-specific: the same endpoints in the same order, the same navigation through the page objects,
- * the same assertions.
- *
- * Rules honoured here. Rule 1 clause 1: this file writes nothing but the capture and record artefacts
- * the fixture owns. Clause 2: only the AAP 0.7.3 W2/W4/W5/W6 endpoints, in the AAP's order, every
- * date derived from the tenant business date the `runDate` fixture read over the API (never the
- * browser clock), and `dateFormat` + `locale` asserted on every date-bearing body. Clause 3: the
- * principal is `required` only — nothing here clamps, bounds or pre-validates it. Clause 4: strict
- * types, with the capture's unmodelled payload narrowed at one documented boundary. Clause 8: real
- * assertions at every contract, never a smoke test. Clause 9: no credential, tenant value, header
- * value or session material is printed, attached or compared by value — the credentials are read from
- * the environment inside the test body and handed straight to the login screen. Rule 2: navigation
- * only through the page objects, so no host is named and no public demo server can be reached (the
- * fixture's own `assertBackendHost` teardown enforces the origin of every captured call).
- */
+/** AAP 0.11.1 row 52 `chain-w2-w4-w5-w6`, AAP 0.10.3 criterion 12 — the end-to-end proof of the migration: W2 (create and activate a client) → W4 (submit an individual loan application after previewing its schedule) → W5 (AAP 0.10.1, AAP 0.10.2, Rule 1 clause 8, Rule 2). */
 import { test, expect } from '../fixtures/parity-fixture';
 import type { WorkflowTools } from '../fixtures/parity-fixture';
 import type {
@@ -92,13 +19,7 @@ import {
   readCredentials,
 } from '../seed/fixtures';
 
-/**
- * The Fineract paths the four stages call, exactly as the capture reports them (AAP 0.7.3 W1, W2, W4,
- * W5, W6). A capture templates every numeric path segment by the id's role — `{clientId}` for a
- * `clients` segment, `{loanId}` for a `loans` one — so these constants are the capture's own spelling
- * and a comparison against `exchange.path` is an exact one. Each is a path the endpoint allowlist
- * declares (AAP 0.10.4), which is what keeps `npm run check:endpoints` able to judge this file.
- */
+/** The Fineract paths the four stages call, exactly as the capture reports them (AAP 0.7.3 W1, W2, W4, W5, W6) (AAP 0.10.4). */
 const AUTHENTICATION_PATH = '/fineract-provider/api/v1/authentication';
 const CLIENT_COLLECTION_PATH = '/fineract-provider/api/v1/clients';
 const CLIENT_RESOURCE_PATH = '/fineract-provider/api/v1/clients/{clientId}';
@@ -110,61 +31,29 @@ const LOAN_APPROVAL_TEMPLATE_PATH = '/fineract-provider/api/v1/loans/{loanId}/te
 const LOAN_TRANSACTIONS_TEMPLATE_PATH = '/fineract-provider/api/v1/loans/{loanId}/transactions/template';
 const LOAN_TRANSACTIONS_PATH = '/fineract-provider/api/v1/loans/{loanId}/transactions';
 
-/**
- * The hash routes the stages read a generated id from (AAP 0.8.2 mirrors the legacy URLs): the record
- * W2 lands on, the application W4 lands on and the record W4's submission lands on. A generated id is
- * taken from the address it was given rather than assumed, and the pattern's first group is that id.
- */
+/** The hash routes the stages read a generated id from (AAP 0.8.2 mirrors the legacy URLs): the record W2 lands on, the application W4 lands on and the record W4's submission lands on. */
 const CLIENT_RECORD_ROUTE = /#\/viewclient\/(\d+)$/;
 const LOAN_APPLICATION_ROUTE = /#\/newclientloanaccount\/(\d+)$/;
 const LOAN_RECORD_ROUTE = /#\/viewloanaccount\/(\d+)$/;
 
-/**
- * The colour class an active status indicator carries, in either application's spelling: the baseline
- * paints `statusactive` and this one `status-active`, and neither paints a status word at all
- * (AAP 0.10.5 item 11), so the class is the only thing either screen can be read for.
- */
+/** The colour class an active status indicator carries, in either application's spelling: the baseline paints `statusactive` and this one `status-active`, and neither paints a status word at all (AAP 0.10.5 item 11), so. */
 const ACTIVE_STATUS_CLASS = /status[-_]?active/i;
 
-/**
- * One captured request body as its field map — the shape `capture/network-capture.ts` records a JSON
- * object in, with keys canonicalised and every generated id already a role token.
- */
+/** One captured request body as its field map — the shape `capture/network-capture.ts` records a JSON object in, with keys canonicalised and every generated id already a role token. */
 type FormFields = { [field: string]: NormalizedValue };
 
-/**
- * Whether a normalised payload is a field map rather than an array or a scalar. The capture records a
- * body as `NormalizedValue` because it does not model Fineract's payloads field by field (Rule 1
- * clause 4); this guard is the documented boundary at which a body becomes readable as fields.
- */
+/** Whether a normalised payload is a field map rather than an array or a scalar (Rule 1 clause 4). */
 function isFieldMap(value: NormalizedValue | null): value is FormFields {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/**
- * The field map of one exchange's request body, or `null` when it carried no JSON object — a call
- * with no body, and one whose body is an array, both answer `null` so a caller can assert on it.
- *
- * @param exchange The captured exchange, or `null` when the run recorded no such call.
- */
+/** The field map of one exchange's request body, or `null` when it carried no JSON object — a call with no body, and one whose body is an array, both answer `null` so a caller can assert on it. @param exchange The captured. */
 function requestFields(exchange: NormalizedExchange | null): FormFields | null {
   const body = exchange === null ? null : exchange.requestBody;
   return isFieldMap(body) ? body : null;
 }
 
-/**
- * The exchanges a run recorded for one endpoint, in the order the page issued them.
- *
- * `command` separates Fineract's action endpoints (AAP 0.7.3), and the two forms are deliberately
- * distinct: a `command` given matches that command exactly, while `undefined` matches only calls that
- * carried no `command` at all — so `POST /loans` never counts the application-preview call that posts
- * the same path with `command=calculateLoanSchedule`, and an action call never counts a plain read.
- *
- * @param capture The running capture.
- * @param method HTTP method, upper-cased.
- * @param path Templated path, as one of the constants above.
- * @param command The `command` query parameter, or omitted for a call that carries none.
- */
+/** The exchanges a run recorded for one endpoint, in the order the page issued them (AAP 0.7.3). */
 function callsTo(
   capture: CaptureSession,
   method: string,
@@ -181,16 +70,7 @@ function callsTo(
   );
 }
 
-/**
- * The figure a page object reported for an amount, as a number, or `null` when the cell carried none.
- *
- * The two applications answer in different types — the baseline reads a cell's text, so a figure
- * arrives as a formatted string, while this application reads the payload's own number — and a
- * comparison has to understand both. Grouping separators are dropped rather than parsed around, so a
- * balance rendered `1,234.56` compares equal to `1234.56`.
- *
- * @param value The reported figure, in either type.
- */
+/** The figure a page object reported for an amount, as a number, or `null` when the cell carried none. */
 function figureOf(value: string | number | null): number | null {
   if (value === null) {
     return null;
@@ -206,17 +86,7 @@ function figureOf(value: string | number | null): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-/**
- * A figure the chain's arithmetic needs, or a failure that names what is missing.
- *
- * W6's repayment amount and the final balance identity are both defined in terms of figures the loan
- * reports, so a snapshot that does not carry one leaves the chain unable to continue. Failing here
- * names the missing figure; substituting a `0` would turn the identity into something that passes for
- * the wrong reason.
- *
- * @param value The figure a snapshot reported.
- * @param description What the figure is, in the message a missing one produces.
- */
+/** A figure the chain's arithmetic needs, or a failure that names what is missing. */
 function requireFigure(value: number | null, description: string): number {
   if (value === null || !Number.isFinite(value)) {
     throw new Error(
@@ -227,16 +97,7 @@ function requireFigure(value: number | null, description: string): number {
   return value;
 }
 
-/**
- * The day offset a capture's normalised date token stands for — `d0` is the run date itself, `d+1` the
- * day after — or `null` when the value is not one the capture produced from a date.
- *
- * The capture reduces every payload date to such a token (AAP 0.10.2 compares dates as offsets, never
- * as literal strings), so reading one back is how this spec states "the body carried the run date"
- * without depending on the calendar day the run happened on.
- *
- * @param value A body field as the capture normalised it.
- */
+/** The day offset a capture's normalised date token stands for — `d0` is the run date itself, `d+1` the day after — or `null` when the value is not one the capture produced from a date (AAP 0.10.2). */
 function offsetOfDateToken(value: NormalizedValue | undefined): number | null {
   if (typeof value !== 'string') {
     return null;
@@ -248,17 +109,7 @@ function offsetOfDateToken(value: NormalizedValue | undefined): number | null {
   return Number(matched[1]);
 }
 
-/**
- * The generated id the current address carries once it matches a record route (AAP 0.10.2: ids are
- * taken from the run that produced them, never assumed).
- *
- * The route assertion waits for the navigation the workflow step causes, so a screen that never
- * reached its record fails there with the address it did reach, and the id is parsed only afterwards.
- *
- * @param page The test's own page.
- * @param route Pattern whose first group is the id, e.g. {@link CLIENT_RECORD_ROUTE}.
- * @param description What the address is expected to show, in the failure message.
- */
+/** The generated id the current address carries once it matches a record route (AAP 0.10.2: ids are taken from the run that produced them, never assumed). */
 async function routeIdOf(
   page: WorkflowTools['page'],
   route: RegExp,
@@ -278,11 +129,7 @@ async function routeIdOf(
   return id;
 }
 
-/**
- * The most recent exchange a run recorded for one endpoint, or `null` when it recorded none. Used for
- * the reads whose answer is the last one made — a template that is re-fetched once the product is
- * chosen, or the record read that carries the end state.
- */
+/** The most recent exchange a run recorded for one endpoint, or `null` when it recorded none. */
 function latestCall(
   capture: CaptureSession,
   method: string,
@@ -292,23 +139,13 @@ function latestCall(
   return callsTo(capture, method, path, command).at(-1) ?? null;
 }
 
-/**
- * The chain: one test, four stages, every stage asserted before the next one begins.
- *
- * The body is wrapped in `runWorkflow('CHAIN', …)` so the fixture records the verdict, writes the
- * masked capture beside the record and snapshots the end state of the two resources the run created
- * (AAP 0.10.4). The returned `stateTargets` are the ids this test generated; the fixture supplies the
- * project, the workflow and the run date itself, so no artefact can be mislabelled from here.
- */
+/** The chain: one test, four stages, every stage asserted before the next one begins (AAP 0.10.4). */
 test.describe('Chain W2 → W4 → W5 → W6 end-to-end proof', () => {
   test('creates a client, submits a loan, approves and disburses it, then repays it on Fineract', async ({
     runWorkflow,
   }) => {
     await runWorkflow('CHAIN', async ({ page, pages, capture, runDate }) => {
-      // ── Stage 0 — sign in (AAP 0.10.1 W1) ────────────────────────────────────────────────────────
-      // Every in-scope route is guarded, so the chain begins with the ordinary login both applications
-      // perform, with the credentials read from the environment at this moment and handed straight to
-      // the login screen (Rule 1 clause 9: never stored, printed or compared).
+      // ── Stage 0 — sign in (AAP 0.10.1 W1) ──────────────────────────────────────────────────────── Every in-scope route is guarded, so the chain begins with the ordinary login both applications perform, with the credentials (Rule 1 clause 9).
       const runDatePayload = formatFineractDate(runDate);
       const runDateInput = formatDateOnly(runDate);
       expect(
@@ -333,10 +170,7 @@ test.describe('Chain W2 → W4 → W5 → W6 end-to-end proof', () => {
         'W1: signing in sends exactly one POST /authentication, the only credential exchange of the run',
       ).toBe(1);
 
-      // ── Stage 1 — W2 create and activate a client (AAP 0.10.1 W2) ───────────────────────────────
-      // The list it starts from is asserted before anything is written: an alphabetical run puts this
-      // spec first, so the database holds no second Parity Client, and an empty list must render the
-      // explicit empty state rather than an error (AAP 0.7.4).
+      // ── Stage 1 — W2 create and activate a client (AAP 0.10.1 W2) ─────────────────────────────── The list it starts from is asserted before anything is written: an alphabetical run puts this spec first, so the database (AAP 0.7.4).
       await pages.clients.open();
       const columnHeaders = await pages.clients.readColumnHeaders();
       expect(
@@ -377,8 +211,7 @@ test.describe('Chain W2 → W4 → W5 → W6 end-to-end proof', () => {
       ).toBeGreaterThan(0);
 
       if (pages.uiProject === 'legacy') {
-        // The baseline names its office by label and takes the Date objects its datepicker writes
-        // (AAP 0.10.5 items 1 and 2: a deliberate difference of control, not of payload).
+        // The baseline names its office by label and takes the Date objects its datepicker writes (AAP 0.10.5 items 1 and 2: a deliberate difference of control, not of payload).
         await pages.clients.fillClientForm({
           officeName: SCENARIO.client.officeName,
           firstName: SCENARIO.client.firstname,
@@ -397,9 +230,7 @@ test.describe('Chain W2 → W4 → W5 → W6 end-to-end proof', () => {
       }
       await pages.clients.submitForm();
 
-      // The client is created pending, which is the state W2's activate command acts on: W2's outcome
-      // is the two calls in the AAP's order, and a client created already active leaves the activate
-      // command nothing the server accepts.
+      // The client is created pending, which is the state W2's activate command acts on: W2's outcome is the two calls in the AAP's order, and a client created already active leaves the activate command nothing the server.
       const clientId = await routeIdOf(page, CLIENT_RECORD_ROUTE, 'W2: creating the client');
       const clientCreates = callsTo(capture, 'POST', CLIENT_COLLECTION_PATH);
       expect(
@@ -446,17 +277,11 @@ test.describe('Chain W2 → W4 → W5 → W6 end-to-end proof', () => {
 
       await pages.clients.openClientAction(clientId, 'activate');
       if (pages.uiProject === 'next') {
-        // The action form seeds its date from the browser clock (AAP 0.10.5 item 15), so the workflow
-        // input is written from the tenant business date instead: every date a workflow sends is the
-        // run date or an offset from it (AAP 0.10.1, "Run date"). The baseline's own action form offers
-        // the shared page objects no date setter — its `fillClientForm` requires the name fields the
-        // action form does not render — so it keeps its default, which in the plan's environments is
-        // the same day; that is asserted below rather than assumed.
+        // The action form seeds its date from the browser clock (AAP 0.10.5 item 15), so the workflow input is written from the tenant business date instead: every date a workflow sends is the run date or an offset from it (AAP (AAP 0.10.1).
         await pages.clients.fillClientForm({ activationDate: runDateInput });
       }
       await pages.clients.submitAction();
-      // A lifecycle command only navigates back to the record once the server accepted it, so the
-      // address is the application's own readiness signal for the state this stage reads next.
+      // A lifecycle command only navigates back to the record once the server accepted it, so the address is the application's own readiness signal for the state this stage reads next.
       await expect(
         page,
         'W2: a successful activation returns to the client record',
@@ -478,8 +303,7 @@ test.describe('Chain W2 → W4 → W5 → W6 end-to-end proof', () => {
         PAYLOAD_DATE_FORMAT,
       );
       expect(activation['locale'], 'Rule 1 clause 2: the body carries the locale').toBe(LOCALE);
-      // The capture turns every payload date into a day offset from the run date, so the token proves
-      // the body carried a date in the run-date format and names the day it carried.
+      // The capture turns every payload date into a day offset from the run date, so the token proves the body carried a date in the run-date format and names the day it carried.
       const sentActivationOffset = offsetOfDateToken(activation['activationDate']);
       expect(
         sentActivationOffset,
@@ -585,8 +409,7 @@ test.describe('Chain W2 → W4 → W5 → W6 end-to-end proof', () => {
       let previewPrincipal = 0;
       const previewDueDates: string[] = [];
       for (const row of previewRows) {
-        // The server's schedule opens with a disbursement row that carries no period number and no
-        // principal (AAP 0.7.2, `RepaymentPeriod`), so only numbered periods are counted.
+        // The server's schedule opens with a disbursement row that carries no period number and no principal (AAP 0.7.2, `RepaymentPeriod`), so only numbered periods are counted.
         if (row.period === null || Number(row.period) < 1) {
           continue;
         }
@@ -610,8 +433,7 @@ test.describe('Chain W2 → W4 → W5 → W6 end-to-end proof', () => {
         'W4: the previewed due dates advance period by period rather than repeating one date',
       ).toBe(previewDueDates.length);
       if (pages.uiProject === 'next') {
-        // The baseline renders its dates through its own filter, so the display-format contract is
-        // asserted where the plan fixes it (AAP 0.7.2 DISPLAY_DATE_FORMAT): on this application.
+        // The baseline renders its dates through its own filter, so the display-format contract is asserted where the plan fixes it (AAP 0.7.2 DISPLAY_DATE_FORMAT): on this application.
         const firstDue = parseFineractDate(previewDueDates[0]);
         expect(
           firstDue,
@@ -668,9 +490,7 @@ test.describe('Chain W2 → W4 → W5 → W6 end-to-end proof', () => {
       expect(submittedLoan.principal, 'W4: the loan holds the principal applied for').toBe(
         SCENARIO.loanApplication.principal,
       );
-      // The fork reports an `approvedPrincipal` on the submitted loan as well, echoing the amount the
-      // application proposes, so nothing is asserted about it until W5 sets it through the approve
-      // command. What a submitted loan cannot hold is a transaction or a charge: neither has happened.
+      // The fork reports an `approvedPrincipal` on the submitted loan as well, echoing the amount the application proposes, so nothing is asserted about it until W5 sets it through the approve command.
       expect(submittedLoan.transactionCount, 'W4: a submitted loan carries no transaction').toBe(0);
       expect(
         submittedLoan.chargeCount,
@@ -778,9 +598,7 @@ test.describe('Chain W2 → W4 → W5 → W6 end-to-end proof', () => {
 
       await pages.loans.openView(loanId);
       const transactionsAfterDisbursal = await pages.loans.readTransactions();
-      // The product is accrual-based, so the disbursal leaves the loan with the disbursement and the
-      // interest it accrues; what matters here is that the record shows exactly what the API reports,
-      // and that the repayment below adds one to both.
+      // The product is accrual-based, so the disbursal leaves the loan with the disbursement and the interest it accrues; what matters here is that the record shows exactly what the API reports, and that the repayment below.
       expect(
         transactionsAfterDisbursal.length,
         'W5: the loan record shows the transactions the disbursal left on the loan',
@@ -874,9 +692,7 @@ test.describe('Chain W2 → W4 → W5 → W6 end-to-end proof', () => {
         'W6: that read asks for the schedule, the transactions and the charges together',
       ).toContain('all');
 
-      // ── Final proof — the record evidence, then AAP 0.10.3 criterion 12's three facts ─────────
-      // The screen reads happen before the API snapshots and before the acceptance assertions, so the
-      // three facts that decide the criterion are the last three expectations of the test.
+      // ── Final proof — the record evidence, then AAP 0.10.3 criterion 12's three facts ───────── The screen reads happen before the API snapshots and before the acceptance assertions, so the three facts that decide the.
       await pages.clientView.open(clientId);
       const finalClientHeader = await pages.clientView.readHeader();
       await pages.loans.openView(loanId);
@@ -908,8 +724,7 @@ test.describe('Chain W2 → W4 → W5 → W6 end-to-end proof', () => {
       ).toBe(0);
       for (const exchange of capture.capture.exchanges) {
         if (exchange.path === AUTHENTICATION_PATH) {
-          // The credential exchange is the one call that precedes a session, so it carries no
-          // credential header of its own.
+          // The credential exchange is the one call that precedes a session, so it carries no credential header of its own.
           continue;
         }
         expect(

@@ -6,31 +6,16 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createTranslatedLabels, type TranslatedLabel } from './translated-label.util';
 
-/**
- * Behaviour of the resolver the two savings screens share: the text it answers for a key, and its
- * re-resolution on the two events that change it — a language switch and a bundle arriving.
- *
- * `TranslateService` is stubbed at its own token, the way `savings-new.component.spec.ts` stubs it:
- * the resolver's job is the re-resolution, not ngx-translate's loading, so no bundle file, HTTP call
- * or translation stack takes part here. The stub's `instant` reads a bundle the case can replace,
- * which is what makes the frozen-value failure visible — a resolver that answered once would keep the
- * first bundle's text for ever.
- */
+/** Behaviour of the resolver the two savings screens share: the text it answers for a key, and its re-resolution on the two events that change it — a language switch and a bundle arriving. */
 
 /** One in-memory bundle: the legacy flat dotted key to its text in that language. */
 type Bundle = Readonly<Record<string, string>>;
 
 /** The English bundle the cases start from, with two keys so a per-key case has a second one. */
-const ENGLISH: Bundle = {
-  'label.input.product': 'Product',
-  'label.input.submittedon': 'Submitted on',
-};
+const ENGLISH: Bundle = { 'label.input.product': 'Product', 'label.input.submittedon': 'Submitted on', };
 
 /** The French bundle a language switch must land. */
-const FRENCH: Bundle = {
-  'label.input.product': 'Produit',
-  'label.input.submittedon': 'Soumis le',
-};
+const FRENCH: Bundle = { 'label.input.product': 'Produit', 'label.input.submittedon': 'Soumis le', };
 
 /** The part of `TranslateService` the resolver touches, and nothing more. */
 interface TranslateStub {
@@ -58,11 +43,7 @@ describe('createTranslatedLabels', () => {
     onTranslationChange = new Subject<unknown>();
 
     const stub: TranslateStub = {
-      currentLang: language.asReadonly(),
-      instant: (key: string): string => bundle[key] ?? key,
-      onLangChange,
-      onTranslationChange,
-    };
+      currentLang: language.asReadonly(), instant: (key: string): string => bundle[key] ?? key, onLangChange, onTranslationChange, };
 
     TestBed.configureTestingModule({ providers: [{ provide: TranslateService, useValue: stub }] });
   });
@@ -111,8 +92,7 @@ describe('createTranslatedLabels', () => {
   });
 
   it('replaces the fallback a key resolved to before its bundle arrived', () => {
-    // The first paint of this screen happens before the bundle lands, so `instant` can only answer
-    // with the key itself; the label must not stay at that fallback for the life of the screen.
+    // The first paint of this screen happens before the bundle lands, so `instant` can only answer with the key itself; the label must not stay at that fallback for the life of the screen.
     bundle = {};
     const translated = resolver();
     const product = translated('label.input.product');

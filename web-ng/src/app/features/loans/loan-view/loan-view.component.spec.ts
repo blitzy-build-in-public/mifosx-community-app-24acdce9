@@ -16,80 +16,15 @@ import { LoanScheduleComponent } from './loan-schedule/loan-schedule.component';
 import { LoanTransactionsComponent } from './loan-transactions/loan-transactions.component';
 import { LOAN_ACTIONS, LoanViewComponent } from './loan-view.component';
 
-/**
- * Behavioural spec for the individual-loan record — `#/viewloanaccount/:id`, the screen the loan
- * route tree mounts for its one record path (AAP 0.7.1 Features row `loans`; AAP 0.7.4's
- * `#/viewloanaccount/:id` row; AAP 0.8.2 "Feature routes, matching legacy paths exactly").
- *
- * It pins the five things the record exists to do and that a rewrite would get wrong:
- *
- *  1. the loaded loan renders its account number, its product and its identity, from exactly one read
- *     of `LoanService.get(id)` — the `GET /loans/{id}?associations=all` answer that carries the
- *     schedule, the transactions and the loan's own `charges` together (AAP 0.7.3 row "W6
- *     repayment") — which is the record's whole read, because no charge-list endpoint is a row of the
- *     plan's endpoint table and the legacy record read the same members from the same call;
- *  2. the record shows three tabs — the repayment schedule, the transactions and the charges — and
- *     hands each committed section component the payload's own slice, so none of them requests
- *     anything;
- *  3. a 404, and a route that names no loan at all, put the record into its not-found state: the
- *     message replaces the record and no request is made for a route with no id (AAP 0.7.4 state
- *     rules);
- *  4. the summary block prints the loan's total and outstanding balance from the repayment
- *     schedule's own `totalRepaymentExpected` and `totalOutstanding`, and its three balances from the
- *     sums of the schedule's per-period outstanding members — the fork answers a `summary` for active
- *     loans only, so the schedule it carries for every state is what the block reads — with a figure
- *     the payload omits rendering an empty cell rather than a zero; a 4xx other
- *     than a 404 shows Fineract's own message verbatim with the screen intact, and a 5xx is left to the
- *     interceptor's single notification (Rule 1 clause 3; AAP 0.4.2; AAP 0.4.4 decision 6; AAP 0.7.4);
- *  5. the charges tab renders one row per charge the record's own `charges` member carried — name, due
- *     date, amount, paid and outstanding, with the two charge actions beside them, every one gated on
- *     the single permission code the record declares — and shows the explicit empty state for a loan
- *     that carries none (AAP 0.7.4; AAP 0.14.1);
- *  6. every emission of `route.paramMap` re-reads the loan it names, so an in-place move from one
- *     record URL to another replaces the previous loan, its figures and its action links instead of
- *     leaving them on screen and issuing no request — and an answer for the loan the URL has left is
- *     discarded rather than painted (the reuse fix `loan-edit` and `client-actions` carry).
- *
- * The route stub is what makes point 6 testable: its `paramMap` is a subject, so a case can move the
- * URL the way the router does, on the same mounted component.
- *
- * The action entry points are asserted too, because they are what makes the record the way into W5,
- * W6 and the two charge screens: the rows of `LOAN_ACTIONS` the loan's own state offers — the charge
- * form, the six `loanaccount/:id/:action` segments and the edit form — each gated by
- * `HasPermissionDirective` on that row's own Fineract code (AAP 0.14.1, "Permissions are declared
- * once per route and once per action").
- *
- * **What is stubbed, and why.** Only the two collaborations a unit test cannot own: `LoanService`,
- * which would otherwise need a transport for a request this screen's contract already fixes — and of
- * which only the one method this screen calls, `get`, is supplied, so a stub cannot stand in for a
- * second read the screen does not make — and `PermissionsService`, which reads the session a unit
- * test has no business assembling — the same substitution `navbar.component.spec.ts` makes for the
- * same directive. Everything else is the shipped code: the three section components, the
- * application's tab strip, the status swatch, the permission directive and the real
- * `TranslateService` filled with the legacy captions, so a label that did not resolve would show up
- * as the missing-translation handler's wording rather than as the text asserted below.
- *
- * A rejected read reaches the component as `ApiError` because `core/http/fineract.interceptor.ts`
- * maps it there (AAP 0.4.2); the failures below are built with the production mapper `toApiError`
- * from a real `HttpErrorResponse`, so the type and the status the component discriminates on are the
- * application's own.
- */
+/** Behavioural spec for the individual-loan record — `#/viewloanaccount/:id`, the screen the loan route tree mounts for its one record path (AAP 0.7.1 Features row `loans`; AAP 0.7.4's `#/viewloanaccount/:id` row; AAP (AAP 0.8.2, AAP 0.7.3, Rule 1 clause 3, AAP 0.4.2). */
 
 /** The loan every case opens, as the `:id` segment delivers it. */
 const LOAN_ID = '9';
 
-/**
- * The second record the route is moved to in place — a second `#/viewloanaccount/{id}` the router
- * serves with the same component instance, which is what makes the snapshot read a defect.
- */
+/** The second record the route is moved to in place — a second `#/viewloanaccount/{id}` the router serves with the same component instance, which is what makes the snapshot read a defect. */
 const SECOND_LOAN_ID = '12';
 
-/**
- * The action links the fixture loan's state offers — it is an active loan (`loanStatusType.active`,
- * 300) — in the order `LOAN_ACTIONS` lists them: the charge form, the repayment form and undo
- * disbursal, which is exactly the set the legacy record shows for an active loan
- * (`ViewLoanDetailsController.js`).
- */
+/** The action links the fixture loan's state offers — it is an active loan (`loanStatusType.active`, 300) — in the order `LOAN_ACTIONS` lists them: the charge form, the repayment form and undo disbursal, which is exactly. */
 const ACTION_PATHS: readonly string[] = [
   `/addloancharge/${LOAN_ID}`,
   `/loanaccount/${LOAN_ID}/repayment`,
@@ -108,11 +43,7 @@ const SUMMARY_CAPTIONS: readonly string[] = [
   'Fees',
 ];
 
-/**
- * The legacy captions this record resolves, keyed as the shipped bundles key them. Every key is one
- * `app/global-translations/locale-en.json` carries, so serving them here is what proves the labels
- * resolve rather than fall back to the missing-translation handler's wording.
- */
+/** The legacy captions this record resolves, keyed as the shipped bundles key them. */
 const TRANSLATIONS: Readonly<Record<string, string>> = {
   'label.heading.repaymentschedule': 'Repayment Schedule',
   'label.heading.transactions': 'Transactions',
@@ -149,13 +80,7 @@ const TRANSLATIONS: Readonly<Record<string, string>> = {
   'error.msg.resource.not.found': 'The requested resource is not available.',
 };
 
-/**
- * The two-period schedule the payload of the fixture loan carries, shaped as
- * `GET /loans/{id}?associations=all` answers it: the loan-wide totals beside the periods, and the
- * per-period outstanding members the record's three balances are summed from. The first period is
- * paid and carries every member at zero; the second omits the fee and penalty members entirely,
- * which is how the fork reports a period no fee is outstanding against.
- */
+/** The two-period schedule the payload of the fixture loan carries, shaped as `GET /loans/{id}?associations=all` answers it: the loan-wide totals beside the periods, and the per-period outstanding members the record's. */
 const SCHEDULE: RepaymentSchedule = {
   periods: [
     {
@@ -222,16 +147,7 @@ const TRANSACTIONS: readonly LoanTransaction[] = [
   },
 ];
 
-/**
- * The charges the fixture loan carries, shaped as the record's own `charges` member carries them —
- * `GET /loans/{id}?associations=all` (AAP 0.7.3 row "W6 repayment"): one charge still outstanding,
- * with a specified due date, and one already paid that falls due on disbursement and so carries no
- * date at all.
- *
- * The settle flags are the fork's own. `chargePayable` is false on both because neither charge is
- * payable through an account transfer: the fork's `isChargePayable()` folds that payment mode in
- * beside the paid and waived flags, which is why an outstanding charge is still not a payable one.
- */
+/** The charges the fixture loan carries, shaped as the record's own `charges` member carries them — `GET /loans/{id}?associations=all` (AAP 0.7.3 row "W6 repayment"): one charge still outstanding, with a specified due. */
 const LOAN_CHARGES: readonly LoanCharge[] = [
   {
     id: 21,
@@ -266,10 +182,7 @@ const LOAN_CHARGES: readonly LoanCharge[] = [
   },
 ];
 
-/**
- * The loan the record renders: every member the page reads — its charges included, because the one
- * read carries them — with the server's own figures.
- */
+/** The loan the record renders: every member the page reads — its charges included, because the one read carries them — with the server's own figures. */
 const LOAN: LoanAccount = {
   id: 9,
   accountNo: '000000145',
@@ -287,17 +200,10 @@ const LOAN: LoanAccount = {
   charges: LOAN_CHARGES,
 };
 
-/**
- * A loan whose payload carries no `charges` member at all, which is how the fork answers a loan that
- * carries no charge: the record's charge tab then renders the explicit empty state rather than an
- * empty table or an error (AAP 0.7.4).
- */
+/** A loan whose payload carries no `charges` member at all, which is how the fork answers a loan that carries no charge: the record's charge tab then renders the explicit empty state rather than an empty table or an error (AAP 0.7.4). */
 const UNCHARGED_LOAN: LoanAccount = { ...LOAN, charges: undefined };
 
-/**
- * The one charge the second route's loan carries: a row of its own, so a charge list left over from
- * the first record is caught as surely as a figure left over from it.
- */
+/** The one charge the second route's loan carries: a row of its own, so a charge list left over from the first record is caught as surely as a figure left over from it. */
 const SECOND_LOAN_CHARGE: LoanCharge = {
   id: 31,
   chargeId: 4,
@@ -315,11 +221,7 @@ const SECOND_LOAN_CHARGE: LoanCharge = {
   dueDate: '2027-01-24',
 };
 
-/**
- * The record the second route emission names: a loan whose every printed value — its charge list
- * included — differs from {@link LOAN}, so a screen that kept the first record, its action links or
- * its charges is caught.
- */
+/** The record the second route emission names: a loan whose every printed value — its charge list included — differs from {@link LOAN}, so a screen that kept the first record, its action links or its charges is caught. */
 const SECOND_LOAN: LoanAccount = {
   ...LOAN,
   id: 12,
@@ -329,27 +231,12 @@ const SECOND_LOAN: LoanAccount = {
   charges: [SECOND_LOAN_CHARGE],
 };
 
-/**
- * The fixture loan as the same payload in another lifecycle state, so a case can read the record the
- * way the server answers it for an application that has been submitted, approved or rejected.
- *
- * @param id numeric `LoanStatus.id` the record filters its action links on.
- * @param code the status's message code, as the payload carries it.
- * @param value the status's display text.
- * @returns the fixture loan in that state.
- */
+/** The fixture loan as the same payload in another lifecycle state, so a case can read the record the way the server answers it for an application that has been submitted, approved or rejected. @param id numeric. */
 function loanInStatus(id: number, code: string, value: string): LoanAccount {
   return { ...LOAN, status: { id, code, value } };
 }
 
-/**
- * The action links the legacy record offers in each loan state, and the ones it does not — the
- * per-status button lists of `app/scripts/controllers/loanAccount/ViewLoanDetailsController.js`,
- * which is what the record's entry points have to reproduce (Rule 1 clause 3): a submitted
- * application (100) carries add-charge, approve, modify and reject; an approved loan (200) carries
- * add-charge, disburse and undo approval; an active loan (300) carries add-charge, make repayment and
- * undo disbursal; an application in any other state carries none.
- */
+/** The action links the legacy record offers in each loan state, and the ones it does not — the per-status button lists of `app/scripts/controllers/loanAccount/ViewLoanDetailsController.js`, which is what the record's (Rule 1 clause 3). */
 const ACTIONS_BY_STATUS: readonly {
   readonly state: string;
   readonly loan: LoanAccount;
@@ -396,12 +283,7 @@ const ACTIONS_BY_STATUS: readonly {
   },
 ];
 
-/**
- * A loan whose schedule reports only part of what the summary block prints: no loan-wide totals at
- * all, and one period carrying nothing but its principal balance. That is the shape an earlier loan
- * state answers with, so the block's empty-cell rule can be observed against real omissions rather
- * than against zeroes, which are values the server did report.
- */
+/** A loan whose schedule reports only part of what the summary block prints: no loan-wide totals at all, and one period carrying nothing but its principal balance. */
 const PARTIAL_LOAN: LoanAccount = {
   ...LOAN,
   repaymentSchedule: {
@@ -433,10 +315,7 @@ const NOT_FOUND_TEXT: string = TRANSLATIONS['error.msg.resource.not.found'];
 /** The message a refused request answers with, compared character for character below. */
 const VALIDATION_MESSAGE = 'The loan cannot be disbursed because it has not been approved.';
 
-/**
- * An observable a case settles by hand, so one route's answer can be held open while the URL moves to
- * another record — the order in which a superseded read answers last.
- */
+/** An observable a case settles by hand, so one route's answer can be held open while the URL moves to another record — the order in which a superseded read answers last. */
 function deferredResponse<T>(): { readonly response: Observable<T>; resolve(value: T): void } {
   let settle: ((value: T) => void) | null = null;
 
@@ -458,25 +337,13 @@ function deferredResponse<T>(): { readonly response: Observable<T>; resolve(valu
   };
 }
 
-/**
- * The read this screen makes of its family's service, so a case can both answer it and assert how
- * often, and with what, the component asked.
- */
+/** The read this screen makes of its family's service, so a case can both answer it and assert how often, and with what, the component asked. */
 type LoanRead = (id: number | string) => Observable<LoanAccount>;
 
-/**
- * The slice of `LoanService` this screen is given: the one read it makes. Supplying only this member
- * keeps a stub from standing in for a request the screen does not issue — the record carries its
- * charges itself, and no charge-list endpoint is a row of the plan's endpoint table (AAP 0.7.3 rows
- * "W6 repayment" and "Loan edit"; Rule 1 clause 2).
- */
+/** The slice of `LoanService` this screen is given: the one read it makes (AAP 0.7.3, Rule 1 clause 2). */
 type LoanServiceStub = Pick<LoanService, 'get'>;
 
-/**
- * The half of `PermissionsService` the `hasPermission` directive asks, with the legacy algebra for
- * `ALL_FUNCTIONS` and a leading `!`. The real service reads the session, which a unit test has no
- * business assembling — the substitution `navbar.component.spec.ts` makes for the same directive.
- */
+/** The half of `PermissionsService` the `hasPermission` directive asks, with the legacy algebra for `ALL_FUNCTIONS` and a leading `!`. */
 class PermissionsStub implements Pick<PermissionsService, 'has'> {
   private readonly granted: WritableSignal<readonly string[]> = signal<readonly string[]>([]);
 
@@ -503,8 +370,7 @@ describe('LoanViewComponent', () => {
   let permissions: PermissionsStub;
   let routeParams: BehaviorSubject<ParamMap>;
 
-  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines the
-  // cast to one line and keeps the DOM assertions type-checked (Rule 1 clause 4).
+  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines the cast to one line and keeps the DOM assertions type-checked (Rule 1 clause 4).
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
 
   /** The tab strip's anchors, in the order the record renders them. */
@@ -559,38 +425,20 @@ describe('LoanViewComponent', () => {
     return convertToParamMap(params);
   }
 
-  /**
-   * Lets the record's reads answer and the screen paint them: each read resumes in a microtask, which
-   * the awaits below cross before the render.
-   */
+  /** Lets the record's reads answer and the screen paint them: each read resumes in a microtask, which the awaits below cross before the render. */
   async function settle(): Promise<void> {
     await Promise.resolve();
     await fixture.whenStable();
     fixture.detectChanges();
   }
 
-  /**
-   * Moves the mounted record to another URL the way the router does when only the `:id` segment
-   * changes: the same component instance stays on screen and the parameter map emits again.
-   *
-   * @param id the `:id` segment of the record the URL now names.
-   */
+  /** Moves the mounted record to another URL the way the router does when only the `:id` segment changes: the same component instance stays on screen and the parameter map emits again. @param id the `:id` segment of the. */
   async function navigateTo(id: string): Promise<void> {
     routeParams.next(paramMapFor(id));
     await settle();
   }
 
-  /**
-   * Mounts the record for one `#/viewloanaccount/:id` URL and renders it once.
-   *
-   * Every case starts here, so the route id and the one answer the service gives are the only things
-   * it changes. The module is reset first because the route stub is the one provider a case supplies,
-   * and a module left instantiated by the previous case cannot take a new one. The subject behind the
-   * route is recreated per case, so one case's emissions cannot reach the next.
-   *
-   * @param id the `:id` segment, or `null` for a route that carries none.
-   * @param read the answer `LoanService.get` gives for this case — the record, its charges included.
-   */
+  /** Mounts the record for one `#/viewloanaccount/:id` URL and renders it once. */
   async function show(id: string | null, read: LoanRead): Promise<void> {
     TestBed.resetTestingModule();
     readLoan.mockImplementation(read);
@@ -619,14 +467,7 @@ describe('LoanViewComponent', () => {
     await settle();
   }
 
-  /**
-   * The production mapping of a Fineract failure onto `ApiError`, so a rejected read reaches the
-   * component as the type it catches in the application (AAP 0.4.2; AAP 0.7.2 row `FineractError`).
-   *
-   * @param status HTTP status to answer with.
-   * @param message the server's own `defaultUserMessage`.
-   * @returns the failure the service rejects with.
-   */
+  /** The production mapping of a Fineract failure onto `ApiError`, so a rejected read reaches the component as the type it catches in the application (AAP 0.4.2; AAP 0.7.2 row `FineractError`). @param status HTTP status to. */
   function failure(status: number, message: string): ApiError {
     return toApiError(new HttpErrorResponse({ status, error: { defaultUserMessage: message } }));
   }
@@ -639,9 +480,7 @@ describe('LoanViewComponent', () => {
   it('renders the loaded loan, from its one read, with its account number, its product and its three tabs', async () => {
     await show(LOAN_ID, () => of(LOAN));
 
-    // One read of the record endpoint, and that is the whole load: the answer carries the schedule,
-    // the transactions and the loan's charges, so no second request is made (AAP 0.7.3 row "W6
-    // repayment"; Rule 1 clause 2).
+    // One read of the record endpoint, and that is the whole load: the answer carries the schedule, the transactions and the loan's charges, so no second request is made (AAP 0.7.3 row "W6 repayment"; Rule 1 clause 2).
     expect(readLoan).toHaveBeenCalledTimes(1);
     expect(readLoan).toHaveBeenCalledWith(LOAN_ID);
     expect(component.loanId()).toBe(LOAN_ID);
@@ -658,9 +497,7 @@ describe('LoanViewComponent', () => {
     expect(head()).toContain('Spec Borrower');
     expect(head()).toContain('5,000');
 
-    // The status indicator is the design's colour and nothing else: the record's dot geometry with
-    // the active key's class, decorative and wordless (AAP 0.10.5 deliberate difference 11). The
-    // classes are checked by membership because the renderer normalises their order.
+    // The status indicator is the design's colour and nothing else: the record's dot geometry with the active key's class, decorative and wordless (AAP 0.10.5 deliberate difference 11).
     const swatch = host().querySelector('#loan-view-header app-status-swatch span');
 
     expect(swatch?.classList.contains('status-swatch')).toBe(true);
@@ -708,9 +545,7 @@ describe('LoanViewComponent', () => {
     expect(charges).not.toBeNull();
     expect((charges.componentInstance as LoanChargesComponent).charges()).toEqual(LOAN_CHARGES);
     expect((charges.componentInstance as LoanChargesComponent).loanId()).toBe(LOAN.id);
-    // The child is handed the loan's own lifecycle state beside its rows, because the section's two
-    // actions are offered only on an `Active` loan, exactly as the legacy record decides them
-    // (`ViewLoanDetailsController.js:168-175`; Rule 1 clause 3).
+    // The child is handed the loan's own lifecycle state beside its rows, because the section's two actions are offered only on an `Active` loan, exactly as the legacy record decides them (Rule 1 clause 3).
     expect((charges.componentInstance as LoanChargesComponent).loanStatus()).toEqual(LOAN.status);
     expect(fixture.debugElement.query(By.directive(LoanTransactionsComponent))).toBeNull();
     // Switching tabs reads nothing: the one answer already carried every section.
@@ -732,8 +567,7 @@ describe('LoanViewComponent', () => {
     expect(host().querySelector('.btn-group')).toBeNull();
     expect(host().querySelector('.alert')).toBeNull();
 
-    // A route with no id issues no request at all; a 404 is the answer to exactly one, and a record
-    // the server does not have leaves no charge list behind.
+    // A route with no id issues no request at all; a 404 is the answer to exactly one, and a record the server does not have leaves no charge list behind.
     expect(readLoan).toHaveBeenCalledTimes(id === null ? 0 : 1);
     expect(component.charges()).toBeNull();
   });
@@ -748,8 +582,7 @@ describe('LoanViewComponent', () => {
     ]);
     expect(actionLinks().map((link) => link.textContent?.trim())).toEqual(ACTION_CAPTIONS);
     expect(actionLinks().map((link) => link.getAttribute('href'))).toEqual(ACTION_PATHS);
-    // The charge section's pay and waive links keep the record's own code; the entry points above
-    // each answer to the code their `LOAN_ACTIONS` row carries.
+    // The charge section's pay and waive links keep the record's own code; the entry points above each answer to the code their `LOAN_ACTIONS` row carries.
     expect(component.actionPermission).toBe('UPDATE_LOAN');
 
     // The gate fails closed: without the codes no entry point is visible…
@@ -779,14 +612,12 @@ describe('LoanViewComponent', () => {
     async ({ loan, shown, hidden }) => {
       await show(LOAN_ID, () => of(loan));
 
-      // Every code the table names is held, so the only thing deciding what appears is the loan's
-      // own state — the filter the legacy record applies and the record reproduces (Rule 1 clause 3).
+      // Every code the table names is held, so the only thing deciding what appears is the loan's own state — the filter the legacy record applies and the record reproduces (Rule 1 clause 3).
       permissions.grant(['ALL_FUNCTIONS']);
       fixture.detectChanges();
 
       expect(actionLinks().map((link) => link.getAttribute('id'))).toEqual(shown);
-      // A state the legacy record offers no step in renders no joined group at all rather than an
-      // empty one, so no affordance stands where an action cannot be taken.
+      // A state the legacy record offers no step in renders no joined group at all rather than an empty one, so no affordance stands where an action cannot be taken.
       expect(host().querySelector('#loan-actions') === null).toBe(shown.length === 0);
 
       for (const id of hidden) {
@@ -798,12 +629,7 @@ describe('LoanViewComponent', () => {
   it('derives the five summary figures from the repayment schedule the fork sends', async () => {
     await show(LOAN_ID, () => of(LOAN));
 
-    // The fork answers a `summary` object for an active loan only, so the block reads the schedule
-    // every state carries: the total is
-    // `totalRepaymentExpected`, the outstanding balance is `totalOutstanding`, and the three balances
-    // are the sums of the periods' own `principalOutstanding`, `interestOutstanding` and
-    // `feeChargesOutstanding` + `penaltyChargesOutstanding` — the same figures the live API's
-    // `summary` reports for an active loan.
+    // The fork answers a `summary` object for an active loan only, so the block reads the schedule every state carries: the total is `totalRepaymentExpected`, the outstanding balance is `totalOutstanding`, and the three.
     expect(renderedSummary().map(([caption, value]) => [caption, value])).toEqual([
       ['Total', '5,625'],
       ['Outstanding', '5,133.33'],
@@ -821,8 +647,7 @@ describe('LoanViewComponent', () => {
 
     // The captions are the legacy bundles' own, in the record's order…
     expect(rows.map(([caption]) => caption)).toEqual(SUMMARY_CAPTIONS);
-    // …the one figure the schedule reports renders as reported…
-    // …and the four it omits render nothing at all (Rule 1 clause 3).
+    // …the one figure the schedule reports renders as reported… …and the four it omits render nothing at all (Rule 1 clause 3).
     expect(rows.map(([, value]) => value)).toEqual(['', '', '5,000', '', '']);
     expect(rows.map(([, value]) => value)).not.toContain('0');
   });
@@ -838,16 +663,14 @@ describe('LoanViewComponent', () => {
     expect(host().querySelector('#loan-view')).not.toBeNull();
     expect(host().querySelector('#loan-view-not-found')).toBeNull();
     expect(host().querySelector('.panel-body')).not.toBeNull();
-    // A record that could not be read leaves no charge list behind, so the charge tab can neither
-    // list rows nor claim the loan carries none.
+    // A record that could not be read leaves no charge list behind, so the charge tab can neither list rows nor claim the loan carries none.
     expect(component.charges()).toBeNull();
   });
 
   it('reports a 5xx only through the interceptor’s notification, leaving the shell usable', async () => {
     await show(LOAN_ID, () => throwError(() => failure(503, VALIDATION_MESSAGE)));
 
-    // A 5xx is the interceptor's to announce exactly once (AAP 0.4.2), so the record adds neither a
-    // second copy of the message nor a not-found state of its own (AAP 0.7.4; AAP 0.14.2).
+    // A 5xx is the interceptor's to announce exactly once (AAP 0.4.2), so the record adds neither a second copy of the message nor a not-found state of its own (AAP 0.7.4; AAP 0.14.2).
     expect(component.error()?.status).toBe(503);
     expect(component.clientError()).toBeNull();
     expect(component.notFound()).toBe(false);
@@ -866,9 +689,7 @@ describe('LoanViewComponent', () => {
 
     openChargesTab();
 
-    // The server's own values: the name verbatim, the due date through the shared display pattern —
-    // an empty cell for the charge that falls due on disbursement and carries no date — and the
-    // amounts as reported.
+    // The server's own values: the name verbatim, the due date through the shared display pattern — an empty cell for the charge that falls due on disbursement and carries no date — and the amounts as reported.
     expect(chargeRows()).toEqual([
       ['Parity Fee', '24 December 2026', '25', '0', '25'],
       ['Parity Fee W8', '', '40', '40', '0'],
@@ -893,8 +714,7 @@ describe('LoanViewComponent', () => {
     fixture.detectChanges();
     expect(chargeActionLinks().every((link) => link.style.display === 'none')).toBe(true);
 
-    // …while the code the route declares opens the directive's own gate on all four: whether a row
-    // then offers its action is the section's per-row eligibility rule, which its own spec pins.
+    // …while the code the route declares opens the directive's own gate on all four: whether a row then offers its action is the section's per-row eligibility rule, which its own spec pins.
     permissions.grant(['UPDATE_LOAN']);
     fixture.detectChanges();
     expect(chargeActionLinks().every((link) => link.style.display === '')).toBe(true);
@@ -905,9 +725,7 @@ describe('LoanViewComponent', () => {
 
     openChargesTab();
 
-    // AAP 0.7.4's empty-state rule for this surface: the shared empty state and no error, never an
-    // empty table and never a failure message. The server omits the member rather than answering an
-    // empty array, so the record's own default is what the tab reads.
+    // AAP 0.7.4's empty-state rule for this surface: the shared empty state and no error, never an empty table and never a failure message.
     expect(component.charges()).toEqual([]);
     expect(host().querySelector('#loan-charges')).toBeNull();
     expect(host().querySelector('#loan-charges-empty')?.textContent?.trim()).toBe('No Data');
@@ -938,8 +756,7 @@ describe('LoanViewComponent', () => {
       ACTION_PATHS.map((path) => path.replace(LOAN_ID, SECOND_LOAN_ID)),
     );
 
-    // …and the charge list, which is the second payload's own: the first loan's rows are gone, not
-    // merely outweighed by the second's.
+    // …and the charge list, which is the second payload's own: the first loan's rows are gone, not merely outweighed by the second's.
     expect(component.charges()).toEqual([SECOND_LOAN_CHARGE]);
 
     openChargesTab();
@@ -983,8 +800,7 @@ describe('LoanViewComponent', () => {
 
     await show(LOAN_ID, (id) => (String(id) === SECOND_LOAN_ID ? second.response : first.response));
 
-    // The first loan's read is still unanswered when the URL moves to the second loan, which is what a
-    // move between two record URLs produces when the earlier response is the slower one.
+    // The first loan's read is still unanswered when the URL moves to the second loan, which is what a move between two record URLs produces when the earlier response is the slower one.
     routeParams.next(paramMapFor(SECOND_LOAN_ID));
     await fixture.whenStable();
 
@@ -994,8 +810,7 @@ describe('LoanViewComponent', () => {
     expect(component.loan()?.id).toBe(SECOND_LOAN.id);
     expect(component.loading()).toBe(false);
 
-    // The earlier answer lands last. It is dropped rather than painted, so loan 9's record and its
-    // action links can never appear under loan 12's URL.
+    // The earlier answer lands last. It is dropped rather than painted, so loan 9's record and its action links can never appear under loan 12's URL.
     first.resolve(LOAN);
     await settle();
 

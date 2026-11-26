@@ -2,73 +2,20 @@ import { provideHttpClient, type HttpRequest } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-
 import { AppConfigService } from '../config/app-config.service';
 import {
-  CLIENT_ACTION_CHECK_STATUS,
-  CLIENT_ENTITY_NAME,
-  DataTableGateService,
-  type ClientActionName,
-  type ClientCheckStatus,
-  type DataTableGateResult,
-  type DataTableRowSet,
-  type EntityDatatableCheck,
-  type EntityDatatableCheckPage,
+  CLIENT_ACTION_CHECK_STATUS, CLIENT_ENTITY_NAME, DataTableGateService, type ClientActionName, type ClientCheckStatus,
+  type DataTableGateResult, type DataTableRowSet, type EntityDatatableCheck, type EntityDatatableCheckPage,
 } from './datatable-gate.service';
 
-/**
- * Contract and behaviour spec for `DataTableGateService`, the gate every client lifecycle action
- * passes through before it posts (AAP 0.3.4 claim 13; AAP 0.7.3 row "Client actions: datatable gate";
- * AAP 0.7.1 supporting-services row `DataTableGateService`). It is the `HttpTestingController`
- * contract test Rule 1 clause 8 asks for on both endpoints the gate uses: `GET
- * /entityDatatableChecks?limit=-1` and `GET /datatables/{table}/{clientId}?genericResultSet=true`.
- *
- * Each test below pins one contract, against the shapes the legacy controller actually reads:
- * - the checks call is a `GET` carrying `limit=-1` and no other parameter, and its answer is the paged
- *   envelope `{totalFilteredRecords, pageItems}` — not a bare row list, because
- *   `app/scripts/controllers/client/ClientActionsController.js:27` reads `response.pageItems` — and no
- *   table is read before that envelope arrives;
- * - the action selects the check status through `CLIENT_ACTION_CHECK_STATUS`, and the filter compares
- *   the check's `status.value` (a Fineract enum's name, :28) with it: a check of another entity, of
- *   another status, or with the right name in another case is never read;
- * - each surviving table is read once as a `GET` carrying `genericResultSet=true` and no other
- *   parameter, with the table name and the client id as path segments rather than query parameters;
- * - the emitted array holds one result per checked table in the order the server listed the checks,
- *   even when the reads complete in the opposite order, and each result's `resultSet` is the envelope
- *   the read returned, untouched;
- * - no applicable check emits an empty array and issues no datatable request at all;
- * - an answer the gate cannot read — a body that is not the paged envelope, a row that is not an object
- *   or names no entity, a client row without the status or the table name the comparison needs — fails
- *   with one described, displayable error, emitting nothing and reading no table, so an unreadable
- *   answer can never pass as an empty gate;
- * - another entity's unreadable row is skipped rather than failed: it is dropped on its `entity` alone,
- *   as the legacy filter drops it, and the client checks beside it are still read in the server's order;
- * - a failure of either call reaches the subscriber as an error, with no emission and no completion, so
- *   the caller in `features/clients/client-actions/**` can block the action;
- * - an action with no mapped check status fails before any request, because a gate that cannot tell
- *   what to read must not report a pass.
- *
- * The transport is the real `HttpClient` over `HttpTestingController`, so the assertions are on the
- * requests the service actually composes — method, path, parameter set and parameter values — rather
- * than on a stand-in for `HttpClient`. `AppConfigService` is stubbed because this spec is about the
- * gate's own URLs: the resolution of `apiBaseUrl` and `apiPath` is proved in
- * `core/config/app-config.service.spec.ts` (AAP 0.4.4 decision 5).
- */
+/** Contract and behaviour spec for `DataTableGateService`, the gate every client lifecycle action passes through before it posts (AAP 0.3.4 claim 13; AAP 0.7.3 row "Client actions: datatable gate"; AAP 0.7.1. */
 
-/**
- * The served API host and root, written out exactly as `web-ng/src/assets/config.json` ships them, so
- * the requests this spec expects are the URLs the deployed application produces (AAP 0.4.4 decision
- * 5(a)). No demo host appears here or anywhere else (Rule 2).
- */
+/** The served API host and root, written out exactly as `web-ng/src/assets/config.json` ships them. */
 const API_BASE_URL = 'https://localhost:8443';
 const API_PATH = '/fineract-provider/api/v1';
 const API_ROOT = `${API_BASE_URL}${API_PATH}`;
 
-/**
- * The one separator the expected URLs are joined with. Named because both the stub's composition and
- * the expectations below join path segments, and one constant keeps the expected URL and the requested
- * URL built the same way.
- */
+/** The one separator the expected URLs are joined with. Named because both the stub's composition and the expectations below join path segments, and one constant keeps the expected URL and the requested URL built the same. */
 const SEPARATOR = '/';
 
 /** The resource path of the gate's first call (AAP 0.7.3 row "Client actions: datatable gate"). */
@@ -82,18 +29,10 @@ const CLIENT_ID = 7;
 const FIRST_TABLE = 'client_extra_details';
 const SECOND_TABLE = 'client_family_members';
 
-/**
- * A client id in the zero-padded form the legacy client list shows it in. The segment is written as
- * given, so a value that is turned into a number — `+('000000002')` is `2` — would read another
- * client's table, and the case below fails on the path instead of passing on a coerced one.
- */
+/** A client id in the zero-padded form the legacy client list shows it in. */
 const LEADING_ZERO_CLIENT_ID = '000000002';
 
-/**
- * The numeric ids of the check statuses these fixtures use, from Fineract's `StatusEnum`: `ACTIVATE` is
- * 300, `WITHDRAWN` 400, `REJECTED` 500 and `CLOSE` 600. Written out so the fixture's enum values are
- * the ones the backend serialises, rather than an id the assertion would agree with on its own.
- */
+/** The numeric ids of the check statuses these fixtures use, from Fineract's `StatusEnum`: `ACTIVATE` is 300, `WITHDRAWN` 400, `REJECTED` 500 and `CLOSE` 600. */
 const STATUS_IDS: Readonly<Record<ClientCheckStatus, number>> = {
   ACTIVATE: 300,
   CLOSE: 600,
@@ -110,15 +49,7 @@ const ACTION_STATUS: readonly (readonly [ClientActionName, ClientCheckStatus])[]
   ['reactivate', 'ACTIVATE'],
 ];
 
-/**
- * Answers to `GET /entityDatatableChecks` the gate must not read as an empty gate, each named by what is
- * wrong with it. Every one is a shape Fineract's `Page<EntityDataTableChecksData>` contract rules out, so
- * none of them arrives from a healthy backend — which is why the gate has to answer them with a
- * described, displayable failure rather than the `TypeError` a bare `.filter` or `.status.value` words.
- *
- * The rows are written as the raw objects a response body carries, not as {@link EntityDatatableCheck}
- * values, because the member each case leaves out is exactly what makes it unreadable.
- */
+/** Answers to `GET /entityDatatableChecks` the gate must not read as an empty gate, each named by what is wrong with it. */
 const UNREADABLE_ANSWERS: readonly (readonly [string, Readonly<Record<string, unknown>>])[] = [
   ['that carries no pageItems', { totalFilteredRecords: 0 }],
   ['whose pageItems is null', { totalFilteredRecords: 1, pageItems: null }],
@@ -167,19 +98,12 @@ const UNREADABLE_ANSWERS: readonly (readonly [string, Readonly<Record<string, un
   ],
 ];
 
-/**
- * The stub `apiUrl()`: the gate owns no host, so the configuration supplies one (AAP 0.4.2, Rule 2). It
- * composes exactly as `AppConfigService.apiUrl()` documents — base, path and resource joined with one
- * separator and no other rewriting — so a request this spec sees is the one the application sends.
- */
+/** The stub `apiUrl()`: the gate owns no host, so the configuration supplies one (AAP 0.4.2, Rule 2). */
 const apiConfig: Pick<AppConfigService, 'apiUrl'> = {
   apiUrl: (path: string): string => `${API_ROOT}${SEPARATOR}${path}`,
 };
 
-/**
- * A generic result set with one entry, the shape `GET /datatables/{table}/{clientId}?genericResultSet=true`
- * answers: a column list and rows whose values are positional.
- */
+/** A generic result set with one entry, the shape `GET /datatables/{table}/{clientId}?genericResultSet=true` answers: a column list and rows whose values are positional. */
 const RESULT_SET: DataTableRowSet = {
   columnHeaders: [
     { columnName: 'id', columnType: 'BIGINT', columnDisplayType: 'INTEGER', isColumnPrimaryKey: true },
@@ -225,11 +149,7 @@ function isDatatableRequest(table: string, clientId: number | string) {
     request.method === 'GET' && request.url === datatableUrl(table, clientId);
 }
 
-/**
- * Matches any read in the datatable family, whichever table and client id it names. Used where the
- * expectation is that *no* table has been read — before the checks have answered, and for an answer
- * that names no table — so the assertion cannot be satisfied by a request the fixtures happen to miss.
- */
+/** Matches any read in the datatable family, whichever table and client id it names. */
 function isAnyDatatableRequest(request: HttpRequest<unknown>): boolean {
   return request.method === 'GET' && request.url.startsWith(`${API_ROOT}${SEPARATOR}datatables${SEPARATOR}`);
 }
@@ -252,15 +172,13 @@ describe('DataTableGateService', () => {
   });
 
   afterEach(() => {
-    // Proves no request was left outstanding: a gate that issued a call it never reported would fail
-    // here, and so would one that stayed silent about a table the checks named.
+    // Proves no request was left outstanding: a gate that issued a call it never reported would fail here, and so would one that stayed silent about a table the checks named.
     httpMock.verify();
   });
 
   for (const [action, statusValue] of ACTION_STATUS) {
     it(`gates the ${action} action on the ${statusValue} check status`, () => {
-      // The production table is asserted against this spec's own expectation first, so a changed
-      // mapping fails here rather than silently gating on another status.
+      // The production table is asserted against this spec's own expectation first, so a changed mapping fails here rather than silently gating on another status.
       expect(CLIENT_ACTION_CHECK_STATUS.get(action)).toBe(statusValue);
 
       const emissions: DataTableGateResult[][] = [];
@@ -273,14 +191,10 @@ describe('DataTableGateService', () => {
       expect(checksRequest.request.params.get('limit')).toBe('-1');
       expect(checksRequest.request.body).toBeNull();
 
-      // The legacy order of the two calls (`app/scripts/controllers/client/ClientActionsController.js:26-35`):
-      // the tables to read come out of the checks answer, so nothing in the datatable family may be in
-      // flight before that answer arrives. Asserted while the checks call is still unanswered, because
-      // after the flush a datatable read is exactly what is expected.
+      // The legacy order of the two calls (`app/scripts/controllers/client/ClientActionsController.js:26-35`): the tables to read come out of the checks answer, so nothing in the datatable family may be in flight before that.
       httpMock.expectNone(isAnyDatatableRequest);
 
-      // Three rows the action must ignore — another entity, another status, and the right status for a
-      // different entity — beside the one it must read.
+      // Three rows the action must ignore — another entity, another status, and the right status for a different entity — beside the one it must read.
       const otherStatus: ClientCheckStatus = statusValue === 'CLOSE' ? 'ACTIVATE' : 'CLOSE';
       checksRequest.flush(
         checksPage([
@@ -313,20 +227,17 @@ describe('DataTableGateService', () => {
     const firstRead = httpMock.expectOne(isDatatableRequest(SECOND_TABLE, CLIENT_ID));
     const secondRead = httpMock.expectOne(isDatatableRequest(FIRST_TABLE, CLIENT_ID));
 
-    // Both reads are bodiless GETs: the table and the client id are in the path, and the only parameter
-    // is the one asserted in the cases above.
+    // Both reads are bodiless GETs: the table and the client id are in the path, and the only parameter is the one asserted in the cases above.
     expect(firstRead.request.body).toBeNull();
     expect(secondRead.request.body).toBeNull();
 
-    // The first table answers last on purpose: the emitted array must follow the server's order of the
-    // checks, not the order the reads happen to complete in.
+    // The first table answers last on purpose: the emitted array must follow the server's order of the checks, not the order the reads happen to complete in.
     secondRead.flush(RESULT_SET);
     firstRead.flush(EMPTY_RESULT_SET);
 
     expect(emissions).toHaveLength(1);
     expect(emissions[0]?.map((result) => result.table)).toEqual([SECOND_TABLE, FIRST_TABLE]);
-    // The same envelopes the reads returned, not copies and not projections: the gate reads no column
-    // of a table whose columns are defined per tenant.
+    // The same envelopes the reads returned, not copies and not projections: the gate reads no column of a table whose columns are defined per tenant.
     expect(emissions[0]?.[0]?.resultSet).toBe(EMPTY_RESULT_SET);
     expect(emissions[0]?.[1]?.resultSet).toBe(RESULT_SET);
   });
@@ -351,11 +262,9 @@ describe('DataTableGateService', () => {
       );
 
     expect(emissions).toEqual([[]]);
-    // The gate answers with one empty emission and then finishes, so a caller awaiting it through
-    // `firstValueFrom` resolves instead of hanging on a stream that never completes.
+    // The gate answers with one empty emission and then finishes, so a caller awaiting it through `firstValueFrom` resolves instead of hanging on a stream that never completes.
     expect(completed).toBe(true);
-    // Nothing to read means nothing was read: no request in the datatable family exists at all, which is
-    // stricter than naming the fixtures' two tables and cannot be satisfied by a read of a third.
+    // Nothing to read means nothing was read: no request in the datatable family exists at all, which is stricter than naming the fixtures' two tables and cannot be satisfied by a read of a third.
     httpMock.expectNone(isAnyDatatableRequest);
   });
 
@@ -381,22 +290,18 @@ describe('DataTableGateService', () => {
 
       httpMock.expectOne(isChecksRequest).flush(answer);
 
-      // One failure, no gate, no completion: an answer the gate cannot read is reported as a failure
-      // rather than emitted as the empty gate a caller would proceed on.
+      // One failure, no gate, no completion: an answer the gate cannot read is reported as a failure rather than emitted as the empty gate a caller would proceed on.
       expect(emissions).toEqual([]);
       expect(failures).toHaveLength(1);
 
-      // `failureMessage()` in the caller renders an `Error`'s own message verbatim, so the gate has to
-      // fail with a sentence a screen may show: non-empty, and not the `TypeError` wording of a bare
-      // `.filter` or `.status.value` read.
+      // `failureMessage()` in the caller renders an `Error`'s own message verbatim, so the gate has to fail with a sentence a screen may show: non-empty, and not the `TypeError` wording of a bare `.filter` or `.status.value`.
       const failure = failures[0];
       expect(failure).toBeInstanceOf(Error);
       const message = failure instanceof Error ? failure.message : '';
       expect(message).not.toBe('');
       expect(message).not.toMatch(/TypeError|undefined|Cannot read/);
 
-      // No datatable read can be issued for an answer whose tables are unknown, and `verify()` in
-      // `afterEach` would report any that was.
+      // No datatable read can be issued for an answer whose tables are unknown, and `verify()` in `afterEach` would report any that was.
       httpMock.expectNone(isDatatableRequest(FIRST_TABLE, CLIENT_ID));
       httpMock.expectNone(isDatatableRequest(SECOND_TABLE, CLIENT_ID));
     });
@@ -405,26 +310,16 @@ describe('DataTableGateService', () => {
   it(`skips another entity's unreadable row and still reads the client check beside it`, () => {
     const emissions: DataTableGateResult[][] = [];
     const failures: unknown[] = [];
-
     service.checkClientActionGate(CLIENT_ID, 'activate').subscribe({
-      next: (results) => emissions.push(results),
-      error: (failure: unknown) => failures.push(failure),
-    });
+      next: (results) => emissions.push(results), error: (failure: unknown) => failures.push(failure), });
 
-    // `m_loan` is another entity's check. The legacy filter drops it on `entity` alone
-    // (`app/scripts/controllers/client/ClientActionsController.js:28`), so its absent `status` and
-    // `datatableName` are never read: a skip is not a failure, and the client check beside it is read.
+    // `m_loan` is another entity's check. The legacy filter drops it on `entity` alone (`app/scripts/controllers/client/ClientActionsController.js:28`).
     httpMock.expectOne(isChecksRequest).flush({
-      totalFilteredRecords: 2,
-      pageItems: [{ entity: 'm_loan' }, checkRow(FIRST_TABLE, 'ACTIVATE')],
-    });
-
+      totalFilteredRecords: 2, pageItems: [{ entity: 'm_loan' }, checkRow(FIRST_TABLE, 'ACTIVATE')], });
     httpMock.expectNone(isDatatableRequest(SECOND_TABLE, CLIENT_ID));
-
     const read = httpMock.expectOne(isDatatableRequest(FIRST_TABLE, CLIENT_ID));
     expect(read.request.params.get('genericResultSet')).toBe('true');
     read.flush(RESULT_SET);
-
     expect(failures).toEqual([]);
     expect(emissions).toEqual([[{ table: FIRST_TABLE, resultSet: RESULT_SET }]]);
   });
@@ -432,19 +327,12 @@ describe('DataTableGateService', () => {
   it('propagates a failed checks call without reading a table or reporting an empty gate', () => {
     const emissions: DataTableGateResult[][] = [];
     const failures: unknown[] = [];
-
     service.checkClientActionGate(CLIENT_ID, 'activate').subscribe({
-      next: (results) => emissions.push(results),
-      error: (failure: unknown) => failures.push(failure),
-    });
-
+      next: (results) => emissions.push(results), error: (failure: unknown) => failures.push(failure), });
     httpMock
       .expectOne(isChecksRequest)
-      .flush(
-        { defaultUserMessage: 'The list of checks could not be read' },
-        { status: 500, statusText: 'Server Error' },
-      );
-
+      .flush({ defaultUserMessage: 'The list of checks could not be read' },
+        { status: 500, statusText: 'Server Error' }, );
     expect(failures).toHaveLength(1);
     expect(emissions).toEqual([]);
   });
@@ -452,24 +340,17 @@ describe('DataTableGateService', () => {
   it('propagates a failed table read instead of reporting the gate as passed', () => {
     const emissions: DataTableGateResult[][] = [];
     const failures: unknown[] = [];
-
     service.checkClientActionGate(CLIENT_ID, 'activate').subscribe({
-      next: (results) => emissions.push(results),
-      error: (failure: unknown) => failures.push(failure),
-    });
-
+      next: (results) => emissions.push(results), error: (failure: unknown) => failures.push(failure), });
     httpMock.expectOne(isChecksRequest).flush(checksPage([checkRow(FIRST_TABLE, 'ACTIVATE')]));
 
-    // One table failing fails the whole gate: a partial answer would let the caller act on a check
-    // whose table was never read.
+    // One table failing fails the whole gate: a partial answer would let the caller act on a check whose table was never read.
     httpMock
       .expectOne(isDatatableRequest(FIRST_TABLE, CLIENT_ID))
       .flush({ defaultUserMessage: 'Not permitted' }, { status: 403, statusText: 'Forbidden' });
-
     expect(failures).toHaveLength(1);
     expect(emissions).toEqual([]);
   });
-
   for (const clientId of [CLIENT_ID, String(CLIENT_ID), LEADING_ZERO_CLIENT_ID] as const) {
     it(`uses the client id ${JSON.stringify(clientId)} as a raw path segment`, () => {
       service
@@ -478,9 +359,7 @@ describe('DataTableGateService', () => {
 
       httpMock.expectOne(isChecksRequest).flush(checksPage([checkRow(FIRST_TABLE, 'ACTIVATE')]));
 
-      // The id is part of the path, unencoded and uncoerced, so `isDatatableRequest` compares it as a
-      // whole segment: a query-parameter form of the id would not match, and neither would the value
-      // the leading-zero case would carry if the segment were turned into a number.
+      // The id is part of the path, unencoded and uncoerced, so `isDatatableRequest` compares it as a whole segment: a query-parameter form of the id would not match, and neither would the value the leading-zero case would.
       httpMock.expectOne(isDatatableRequest(FIRST_TABLE, clientId)).flush(RESULT_SET);
     });
   }
@@ -489,8 +368,7 @@ describe('DataTableGateService', () => {
     const emissions: DataTableGateResult[][] = [];
     const failures: unknown[] = [];
 
-    // An action name read off the URL is a string until it is narrowed: the cast is the documented
-    // boundary where that untyped value reaches the typed API (Rule 1 clause 4).
+    // An action name read off the URL is a string until it is narrowed: the cast is the documented boundary where that untyped value reaches the typed API (Rule 1 clause 4).
     service.checkClientActionGate(CLIENT_ID, 'archive' as ClientActionName).subscribe({
       next: (results) => emissions.push(results),
       error: (failure: unknown) => failures.push(failure),
@@ -503,10 +381,7 @@ describe('DataTableGateService', () => {
   });
 
   it('refuses a crafted route id with the guard message and issues no request at all', () => {
-    // The router hands an `:id` over URL-decoded, so this value would leave `/api/v1` and read another
-    // resource on the same host (CWE-20, CWE-22). The refusal arrives as an observable error — the
-    // service documents that it fails through the returned observable and never synchronously — and it
-    // comes before every request, including the id-less checks call.
+    // The router hands an `:id` over URL-decoded, so this value would leave `/api/v1` and read another resource on the same host (CWE-20, CWE-22).
     const crafted = '../../../users';
     const emissions: DataTableGateResult[][] = [];
     const refusals: Error[] = [];
@@ -522,8 +397,7 @@ describe('DataTableGateService', () => {
 
     expect(emissions).toEqual([]);
     expect(refusals).toHaveLength(1);
-    // The message is the guard's fixed sentence, which names neither the rejected value nor the call:
-    // that sentence is the text a screen renders, so the diagnostic travels in `cause` instead.
+    // The message is the guard's fixed sentence, which names neither the rejected value nor the call: that sentence is the text a screen renders, so the diagnostic travels in `cause` instead.
     expect(refusals[0].message).not.toContain(crafted);
     expect(refusals[0].message).not.toContain('DataTableGateService.checkClientActionGate');
     expect(String(refusals[0].cause)).toContain(`'${crafted}'`);
@@ -533,9 +407,7 @@ describe('DataTableGateService', () => {
   });
 
   it('refuses a check row whose datatable name is not a table name, without reading that table', () => {
-    // The table name comes from the server's own `entityDatatableChecks` answer, so it is checked
-    // where the read path is composed: a name of any other shape must not be written into a path that
-    // could leave the datatable family, and the gate must fail rather than report a table it never read.
+    // The table name comes from the server's own `entityDatatableChecks` answer, so it is checked where the read path is composed: a name of any other shape must not be written into a path that could leave the datatable.
     const crafted = '../../../users';
     const emissions: DataTableGateResult[][] = [];
     const refusals: Error[] = [];
@@ -553,8 +425,7 @@ describe('DataTableGateService', () => {
 
     expect(emissions).toEqual([]);
     expect(refusals).toHaveLength(1);
-    // Same two channels as the case above: the server-supplied name and the composing call are in
-    // `cause`, and the sentence a screen renders names neither of them.
+    // Same two channels as the case above: the server-supplied name and the composing call are in `cause`, and the sentence a screen renders names neither of them.
     expect(refusals[0].message).not.toContain(crafted);
     expect(refusals[0].message).not.toContain('DataTableGateService.checkClientActionGate');
     expect(String(refusals[0].cause)).toContain(`'${crafted}'`);

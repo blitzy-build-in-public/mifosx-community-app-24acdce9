@@ -1,33 +1,9 @@
-<!--
-  Accounts section of the individual client record's `General` tab: the read-only table of the
-  client's loan and savings accounts (AAP 0.7.1 row `clients` — `ClientViewComponent` with
-  `ClientAccountsComponent`; AAP 0.7.4 `#/viewclient/:id`; Figma screen `1:4`, step 3 of "Sign in
-  and open a client record").
-
-  The caller owns the record card, its pale work panel and the `ACCOUNTS` section heading, so this
-  file contributes the card body and nothing else: no panel, no heading, no toolbar, no background,
-  no stylesheet and no colour of its own (Rule 1 clause 6). Every visual value — the `.table` header
-  band and row rules, the 8px cell padding, the body type and the status colour — comes from the
-  global classes of `web-ng/src/styles.scss`, and the empty state from `app-empty-state`.
-
-  The Figma raster paints the section's heading and the first two pixels of its container and no
-  column, row, swatch or figure, so the table's own metrics are the design system's inherited table
-  values rather than measurements of this screen (AAP 0.2.3 rows `ClientList / DataTable`,
-  `StatusSwatch`, `EmptyState`).
--->
+<!-- Accounts section of the individual client record's `General` tab: the read-only table of the client's loan and savings accounts (AAP 0.7.1 row `clients` — `ClientViewComponent` with `ClientAccountsComponent`; AAP 0.7.4 (Rule 1 clause 6, AAP 0.2.3). -->
 <div class="panel-body">
-  <!-- Four mutually exclusive states, in the order a viewer meets them, and a failed read never
-       reaches the empty state. While the first response is in flight nothing is painted: the design
-       shows no spinner, skeleton or placeholder, and AAP 0.2.4 records that the flow carries no such
-       asset, so emitting nothing is the faithful state rather than a missing one. -->
+  <!-- Four mutually exclusive states, in the order a viewer meets them, and a failed read never reaches the empty state (AAP 0.2.4). -->
   @if (loading()) {
   } @else if (failed()) {
-    <!-- Fineract's own failure text, verbatim and untranslated, for the failures the interceptor
-         does not notify — a 4xx — because it raises its single notification for status `0` and
-         `>= 500` alone. A 5xx or a transport fault leaves the message empty, so this branch paints
-         nothing and the notification already raised stays the one report of it. The section must
-         never claim "no accounts" about a client whose accounts were never read, so the explicit
-         empty state below is reserved for the client that genuinely holds none (AAP 0.7.4). -->
+    <!-- Fineract's own failure text, verbatim and untranslated, for the failures the interceptor does not notify — a 4xx — because it raises its single notification for status `0` and `>= 500` alone (AAP 0.7.4). -->
     @if (errorMessage(); as message) {
       <div class="alert alert-danger" role="alert">{{ message }}</div>
     }
@@ -37,10 +13,7 @@
     <table class="table table-striped" id="client-accounts">
       <thead>
         <tr>
-          <!-- `label.heading.accnum` is the key the legacy client record heads this column with
-               ("Account Number" in `app/global-translations/locale-en.json`); no locale bundle
-               defines a `label.heading.accountno`, so the account-number column takes the key the
-               legacy table itself uses. -->
+          <!-- `label.heading.accnum` is the key the legacy client record heads this column with ("Account Number" in `app/global-translations/locale-en.json`); no locale bundle defines a `label.heading.accountno`, so the. -->
           <th scope="col">{{ 'label.heading.accnum' | translate }}</th>
           <th scope="col">{{ 'label.heading.product' | translate }}</th>
           <th scope="col">{{ 'label.heading.status' | translate }}</th>
@@ -48,28 +21,14 @@
         </tr>
       </thead>
       <tbody>
-        <!-- Tracked by index, not by `row.id`: loan accounts and savings accounts are numbered by
-             independent Fineract sequences, so a client holding both can carry the same id twice
-             and a repeated track key is an Angular error. The row list is replaced wholesale on
-             every load, which leaves the index as this frame's stable identity. -->
+        <!-- Tracked by index, not by `row.id`: loan accounts and savings accounts are numbered by independent Fineract sequences, so a client holding both can carry the same id twice and a repeated track key is an Angular error. -->
         @for (row of rows(); track $index) {
           <tr>
             <td>{{ row.accountNo }}</td>
             <td>{{ row.productName }}</td>
-            <!-- The swatch is the whole cell: a colour and no word, no `title`, no `aria-label`,
-                 no visually-hidden text. The status indicator is deliberately text-free, the
-                 deliberate difference the plan registers for every status indicator in this
-                 application (AAP 0.10.5 item 11; Rule 1 clause 3). -->
+            <!-- The swatch is the whole cell: a colour and no word, no `title`, no `aria-label`, no visually-hidden text (AAP 0.10.5, Rule 1 clause 3). -->
             <td><app-status-swatch [status]="row.status" /></td>
-            <!-- The account family's own balance figure, right-aligned beneath its header and
-                 printed through the `number` pipe, which groups a figure the way the filter legacy
-                 applies to both of its balance cells does (`app/views/clients/viewclient.html:349`
-                 `{{loanaccount.loanBalance|number}}` and `:446`
-                 `{{savingaccount.accountBalance|number}}`), so this record prints `5,000` for a
-                 five-thousand balance. Displayed balance formatting is a dimension the parity
-                 comparison decides on (AAP 0.10.2; Rule 1 clause 3). A row whose family reported no
-                 figure leaves the cell empty: no zero, dash, currency symbol or placeholder the
-                 payload never carried (AAP 0.7.4; Rule 1 clause 3). -->
+            <!-- The account family's own balance figure, right-aligned beneath its header and printed through the `number` pipe, which groups a figure the way the filter legacy applies to both of its balance cells does (AAP 0.10.2, Rule 1 clause 3, AAP 0.7.4). -->
             <td class="text-right">
               @if (row.balance !== null) {
                 {{ row.balance | number }}

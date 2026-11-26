@@ -3,10 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { AVAILABLE_LANGS } from '../core/i18n/translate.config';
 import { DISPLAY_DATE_FORMAT, fromFineractDate, toFineractDate } from './date-format.util';
 
-/**
- * Narrows a parse result the calling test has already decided must be a date, without an optional
- * chain that would let a `null` reach an assertion as `undefined`.
- */
+/** Narrows a parse result the calling test has already decided must be a date, without an optional chain that would let a `null` reach an assertion as `undefined`. */
 function asDate(value: Date | null): Date {
   expect(value).toBeInstanceOf(Date);
 
@@ -45,12 +42,9 @@ describe('toFineractDate', () => {
     expect(toFineractDate(new Date(2026, 10, 21), 'es')).toBe('21 noviembre 2026');
   });
 
-  it.each(AVAILABLE_LANGS)(
-    'formats a date in %s without reporting a missing locale',
-    (language: string) => {
+  it.each(AVAILABLE_LANGS)('formats a date in %s without reporting a missing locale', (language: string) => {
       expect(toFineractDate(new Date(2026, 10, 21), language)).toMatch(/^21 .+ 2026$/u);
-    },
-  );
+    }, );
 
   it('formats a regional code with its base language data', () => {
     expect(toFineractDate(new Date(2026, 10, 21), 'pt_BR')).toBe('21 novembro 2026');
@@ -58,32 +52,19 @@ describe('toFineractDate', () => {
   });
 
   it('reports a language it ships no locale data for instead of using another language', () => {
-    expect(() => toFineractDate(new Date(2026, 10, 21), 'et')).toThrow(
-      /No Angular locale data|no locale data/i,
-    );
+    expect(() => toFineractDate(new Date(2026, 10, 21), 'et')).toThrow(/No Angular locale data|no locale data/i, );
   });
 });
 
 describe('fromFineractDate', () => {
-  it.each([
-    ['1988-03-14', 1988, 2, 14],
-    ['2026-11-21', 2026, 10, 21],
-    ['2026-01-01', 2026, 0, 1],
-    ['2026-12-31', 2026, 11, 31],
-  ])(
-    'parses %s as local midnight, so the day never shifts by timezone',
-    (input: string, year: number, month: number, day: number) => {
+  it.each([['1988-03-14', 1988, 2, 14], ['2026-11-21', 2026, 10, 21], ['2026-01-01', 2026, 0, 1], ['2026-12-31', 2026, 11, 31], ])(
+    'parses %s as local midnight, so the day never shifts by timezone', (input: string, year: number, month: number, day: number) => {
       const parsed = asDate(fromFineractDate(input));
 
-      expect([parsed.getFullYear(), parsed.getMonth(), parsed.getDate()]).toEqual([
-        year,
-        month,
-        day,
-      ]);
+      expect([parsed.getFullYear(), parsed.getMonth(), parsed.getDate()]).toEqual([year, month, day, ]);
       expect(parsed.getHours()).toBe(0);
       expect(parsed.getMinutes()).toBe(0);
-    },
-  );
+    }, );
 
   it('reads the leading date part of a full ISO string', () => {
     const parsed = asDate(fromFineractDate('2026-11-21T00:00:00.000+0000'));

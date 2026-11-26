@@ -4,39 +4,13 @@ import { firstValueFrom, type Observable } from 'rxjs';
 import { PermissionsService } from './permissions.service';
 import type { SessionData, SessionUserResponse } from './session.model';
 
-/**
- * The prefix the legacy storage wrapper is configured with — `.constant('prefix', 'mifosX')` at
- * `app/scripts/webstorage-configuration.js:3` — under which both front ends keep the shared session
- * (AAP 0.3.4 claim 9).
- */
+/** The prefix the legacy storage wrapper is configured with (`.constant('prefix', 'mifosX')`, `app/scripts/webstorage-configuration.js:3`), under which both front ends keep the shared session (AAP 0.3.4 claim 9). */
 export const LEGACY_STORAGE_PREFIX = 'mifosX';
 
-/**
- * The entry name the legacy `SessionManager` uses: `webStorage.add("sessionData", {userId,
- * authenticationKey, userPermissions})` at `app/scripts/services/SessionManager.js:20-23`,
- * `webStorage.remove("sessionData")` at :31 and `webStorage.get('sessionData')` at :37.
- */
+/** The entry name the legacy `SessionManager` uses — `sessionData` — written at `SessionManager.js:20-23`, removed at :31 and read at :37. */
 export const SESSION_ENTRY_KEY = 'sessionData';
 
-/**
- * The key the legacy pair actually stores at.
- *
- * `angular-webstorage` composes `prefix + key` by raw string concatenation, with no separator, so
- * `'mifosX'` and `'sessionData'` make `'mifosXsessionData'` (AAP 0.3.4 claim 9): that spelling is the
- * one this application writes and removes. Releases of the same library from 0.11.0 on ignore the
- * `prefix` constant and store the bare `sessionData` key, and either front end may have written
- * either spelling on the origin the two share during cutover (AAP 0.4.2), so `read()` accepts both —
- * this composed spelling first — rather than losing the login a legacy screen wrote.
- *
- * This function is the single place that serialized key is derived (AAP 0.9.4 row 7): the exact key
- * the bower library produces is an open item of the plan until a legacy login is observed, and if the
- * observation differs from this composition the correction is this one expression and nothing else,
- * because every storage read, write and removal below goes through it.
- *
- * @param prefix the legacy wrapper's configured prefix; the application always uses the default.
- * @param entry the legacy entry name; the application always uses the default.
- * @returns the key the shared session entry is stored under.
- */
+/** The key the legacy pair stores at: `prefix + key` by raw string concatenation, so `'mifosXsessionData'` (AAP 0.3.4 claim 9); later releases of the library ignore the prefix and either front end may have written either spelling on the shared origin (AAP 0.4.2), so `read()` accepts both — and this function is the single place that key is derived (AAP 0.9.4 row 7). */
 export function sessionStorageKey(
   prefix: string = LEGACY_STORAGE_PREFIX,
   entry: string = SESSION_ENTRY_KEY,
@@ -49,17 +23,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/**
- * The stored entry as a `SessionData`, or `null` when it is anything else.
- *
- * The entry is whatever a previous release of either front end wrote to `localStorage`, so it is
- * parsed into `unknown` and narrowed field by field (Rule 1 clause 4): a session needs a finite
- * numeric `userId`, a non-empty string `authenticationKey` and a `userPermissions` array of strings
- * (AAP 0.7.2, row `SessionData`). Anything else — an absent field, a string id, a permission list
- * that is not an array of strings, `null`, an array — is not a session, and reporting it as one would
- * let the interceptor send an `Authorization` header and the gate a permission list that no login
- * produced.
- */
+/** The stored entry as a `SessionData`, or `null` when it is anything else: whatever a previous release of either front end wrote is input rather than a typed value, so it is parsed into `unknown` and narrowed field by field (Rule 1 clause 4, AAP 0.7.2 row `SessionData`). */
 function toSessionData(value: unknown): SessionData | null {
   if (!isRecord(value)) {
     return null;
@@ -81,9 +45,7 @@ function toSessionData(value: unknown): SessionData | null {
     return null;
   }
 
-  // Filtered through a type predicate rather than a boolean test, so the list below is a `string[]`
-  // this function has actually checked instead of the loosely typed array `Array.isArray` leaves
-  // behind (Rule 1 clause 4). A single non-string entry makes the whole list unusable.
+  // A type predicate rather than a boolean test, so the list below is a `string[]` this function has checked (Rule 1 clause 4).
   const codes: string[] = userPermissions.filter((code): code is string => typeof code === 'string');
   if (codes.length !== userPermissions.length) {
     return null;
@@ -92,136 +54,40 @@ function toSessionData(value: unknown): SessionData | null {
   return { userId, authenticationKey, userPermissions: codes };
 }
 
-/**
- * Supplies the `GET /users/{id}` answer the restore needs (AAP 0.7.3 W1: `GET /users/{id}`,
- * `userResource`) without this service owning an HTTP call.
- *
- * The session restore re-reads the user Fineract's id belongs to —
- * `resourceFactory.userResource.get({userId: sessionData.userId})` at
- * `app/scripts/services/SessionManager.js:41` — and only a class that owns `HttpClient` may issue it:
- * `auth.service.ts` is one of the seven files AAP 0.8.2 and 0.14.1 exempt from the
- * `no-restricted-imports` ban on `HttpClient`, and `core/auth/session.service.ts` is not. The owning
- * service passes its call in, so this file holds no `HttpClient`, names no Fineract path and still
- * runs the legacy sequence unchanged.
- *
- * @param userId the `userId` of the stored session, forwarded verbatim to `GET /users/{id}`.
- * @returns an observable of the response's projection; only its first emission is read.
- */
+/** Supplies the `GET /users/{id}` answer the restore needs (AAP 0.7.3 W1) — legacy's `userResource.get({userId})` at `SessionManager.js:41` — so this service owns no HTTP call and names no Fineract path: only `auth.service.ts` of the two may hold `HttpClient` (AAP 0.8.2, AAP 0.14.1), and the owning service passes its call in. */
 export type SessionUserReader = (userId: number) => Observable<SessionUserResponse>;
 
-/**
- * The legacy session entry both front ends share: reads and writes the `{userId, authenticationKey,
- * userPermissions}` JSON that `SessionManager` writes under the `mifosX` prefix, restores it through
- * `GET /users/{id}`, and clears it on logout and on a 401 (AAP 0.7.1, row `SessionService`:
- * `read(): SessionData | null`, `write(session)`, `clear()`, `restore(): Promise<boolean>`).
- *
- * **One login, two front ends.** During cutover a user's login is shared with the AngularJS screens
- * that are not migrated yet (AAP 0.4.2), which is why the storage key, the prefix and the JSON shape
- * are legacy's rather than a design of this application's own: the interceptor sends
- * `Authorization: Basic <authenticationKey>` from what this service publishes and a legacy screen
- * reads the same entry out of `localStorage` (AAP 0.3.4 claim 9).
- *
- * **The permission list has one owner.** `PermissionsService` answers every permission question, so
- * the restore publishes the stored `userPermissions` through it and keeps no second copy (AAP 0.7.1,
- * row `PermissionsService`). That is also the legacy behaviour: the restore overwrites the response's
- * own list with the stored one (`app/scripts/services/SessionManager.js:41-43`).
- *
- * **Nothing here is logged.** The authentication key is a bearer credential (Rule 1 clause 9,
- * AAP 0.10.4): it is persisted only in this entry and is never written to the console or to a log.
- *
- * Storage is reached through the injected `DOCUMENT`, and when the browser cannot provide
- * `localStorage` — a null `defaultView`, or a `localStorage` getter that throws — the entry is kept in
- * memory for the page's lifetime instead, the fallback the legacy wrapper itself selects
- * (`app/scripts/webstorage-configuration.js:6-12`, "Using memory storage: a page reload will clear all
- * stored data"). A storage exception never escapes this service.
- */
+/** The legacy session entry both front ends share: reads, writes and removes the `{userId, authenticationKey, userPermissions}` JSON `SessionManager` writes under the `mifosX` prefix, restores it through `GET /users/{id}`, and clears it on logout and on a 401 (AAP 0.7.1 `SessionService`; AAP 0.4.2; AAP 0.3.4 claim 9), with `PermissionsService` the one owner of the list and the key never logged (Rule 1 clause 9). */
 @Injectable({ providedIn: 'root' })
 export class SessionService {
-  /**
-   * Injected rather than read off the `document` global, so a test can supply a document with no
-   * browsing context and the storage-unavailable path is exercisable.
-   */
+  /** Injected rather than read off the `document` global, so a test can supply a document with no browsing context and the storage-unavailable path stays exercisable. */
   private readonly document = inject(DOCUMENT);
 
-  /**
-   * The single owner of the permission list: `clear()` withdraws permissions through it and the
-   * restore publishes the stored list through it, so the template gate and the route guard keep
-   * answering from one list (AAP 0.1.1, "a permission gate that fails closed").
-   */
+  /** The single owner of the permission list: `clear()` withdraws through it and the restore publishes the stored list through it, so the template gate and the route guard answer from one list (AAP 0.1.1). */
   private readonly permissions = inject(PermissionsService);
 
   /** The session this application itself published, or `null` when none is in effect. */
   private readonly state = signal<SessionData | null>(null);
 
-  /**
-   * The last entry this instance wrote or found, kept so the session survives while the browser's
-   * storage cannot answer — the memory fallback of `app/scripts/webstorage-configuration.js:6-12`.
-   * It is a copy, never the source of truth while `localStorage` is readable.
-   */
+  /** The last entry this instance wrote or found, kept so the session survives while the browser's storage cannot answer — the memory fallback of `app/scripts/webstorage-configuration.js:6-12`. */
   private memoryEntry: string | null = null;
 
-  /**
-   * True while the browser's storage is the state this instance reads; false once a write or a
-   * removal failed, from which point the in-memory copy is the only state worth trusting — a store
-   * that refused a write still holds the entry it refused to replace, and reading that back would
-   * answer with a session this instance has already left behind.
-   */
+  /** True while the browser's storage is the state this instance reads; false once a write or a removal failed, from which point the in-memory copy is the only state worth trusting. */
   private storageInSync = true;
 
   /** The projection of the last restored session, which is what the user-menu label shows. */
   private readonly currentUser = signal<SessionUserResponse | null>(null);
 
-  /**
-   * The in-memory session the HTTP interceptor reads for `Authorization: Basic <authenticationKey>`
-   * (AAP 0.4.2: one interceptor adds both that header and the tenant header).
-   *
-   * It is published by `write()` and by `restore()`, and emptied by `clear()`. A caller that needs the
-   * credential — the interceptor — reads it here rather than from storage, so no request path parses
-   * the stored JSON.
-   */
+  /** The in-memory session the interceptor reads for `Authorization: Basic <authenticationKey>` (AAP 0.4.2): published by `write()` and `restore()`, emptied by `clear()`, so no request path parses the stored JSON. */
   readonly session: Signal<SessionData | null> = this.state.asReadonly();
 
-  /**
-   * The projection of the restored session — `{id, username}` from `GET /users/{id}` — which is the
-   * label the user menu shows. `write()` and `clear()` set it to `null`: a previous session's label
-   * must not outlive the session it belongs to, and the user of a session this application has just
-   * written arrives from the authentication response its caller holds.
-   *
-   * It carries no permissions: `PermissionsService` holds the only copy of those (AAP 0.7.1, row
-   * `PermissionsService`).
-   */
+  /** The `{id, username}` projection of the restored session, which is the label the user menu shows; `write()` and `clear()` empty it, and it carries no permissions, because `PermissionsService` holds the only copy (AAP 0.7.1). */
   readonly user: Signal<SessionUserResponse | null> = this.currentUser.asReadonly();
 
-  /**
-   * The account name the user menu is labelled with — `username` from `GET /users/{id}`, so `mifos`
-   * after a login as `mifos` — or `null` until a restore has resolved one.
-   *
-   * It is a projection of `user()` rather than a state of its own, so the two cannot disagree, and it
-   * is deliberately not part of the stored entry: `SessionData` keeps exactly the three legacy fields
-   * (AAP 0.7.2, row `SessionData`), and `write()` and `clear()` empty the label with the session it
-   * describes. `core/layout/navbar.component.ts` renders it and `AuthService` re-exposes it.
-   */
+  /** The account name the user menu is labelled with — `username` from `GET /users/{id}` — or `null` until a restore has resolved one; a projection of `user()`, deliberately not part of the stored entry (AAP 0.7.2 row `SessionData`). */
   readonly username: Signal<string | null> = computed(() => this.currentUser()?.username ?? null);
 
-  /**
-   * The stored session entry, or `null` when there is no entry or the entry is not a well-formed
-   * session (AAP 0.7.1, `read(): SessionData | null`).
-   *
-   * This is a pure storage read of the entry itself: it publishes nothing and writes nothing, so a
-   * caller can ask what is stored without putting it into effect — `restore()` is what publishes. The
-   * composed `mifosXsessionData` key from `sessionStorageKey()` is read first and the bare
-   * `sessionData` spelling second, because either front end may have written either. A malformed entry
-   * under the composed key is reported as `null` rather than falling through to the other spelling: a
-   * partly valid entry beside a valid one is a corrupted session, not a session.
-   *
-   * An entry that is present but is not a session is reported as `null` and left exactly where it was
-   * found, which is the legacy behaviour this service reproduces (Rule 1 clause 3): the legacy
-   * `angular-webstorage` wrapper parses an entry when it is read and throws, and a read never writes,
-   * so repairing the store here would be a difference from legacy that AAP 0.10.5 does not register.
-   * The consequence is legacy's as well: a corrupt composed entry keeps shadowing a valid bare entry
-   * under the other spelling for the life of the page, exactly as a legacy screen's read of it would
-   * keep failing, and the next login writes over it.
-   */
+  /** The stored session entry, or `null` when there is none or it is not well formed (AAP 0.7.1 `read`): a pure storage read that publishes nothing, the composed `mifosXsessionData` key first and the bare `sessionData` spelling second, a malformed entry under the composed key reported rather than falling through, and every unreadable entry left where it was found, as legacy leaves it (Rule 1 clause 3). */
   read(): SessionData | null {
     const raw = this.readEntry();
 
@@ -240,30 +106,7 @@ export class SessionService {
     return toSessionData(parsed);
   }
 
-  /**
-   * Persists `session` as the legacy entry and publishes it (AAP 0.7.1, `write(session)`).
-   *
-   * Exactly the three stored fields are serialised — nothing else the caller's object may carry —
-   * because the entry is a contract with the legacy screens reading it (AAP 0.7.2, row `SessionData`).
-   * The session is checked and normalised, and its entry serialised, **before** anything is
-   * persisted: a caller whose object cannot describe a session gets a described error and no entry at
-   * all, never the `{userId, authenticationKey}` fragment a spread of a malformed member would have
-   * left behind after the write (AAP 0.4.3 row 2, whose response this entry is copied from).
-   *
-   * The permission list is not published here — `write()` publishes no permissions — and this
-   * method's own job is the entry and the session signal. The stored list reaches
-   * `PermissionsService`, its only owner, through the `restore()` that follows: that is where the
-   * `userPermissions` written here are published, exactly as the legacy restore publishes the stored
-   * list over the response's own (`app/scripts/services/SessionManager.js:41-43`).
-   *
-   * `user()` is emptied because the label of the session being replaced does not describe the one just
-   * written; it is filled again by the next `restore()` whose `readUser` projection supplies it.
-   *
-   * @param session the session to persist, with the three members the legacy entry holds.
-   * @throws TypeError when `session` is not a well-formed entry — a `userId` that is not a finite
-   * number, an empty `authenticationKey`, or a `userPermissions` member that is not an array of
-   * strings. Nothing is persisted, published or removed in that case.
-   */
+  /** Persists `session` as the legacy entry — exactly its three stored fields, because the entry is a contract with the legacy screens (AAP 0.7.2 `SessionData`) — and publishes it (AAP 0.7.1 `write`): the session is checked, normalised and serialised before anything is persisted, the permissions are published by the `restore()` that follows (`SessionManager.js:41-43`), and `user()` empties with the label it described. */
   write(session: SessionData): void {
     const data = toSessionData(session);
 
@@ -286,15 +129,7 @@ export class SessionService {
     this.currentUser.set(null);
   }
 
-  /**
-   * Ends the session: the stored entry goes, both signals empty and the permission gate is withdrawn
-   * (AAP 0.7.1, `clear()`; AAP 0.4.2, the interceptor's 401 handling).
-   *
-   * It is idempotent, because the logout button and a 401 response can both reach it for one session.
-   * Both stored spellings are removed for the same reason `read()` accepts both: an entry left under
-   * the other key would be picked up by the next `restore()` and sign the user back in, so `clear()`
-   * would not fail closed.
-   */
+  /** Ends the session: the stored entry goes, both signals empty and the permission gate is withdrawn (AAP 0.7.1 `clear`; AAP 0.4.2). It is idempotent, and both stored spellings are removed so a leftover entry cannot sign the user back in. */
   clear(): void {
     this.removeEntry();
     this.state.set(null);
@@ -302,45 +137,12 @@ export class SessionService {
     this.permissions.clear();
   }
 
-  /**
-   * Puts the stored session back into effect, in the order the legacy `SessionManager.restore` uses
-   * (`app/scripts/services/SessionManager.js:36-48`; AAP 0.7.1, `restore(): Promise<boolean>`).
-   *
-   * The session is published **before** `readUser` is called, because the request that reads the user
-   * carries `Authorization: Basic <authenticationKey>` and the interceptor takes that key from
-   * `session()` — legacy sets the authorization before it calls `userResource.get` for the same
-   * reason (:40-41).
-   *
-   * With `readUser`, the projection is read once for the stored `userId`, `user()` becomes its
-   * `{id, username}`, and the stored `userPermissions` are published through `PermissionsService` —
-   * the stored list wins over whatever the response reports, as it does in legacy (:42). With no
-   * `readUser`, the stored session and its permissions are published with no request at all.
-   *
-   * A restore publishes only for the session it was started on, on both of its paths. If another
-   * session replaced the stored one while the user read was in flight — two logins overlapping and
-   * their `GET /users/{id}` answers arriving in reverse order — the late answer describes a session
-   * that is no longer in effect, so it publishes nothing and resolves `false`. Publishing it would
-   * leave the earlier login's `username` and permission list behind the later login's
-   * `Authorization` key, which is the same guard the failure path below applies.
-   *
-   * A failing `readUser` — a rejection, an error emission or an empty completion — resolves `false`
-   * and leaves the entry where it is, with nothing published and the permission gate withdrawn: the
-   * session is not in effect, and the 401 that ends such a session for good is the interceptor's and
-   * `AuthService`'s call, not this method's.
-   *
-   * @param readUser the `GET /users/{id}` call the owning HTTP service supplies, invoked at most once
-   * with the stored `userId`.
-   * @returns `true` when a stored session is in effect afterwards, `false` when there was none, it was
-   * malformed, a later session replaced it before the projection arrived, or the user projection could
-   * not be read.
-   */
+  /** Puts the stored session back into effect in legacy's order (`SessionManager.js:36-48`; AAP 0.7.1 `restore`): published before `readUser` runs, since that request carries its key (:40-41), then the projection fills `user()` and the stored `userPermissions` are published through `PermissionsService` (:42) — and it publishes only for the session it started on, resolving `false` for a superseded or unreadable one. */
   async restore(readUser?: SessionUserReader): Promise<boolean> {
     const stored = this.read();
 
     if (stored === null) {
-      // Nothing is stored, so no session is in effect: the signals empty and the gate is withdrawn,
-      // because a permission list left over from an earlier session would answer for nobody
-      // (AAP 0.1.1, "a permission gate that fails closed").
+      // Nothing is stored, so no session is in effect: the signals empty and the gate is withdrawn (AAP 0.1.1).
       this.state.set(null);
       this.currentUser.set(null);
       this.permissions.clear();
@@ -358,12 +160,7 @@ export class SessionService {
     try {
       projection = await firstValueFrom(readUser(stored.userId));
     } catch {
-      // A stored entry whose user cannot be read is not a session in effect: the entry stays where the
-      // caller that can act on the 401 will find it, and nothing is published — the session signal
-      // empties so no interceptor sends a header for it, the user label empties, and the gate is
-      // withdrawn rather than left open (AAP 0.1.1, "a permission gate that fails closed"). The
-      // withdrawal is skipped when a session replaced this one while the read was in flight, because
-      // that session, not the failed one, owns the signals and the permission list.
+      // A stored entry whose user cannot be read is not a session in effect: nothing is published, the entry stays where a 401 can act on it, and the gate is withdrawn rather than left open — unless a later session now owns the signals.
       if (this.state() === stored) {
         this.state.set(null);
         this.currentUser.set(null);
@@ -373,10 +170,7 @@ export class SessionService {
     }
 
     if (this.state() !== stored) {
-      // A login replaced this session while the user read was in flight, so the projection that just
-      // arrived describes a session that is no longer in effect: publishing it would put the earlier
-      // login's label and permission list behind the later login's authorization key. The session now
-      // in effect owns the signals, and this restore did not establish anything.
+      // A login replaced this session while the user read was in flight, so this answer describes a session no longer in effect and publishes nothing; the session now in effect owns the signals.
       return false;
     }
 
@@ -385,12 +179,7 @@ export class SessionService {
     return true;
   }
 
-  /**
-   * The page's `localStorage`, or `null` when the document has no browsing context or the browser
-   * refuses the storage — a `SecurityError` for a partitioned or disabled store, which is the state
-   * the legacy wrapper answers with its memory fallback
-   * (`app/scripts/webstorage-configuration.js:6-12`).
-   */
+  /** The page's `localStorage`, or `null` when the document has no browsing context or the browser refuses the store — the state the legacy wrapper answers with its memory fallback (`app/scripts/webstorage-configuration.js:6-12`). */
   private store(): Storage | null {
     const view = this.document.defaultView;
 
@@ -405,11 +194,7 @@ export class SessionService {
     }
   }
 
-  /**
-   * The raw stored entry: the composed legacy key first, the bare spelling second, and the in-memory
-   * copy when the store cannot be read at all or has refused a write. Every storage exception is
-   * absorbed here, so no caller has to handle one.
-   */
+  /** The raw stored entry: the composed legacy key first, the bare spelling second, the in-memory copy when the store cannot be read or has refused a write; every storage exception is absorbed here. */
   private readEntry(): string | null {
     const store = this.storageInSync ? this.store() : null;
 
@@ -462,8 +247,7 @@ export class SessionService {
       store.removeItem(SESSION_ENTRY_KEY);
       this.storageInSync = true;
     } catch {
-      // Nothing can be removed from a store that refuses access, and the signals are emptied anyway.
-      // The store may still hold the entry it refused to drop, so the in-memory copy answers instead.
+      // Nothing can be removed from a store that refuses access, and the signals are emptied anyway; the memory copy answers.
       this.storageInSync = false;
     }
   }

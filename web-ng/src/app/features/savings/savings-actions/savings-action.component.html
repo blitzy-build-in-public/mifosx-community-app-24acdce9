@@ -1,34 +1,4 @@
-<!--
-  The savings action screen: one route (`#/savingaccount/:id/:action`), four screens selected by the
-  `:action` segment — approve, activate, deposit and withdraw — plus the not-found outcome for any
-  other segment or a route carrying no account id (AAP 0.7.3 W8 row, AAP 0.7.4 screens, AAP 0.8.2
-  `savings.routes.ts`).
-
-  One card per screen (AAP 0.7.4). Every visual value comes from the global Bootstrap 3 layer
-  compiled in `web-ng/src/styles.scss`, so this file carries no style block, no style attribute and no
-  colour literal (Rule 1 clause 6): `.container-fluid`/`.row`/`.col-md-12` is the page grid, `.panel`
-  the white square surface with its shadow and no border stroke, `.panel-heading` the white heading
-  band with the rule beneath it, `.panel-body` the card's body,
-  `.panel-title` the card-title treatment, `.form-group`/`.control-label`/`.help-block` the field
-  layout and its invalid state, `.alert.alert-danger` the verbatim Fineract failure, and
-  `.btn.btn-primary`/`.btn.btn-default` the primary action and its cancel.
-
-  The two shared field components render their own `.form-group`/`.control-label`/`.form-control`
-  markup, so the date and the payment type are drawn by `app-date-field` and `app-select-field` rather
-  than by anything here — the native controls that replace the forbidden jQuery plugins (AAP 0.10.5
-  items 1 and 2).
-
-  What is deliberately absent, because the legacy forms have none of it and the migration reproduces
-  behaviour rather than improving it (Rule 1 clause 3): no native `required` attribute (the browser
-  would block a submission Fineract alone decides, so `required` reaches assistive technology as
-  `aria-required`), no confirmation step, no success message, no balance check and no note field.
-
-  Wording resolves through `TranslatePipe` from the legacy bundles: the mode-dependent heading and
-  primary label come from the component's single operation table, and the field captions are the
-  legacy `label.input.*` / `label.heading.*` keys. The server's own failure text is the one string
-  rendered untranslated, because the parity comparison reads it character for character (AAP 0.4.4
-  decision 6).
--->
+<!-- The savings action screen: one route (`#/savingaccount/:id/:action`) and four screens selected by the `:action` segment — approve, activate, deposit and withdraw — plus the not-found outcome for any other segment or a (AAP 0.7.3, AAP 0.7.4, AAP 0.8.2, Rule 1 clause 6). -->
 <div class="container-fluid">
   <div class="row">
     <div class="col-md-12">
@@ -107,16 +77,7 @@
                   [required]="true"
                 />
 
-                <!--
-                  The amount is required-only, exactly as the legacy form marks it: no range and no balance
-                  rule the legacy screen lacks, so Fineract stays the authority on the value (Rule 1 clause
-                  3). `step="0.01"` is the browser's own increment for a money figure, not a rule of its own:
-                  left at the `type="number"` default of one whole unit the browser would report an ordinary
-                  two-decimal amount as invalid, and `novalidate` on the form keeps the increment from ever
-                  blocking a submit. `dirty` joins `touched` so the message appears as soon as an entered
-                  amount is cleared, before the field is left — the legacy `form-validate` directive's own
-                  behaviour on this input.
-                -->
+                <!-- The amount is required-only, exactly as the legacy form marks it: no range and no balance rule the legacy screen lacks, so Fineract stays the authority on the value (Rule 1 clause 3). -->
                 @let amount = transactionForm.controls.transactionAmount;
                 @let amountInvalid = amount.invalid && (amount.touched || amount.dirty);
                 <div class="form-group" [class.has-error]="amountInvalid">

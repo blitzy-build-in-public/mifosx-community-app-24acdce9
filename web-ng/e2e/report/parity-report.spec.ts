@@ -1,44 +1,9 @@
-/**
- * The harness's own tests for `e2e/report/parity-report.ts`: the gate a workflow's free text passes
- * before it reaches `parity-report.md`, `parity-report.json` and `.captures/workflows/*.json`.
- *
- * Why this file exists. `WorkflowRecord.reason` is whatever a page object's thrown message said, and every
- * page object opens the legacy entry URL, which carries `?baseApiUrl=<FINERACT_URL>&tenantIdentifier=
- * <TENANT_ID>` so the legacy app addresses Fineract rather than a public demo host (Rule 2; AAP 0.3.4).
- * On a host where the legacy app is not running every legacy row is `legacy-broken` with such a reason
- * (AAP 0.10.1), so without a mask the tenant value and the backend address are published into two
- * documents and one artefact on every run. AAP 0.10.4 deliberately keeps the tenant identifier outside
- * the credential gate — it is configuration, and the configured value is an ordinary English word — so
- * the credential guards can never be the fix: the value is masked on the way in, at `narrowRecord`, and
- * `assertNoCredential` refuses a document where masking was missed (Rule 1 clause 9). Nothing in
- * `npm test` reaches this module, because it is harness tooling outside the two Angular projects, so
- * until this file existed the mask was verified by review alone.
- *
- * What is pinned here: a page object's full diagnostic loses both parameter values while the host, the
- * path, the hash and the sentence around them survive (criterion 4 needs the reason readable, not
- * blank); each pair shape the harness can produce — a query pair, a URL-encoded `baseApiUrl` value, a
- * JSON-shaped quoted pair, a separator with spaces around it — is masked and everything else in the
- * string is left byte for byte; `***`, AAP 0.10.2's own mask marker, is left alone, which is what makes
- * the function idempotent and lets the fixture and the writer both apply it; prose that merely names the
- * parameters is untouched; and `validateRecord` returns the record with `reason` and `failingStep` masked
- * and `workflow`, `project`, `status` and the AAP 0.10.5 `intentionalDiffId` intact, which is the copy
- * `writeWorkflowRecord` writes.
- *
- * These are the harness's tests, not the Playwright workflow specs: they run under the `web-ng-harness`
- * vitest project (`e2e/vitest.config.ts`, `npm run test:harness`) in a plain Node environment, reach no
- * backend and write no file — `validateRecord` is the in-memory gate, and the write it feeds is not
- * exercised here. The specs that drive W1 to W8 against both front ends are Playwright's and live under
- * `e2e/specs/**`.
- *
- * Every string is built from the harness's own address and tenant constants (`e2e/seed/fixtures.ts`), the
- * same ones `pages/legacy/login.page.ts` builds the entry URL from, so no URL or tenant value is written
- * as a literal in this file (Rule 2; AAP 0.10.4's credential gate).
- */
+/** The harness's own tests for `e2e/report/parity-report.ts`: the gate a workflow's free text passes before it reaches `parity-report.md`, `parity-report.json` and `.captures/workflows/*.json` (Rule 2, AAP 0.3.4, AAP 0.10.1, AAP 0.10.4). */
 import { describe, expect, it } from 'vitest';
 
-import { FINERACT_URL, LEGACY_URL, TENANT_ID } from '../seed/fixtures';
-import { redactEntryLocation, validateRecord } from './parity-report';
-import type { WorkflowRecord } from './parity-report';
+import { FINERACT_URL, LEGACY_URL, NEXT_URL, TENANT_ID } from '../seed/fixtures';
+import { collectProblems, redactEntryLocation, renderMarkdown, validateRecord } from './parity-report';
+import type { LineBudget, ParityReport, WorkflowRecord } from './parity-report';
 
 /** The backend address as the entry URL carries it: `encodeURIComponent` of `FINERACT_URL`. */
 const ENCODED_BACKEND_URL: string = encodeURIComponent(FINERACT_URL);
@@ -49,17 +14,10 @@ const ENCODED_TENANT: string = encodeURIComponent(TENANT_ID);
 /** AAP 0.10.2's mask marker, and the text every masked value must become. */
 const MASK: string = '***';
 
-/**
- * The legacy entry URL exactly as `pages/legacy/login.page.ts` builds it — the address whose two
- * parameter values F01 is about — before the hash a page object appends.
- */
+/** The legacy entry URL exactly as `pages/legacy/login.page.ts` builds it — the address whose two parameter values F01 is about — before the hash a page object appends. */
 const ENTRY_URL: string = `${LEGACY_URL}/?baseApiUrl=${ENCODED_BACKEND_URL}&tenantIdentifier=${ENCODED_TENANT}`;
 
-/**
- * The message `open()` on the legacy login page throws when neither reading of the login route renders,
- * reproduced verbatim: it is the shape of reason every legacy-broken row carries on a host without the
- * legacy app, and it quotes the full entry URL twice.
- */
+/** The message `open()` on the legacy login page throws when neither reading of the login route renders, reproduced verbatim: it is the shape of reason every legacy-broken row carries on a host without the legacy app, and. */
 const LOGIN_MESSAGE: string =
   'The legacy login form did not appear at either reading of the login route: ' +
   `${ENTRY_URL}#/login (AAP 0.8.2, the "login" route of in-scope-routes.json) or ` +
@@ -143,3 +101,54 @@ describe('parity-report entry-location redaction', () => {
     expect(record.reason).toContain(`tenantIdentifier=${ENCODED_TENANT}`);
   });
 });
+
+describe('parity-report line budget', () => {
+  /** A report as `buildReport` shapes it with only the size record varied: `workflows` empty keeps the row checks out of the way, so every assertion below is about the record alone (AAP 0.9.3, Rule 1 clause 10). */
+  const reportWith = (lineBudget: LineBudget): ParityReport => ({
+    header: {
+      environment: 'codespaces',
+      backendRemote: 'Blitzy-Sandbox/blitzy-fineract',
+      backendCommit: '74099701987ccb4755706d9a3de9fbbd3576ea1b',
+      fineractUrl: FINERACT_URL,
+      legacyUrl: LEGACY_URL,
+      nextUrl: NEXT_URL,
+      runDate: '2026-11-24',
+      generatedAt: '2026-11-26T00:00:00.000Z',
+      backendVerified: true,
+    },
+    workflows: [],
+    differenceRegister: [],
+    lineBudget,
+  });
+
+  it('renders the measured total as the report\'s last section and names the overage only when it is over the ceiling', () => {
+    const within = reportWith({ measuredLines: 58_643, measuredFiles: 245, checkScriptLines: 1_479, verdict: 'within' });
+    const markdown = renderMarkdown(within);
+
+    // The record states the ceiling, the measured total with its file count and the command that settles it.
+    expect(markdown).toContain('## Line budget');
+    expect(markdown).toContain('Ceiling: 60,000 generated lines');
+    expect(markdown).toContain('58,643 generated lines across 245 tracked files');
+    expect(markdown).toContain('git ls-files | grep -v package-lock.json | xargs wc -l');
+    expect(markdown).toContain('inside the ceiling by 1,357 lines');
+    // The trim, its reason and the revised totals: nothing was cut, so the fixed cut order never engaged.
+    expect(markdown).toContain('84,770 lines before the trim');
+    expect(markdown).toContain('No scope was cut');
+    expect(markdown).toContain('Stretch ships');
+    // The check scripts' recorded share against the plan's about 600, stated as a revised share.
+    expect(markdown).toContain('1,479 lines against AAP 0.9.3\'s share of about 600');
+    // Last section: nothing headed renders after it.
+    expect(markdown.split('\n').filter((line) => line.startsWith('## ')).pop()).toBe('## Line budget');
+
+    // Inside the ceiling the record contributes no problem.
+    expect(collectProblems(within)).toEqual([]);
+
+    // Over it, one problem names the measured total, the ceiling and the overage — what fails the report step.
+    const over = reportWith({ measuredLines: 71_500, measuredFiles: 245, checkScriptLines: 1_479, verdict: 'over' });
+    const problems = collectProblems(over);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('71,500 generated lines against AAP 0.9.3\'s ceiling of 60,000');
+    expect(problems[0]).toContain('11,500 lines over');
+  });
+});
+

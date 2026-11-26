@@ -28,45 +28,9 @@ import { provideTranslate } from './core/i18n/translate.config';
 import { NotFoundComponent } from './features/not-found/not-found.component';
 import { SearchResultsComponent } from './features/search/search-results.component';
 
-/**
- * Behaviour of the application's route tree (AAP 0.8.2 "Shell and navigation" and "Feature routes";
- * AAP 0.3.4 claims 1 and 2; AAP 0.10.4 route list; AAP 0.11.1 row `app.routes.ts`).
- *
- * The tree is the one statement of which hash URL renders which screen, and
- * `web-ng/tools/parity/in-scope-routes.json` is the list it has to agree with. These tests therefore
- * assert the agreement itself rather than a sample of it: every path the list declares, composed
- * through the lazy mounts exactly as the router composes it, and nothing beyond them. That is gate (c)
- * of `npm run check:wiring`, exercised at run time against the real `APP_ROUTES` value instead of
- * against the source text.
- *
- * The remaining tests pin what the list cannot state: the two dashboard redirects (AAP 0.10.5 item 3),
- * the two catch-alls that make the not-found screen reachable — the unguarded one at the top level and
- * the one inside the shell, which is where a signed-in visitor sees it — the guard on the signed-in
- * subtree, the segment list that decides which lazy group a URL fetches, and the access code each gated
- * route declares for `permissionGuard` and the navigation to share.
- *
- * **The guard that reads those declarations.** `permissionGuard` has no spec file of its own — AAP
- * 0.11.1 lists `core/auth/{auth,permission}.guard.ts` without a `+spec` — so the cases at the end of
- * this file run it in `TestBed`'s injector, against a real `ActivatedRouteSnapshot` and the real
- * `PermissionsService`, for every declaration shape the route table uses. The parameterised one
- * matters most: `client/:id/:action` serves five lifecycle commands from one path, so the code it
- * enforces is the code the `:action` segment names, which is the code the record gates its lifecycle
- * entry with and the code the action screen gates its submit control with (AAP 0.1.1, "a route guard
- * and a template directive must agree, or a user reaches a screen they cannot act on").
- */
+/** Behaviour of the application's route tree (AAP 0.8.2 "Shell and navigation" and "Feature routes"; AAP 0.3.4 claims 1 and 2; AAP 0.10.4 route list; AAP 0.11.1 row `app.routes.ts`) (AAP 0.10.5, AAP 0.1.1). */
 
-/**
- * The nineteen paths `web-ng/tools/parity/in-scope-routes.json` declares, in its own order, with the
- * response status the list gives each of them. Restated here because the expected value of a gate is
- * part of the gate: a route added to or removed from the tree without this list changing must fail
- * here, and a spec that read the very list it checks would move with it.
- *
- * The list holds nineteen paths while the tree composes twenty leaves, because `**` is the one path the
- * tree declares twice: last among the shell's children, so a signed-in visitor's unknown URL keeps the
- * chrome, and last at the top level, so a signed-out visitor's does not enter the shell at all. Both
- * compose to the same full path, so the composition case below compares the unique paths and counts
- * the duplicate instead of failing on it.
- */
+/** The nineteen paths `web-ng/tools/parity/in-scope-routes.json` declares, in its own order, with the response status the list gives each of them. */
 const IN_SCOPE_PATHS: readonly string[] = [
   'login',
   '',
@@ -89,21 +53,13 @@ const IN_SCOPE_PATHS: readonly string[] = [
   '**',
 ];
 
-/**
- * The shape every access code has as the route table declares it: an upper-case Fineract code. A code
- * in any other form names no permission the server issues.
- */
+/** The shape every access code has as the route table declares it: an upper-case Fineract code. */
 const ACCESS_CODE = /^[A-Z][A-Z_]+$/;
 
 /** The one route that serves five lifecycle commands from a parameter. */
 const CLIENT_ACTION_PATH = 'client/:id/:action';
 
-/**
- * The five codes the lifecycle-action route declares, spelled out rather than imported from
- * `CLIENT_ACTION_PERMISSIONS`: this declaration is what the guard enforces on `#/client/2/close`, so a
- * code swapped, added or dropped there must fail here even though the record and the action screen
- * would follow the same constant.
- */
+/** The five codes the lifecycle-action route declares, spelled out rather than imported from `CLIENT_ACTION_PERMISSIONS`: this declaration is what the guard enforces on `#/client/2/close`, so a code swapped, added or. */
 const CLIENT_ACTION_CODES: Readonly<Record<string, string>> = {
   activate: 'ACTIVATE_CLIENT',
   close: 'CLOSE_CLIENT',
@@ -112,26 +68,12 @@ const CLIENT_ACTION_CODES: Readonly<Record<string, string>> = {
   reactivate: 'REACTIVATE_CLIENT',
 };
 
-/**
- * Whether a value is a non-null object that is not an array — the shape a `{ param, codes }`
- * declaration has, and the shape the `codes` map inside it has.
- *
- * A type predicate rather than an assertion, so a route table that changed shape fails the assertion
- * below instead of being coerced into the shape a case expected (Rule 1 clause 4).
- */
+/** Whether a value is a non-null object that is not an array — the shape a `{ param, codes }` declaration has, and the shape the `codes` map inside it has (Rule 1 clause 4). */
 function isDeclarationObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/**
- * Every access code a route's `data.permission` declaration names, whatever shape it uses: a single
- * code, a list of codes, or the `{ param, codes }` declaration whose map the route parameter selects
- * from. One assertion then covers all three, because what a code must be does not depend on the shape
- * that names it.
- *
- * @param declared the route's `data.permission` value, which the framework types as `any`.
- * @returns the codes the declaration names, or none for a shape this file does not read.
- */
+/** Every access code a route's `data.permission` declaration names, whatever shape it uses: a single code, a list of codes, or the `{ param, codes }` declaration whose map the route parameter selects from. */
 function declaredCodes(declared: unknown): readonly string[] {
   if (typeof declared === 'string') {
     return [declared];
@@ -152,19 +94,7 @@ function declaredCodes(declared: unknown): readonly string[] {
   return [];
 }
 
-/**
- * Every full path the given route array resolves to, with each lazy group's children spliced in at the
- * path its mount declares — the composition `in-scope-routes.json` describes in its header ("full
- * paths are app-level parent segments joined with feature child segments; lazy groups mount at path
- * ''").
- *
- * The lazy `loadChildren` callbacks are invoked directly, which is what the router does on first
- * navigation, so the answer is the tree the application really serves and not the top-level skeleton.
- *
- * @param routes the route array to compose, at the prefix it is mounted under.
- * @param prefix the path segments of the mount point, already joined.
- * @returns one full path per leaf route, in declaration order.
- */
+/** Every full path the given route array resolves to, with each lazy group's children spliced in at the path its mount declares — the composition `in-scope-routes.json` describes in its header ("full paths are app-level. */
 async function composePaths(routes: readonly Route[], prefix = ''): Promise<readonly string[]> {
   const paths: string[] = [];
 
@@ -197,16 +127,7 @@ async function composePaths(routes: readonly Route[], prefix = ''): Promise<read
 /** A segment no in-scope route begins with, so a URL built from it reaches a catch-all. */
 const UNKNOWN_SEGMENT = 'no-such-screen';
 
-/**
- * The route the application declares at `path`, with every lazy group's children spliced in exactly
- * as {@link composePaths} splices them — the same composition, kept as the route object so a case can
- * read the declaration the router really serves rather than the top-level skeleton.
- *
- * @param path the full path to find, spelled as `in-scope-routes.json` spells it.
- * @param routes the route array to search, at the prefix it is mounted under.
- * @param prefix the path segments of the mount point, already joined.
- * @returns the route, or `undefined` when the tree declares none.
- */
+/** The route the application declares at `path`, with every lazy group's children spliced in exactly as {@link composePaths} splices them — the same composition, kept as the route object so a case can read the declaration. */
 async function findRoute(
   path: string,
   routes: readonly Route[] = APP_ROUTES,
@@ -251,26 +172,11 @@ async function findRoute(
 }
 
 
-/**
- * The URL of a path no screen declares.
- *
- * The segment is passed as a route command and the URL is serialized by the router instead of being
- * written as a string literal, because `check:endpoints` reads any source literal that begins with `/`
- * as a Fineract API path — written out, this URL is reported as `<apiPath>/no-such-screen`, which is a
- * false finding for a path that is the opposite of an endpoint.
- *
- * @param router the router whose location strategy spells the URL.
- * @returns the unknown URL, in the form the router navigates and records.
- */
+/** The URL of a path no screen declares. The segment is passed as a route command and the URL is serialized by the router instead of being written as a string literal, because `check:endpoints` reads any source literal. */
 const unknownUrl = (router: Router): string =>
   router.serializeUrl(router.createUrlTree([UNKNOWN_SEGMENT]));
 
-/**
- * The `currentSnapshot` a `canMatch` predicate is handed. The predicates `app.routes.ts` declares read
- * the URL segments or the session and nothing else, so the members they cannot read carry the empty
- * values the matching phase would hold, and the two `ParamMap`s come from the framework's own
- * `convertToParamMap()` rather than from a hand-built stand-in.
- */
+/** The `currentSnapshot` a `canMatch` predicate is handed. The predicates `app.routes.ts` declares read the URL segments or the session and nothing else, so the members they cannot read carry the empty values the matching. */
 const MATCH_SNAPSHOT: PartialMatchRouteSnapshot = {
   routeConfig: null,
   url: [],
@@ -284,14 +190,7 @@ const MATCH_SNAPSHOT: PartialMatchRouteSnapshot = {
   queryParamMap: convertToParamMap({}),
 };
 
-/**
- * A TestBed holding the real `APP_ROUTES` in the real router, with `AuthService` answered the way a
- * visitor's stored session answers it — `true` for a signed-in visitor, `false` for a signed-out one —
- * so a navigation case needs no session entry, no request and no fixture.
- *
- * @param authenticated the answer `authGuard`, and the shell catch-all's `canMatch`, read.
- * @returns the router the calling case navigates.
- */
+/** A TestBed holding the real `APP_ROUTES` in the real router, with `AuthService` answered the way a visitor's stored session answers it — `true` for a signed-in visitor, `false` for a signed-out one — so a navigation case. */
 function routerFor(authenticated: boolean): Router {
   TestBed.configureTestingModule({
     providers: [
@@ -350,9 +249,7 @@ describe('APP_ROUTES', () => {
             guard(mount, [new UrlSegment(segment, {})], MATCH_SNAPSHOT) === true,
         );
 
-    // Every path a feature group serves — the list's entries that are not the login screen, a redirect,
-    // the search screen or a catch-all — is accepted by exactly one mount, its own, so a deep link can
-    // neither lose its group nor drag in another one's chunk.
+    // Every path a feature group serves — the list's entries that are not the login screen, a redirect, the search screen or a catch-all — is accepted by exactly one mount, its own, so a deep link can neither lose its group.
     const grouped: readonly string[] = IN_SCOPE_PATHS.filter(
       (path: string): boolean =>
         path !== 'login' && path !== '' && path !== 'home' && path !== 'search/:query' && path !== '**',
@@ -365,8 +262,7 @@ describe('APP_ROUTES', () => {
       const accepting: readonly Route[] = mounts.filter((mount: Route): boolean => accepts(mount, first));
 
       expect(accepting).toHaveLength(1);
-      // The accepting mount really owns the path: its own array declares it, which is the agreement
-      // between the list a predicate carries and the feature array it guards.
+      // The accepting mount really owns the path: its own array declares it, which is the agreement between the list a predicate carries and the feature array it guards.
       const loaded: unknown = await accepting[0]?.loadChildren?.();
       expect(Array.isArray(loaded)).toBe(true);
       expect((loaded as readonly Route[]).some((route: Route): boolean => route.path === path)).toBe(true);
@@ -384,8 +280,7 @@ describe('APP_ROUTES', () => {
 
     expect(login).toBeDefined();
     expect(login?.loadChildren).toBeTypeOf('function');
-    // The login branch is a top-level sibling: it carries no guard, because a signed-out visitor is
-    // exactly who must reach it (auth.guard.ts documents the same placement).
+    // The login branch is a top-level sibling: it carries no guard, because a signed-out visitor is exactly who must reach it (auth.guard.ts documents the same placement).
     expect(login?.canActivate).toBeUndefined();
   });
 
@@ -410,8 +305,7 @@ describe('APP_ROUTES', () => {
     const shell = APP_ROUTES.find((route: Route): boolean => route.component === ShellComponent);
     const search = shell?.children?.find((route: Route): boolean => route.path === 'search/:query');
 
-    // The one in-scope route that declared none (AAP 0.8.2), declared together with the guard that
-    // enforces it (AAP 0.14.1): a code no guard reads would be decorative.
+    // The one in-scope route that declared none (AAP 0.8.2), declared together with the guard that enforces it (AAP 0.14.1): a code no guard reads would be decorative.
     expect(search?.data?.['permission']).toBe('READ_CLIENT');
     expect(search?.canActivate ?? []).toContain(permissionGuard);
     // The declaration changes neither the trail nor the lazily loaded screen.
@@ -440,22 +334,18 @@ describe('APP_ROUTES', () => {
     expect(wildcards[0]?.component).toBe(NotFoundComponent);
     // Last in the array, so it can never shadow a declared screen.
     expect(APP_ROUTES.at(-1)).toBe(wildcards[0]);
-    // Top level, outside the guarded shell: a path that does not exist is not a permission problem, so a
-    // signed-out visitor sees the not-found screen instead of the login form.
+    // Top level, outside the guarded shell: a path that does not exist is not a permission problem, so a signed-out visitor sees the not-found screen instead of the login form.
     expect(wildcards[0]?.canActivate ?? []).not.toContain(authGuard);
 
     const shell = APP_ROUTES.find((route: Route): boolean => route.component === ShellComponent);
     const children: readonly Route[] = shell?.children ?? [];
     const inShell = children.at(-1);
 
-    // The second placement, last among the shell's children: a signed-in visitor to an unknown URL is
-    // matched here, so the navbar, the breadcrumb and the shell's `<main class="content-wrapper">`
-    // landmark stay around the screen instead of being backtracked out of.
+    // The second placement, last among the shell's children: a signed-in visitor to an unknown URL is matched here, so the navbar, the breadcrumb and the shell's `<main class="content-wrapper">` landmark stay around the.
     expect(inShell?.path).toBe('**');
     expect(inShell?.component).toBe(NotFoundComponent);
     expect(children.filter((route: Route): boolean => route.path === '**')).toHaveLength(1);
-    // Neither wildcard declares an access code or a trail: the screen renders no data and names no
-    // capability, so a code would deny a path that does not exist.
+    // Neither wildcard declares an access code or a trail: the screen renders no data and names no capability, so a code would deny a path that does not exist.
     expect(inShell?.data).toBeUndefined();
     expect(wildcards[0]?.data).toBeUndefined();
     expect(inShell?.canActivate ?? []).not.toContain(permissionGuard);
@@ -487,8 +377,7 @@ describe('APP_ROUTES', () => {
     for (const route of gated) {
       const codes: readonly string[] = declaredCodes(route.data?.['permission']);
 
-      // A gated route names at least one code: a declaration shape this file cannot read, or one that
-      // names nothing, states no restriction at all, so it fails here rather than passing unnoticed.
+      // A gated route names at least one code: a declaration shape this file cannot read, or one that names nothing, states no restriction at all, so it fails here rather than passing unnoticed.
       expect(codes.length).toBeGreaterThan(0);
 
       for (const code of codes) {
@@ -496,8 +385,7 @@ describe('APP_ROUTES', () => {
       }
 
       if (route.path === 'clients') {
-        // The landing screen declares its code for the navigation entry but carries no guard: it is
-        // the destination permissionGuard sends a denied navigation to (clients.routes.ts states it).
+        // The landing screen declares its code for the navigation entry but carries no guard: it is the destination permissionGuard sends a denied navigation to (clients.routes.ts states it).
         expect(route.canActivate ?? []).not.toContain(permissionGuard);
         continue;
       }
@@ -510,9 +398,7 @@ describe('APP_ROUTES', () => {
     const route = await findRoute(CLIENT_ACTION_PATH);
     const declared: unknown = route?.data?.['permission'];
 
-    // The declaration is the parameter name plus the five legacy codes, whole: a code widened,
-    // swapped, added or dropped here changes which command a user may post, so the case states the
-    // object rather than sampling it.
+    // The declaration is the parameter name plus the five legacy codes, whole: a code widened, swapped, added or dropped here changes which command a user may post, so the case states the object rather than sampling it.
     expect(declared).toEqual({ param: 'action', codes: CLIENT_ACTION_CODES });
     // And the guard is what reads it, so the route is gated rather than merely labelled.
     expect(route?.canActivate ?? []).toContain(permissionGuard);
@@ -521,8 +407,7 @@ describe('APP_ROUTES', () => {
   it('is the tree the router instantiates: a real navigation resolves against it', async () => {
     const router = routerFor(true);
 
-    // The URL resolves against the real tree: the shell route matches, the lazy clients group loads,
-    // and the composed URL is the legacy one.
+    // The URL resolves against the real tree: the shell route matches, the lazy clients group loads, and the composed URL is the legacy one.
     await router.navigateByUrl('/clients');
 
     expect(router.url).toBe('/clients');
@@ -535,8 +420,7 @@ describe('APP_ROUTES', () => {
     await router.navigateByUrl(unknown);
 
     expect(router.url).toBe(unknown);
-    // The shell route matched and the not-found screen is its child, so the navbar, the breadcrumb and
-    // the shell's `<main class="content-wrapper">` landmark are on screen around it.
+    // The shell route matched and the not-found screen is its child, so the navbar, the breadcrumb and the shell's `<main class="content-wrapper">` landmark are on screen around it.
     expect(router.routerState.root.firstChild?.component).toBe(ShellComponent);
     expect(router.routerState.root.firstChild?.firstChild?.component).toBe(NotFoundComponent);
   });
@@ -548,8 +432,7 @@ describe('APP_ROUTES', () => {
     await router.navigateByUrl(unknown);
 
     expect(router.url).toBe(unknown);
-    // Not the shell: entering it would hand the navigation to `authGuard`, which would replace it with
-    // the login form for a path that does not exist. The unguarded top-level catch-all renders instead.
+    // Not the shell: entering it would hand the navigation to `authGuard`, which would replace it with the login form for a path that does not exist.
     expect(router.routerState.root.firstChild?.component).toBe(NotFoundComponent);
   });
 });
@@ -557,29 +440,12 @@ describe('APP_ROUTES', () => {
 /** The guard's synchronous answer: let the navigation through, or replace it with a redirect. */
 type GuardAnswer = ReturnType<CanActivateFn>;
 
-/**
- * Behaviour of `permissionGuard` on the declaration shapes the route table uses — the code the route
- * states, the list it requires, and the parameterised declaration `client/:id/:action` uses, where the
- * `:action` segment names the command and therefore the code (AAP 0.1.1; AAP 0.14.1, "permissions are
- * declared once per route and once per action").
- *
- * The guard is run in `TestBed`'s injector against the real `PermissionsService`, so each verdict is
- * the answer the application's own gate gives rather than a stub's. The route is a real
- * `ActivatedRouteSnapshot` whose `params` and `data` a case sets — its `paramMap` derives from
- * `params`, so the guard reads the same map the router would hand it — and the state is the router's
- * own, because no verdict depends on the target URL.
- */
+/** Behaviour of `permissionGuard` on the declaration shapes the route table uses — the code the route states, the list it requires, and the parameterised declaration `client/:id/:action` uses, where the `:action` segment (AAP 0.1.1, AAP 0.14.1). */
 describe('permissionGuard', () => {
   /** The declaration `client/:id/:action` states, as the guard receives it. */
   const ACTION_DECLARATION = { param: 'action', codes: CLIENT_ACTION_CODES };
 
-  /**
-   * The route snapshot the guard is handed for `#/client/2/<action>`.
-   *
-   * @param action the `:action` segment the URL carries.
-   * @param permission the route's `data.permission`, which defaults to the lifecycle declaration.
-   * @returns the snapshot, ready for the guard to read.
-   */
+  /** The route snapshot the guard is handed for `#/client/2/<action>`. @param action the `:action` segment the URL carries. @param permission the route's `data.permission`, which defaults to the lifecycle declaration.. */
   function routeFor(action: string, permission: unknown = ACTION_DECLARATION): ActivatedRouteSnapshot {
     const route = new ActivatedRouteSnapshot();
     route.params = { id: '2', action };
@@ -588,11 +454,7 @@ describe('permissionGuard', () => {
     return route;
   }
 
-  /**
-   * The router state the guard is handed. Its second parameter is never consulted — no verdict
-   * depends on the target URL — so the router's own empty snapshot is the whole of what the contract
-   * needs, and no navigation is performed to obtain one.
-   */
+  /** The router state the guard is handed. Its second parameter is never consulted — no verdict depends on the target URL — so the router's own empty snapshot is the whole of what the contract needs, and no navigation is. */
   function unreadState(): RouterStateSnapshot {
     return TestBed.inject(Router).routerState.snapshot;
   }
@@ -602,17 +464,13 @@ describe('permissionGuard', () => {
     return TestBed.runInInjectionContext(() => permissionGuard(route, unreadState()));
   }
 
-  /**
-   * The route a denial redirects to, serialized by the same router the guard built the tree with, or
-   * `null` when the guard allowed the navigation.
-   */
+  /** The route a denial redirects to, serialized by the same router the guard built the tree with, or `null` when the guard allowed the navigation. */
   function denialTarget(answer: GuardAnswer): string | null {
     return answer instanceof UrlTree ? TestBed.inject(Router).serializeUrl(answer) : null;
   }
 
   beforeEach(() => {
-    // A fresh injector per case: a permission list set by one case must never reach the next, and a
-    // second `configureTestingModule` on an instantiated module throws.
+    // A fresh injector per case: a permission list set by one case must never reach the next, and a second `configureTestingModule` on an instantiated module throws.
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({ providers: [provideRouter([])] });
   });
@@ -626,20 +484,17 @@ describe('permissionGuard', () => {
   it('denies a command the user holds only READ_CLIENT for, sending the navigation to the clients list', () => {
     TestBed.inject(PermissionsService).setPermissions(['READ_CLIENT']);
 
-    // The read code lets the record open; it says nothing about a closure, so the guard refuses the
-    // screen whose form posts one (AAP 0.1.1).
+    // The read code lets the record open; it says nothing about a closure, so the guard refuses the screen whose form posts one (AAP 0.1.1).
     expect(denialTarget(runGuard(routeFor('close')))).toBe('/clients');
     expect(denialTarget(runGuard(routeFor('reactivate')))).toBe('/clients');
   });
 
   it('denies an :action value the codes map names no code for, a prototype key included', () => {
-    // The wildcard passes every code the guard asks about, so a denial here can only come from the
-    // lookups before that question: the map names nothing for this segment.
+    // The wildcard passes every code the guard asks about, so a denial here can only come from the lookups before that question: the map names nothing for this segment.
     TestBed.inject(PermissionsService).setPermissions(['ALL_FUNCTIONS']);
 
     expect(denialTarget(runGuard(routeFor('nonsense')))).toBe('/clients');
-    // `toString` is a member of the map's prototype and of no declaration the route wrote, so an
-    // inherited-member lookup would ask about a code the route never named.
+    // `toString` is a member of the map's prototype and of no declaration the route wrote, so an inherited-member lookup would ask about a code the route never named.
     expect(denialTarget(runGuard(routeFor('toString')))).toBe('/clients');
   });
 

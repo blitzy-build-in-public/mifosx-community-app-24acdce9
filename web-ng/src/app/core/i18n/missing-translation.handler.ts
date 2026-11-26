@@ -4,20 +4,7 @@ import type {
   MissingTranslationHandlerParams,
 } from '@ngx-translate/core';
 
-/**
- * Keeps a missing translation key from reaching the user as the raw dotted key, and reports it to
- * the developer console in development builds only.
- *
- * ngx-translate's own handler returns `params.key` unchanged, which would render
- * `label.heading.clients` where "Clients" belongs. The migrated locale bundles are the flat,
- * dotted files the legacy application ships, so an absent key is a realistic case rather than a
- * theoretical one.
- *
- * The single warning issued from `handle` is the only sanctioned console output in the
- * application: a development-only notice of a missing translation key. It is guarded by
- * `isDevMode()` and carries the key alone — never a translated value, a request, a response or a
- * session field — so nothing confidential can reach the console or a captured log.
- */
+/** Keeps a missing translation key from reaching the user as the raw dotted key, and reports it to the developer console in development builds only. ngx-translate's own handler returns `params.key` unchanged, which would. */
 
 /** Acronym run followed by a capitalised word, as in `IDField`: split before the last capital. */
 const ACRONYM_TO_WORD_BOUNDARY = /([A-Z]+)([A-Z][a-z])/g;
@@ -28,22 +15,7 @@ const LOWER_TO_UPPER_BOUNDARY = /([a-z0-9])([A-Z])/g;
 /** Whitespace run left behind by the boundary substitutions. */
 const WHITESPACE_RUN = /\s+/g;
 
-/**
- * Turns the last segment of a dotted translation key into a presentable label. Deterministic and
- * side-effect free: it performs no translation lookup, reads no language state and touches no DOM.
- *
- * Applied in order: split on `.` and keep the last segment that is not blank; split that segment on
- * `_`; insert a space between an acronym run and a following capitalised word; insert a space
- * between a lower-case letter or digit and a following capital; trim each word and drop the blanks;
- * upper-case the first character of every word and leave the rest as written; join the words with
- * one space. Capitalising each `_`-separated word rather than the whole segment alone is what
- * renders `label.input.user_name` as `User Name` instead of `User name`.
- *
- * Worked example: `'client.missing.camelCaseKey'` becomes `'Camel Case Key'`.
- *
- * @param key dotted key as the translate pipe, a directive or `TranslateService` hands it over
- * @returns the humanised last segment, or `''` when no segment holds a character
- */
+/** Turns the last segment of a dotted translation key into a presentable label. */
 export function humaniseKey(key: string): string {
   const last: string | undefined = key
     .split('.')
@@ -65,70 +37,18 @@ export function humaniseKey(key: string): string {
   return words.join(' ');
 }
 
-/**
- * The application's own default copy for the strings this application introduces, keyed exactly as
- * the templates render them.
- *
- * **Why the application has to carry them.** Every other label in this migration resolves through the
- * flat `app/global-translations/locale-*.json` bundles the legacy application ships, which are read in
- * place and never copied or edited (Rule 1 clauses 1 and 6, AAP 0.4.3). Two strings are not in that key
- * space at all: the idle warning and its "Stay signed in" action. The warning is new copy — the legacy
- * application never rendered one, because its `$idleTimeout` handler logged out silently
- * (`app/scripts/controllers/main/MainController.js:139-143`) — and AAP 0.1.1 requires it ("a 10-second
- * warning before logout"), so the AAP adds the sentence and the frozen bundles cannot carry it. Its
- * keys are therefore the application's own: `label.message.session.expiring` and
- * `label.button.stay.signed.in`.
- *
- * **Where this map sits in the lookup.** ngx-translate calls the missing-translation handler only
- * after the active language and the configured fallback language (`FALLBACK_LANG`, `en`) have both
- * failed to answer the key, so a served bundle that carries either key answers it first and this map
- * is never consulted for that key. A bundle that later ships the two keys therefore wins with no code
- * change here, and the English text below is the default the application falls back to instead of the
- * humanised key.
- *
- * **Not a hidden key space.** These two keys are declared here because they are the application's own
- * copy, and they are answered before the missing-key path so they are neither humanised (which would
- * render "Session Expiring") nor reported as missing. Every other absent key keeps the humanise-and-
- * warn behaviour documented on {@link FineractMissingTranslationHandler}.
- */
+/** The application's own default copy for the strings this application introduces, keyed exactly as the templates render them. **Why the application has to carry them.** Every other label in this migration resolves through (AAP 0.4.3, AAP 0.1.1). */
 export const APP_OWNED_TRANSLATIONS: ReadonlyMap<string, string> = new Map<string, string>([
   ['label.message.session.expiring', 'You have been inactive and will be signed out shortly.'],
   ['label.button.stay.signed.in', 'Stay signed in'],
 ]);
 
-/**
- * Replaces ngx-translate's key-echoing default handler, so a key that the active locale and the
- * fallback locale both lack is still rendered as a readable label. This is the guarantee that a
- * raw dotted key never appears in the interface.
- *
- * Registered as a provider for the `MissingTranslationHandler` token —
- * `{ provide: MissingTranslationHandler, useClass: FineractMissingTranslationHandler }` — in
- * `core/i18n/translate.config.ts` and in `src/app/app.config.ts`. It is therefore never injected by
- * name, which is why the class carries no decorator and takes no constructor argument: a
- * provider-registered class needs neither an injection site nor injection metadata.
- *
- * Humanising the key is a deliberate, minimal difference from the legacy angular-translate setup,
- * which renders the raw key. The dotted key space, the loader prefix and the fallback language are
- * untouched: ngx-translate calls this handler only after the configured fallback language has
- * already failed, so the handler neither retries a lookup nor translates the result.
- *
- * **The application's own copy is answered first.** A key {@link APP_OWNED_TRANSLATIONS} carries is a
- * string this application introduces rather than one the legacy bundles ever held, so the handler
- * returns that default instead of humanising the key — and, because the key is not missing, it
- * reports nothing. Every other absent key keeps the humanised label and the development-only warning.
- */
+/** Replaces ngx-translate's key-echoing default handler, so a key that the active locale and the fallback locale both lack is still rendered as a readable label. */
 export class FineractMissingTranslationHandler implements MissingTranslationHandler {
-  /**
-   * Keys this handler instance has already reported, so a key rendered inside a list or a repeated
-   * block warns once instead of on every change-detection pass.
-   */
+  /** Keys this handler instance has already reported, so a key rendered inside a list or a repeated block warns once instead of on every change-detection pass. */
   private readonly warnedKeys = new Set<string>();
 
-  /**
-   * @param params ngx-translate's missing-key context; only `key` is read from it
-   * @returns the application's own default copy for a key it introduces, else the humanised last
-   *   segment of the missing key — never the key itself
-   */
+  /** @param params ngx-translate's missing-key context; only `key` is read from it @returns the application's own default copy for a key it introduces, else the humanised last segment of the missing key — never the key itself */
   handle(params: MissingTranslationHandlerParams): string {
     const appOwned: string | undefined = APP_OWNED_TRANSLATIONS.get(params.key);
 

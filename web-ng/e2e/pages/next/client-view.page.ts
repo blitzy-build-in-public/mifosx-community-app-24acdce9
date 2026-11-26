@@ -1,76 +1,9 @@
-/**
- * Page object for the new Angular application's individual client record — the `next` project's side
- * of workflow **W3** (search for a client, then read the record's details, accounts and identifiers
- * back, AAP 0.10.1) and the screen every in-scope client action and every loan and savings workflow
- * starts from.
- *
- * **Route.** `#/viewclient/:id` (AAP 0.8.2; `web-ng/tools/parity/in-scope-routes.json`), rendered by
- * `features/clients/client-view/client-view.component.ts` under the root element `app-client-view`.
- * The record's own blocks — `app-record-header`, `app-tab-strip`, `app-action-button-group`,
- * `app-client-summary`, `app-client-accounts` and `app-client-identifiers` — are the sub-roots
- * every other locator in this file is scoped to.
- *
- * **Entry URL (Rule 2; AAP 0.4.4 decision 5).** Every navigation composes
- * `${NEXT_URL}/?baseApiUrl=${encodeURIComponent(FINERACT_URL)}&tenantIdentifier=${TENANT_ID}#<route>`.
- * The application resolves its backend once, before the first navigation, from `assets/config.json`,
- * then the container's `API_BASE_URL`/`TENANT_ID`, then these two query parameters, which win. That
- * precedence is what lets one bundle address the local stack and a forwarded Codespaces host with no
- * code difference (AAP 0.10.3), and it is why no host literal appears here: `NEXT_URL` and
- * `FINERACT_URL` are the only origins and both come from `seed/fixtures.ts`. A bare `page.goto('#/…')`
- * would resolve against the configured `baseURL` and drop both parameters, so {@link ClientViewPage}
- * never issues one.
- *
- * **What it reads, and what it only drives.** Every reader returns text the screen rendered, trimmed
- * and with its whitespace runs collapsed: the record header, the two tab labels, the visible action
- * labels, the accounts table and the identifiers table. Nothing is parsed into a number,
- * reformatted or normalised beyond that, because display normalisation is the capture's and the
- * parity report's business (AAP 0.10.2; Rule 1 clause 3). The object issues no HTTP
- * request of its own: the only effects are clicks and reads of what the record's own service fetched
- * (Rule 1 clause 2), and it holds no clock read of any kind — a date reaches a caller as the screen
- * printed it, through the application's one display pattern.
- *
- * **The record's four states (AAP 0.7.4).** While the record read is outstanding the screen paints
- * nothing; a 404 paints the not-found message *in place of* the record, so `app-client-view` is on
- * the page while `app-record-header`, the strip, the action row and the profile card are all absent;
- * any other 4xx paints Fineract's own message above a record that stays usable; a 5xx raises the
- * interceptor's single notification. The readers therefore return `''` or `[]` for a sub-root the
- * screen did not paint rather than raising, with one exception: {@link ClientViewPage.readHeader}
- * throws an `Error` naming `app-record-header`, because a caller that cannot find the header is
- * reading a record the server refused and needs to know which of the two it hit. That is an
- * exception, never an assertion.
- *
- * **Deliberate differences the readers respect (AAP 0.10.5).** The record keeps exactly the two
- * in-scope tabs, `General` and `Identities` (item 6), and the in-scope actions (items 5 and 7): the
- * four tabs, the signature, avatar and camera controls, and the client charge, client transfer and
- * staff-assignment features of the baseline application are out of scope and are never looked for
- * here — loan charges are in scope and live on the loan account's own record. The status is a colour
- * only: {@link ClientHeaderView.statusClass} carries the colour class of the indicator and no word is
- * read anywhere (item 11). `New Saving` is present solely because Stretch ships, so it is W8's entry
- * point (item 5; AAP 0.10.1 W8).
- *
- * **Locators (Rule 1 clause 6).** Taken from the templates above and only from them: the Bootstrap 3
- * classes the templates render (`.panel`, `.table`, `.nav-tabs`, `.btn-group`, `.btn.btn-primary`,
- * `.dropdown-menu`, `.breadcrumb`), the application's status colour classes, and the component
- * selectors that are the templates' own roots. Every visible caption is translated at run
- * time from the legacy locale bundles, so a text match is a case-insensitive pattern built from the
- * caller's label and paired with a structural fallback. No attribute is required on `web-ng/src` for
- * this file to work, and the dropdown's open position is the Angular-bound `.open` class — clicked,
- * never driven through a global plugin call (Rule 1 clause 7).
- *
- * **No assertions (Rule 1 clause 8), no credentials (Rule 1 clause 9).** Every judgement belongs to
- * the specs under `web-ng/e2e/specs/`. No client number, account number or session value is printed,
- * logged or returned anywhere but to the caller that asked for it.
- */
+/** Page object for the new Angular application's individual client record — the `next` project's side of workflow **W3** (search for a client, then read the record's details, accounts and identifiers back, AAP 0.10.1) and (AAP 0.8.2, Rule 2, AAP 0.4.4, AAP 0.10.3). */
 import type { Locator, Page } from '@playwright/test';
 
 import { FINERACT_URL, NEXT_URL, TENANT_ID } from '../../seed/fixtures.js';
 
-/**
- * The record header's identity, as AAP 0.10.1 W3 compares it against the API's answer.
- *
- * `pages/legacy/client-view.page.ts` declares the counterpart for the baseline application, and one
- * spec text reads both, so the field set here is the one the two sides agree on.
- */
+/** The record header's identity, as AAP 0.10.1 W3 compares it against the API's answer. */
 export interface ClientHeaderView {
   /** The client name the record title renders — the API's `displayName`. */
   readonly displayName: string;
@@ -112,11 +45,7 @@ export interface IdentifierRow {
   readonly cells: readonly string[];
 }
 
-/**
- * What the record header yields inside the page, before the metadata runs are matched to the three
- * fields {@link ClientHeaderView} names. Internal to this module: a caller reads
- * {@link ClientHeaderView}, never this shape.
- */
+/** What the record header yields inside the page, before the metadata runs are matched to the three fields {@link ClientHeaderView} names. */
 interface HeaderReading {
   /** The record title's text, trimmed. */
   readonly displayName: string;
@@ -126,11 +55,7 @@ interface HeaderReading {
   readonly runs: readonly { readonly label: string; readonly value: string }[];
 }
 
-/**
- * One table row read inside the page: its cells and its indicator's colour class. Internal to this
- * module — {@link ClientViewPage.readAccounts} and {@link ClientViewPage.readIdentifiers} each map it
- * onto their own exported row shape, because the two tables' columns mean different things.
- */
+/** One table row read inside the page: its cells and its indicator's colour class. */
 interface TableRowReading {
   /** The row's cells, trimmed, in column order. */
   readonly cells: readonly string[];
@@ -141,11 +66,7 @@ interface TableRowReading {
 /** Root of the client record: every other locator in this file is scoped to it. */
 const ROOT_SELECTOR = 'app-client-view';
 
-/**
- * The record's own trail (`<ol class="breadcrumb">` holding the client's office). The screen renders
- * it only once the record has been read, and the shell declares no crumb for this route, so it is the
- * one trail on the page and never a fallback to the navbar's.
- */
+/** The record's own trail (`<ol class="breadcrumb">` holding the client's office). */
 const BREADCRUMB_SELECTOR = '.breadcrumb';
 
 /** The record's head block: the indicator, the name and the three inline metadata runs. */
@@ -160,15 +81,7 @@ const ACTION_GROUP_SELECTOR = 'app-action-button-group';
 /** `General` tab's accounts section. */
 const ACCOUNTS_SELECTOR = 'app-client-accounts';
 
-/**
- * The three states the accounts section paints once its own `GET /clients/{id}/accounts` has answered,
- * and the whole of what "settled" means for it: the populated table (`#client-accounts`), the explicit
- * empty state the section shows a client that genuinely holds no account (`app-empty-state`, the
- * section's `id="client-accounts-empty"`), and Fineract's own refusal text for a read the interceptor
- * does not notify (`.alert.alert-danger`, rendered for a 4xx alone). While the first response is in
- * flight the section paints nothing at all, so none of the three is on the page and a table read at
- * that moment answers `[]` about a section that had not arrived.
- */
+/** The three states the accounts section paints once its own `GET /clients/{id}/accounts` has answered, and the whole of what "settled" means for it: the populated table (`#client-accounts`), the explicit empty state the. */
 const ACCOUNTS_SETTLED_SELECTOR =
   `${ACCOUNTS_SELECTOR} #client-accounts, ` +
   `${ACCOUNTS_SELECTOR} app-empty-state, ` +
@@ -180,12 +93,7 @@ const SUMMARY_SELECTOR = 'app-client-summary';
 /** `Identities` tab's identifiers section. */
 const IDENTIFIERS_SELECTOR = 'app-client-identifiers';
 
-/**
- * A tab of the strip: the anchor of a `.nav-tabs` item. The two decorative chevrons the strip
- * renders are `<li aria-hidden="true">` with no anchor, so they never appear as a label. The list,
- * item and anchor carry no role of their own — the strip is the plain Bootstrap 3 markup legacy's
- * tabset renders, which is all AAP 0.5.2 maps and all AAP 0.10.5 registers (Rule 1 clause 3).
- */
+/** A tab of the strip: the anchor of a `.nav-tabs` item. The two decorative chevrons the strip renders are `<li aria-hidden="true">` with no anchor, so they never appear as a label (AAP 0.5.2, AAP 0.10.5, Rule 1 clause 3). */
 const TAB_LINK_SELECTOR = `.nav-tabs li > a`;
 
 /** The strip's whole items, used only if a template stops rendering an anchor inside a tab item. */
@@ -228,10 +136,7 @@ const ACTION_DESTINATIONS: readonly {
   { route: /\/client\//, root: 'app-client-actions', description: 'the client action screen' },
 ];
 
-/**
- * Ceiling for a screen to appear after a navigation or a click. Generous because the record's first
- * paint waits on `GET /clients/{id}` against the same backend the legacy baseline uses.
- */
+/** Ceiling for a screen to appear after a navigation or a click. */
 const SCREEN_TIMEOUT_MS = 30_000;
 
 /** Ceiling for the `More` menu to open, which is a class change and nothing else. */
@@ -247,19 +152,7 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/**
- * Builds the case-insensitive pattern a caller's label is matched with. Internal to this module.
- *
- * A label's words are joined by optional whitespace rather than by the exact spacing a caller typed:
- * the shipped legacy bundle words this record's actions `New Loan` and `New Saving`, while a run whose
- * locale file does not resolve falls back to the humanised key and renders `Newloan` and `Newsaving`.
- * Matching both keeps a caller's label independent of which translation bundle is on disk, and costs
- * nothing for a one-word label.
- *
- * @param label The label a caller asked for — an action's or a tab's visible text.
- * @returns A pattern matching that text anywhere in a control's rendering.
- * @throws When the label is empty, which would match every control the group offers.
- */
+/** Builds the case-insensitive pattern a caller's label is matched with. */
 function labelPattern(label: string): RegExp {
   const tokens = label
     .trim()
@@ -276,18 +169,7 @@ function describeArgument(value: number | string): string {
   return typeof value === 'number' ? String(value) : JSON.stringify(value);
 }
 
-/**
- * Renders a client or loan account id as the single hash-route segment it has to be. Internal to this
- * module.
- *
- * A guard on the caller's own input, never a check on the application: an empty value, a non-finite
- * number or a value carrying `/`, `?` or `#` would address a different route than the one asked for.
- *
- * @param value The id a caller supplied.
- * @param role What the value names, used in the error message.
- * @returns The id as route text.
- * @throws When the value cannot be one route segment.
- */
+/** Renders a client or loan account id as the single hash-route segment it has to be. */
 function requireRouteId(value: number | string, role: string): string {
   const text = (typeof value === 'number' ? (Number.isFinite(value) ? String(value) : '') : value).trim();
   if (text.length === 0) {
@@ -304,13 +186,7 @@ function cellAt(cells: readonly string[], index: number): string {
   return index >= 0 && index < cells.length ? cells[index] : '';
 }
 
-/**
- * The first metadata run whose label matches a field's pattern, or `''`. Internal to this module.
- *
- * The label is matched rather than the position, so a locale that words a label differently still
- * yields the three values in their documented places, and a field the record leaves unset answers
- * `''` instead of borrowing a neighbour's value.
- */
+/** The first metadata run whose label matches a field's pattern, or `''`. */
 function valueOfRun(
   runs: readonly { readonly label: string; readonly value: string }[],
   pattern: RegExp,
@@ -323,30 +199,12 @@ function valueOfRun(
   return '';
 }
 
-/**
- * Renders a list of labels for an error message, so a caller that asked for a label the screen does not
- * show is told what the screen does show. Internal to this module.
- */
+/** Renders a list of labels for an error message, so a caller that asked for a label the screen does not show is told what the screen does show. */
 function describeLabels(labels: readonly string[]): string {
   return labels.length === 0 ? 'no labels at all' : labels.map((label) => `"${label}"`).join(', ');
 }
 
-/**
- * Runs inside the page: the record header's title, its indicator colour and its inline metadata runs.
- *
- * The status is the colour class of the indicator and never a word, because the header paints a colour
- * with no label beside it (AAP 0.10.5 item 11). The metadata is read as span pairs — each run renders
- * its label in one span and its value in the next, with the pipe separator kept out of the
- * accessibility tree — and a run whose value span is empty answers `''` rather than borrowing text.
- * When a template renders the runs without spans, the block's text is split on the pipe instead, so a
- * markup change degrades to the same three values rather than to none.
- *
- * Self-contained on purpose: Playwright serialises this function's source and evaluates it in the
- * document, where no module-scope binding of this file exists, so nothing it needs is imported and no
- * inner binding is declared.
- *
- * @param element The `app-record-header` element.
- */
+/** Runs inside the page: the record header's title, its indicator colour and its inline metadata runs (AAP 0.10.5). */
 function readHeaderBlock(element: HTMLElement): HeaderReading {
   let statusClass = '';
   const swatch = element.querySelector('.status-active, .status-pending, .status-closed, .status-other');
@@ -394,19 +252,7 @@ function readHeaderBlock(element: HTMLElement): HeaderReading {
   return { displayName, statusClass, runs };
 }
 
-/**
- * Runs inside the page: every body row of the first table a section renders, with its cells and its
- * indicator's colour class.
- *
- * A section that paints the explicit empty state instead of a table answers an empty list, and so does
- * one that has painted nothing yet, so a caller never mistakes "no rows read" for "no accounts". The
- * status is again the colour class and never the cell's text (AAP 0.10.5 item 11); the identifiers
- * table prints its status as text and carries no indicator, so its rows answer `''` here.
- *
- * Self-contained on purpose: see {@link readHeaderBlock}.
- *
- * @param element The section root — `app-client-accounts` or `app-client-identifiers`.
- */
+/** Runs inside the page: every body row of the first table a section renders, with its cells and its indicator's colour class (AAP 0.10.5). */
 function readTableRowsInPage(element: HTMLElement): TableRowReading[] {
   if (element.querySelector('app-empty-state') !== null) {
     return [];
@@ -439,36 +285,12 @@ function readTableRowsInPage(element: HTMLElement): TableRowReading[] {
   return readings;
 }
 
-/**
- * Drives the new Angular application's client record and reads what it renders: the `next` side of
- * workflow W3 and the entry point every in-scope client action and every loan and savings workflow
- * uses (AAP 0.10.1, AAP 0.7.4).
- *
- * One instance per Playwright page, constructed with the page the spec has already authenticated on:
- * this class never logs in, never reads a credential and never touches `localStorage` (Rule 1
- * clause 9). A caller walks the record in the order the screen allows — {@link open}, then the readers,
- * then one of the `start*` methods or {@link openLoanAccount} to leave it — and every judgement about
- * what was read belongs to the spec that called it (Rule 1 clause 8).
- *
- * The reader shapes are the ones `pages/legacy/client-view.page.ts` declares for the baseline
- * application as well, so one spec text reads both sides of the parity comparison.
- */
+/** Drives the new Angular application's client record and reads what it renders: the `next` side of workflow W3 and the entry point every in-scope client action and every loan and savings workflow uses (AAP 0.10.1, AAP (AAP 0.7.4, Rule 1 clause 9, Rule 1 clause 8). */
 export class ClientViewPage {
-  /**
-   * @param page The Playwright page the spec has already authenticated on.
-   */
+  /** @param page The Playwright page the spec has already authenticated on. */
   constructor(private readonly page: Page) {}
 
-  /**
-   * Opens the record of one client on `#/viewclient/:id` (the entry step of AAP 0.10.1 W3).
-   *
-   * The root element is awaited rather than any block inside it: a client id the server does not know
-   * paints the not-found message in place of the record (AAP 0.7.4), and that state is a legitimate one
-   * for a spec to drive. {@link readHeader} is what distinguishes the two.
-   *
-   * @param clientId Fineract client the record belongs to.
-   * @throws When the id is empty or would address more than one route segment.
-   */
+  /** Opens the record of one client on `#/viewclient/:id` (the entry step of AAP 0.10.1 W3) (AAP 0.7.4). */
   async open(clientId: number | string): Promise<void> {
     const id = requireRouteId(clientId, 'the client id');
     await this.navigate(`/viewclient/${id}`);
@@ -476,11 +298,7 @@ export class ClientViewPage {
     await this.awaitRecordSettled();
   }
 
-  /**
-   * Reads the record's own trail — the client's office, the one crumb the record renders.
-   *
-   * @returns The trail's text, trimmed; `''` while the record is unread or was refused.
-   */
+  /** Reads the record's own trail — the client's office, the one crumb the record renders. @returns The trail's text, trimmed; `''` while the record is unread or was refused. */
   async readBreadcrumb(): Promise<string> {
     const crumbs = (await this.record()).locator(BREADCRUMB_SELECTOR);
     if ((await crumbs.count()) === 0) {
@@ -489,18 +307,7 @@ export class ClientViewPage {
     return normalizeText(await crumbs.first().innerText());
   }
 
-  /**
-   * Reads the record header: the client name, the indicator's colour class and the three metadata
-   * values AAP 0.10.1 W3 compares against `GET /clients/{id}`.
-   *
-   * An `External ID` or `Staff` the client does not carry answers `''`, which is what the screen shows:
-   * the label with an empty value and no placeholder. The status is the colour class alone — the
-   * server's status word is never painted, so nothing here can read one (AAP 0.10.5 item 11).
-   *
-   * @returns The header as the record renders it.
-   * @throws When `app-record-header` is not on the page — the record was refused, so there is no header
-   * to read. An `Error`, not an assertion: the caller decides what a missing record means.
-   */
+  /** Reads the record header: the client name, the indicator's colour class and the three metadata values AAP 0.10.1 W3 compares against `GET /clients/{id}` (AAP 0.10.5). */
   async readHeader(): Promise<ClientHeaderView> {
     const header = (await this.record()).locator(RECORD_HEADER_SELECTOR).first();
     if ((await header.count()) === 0) {
@@ -519,15 +326,7 @@ export class ClientViewPage {
     };
   }
 
-  /**
-   * Reads the tab labels the strip renders, in document order.
-   *
-   * The record keeps exactly the in-scope tabs, so a caller reads the two the plan allows rather than
-   * the baseline application's fuller set (AAP 0.10.5 item 6). The strip's decorative chevrons carry no
-   * anchor and are therefore never reported.
-   *
-   * @returns The labels, trimmed; `[]` when the record paints no strip.
-   */
+  /** Reads the tab labels the strip renders, in document order. The record keeps exactly the in-scope tabs, so a caller reads the two the plan allows rather than the baseline application's fuller set (AAP 0.10.5 item 6). */
   async readTabs(): Promise<readonly string[]> {
     const strip = (await this.record()).locator(TAB_STRIP_SELECTOR);
     const links = strip.locator(TAB_LINK_SELECTOR);
@@ -538,15 +337,7 @@ export class ClientViewPage {
     return (await items.allInnerTexts()).map(normalizeText).filter((label) => label.length > 0);
   }
 
-  /**
-   * Switches the record to the tab whose label a caller names, and waits for the section it shows.
-   *
-   * The active class moving to the selected tab is the readiness signal, and the section the label implies
-   * is awaited as well, so a caller reads the new tab's content rather than the one it replaced.
-   *
-   * @param label The tab's visible label, matched case-insensitively.
-   * @throws When no visible tab matches the label, naming the labels the strip does render.
-   */
+  /** Switches the record to the tab whose label a caller names, and waits for the section it shows. */
   async selectTab(label: string): Promise<void> {
     const pattern = labelPattern(label);
     const root = await this.record();
@@ -566,16 +357,7 @@ export class ClientViewPage {
     }
   }
 
-  /**
-   * Reads the labels of the action row's visible controls, in document order.
-   *
-   * Visibility, not presence: a permission the user lacks hides an entry in place and leaves it in the
-   * markup (Rule 1 clause 3), so a label the user may not use never appears here. The `More` trigger is
-   * included — it is one of the row's controls — and the entries inside its menu appear once
-   * {@link openActionMenu} has opened it, which is the only way they are ever visible.
-   *
-   * @returns The visible labels, trimmed; `[]` when the record paints no action row.
-   */
+  /** Reads the labels of the action row's visible controls, in document order (Rule 1 clause 3). */
   async readActionLabels(): Promise<readonly string[]> {
     const group = (await this.record()).locator(ACTION_GROUP_SELECTOR);
     const controls = group.locator(
@@ -596,15 +378,7 @@ export class ClientViewPage {
     return labels;
   }
 
-  /**
-   * Opens the action row's `More` menu, which holds the lifecycle entries the row keeps off its face.
-   *
-   * Idempotent: a menu the record already shows is left as it is, so a caller may open it before reading
-   * the labels or let {@link startAction} open it on the way to an entry. The open position is the
-   * component's own class, driven by a click and never by a global plugin call (Rule 1 clause 7).
-   *
-   * @throws When the trigger is not visible or the menu does not open within {@link MENU_TIMEOUT_MS}.
-   */
+  /** Opens the action row's `More` menu, which holds the lifecycle entries the row keeps off its face (Rule 1 clause 7). */
   async openActionMenu(): Promise<void> {
     const group = (await this.record()).locator(ACTION_GROUP_SELECTOR);
     const menu = group.locator(MENU_SELECTOR).first();
@@ -623,17 +397,7 @@ export class ClientViewPage {
     await menu.waitFor({ state: 'visible', timeout: MENU_TIMEOUT_MS });
   }
 
-  /**
-   * Follows the action whose label a caller names, and waits for the screen it leads to.
-   *
-   * The entry is taken from the visible row first and from the `More` menu second, which is opened only
-   * when the row does not carry the entry. The click is issued once and never retried: the action
-   * screens post to non-idempotent endpoints, and the screen's own in-flight guard is what keeps one
-   * click to one request, so a retry from here would be the duplicate that guard exists to prevent.
-   *
-   * @param label The action's visible label, matched case-insensitively.
-   * @throws When no visible entry matches the label, naming the labels the row does offer.
-   */
+  /** Follows the action whose label a caller names, and waits for the screen it leads to. */
   async startAction(label: string): Promise<void> {
     const pattern = labelPattern(label);
     const group = (await this.record()).locator(ACTION_GROUP_SELECTOR);
@@ -653,21 +417,7 @@ export class ClientViewPage {
     await this.awaitActionDestination(href);
   }
 
-  /**
-   * Reads the `General` tab's accounts table — the client's loan and savings accounts as the section
-   * renders them (AAP 0.10.1 W3, from `GET /clients/{id}/accounts`).
-   *
-   * The columns are the section's own: account number, product, status indicator and balance. The
-   * balance is the last cell's text as the screen printed it, grouping included, because display
-   * formatting is a dimension the parity comparison decides on (AAP 0.10.2).
-   *
-   * The section runs its own read and paints nothing until it answers, so that read is awaited before
-   * anything is read from it ({@link awaitAccountsSettled}): a caller sees the section once it has
-   * settled into one of its three states, never its loading frame.
-   *
-   * @returns One row per account; `[]` when the section paints its empty state, when it never appeared,
-   * or when a failed read left it painting no account row.
-   */
+  /** Reads the `General` tab's accounts table — the client's loan and savings accounts as the section renders them (AAP 0.10.1 W3, from `GET /clients/{id}/accounts`) (AAP 0.10.2). */
   async readAccounts(): Promise<readonly AccountRow[]> {
     const region = (await this.record()).locator(ACCOUNTS_SELECTOR).first();
     await this.awaitAccountsSettled();
@@ -684,19 +434,7 @@ export class ClientViewPage {
     }));
   }
 
-  /**
-   * Opens the loan account record of one account the record lists.
-   *
-   * The accounts table is read-only by design and renders no account affordance (AAP 0.7.4), so the DOM
-   * never exposes the loan's id: the caller supplies it, from the capture or from the state snapshot
-   * that reads the same endpoint. An anchor carrying the account's route is followed when the section
-   * renders one, and the route is composed otherwise — the one deliberate asymmetry with
-   * `pages/legacy/client-view.page.ts`, whose table does link each row, and the reason the specs pass
-   * the id to both sides.
-   *
-   * @param loanId Fineract loan account to open.
-   * @throws When the id is empty or would address more than one route segment.
-   */
+  /** Opens the loan account record of one account the record lists (AAP 0.7.4). */
   async openLoanAccount(loanId: number | string): Promise<void> {
     const id = requireRouteId(loanId, 'the loan account id');
     const target = new RegExp(`/viewloanaccount/${escapeRegExp(id)}(?:$|[/?#])`);
@@ -718,16 +456,7 @@ export class ClientViewPage {
     await this.awaitScreen(LOAN_VIEW_SELECTOR, 'the loan account record');
   }
 
-  /**
-   * Reads the `Identities` tab's identifiers table (AAP 0.10.1 W3, from
-   * `GET /clients/{id}/identifiers`).
-   *
-   * The columns are the section's own: document type, the document number, its description and the
-   * status the endpoint sent. The section offers no add, edit or delete control, so nothing here looks
-   * for one (Rule 1 clause 3).
-   *
-   * @returns One row per identifier; `[]` when the section paints its empty state or has painted none.
-   */
+  /** Reads the `Identities` tab's identifiers table (AAP 0.10.1 W3, from `GET /clients/{id}/identifiers`) (Rule 1 clause 3). */
   async readIdentifiers(): Promise<readonly IdentifierRow[]> {
     const region = (await this.record()).locator(IDENTIFIERS_SELECTOR).first();
     if ((await region.count()) === 0) {
@@ -743,25 +472,12 @@ export class ClientViewPage {
     }));
   }
 
-  /**
-   * Leaves the record for the client's new loan application — the entry step of W4 (AAP 0.10.1).
-   *
-   * @throws When the row does not offer the entry to the user, naming the labels it does offer.
-   */
+  /** Leaves the record for the client's new loan application — the entry step of W4 (AAP 0.10.1). @throws When the row does not offer the entry to the user, naming the labels it does offer. */
   async startNewLoan(): Promise<void> {
     await this.startAction('New Loan');
   }
 
-  /**
-   * Leaves the record for the client's new savings application — the entry step of W8 (AAP 0.10.1).
-   *
-   * The entry exists because Stretch ships (AAP 0.9.1 scope group 4; AAP 0.10.5 item 5). The client
-   * charge, client transfer and staff-assignment features of the baseline application are out of scope
-   * and are never looked for on this record; loan charges are in scope and live on the loan account's
-   * own record.
-   *
-   * @throws When the row does not offer the entry to the user, naming the labels it does offer.
-   */
+  /** Leaves the record for the client's new savings application — the entry step of W8 (AAP 0.10.1) (AAP 0.9.1, AAP 0.10.5). */
   async startNewSaving(): Promise<void> {
     await this.startAction('New Saving');
   }
@@ -771,29 +487,13 @@ export class ClientViewPage {
     return this.page.locator(ROOT_SELECTOR).first();
   }
 
-  /**
-   * The record root, once the record has settled into one of the states AAP 0.7.4 defines.
-   *
-   * The screen paints nothing at all while its own read is outstanding, so a locator taken before the
-   * answer arrives finds no header, no strip and no action row and would report those absences as the
-   * record's shape — a race that makes a reader answer about the moment it ran rather than about the
-   * record. Every reader and every interaction therefore begins here: the settle signal is the first of
-   * the header or the message a refused read paints in its place, which are the two states the screen
-   * reaches once it knows whether it has a record.
-   */
+  /** The record root, once the record has settled into one of the states AAP 0.7.4 defines. */
   private async record(): Promise<Locator> {
     await this.awaitRecordSettled();
     return this.root();
   }
 
-  /**
-   * Waits for the record's first paint, or for the message that replaces a record the server refused.
-   *
-   * The wait is bounded by {@link SCREEN_TIMEOUT_MS} and its expiry is not raised: a page that carries
-   * neither signal is read as it stands, so each reader reports what the page holds (an empty value or
-   * an empty list) and {@link readHeader} names the header that never appeared. Raising here instead
-   * would turn a slow record into a timeout from whichever reader happened to be called first.
-   */
+  /** Waits for the record's first paint, or for the message that replaces a record the server refused. */
   private async awaitRecordSettled(): Promise<void> {
     const settled = this.root().locator(`${RECORD_HEADER_SELECTOR}, .alert.alert-danger`);
     if ((await settled.count()) > 0) {
@@ -805,22 +505,7 @@ export class ClientViewPage {
       .catch((): void => undefined);
   }
 
-  /**
-   * Waits for the accounts section to reach one of the three states its template paints, and lets a
-   * section that reaches none of them be read as it stands (see {@link ACCOUNTS_SETTLED_SELECTOR}).
-   *
-   * The section fetches its own `GET /clients/{id}/accounts` and paints nothing while that read is in
-   * flight, so a read taken the moment the record settled answers `[]` about a section that simply had
-   * not arrived yet — the same answer it gives for a client that holds no account, which is why the
-   * record's accounts precondition raced the render. Waiting for one of the three states is what tells
-   * a settled section from a pending one.
-   *
-   * The wait is bounded by {@link SCREEN_TIMEOUT_MS} and its expiry is not raised, exactly as
-   * {@link awaitRecordSettled} is: a section that never appears, or whose 5xx or transport fault leaves
-   * it painting neither a table, an empty state nor a message, is read as it stands and the caller gets
-   * the empty list it always did. Raising here instead would turn a slow section into a timeout from
-   * whichever reader happened to be called first.
-   */
+  /** Waits for the accounts section to reach one of the three states its template paints, and lets a section that reaches none of them be read as it stands (see {@link ACCOUNTS_SETTLED_SELECTOR}). */
   private async awaitAccountsSettled(): Promise<void> {
     const settled = this.root().locator(ACCOUNTS_SETTLED_SELECTOR);
     if ((await settled.count()) > 0) {
@@ -832,26 +517,12 @@ export class ClientViewPage {
       .catch((): void => undefined);
   }
 
-  /**
-   * Composes the record's entry URL: the application, both configuration query parameters and the hash
-   * route (Rule 2; AAP 0.4.4 decision 5).
-   *
-   * @param route Hash route of the screen, starting with `/`.
-   */
+  /** Composes the record's entry URL: the application, both configuration query parameters and the hash route (Rule 2; AAP 0.4.4 decision 5). @param route Hash route of the screen, starting with `/`. */
   private screenUrl(route: string): string {
     return `${NEXT_URL}/?baseApiUrl=${encodeURIComponent(FINERACT_URL)}&tenantIdentifier=${TENANT_ID}#${route}`;
   }
 
-  /**
-   * Navigates to a hash route on the full entry URL.
-   *
-   * The navigation is confirmed against `window.location.hash` rather than trusted: when the router has
-   * not applied the fragment — a document that was already open, or a redirect that ran first — the hash
-   * is set in the page as the second way to ask it. Nothing further is awaited here; the caller awaits
-   * its own screen's root, which is the readiness signal that belongs to that screen.
-   *
-   * @param route Hash route of the screen, starting with `/`.
-   */
+  /** Navigates to a hash route on the full entry URL. The navigation is confirmed against `window.location.hash` rather than trusted: when the router has not applied the fragment — a document that was already open, or a. */
   private async navigate(route: string): Promise<void> {
     await this.page.goto(this.screenUrl(route));
     const applied = await this.page.evaluate(
@@ -865,18 +536,7 @@ export class ClientViewPage {
     }
   }
 
-  /**
-   * Waits for a screen's root element to appear, and reports the hash the page settled on when it does
-   * not.
-   *
-   * The element is awaited as attached rather than as visible because a screen legitimately paints
-   * nothing while its own read is outstanding (AAP 0.7.4), so visibility would race the request rather
-   * than measure the navigation.
-   *
-   * @param selector Root element of the screen.
-   * @param description What the screen is, used in the error message.
-   * @throws When the root has not appeared within {@link SCREEN_TIMEOUT_MS}.
-   */
+  /** Waits for a screen's root element to appear, and reports the hash the page settled on when it does not (AAP 0.7.4). */
   private async awaitScreen(selector: string, description: string): Promise<void> {
     const screen = this.page.locator(selector).first();
     try {
@@ -890,17 +550,7 @@ export class ClientViewPage {
     }
   }
 
-  /**
-   * Finds the first candidate a caller may actually use: visible, and rendering the label it asked for.
-   *
-   * Visibility is the test rather than presence, because the permission gate hides an entry in place and
-   * never removes it (Rule 1 clause 3). The pattern is built by {@link labelPattern} without the global
-   * flag, so testing it against one candidate cannot affect the next.
-   *
-   * @param candidates The controls to consider, in document order.
-   * @param pattern The label to match.
-   * @returns The matching control, or `null` when none of them is both visible and a match.
-   */
+  /** Finds the first candidate a caller may actually use: visible, and rendering the label it asked for (Rule 1 clause 3). */
   private async findVisible(candidates: Locator, pattern: RegExp): Promise<Locator | null> {
     const count = await candidates.count();
     for (let index = 0; index < count; index += 1) {
@@ -915,17 +565,7 @@ export class ClientViewPage {
     return null;
   }
 
-  /**
-   * Waits for the screen an action's own link leads to.
-   *
-   * The destination comes from the route the link carries rather than from the label, so a locale that
-   * words an action differently still resolves the screen it opens. A link whose route this class does
-   * not map is followed by its observable effect instead — the hash leaving the record — so an action
-   * the plan adds later still reports honestly whether anything happened.
-   *
-   * @param href The clicked link's `href`, as rendered.
-   * @throws When the page neither reached a known screen nor left the record within the timeout.
-   */
+  /** Waits for the screen an action's own link leads to. The destination comes from the route the link carries rather than from the label, so a locale that words an action differently still resolves the screen it opens. */
   private async awaitActionDestination(href: string): Promise<void> {
     for (const destination of ACTION_DESTINATIONS) {
       if (destination.route.test(href)) {
@@ -948,16 +588,7 @@ export class ClientViewPage {
     }
   }
 
-  /**
-   * The section a tab label shows, used to wait for the switch to take effect.
-   *
-   * The record's two in-scope tabs are the only ones this class knows (AAP 0.10.5 item 6); a label it
-   * does not recognise leaves the caller waiting for the active class alone, which is still the tab
-   * switch's own signal.
-   *
-   * @param label The tab's visible label.
-   * @returns A selector matching the section that label shows, or `null` when it is not a known tab.
-   */
+  /** The section a tab label shows, used to wait for the switch to take effect (AAP 0.10.5). */
   private tabSectionSelector(label: string): string | null {
     if (/identit/i.test(label)) {
       return IDENTIFIERS_SELECTOR;

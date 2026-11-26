@@ -12,80 +12,18 @@ import { EmptyStateComponent } from '../../../../shared/empty-state/empty-state.
 import type { LoanCharge, LoanStatus } from '../../loan.models';
 import { LoanChargesComponent } from './loan-charges.component';
 
-/**
- * Behavioural spec for the charges section of the individual-loan record — `app-loan-charges`, the
- * `LoanChargesComponent` row of AAP 0.7.1's loans feature, rendered inside the record's charge tab
- * (`#/viewloanaccount/:id`; AAP 0.7.4) and driven by the loan record's own `charges` member
- * (AAP 0.7.2 row `LoanCharge`; AAP 0.7.3 row "Loan charges"; AAP 0.11.1 "unit specs beside every
- * component and service"; Rule 1 clause 8, "tests prove behaviour").
- *
- * What it pins, case by case, is everything the section decides for itself:
- *
- *  1. one row per charge, in the payload's order, in the six columns the template declares — name,
- *     due date, amount, paid, outstanding and actions — each figure the server's own value rendered
- *     through `DecimalPipe` and the due date through the shared `DISPLAY_DATE_FORMAT`, so a charge's
- *     name is never translated and no column is invented (Rule 1 clause 3);
- *  2. a loan carrying no charges renders the shared explicit empty state and no error: no table, no
- *     alert region and no failure wording anywhere (AAP 0.7.4, "an explicit empty state and no
- *     error");
- *  3. each charge's `pay` and `waive` entry points are links to the charge form's route,
- *     `#/loanaccountcharge/:id/:action/:chargeId`, built from the `loanId` the record binds and the
- *     row's own id, so one row's action can never name another loan or another charge;
- *  4. each link is offered per row exactly as the legacy record offers it: waive for a charge that is
- *     neither paid nor waived, does not fall due on disbursement, and belongs to a loan that is
- *     `Active`, and pay for a charge the server reports `chargePayable` on a loan that is `Active`
- *     (`app/views/loans/viewloanaccountdetails.html:865` and `:868`;
- *     `app/scripts/controllers/loanAccount/ViewLoanDetailsController.js:168-175`). The ineligible
- *     link is hidden with Bootstrap's global `.hidden` utility and never removed, so the row keeps
- *     both anchors in the document (Rule 1 clause 3; AAP 0.10.5 registers no difference here);
- *  5. those two links are also gated by `HasPermissionDirective` on the single code the record passes
- *     down — an independent condition that likewise **hides without removing**: the anchors stay in
- *     the document, the inline `display` alone changes, and it follows the permission list in both
- *     directions (AAP 0.1.1, "a route guard and a template directive must agree"; AAP 0.14.1);
- *  6. a charge that carries no due date leaves its cell empty — no dash, no `N/A`, no `null`, no
- *     `Invalid Date` — because the payload sent no date and nothing here invents one (Rule 1
- *     clause 3).
- *
- * **Providers.** The real router, with an empty route table, because the section's actions are
- * `RouterLink`s and the rendered `href` is the evidence. The real `TranslatePipe` over a real
- * `TranslateService` pre-filled with the captions the shipped legacy bundle carries
- * (`app/global-translations/locale-en.json`), so a label that failed to resolve would surface as the
- * key rather than as the wording asserted below. `HasPermissionDirective` and `PermissionsService`
- * are the shipped classes; only the service's answer is substituted, through a typed stub provided at
- * its own token, because the real one reads the session a unit test has no business assembling — the
- * same substitution `loan-view.component.spec.ts` and `navbar.component.spec.ts` make for the same
- * directive.
- *
- * **No transport is installed** — no `provideHttpClient` and no `provideHttpClientTesting` — because
- * this section injects nothing and issues no request: it renders what its parent hands it, which is
- * how the record keeps making exactly the calls its typed service owns (Rule 1 clause 5). A spec that
- * needed `HttpTestingController` would mean the component had grown a dependency it must not have.
- *
- * The fixtures are synthetic: invented charge names and figures. Nothing here carries tenant data, a
- * credential or an authentication key, and nothing is logged (Rule 1 clause 9).
- */
+/** Behavioural spec for the charges section of the individual-loan record — `app-loan-charges`, the `LoanChargesComponent` row of AAP 0.7.1's loans feature, rendered inside the record's charge tab (`#/viewloanaccount/:id` (AAP 0.7.4, AAP 0.7.2, AAP 0.7.3, AAP 0.11.1). */
 
 /** The loan every case is bound to, in the form the record binds it — `record.id`, a number. */
 const LOAN_ID = 7;
 
-/**
- * The two forms the `loanId` input accepts: the numeric id the record passes and the string form a
- * `:id` route parameter delivers. Both segment into the same link, which case 3 asserts.
- */
+/** The two forms the `loanId` input accepts: the numeric id the record passes and the string form a `:id` route parameter delivers. */
 const LOAN_ID_FORMS: readonly (number | string)[] = [LOAN_ID, String(LOAN_ID)];
 
-/**
- * The one permission code this section is gated on: `UPDATE_LOAN`, the code the record passes down
- * and the code `loans.routes.ts` guards `loanaccountcharge/:id/:action/:chargeId` with, so the
- * directive and the guard cannot disagree (AAP 0.14.1).
- */
+/** The one permission code this section is gated on: `UPDATE_LOAN`, the code the record passes down and the code `loans.routes.ts` guards `loanaccountcharge/:id/:action/:chargeId` with, so the directive and the guard (AAP 0.14.1). */
 const ACTION_PERMISSION = 'UPDATE_LOAN';
 
-/**
- * The captions this section resolves, keyed exactly as the shipped flat legacy bundles key them
- * (`app/global-translations/`). Serving the bundle's wording rather than the key is what proves each
- * caption resolves through the pipe instead of falling back to the raw dotted string.
- */
+/** The captions this section resolves, keyed exactly as the shipped flat legacy bundles key them (`app/global-translations/`). */
 const TRANSLATIONS = {
   'label.heading.name': 'Name',
   'label.heading.dueasof': 'Due as of',
@@ -111,12 +49,7 @@ const HEADING_KEYS = [
 /** The six headings as the table must render them: the bundle's wording, never the key. */
 const HEADINGS: readonly string[] = HEADING_KEYS.map((key) => TRANSLATIONS[key]);
 
-/**
- * The amount format the table uses — `DecimalPipe` at its default `1.0-3` digits, the same grouping
- * the legacy table's `number` filter applies. Every expected figure below is built through it rather
- * than written out, so a change in the pipe's output cannot pass silently (AAP 0.10.2 "displayed
- * data … and their formatting"; Rule 1 clause 3).
- */
+/** The amount format the table uses — `DecimalPipe` at its default `1.0-3` digits, the same grouping the legacy table's `number` filter applies (AAP 0.10.2, Rule 1 clause 3). */
 const AMOUNT_PIPE = new DecimalPipe('en-US');
 
 /** The date format the table uses, through the one pattern the application declares (AAP 0.7.2). */
@@ -140,20 +73,14 @@ const SPECIFIED_DUE_DATE = { id: 2, value: 'Specified due date' };
 const DISBURSEMENT = { id: 1, value: 'Disbursement' };
 const FLAT = { id: 1, value: 'Flat' };
 
-/**
- * The loan state both charge actions require: Fineract's `LoanStatus.ACTIVE`, as
- * `GET /loans/{id}` reports it. Every case that binds no other status runs against this one.
- */
+/** The loan state both charge actions require: Fineract's `LoanStatus.ACTIVE`, as `GET /loans/{id}` reports it. */
 const ACTIVE_STATUS: LoanStatus = {
   id: 300,
   code: 'loanStatusType.active',
   value: 'Active',
 };
 
-/**
- * A charge that falls due on a given date, is still wholly outstanding and is payable through an
- * account transfer: the row whose every cell carries a value and which legacy offers both actions on.
- */
+/** A charge that falls due on a given date, is still wholly outstanding and is payable through an account transfer: the row whose every cell carries a value and which legacy offers both actions on. */
 const CHARGE_DUE: LoanCharge = {
   id: 11,
   chargeId: 5,
@@ -171,12 +98,7 @@ const CHARGE_DUE: LoanCharge = {
   dueDate: [2026, 3, 14],
 };
 
-/**
- * The same charge settled: paid in full, which is why it is neither payable nor waivable. It carries
- * no due date and a figure large enough to prove the thousands grouping; its absent `dueDate` is the
- * state case 6 asserts an empty cell for, and its paid flag is the state the waive rule (and the pay
- * rule, through `chargePayable`) hides both actions on.
- */
+/** The same charge settled: paid in full, which is why it is neither payable nor waivable. */
 const CHARGE_SETTLED: LoanCharge = {
   id: 12,
   chargeId: 6,
@@ -193,11 +115,7 @@ const CHARGE_SETTLED: LoanCharge = {
   chargeCalculationType: FLAT,
 };
 
-/**
- * The same outstanding charge with a regular payment mode: Fineract's `isChargePayable()` answers
- * false for it, because paying it means paying through an account transfer, so the record offers
- * waive and withholds pay.
- */
+/** The same outstanding charge with a regular payment mode: Fineract's `isChargePayable()` answers false for it, because paying it means paying through an account transfer, so the record offers waive and withholds pay. */
 const CHARGE_NOT_PAYABLE: LoanCharge = { ...CHARGE_DUE, id: 13, chargePayable: false };
 
 /** The same charge waived: its charge is settled, so the record withholds both actions. */
@@ -210,11 +128,7 @@ const CHARGE_WAIVED: LoanCharge = {
   chargePayable: false,
 };
 
-/**
- * The same charge taken at disbursement: legacy sets its `actionFlag` on
- * `chargeTimeType.value == 'Disbursement'`, so the record never offers to waive it, while a payable
- * charge still offers pay.
- */
+/** The same charge taken at disbursement: legacy sets its `actionFlag` on `chargeTimeType.value == 'Disbursement'`, so the record never offers to waive it, while a payable charge still offers pay. */
 const CHARGE_AT_DISBURSEMENT: LoanCharge = {
   ...CHARGE_DUE,
   id: 15,
@@ -224,13 +138,7 @@ const CHARGE_AT_DISBURSEMENT: LoanCharge = {
 /** The two rows every table case renders, in the order the payload lists them. */
 const CHARGES: readonly LoanCharge[] = [CHARGE_DUE, CHARGE_SETTLED];
 
-/**
- * The loan states in which the record offers neither charge action, by the fork's own
- * `LoanStatus` ids — every state but `300` — plus the state a payload that reports no status leaves.
- * The whole set is covered because legacy's rule is `loan.status.value != 'Active'`: any state other
- * than `Active` withholds both links, not just the two an application passes through on its way to
- * disbursement.
- */
+/** The loan states in which the record offers neither charge action, by the fork's own `LoanStatus` ids — every state but `300` — plus the state a payload that reports no status leaves. */
 const NOT_ACTIVE_STATUSES: readonly (readonly [string, LoanStatus | null])[] = [
   [
     'submitted and pending approval',
@@ -248,12 +156,7 @@ const NOT_ACTIVE_STATUSES: readonly (readonly [string, LoanStatus | null])[] = [
   ['reported no status at all', null],
 ];
 
-/**
- * The half of `PermissionsService` the `hasPermission` directive asks, carrying the legacy algebra
- * for `ALL_FUNCTIONS` and a leading `!` so the gate is answered the way the shipped service answers
- * it. The real service reads the session, which a unit test has no business assembling — the same
- * substitution `loan-view.component.spec.ts` makes for the same directive.
- */
+/** The half of `PermissionsService` the `hasPermission` directive asks, carrying the legacy algebra for `ALL_FUNCTIONS` and a leading `!` so the gate is answered the way the shipped service answers it. */
 class PermissionsStub implements Pick<PermissionsService, 'has'> {
   private readonly granted: WritableSignal<readonly string[]> = signal<readonly string[]>([]);
 
@@ -280,18 +183,10 @@ describe('LoanChargesComponent', () => {
   let fixture: ComponentFixture<LoanChargesComponent>;
   let permissions: PermissionsStub;
 
-  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines this
-  // spec's only cast to one line and keeps every DOM assertion type-checked (Rule 1 clause 4).
+  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines this spec's only cast to one line and keeps every DOM assertion type-checked (Rule 1 clause 4).
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
 
-  /**
-   * Mounts the section for one loan with the charges the record hands it, on the loan status the
-   * record reports — `Active` unless a case is about the state that withholds both actions.
-   *
-   * Every input is bound before the first change detection: `loanId` and `actionPermission` are
-   * required inputs, so the first pass would throw without them, and the gate's answer and the rows'
-   * eligibility both come out of that same pass.
-   */
+  /** Mounts the section for one loan with the charges the record hands it, on the loan status the record reports — `Active` unless a case is about the state that withholds both actions. */
   function mount(
     charges: readonly LoanCharge[],
     loanId: number | string = LOAN_ID,
@@ -322,10 +217,7 @@ describe('LoanChargesComponent', () => {
     return host().querySelector<HTMLElement>(`#${id}`);
   }
 
-  /**
-   * The route a charge action names: `#/loanaccountcharge/:id/:action/:chargeId`, the path
-   * `loans.routes.ts` declares and `loan-charge-form.component.ts` serves (AAP 0.8.2).
-   */
+  /** The route a charge action names: `#/loanaccountcharge/:id/:action/:chargeId`, the path `loans.routes.ts` declares and `loan-charge-form.component.ts` serves (AAP 0.8.2). */
   function chargeUrl(
     loanId: number | string,
     action: 'pay' | 'waive',
@@ -334,13 +226,7 @@ describe('LoanChargesComponent', () => {
     return `/loanaccountcharge/${loanId}/${action}/${chargeId}`;
   }
 
-  /**
-   * Whether the row's action link is hidden by the section's own eligibility rule — Bootstrap's
-   * global `.hidden` utility — rather than removed.
-   *
-   * The anchor must be in the document in either case: the section hides an ineligible link, it never
-   * drops it, which is what keeps the row's DOM stable and the permission gate independent.
-   */
+  /** Whether the row's action link is hidden by the section's own eligibility rule — Bootstrap's global `.hidden` utility — rather than removed. */
   function hiddenByRule(action: 'pay' | 'waive', chargeId: number): boolean {
     const anchor = byId(`loan-charge-${action}-${chargeId}`);
 
@@ -350,12 +236,10 @@ describe('LoanChargesComponent', () => {
   }
 
   beforeEach(async () => {
-    // Reset first so each case starts on a fresh root injector: a permission granted by one case must
-    // never reach the next, and a second `configureTestingModule` on an instantiated module throws.
+    // Reset first so each case starts on a fresh root injector: a permission granted by one case must never reach the next, and a second `configureTestingModule` on an instantiated module throws.
     TestBed.resetTestingModule();
     permissions = new PermissionsStub();
-    // Ground state: a user who may pay and waive, so the table cases see the actions the section
-    // renders. The gate's own case withholds and re-grants the code explicitly.
+    // Ground state: a user who may pay and waive, so the table cases see the actions the section renders.
     permissions.grant([ACTION_PERMISSION]);
 
     await TestBed.configureTestingModule({
@@ -386,8 +270,7 @@ describe('LoanChargesComponent', () => {
       host().querySelectorAll<HTMLTableCellElement>('#loan-charges thead th'),
     ).map((cell) => (cell.textContent ?? '').trim());
 
-    // The template's six columns and no seventh: a charge carries no status, no currency symbol and
-    // no total column, so none is asserted here (Rule 1 clause 3).
+    // The template's six columns and no seventh: a charge carries no status, no currency symbol and no total column, so none is asserted here (Rule 1 clause 3).
     expect(headings).toEqual(HEADINGS);
     // Every heading resolved through the pipe: the raw dotted keys never reach the screen.
     expect(host().textContent ?? '').not.toContain('label.heading.');
@@ -396,8 +279,7 @@ describe('LoanChargesComponent', () => {
 
     expect(rows).toHaveLength(2);
 
-    // The payload's order is kept — the due charge first, the settled one second — and each cell is
-    // the server's own value.
+    // The payload's order is kept — the due charge first, the settled one second — and each cell is the server's own value.
     expect(cellsOf(rows[0]).slice(0, 5)).toEqual([
       CHARGE_DUE.name,
       asDueDate(DUE_DATE) ?? '',
@@ -412,8 +294,7 @@ describe('LoanChargesComponent', () => {
       asAmount(CHARGE_SETTLED.amountPaid) ?? '',
       asAmount(CHARGE_SETTLED.amountOutstanding) ?? '',
     ]);
-    // The figures the table prints are the pipe's own output for the payload's numbers, thousands
-    // grouping included, rather than figures the component derived.
+    // The figures the table prints are the pipe's own output for the payload's numbers, thousands grouping included, rather than figures the component derived.
     expect(cellsOf(rows[1])[2]).toBe('1,250.5');
     expect(cellsOf(rows[0])[1]).toBe('14 March 2026');
     // The due charge's own name is shown verbatim: a charge's name is the server's, never translated.
@@ -423,8 +304,7 @@ describe('LoanChargesComponent', () => {
   it('renders the explicit empty state and no error for a loan carrying no charges', () => {
     mount([]);
 
-    // The shared explicit empty state is the whole body, and the sentence it carries is the legacy
-    // bundle's own "No Data" (AAP 0.7.4).
+    // The shared explicit empty state is the whole body, and the sentence it carries is the legacy bundle's own "No Data" (AAP 0.7.4).
     expect(fixture.debugElement.queryAll(By.directive(EmptyStateComponent))).toHaveLength(1);
     expect(byId('loan-charges-empty')?.textContent?.trim()).toBe(TRANSLATIONS['label.nodata']);
     // Nothing claims rows the payload never carried: no table at all.
@@ -433,9 +313,7 @@ describe('LoanChargesComponent', () => {
     expect(host().querySelector('.alert')).toBeNull();
     expect(host().querySelector('.alert-danger')).toBeNull();
     expect((host().textContent ?? '').toLowerCase()).not.toContain('error');
-    // The first charge is added from the record's own action group — the single entry point to
-    // `#/addloancharge/:id` (see `loan-view.component.html`) — so an empty section offers no second
-    // control for that one route (Rule 1 clause 3: one action, one home).
+    // The first charge is added from the record's own action group — the single entry point to `#/addloancharge/:id` (see `loan-view.component.html`) — so an empty section offers no second control for that one route (Rule 1 (Rule 1 clause 3).
     expect(host().querySelector('a[href^="/addloancharge"]')).toBeNull();
   });
 
@@ -451,10 +329,7 @@ describe('LoanChargesComponent', () => {
       expect(waive).not.toBeNull();
       expect(pay?.classList.contains('hidden')).toBe(false);
       expect(waive?.classList.contains('hidden')).toBe(false);
-      // …and the anchor names the loan it belongs to and the charge the row carries, so one row's
-      // action can never point at another loan or another charge. `app.config.ts` adds
-      // `withHashLocation()`, so in the application these render as `#/loanaccountcharge/7/pay/11`;
-      // this suite's router uses the default path strategy, which is why the bare path is asserted.
+      // …and the anchor names the loan it belongs to and the charge the row carries, so one row's action can never point at another loan or another charge.
       expect(pay?.getAttribute('href')).toBe(chargeUrl(loanId, 'pay', CHARGE_DUE.id));
       expect(waive?.getAttribute('href')).toBe(chargeUrl(loanId, 'waive', CHARGE_DUE.id));
       expect(pay?.textContent?.trim()).toBe(TRANSLATIONS['label.button.paycharge']);
@@ -481,10 +356,7 @@ describe('LoanChargesComponent', () => {
     (_label, charge, offered) => {
       mount([charge], LOAN_ID, ACTIVE_STATUS);
 
-      // Legacy's rule, condition by condition: waive is hidden once the charge is paid or waived,
-      // once it falls due on disbursement, and whenever the loan is not active; pay is shown only for
-      // a `chargePayable` charge on an active loan
-      // (`ViewLoanDetailsController.js:168-175`; `viewloanaccountdetails.html:865,868`).
+      // Legacy's rule, condition by condition: waive is hidden once the charge is paid or waived, once it falls due on disbursement, and whenever the loan is not active; pay is shown only for a `chargePayable` charge on an.
       expect(hiddenByRule('pay', charge.id)).toBe(!offered.pay);
       expect(hiddenByRule('waive', charge.id)).toBe(!offered.waive);
     },
@@ -495,9 +367,7 @@ describe('LoanChargesComponent', () => {
     (_label, loanStatus) => {
       mount([CHARGE_DUE], LOAN_ID, loanStatus);
 
-      // `charge.chargePayable && status=='Active'` and `actionFlag`'s own
-      // `loan.status.value != 'Active'`: on any state but Active the record offers neither action,
-      // whatever the charge's own flags say.
+      // `charge.chargePayable && status=='Active'` and `actionFlag`'s own `loan.status.value != 'Active'`: on any state but Active the record offers neither action, whatever the charge's own flags say.
       expect(hiddenByRule('pay', CHARGE_DUE.id)).toBe(true);
       expect(hiddenByRule('waive', CHARGE_DUE.id)).toBe(true);
     },
@@ -511,17 +381,14 @@ describe('LoanChargesComponent', () => {
       const pay = byId(`loan-charge-pay-${charge.id}`);
       const waive = byId(`loan-charge-waive-${charge.id}`);
 
-      // Hide, never remove: legacy toggled the element's visibility and Bootstrap 3 lays the row out
-      // around its declared box, so the anchors keep their place in the document.
+      // Hide, never remove: legacy toggled the element's visibility and Bootstrap 3 lays the row out around its declared box, so the anchors keep their place in the document.
       expect(pay).not.toBeNull();
       expect(waive).not.toBeNull();
       expect(pay?.style.display).toBe('none');
       expect(waive?.style.display).toBe('none');
     }
 
-    // The gate follows the permission list: granting the code reveals the same elements, without a
-    // re-render of the section's structure, which is what makes the directive and the route guard
-    // agree at template level (AAP 0.1.1; AAP 0.14.1).
+    // The gate follows the permission list: granting the code reveals the same elements, without a re-render of the section's structure, which is what makes the directive and the route guard agree at template level (AAP (AAP 0.1.1, AAP 0.14.1).
     permissions.grant([ACTION_PERMISSION]);
     fixture.detectChanges();
 
@@ -531,9 +398,7 @@ describe('LoanChargesComponent', () => {
     expect(revealed?.style.display).not.toBe('none');
     expect(byId(`loan-charge-waive-${CHARGE_DUE.id}`)?.style.display).not.toBe('none');
 
-    // The permission gate and the row's own eligibility are two independent conditions on the same
-    // anchor: on the settled row the directive's inline gate is wide open while the eligibility rule
-    // still hides the link, which is what keeps the two reasons for hiding one apart.
+    // The permission gate and the row's own eligibility are two independent conditions on the same anchor: on the settled row the directive's inline gate is wide open while the eligibility rule still hides the link, which is.
     const settledWaive = byId(`loan-charge-waive-${CHARGE_SETTLED.id}`);
 
     expect(settledWaive?.style.display).toBe('');
@@ -552,8 +417,7 @@ describe('LoanChargesComponent', () => {
 
     const cells = cellsOf(renderedRows()[0]);
 
-    // The payload sent no date, so the cell carries nothing at all: no dash, no `N/A`, no `null` and
-    // no `Invalid Date` the parser might have handed the pipe (Rule 1 clause 3).
+    // The payload sent no date, so the cell carries nothing at all: no dash, no `N/A`, no `null` and no `Invalid Date` the parser might have handed the pipe (Rule 1 clause 3).
     expect(cells[1]).toBe('');
     expect(cells[1] ?? '').not.toMatch(/^(?:[-–—]+|n\/?a|null|undefined|invalid date)$/i);
   });

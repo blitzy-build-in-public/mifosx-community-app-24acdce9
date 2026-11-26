@@ -9,34 +9,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppComponent } from './app.component';
 import { NotificationService } from './core/notifications/notification.service';
 
-/**
- * Behaviour of the application root (AAP 0.11.1 row 12; AAP 0.8.2 "Application entry and
- * configuration"): the component `web-ng/src/main.ts` bootstraps and `web-ng/src/index.html`
- * mounts as `<app-root>`.
- *
- * The component owns two hosts and nothing else, so that is what these tests assert. The router
- * outlet renders whatever the router selects, and it is the only routed surface. The single
- * notification host (AAP 0.7.1 shared row `NotificationComponent`) renders one element per
- * notice queued on the root `NotificationService`, and it stays mounted outside the routed
- * content so a notice reaches the user on every route — including the login screen, which
- * renders without the signed-in chrome. The component declares no wrapper element, no styles, no
- * providers and no state, so nothing else about it is observable (AAP 0.14.1 "each screen lands
- * with at least one behavioural spec").
- *
- * The suite mounts the real `AppComponent` with the real router (`provideRouter`) and the real
- * root `NotificationService`, so the DOM under assertion is the one the application serves: one
- * route carries a stub standalone component as its screen, and
- * `provideZonelessChangeDetection()` keeps the change-detection mode the application runs in
- * (no `zone.js`, AAP 0.4.1). The translation stack is the library's own (`provideTranslateService`)
- * with one bundle seeded, because the notification host names its close control through
- * `TranslatePipe` (AAP 0.1.1 requirement 1, AAP 0.7.4).
- */
+/** Behaviour of the application root (AAP 0.11.1 row 12; AAP 0.8.2 "Application entry and configuration"): the component `web-ng/src/main.ts` bootstraps and `web-ng/src/index.html` mounts as `<app-root>` (AAP 0.7.1, AAP 0.14.1, AAP 0.4.1, AAP 0.1.1). */
 
-/**
- * Route target standing in for any screen the router may select. Its marker text and class are
- * what the assertions below look for inside `<app-root>`, so they prove the outlet rendered the
- * component the router chose rather than something the root template declares itself.
- */
+/** Route target standing in for any screen the router may select. */
 @Component({
   selector: 'app-routed-stub',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -44,28 +19,18 @@ import { NotificationService } from './core/notifications/notification.service';
 })
 class RoutedStubComponent {}
 
-/**
- * The one route this suite registers and navigates to, as the root-relative segment the router
- * commands and the route declaration share; the root template declares no route of its own.
- */
+/** The one route this suite registers and navigates to, as the root-relative segment the router commands and the route declaration share; the root template declares no route of its own. */
 const ROUTED_PATH = 'routed-stub';
 
 /** Marker the routed stub renders, so the outlet's output is distinguishable from the root's own. */
 const ROUTED_TEXT = 'Routed screen';
 
-/**
- * Notice texts chosen to expose reordering or truncation: one short and one long, so queue order
- * stays visible in the rendered stack.
- */
+/** Notice texts chosen to expose reordering or truncation: one short and one long, so queue order stays visible in the rendered stack. */
 const INFO_NOTICE = 'Client saved.';
 const ERROR_NOTICE =
   'The request failed: principal 50,000 exceeds the maximum allowed for this product.';
 
-/**
- * The bundle this suite seeds for the notification host's close control, whose accessible name is the
- * one string inside the widget that is translated (AAP 0.1.1 requirement 1, AAP 0.7.4). One key, of
- * the shape the shipped legacy bundles carry, so the rendered name is text rather than a raw key.
- */
+/** The bundle this suite seeds for the notification host's close control, whose accessible name is the one string inside the widget that is translated (AAP 0.1.1 requirement 1, AAP 0.7.4). */
 const BASE_LANG = 'en';
 const CLOSE_LABEL_BUNDLE: Record<string, string> = { 'label.button.close': 'Close' };
 
@@ -75,16 +40,7 @@ describe('AppComponent', () => {
   let notifications: NotificationService;
   let host: HTMLElement;
 
-  /**
-   * Activates the root-relative route named by `segment` through the real router and renders
-   * whatever the outlet created, in the same two steps the application takes after a navigation:
-   * the router resolves the route, then change detection renders it.
-   *
-   * The route is named by segment rather than by URL text: `router.navigate` applies its commands
-   * to the router's root, so this single segment reaches the same location `navigateByUrl` with a
-   * root-prefixed URL would, and the spec holds no path-shaped literal for the endpoint scan to
-   * judge as an application URL (AAP 0.14.1: URL literals live in the URL-owning services).
-   */
+  /** Activates the root-relative route named by `segment` through the real router and renders whatever the outlet created, in the same two steps the application takes after a navigation: the router resolves the route, then (AAP 0.14.1). */
   async function navigateTo(segment: string): Promise<void> {
     await router.navigate([segment]);
     fixture.detectChanges();
@@ -92,10 +48,7 @@ describe('AppComponent', () => {
   }
 
   beforeEach(async () => {
-    // Reset first so every test starts on a fresh root injector, and therefore on a fresh
-    // `NotificationService` queue and a fresh router: a notice queued or a route activated by one
-    // test must never reach the next, and a second `configureTestingModule` on an instantiated
-    // module throws.
+    // Reset first so every test starts on a fresh root injector, and therefore on a fresh `NotificationService` queue and a fresh router: a notice queued or a route activated by one test must never reach the next, and a.
     TestBed.resetTestingModule();
     await TestBed.configureTestingModule({
       imports: [AppComponent],
@@ -106,8 +59,7 @@ describe('AppComponent', () => {
       ],
     }).compileComponents();
 
-    // Seeded before the first render, so the close control's accessible name resolves through a
-    // bundle exactly as it does in the application once a bundle has loaded.
+    // Seeded before the first render, so the close control's accessible name resolves through a bundle exactly as it does in the application once a bundle has loaded.
     const translate = TestBed.inject(TranslateService);
     translate.setTranslation(BASE_LANG, CLOSE_LABEL_BUNDLE, true);
     await firstValueFrom(translate.use(BASE_LANG));
@@ -115,18 +67,14 @@ describe('AppComponent', () => {
     router = TestBed.inject(Router);
     notifications = TestBed.inject(NotificationService);
     fixture = TestBed.createComponent(AppComponent);
-    // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps the
-    // assertions below type-checked and confines the boundary cast to this single line.
+    // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps the assertions below type-checked and confines the boundary cast to this single line.
     host = fixture.nativeElement as HTMLElement;
     fixture.detectChanges();
   });
 
   it('creates the component once, rendering no nested copy of itself', () => {
     expect(fixture.componentInstance).toBeInstanceOf(AppComponent);
-    // `TestBed.createComponent` mounts the component on a host element of its own rather than on
-    // the `<app-root>` `src/index.html` supplies, so this asserts the component's *output*: an
-    // `app-root` element below it would mean the root had rendered itself. The selector itself is
-    // exercised by every other case here, which all render through this component.
+    // `TestBed.createComponent` mounts the component on a host element of its own rather than on the `<app-root>` `src/index.html` supplies, so this asserts the component's *output*: an `app-root` element below it would mean.
     expect(host.querySelectorAll('app-root')).toHaveLength(0);
   });
 
@@ -154,9 +102,7 @@ describe('AppComponent', () => {
 
     expect(routed).not.toBeNull();
     expect(routed?.textContent?.trim()).toBe(ROUTED_TEXT);
-    // `RouterOutlet` is a directive, so its instance comes from the queried element's injector;
-    // `isActivated` is what tells "the outlet rendered the route" from "the outlet is present but
-    // empty".
+    // `RouterOutlet` is a directive, so its instance comes from the queried element's injector; `isActivated` is what tells "the outlet rendered the route" from "the outlet is present but empty".
     expect(outlet?.injector.get(RouterOutlet).isActivated).toBe(true);
     expect(outlet?.injector.get(RouterOutlet).component).toBeInstanceOf(RoutedStubComponent);
   });

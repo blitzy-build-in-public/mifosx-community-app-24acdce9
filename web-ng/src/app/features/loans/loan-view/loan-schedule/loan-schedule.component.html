@@ -1,17 +1,11 @@
-<!-- Eight columns are this section's whole contract, and each cell prints the payload's own member —
-     `feeChargesDue` and `totalDueForPeriod` are the fork's field names — so no figure is recomputed,
-     rounded, summed or worded here and the table cannot disagree with the server's schedule.
-     The table and the shared explicit empty state are this section's only two branches: a schedule
-     with no periods renders that empty state, exactly as the transactions section of the same record
-     does, rather than nothing at all (AAP 0.7.4 state pattern). -->
+<!-- Eight columns are this section's whole contract, and each cell prints the payload's own member — `feeChargesDue` and `totalDueForPeriod` are the fork's field names — so no figure is recomputed, rounded, summed or worded (AAP 0.7.4). -->
 @if (rows().length > 0) {
   <table class="table table-striped" id="loan-schedule">
     <thead>
       <tr>
         <th scope="col">{{ 'label.heading.no' | translate }}</th>
         <th scope="col">{{ 'label.heading.fromdate' | translate }}</th>
-        <!-- The period's due date is labelled with label.heading.date: no locale file defines
-             label.heading.duedate, and this is the key the legacy schedule heads that column with. -->
+        <!-- The period's due date is labelled with label.heading.date: no locale file defines label.heading.duedate, and this is the key the legacy schedule heads that column with. -->
         <th scope="col">{{ 'label.heading.date' | translate }}</th>
         <th scope="col">{{ 'label.heading.principal' | translate }}</th>
         <th scope="col">{{ 'label.heading.interest' | translate }}</th>
@@ -21,9 +15,7 @@
       </tr>
     </thead>
     <tbody>
-      <!-- Keyed by position: the array is the server's own order, never re-sorted, filtered or
-           paginated, and the leading disbursement row carries no period number to key on — two such
-           rows would raise NG0955. -->
+      <!-- Keyed by position: the array is the server's own order, never re-sorted, filtered or paginated, and the leading disbursement row carries no period number to key on — two such rows would raise NG0955. -->
       @for (row of rows(); track $index) {
         <tr>
           <td>{{ row.period }}</td>

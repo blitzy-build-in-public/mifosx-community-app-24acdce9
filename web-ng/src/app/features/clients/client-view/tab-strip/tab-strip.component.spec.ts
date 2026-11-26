@@ -3,18 +3,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { TabStripComponent, type TabDescriptor } from './tab-strip.component';
 
-/**
- * Behavioural spec for the client record's tab strip — the `TabStrip` row of the component
- * inventory, whose one state is "one active of N" (AAP 0.2.3), on the record the flow's third
- * screen shows (Figma node `1:4`). The component is controlled, so every assertion below is on its
- * public surface: the rendered DOM and the emitted id, never the sheet that paints it (Rule 1
- * clause 6). It serves AAP 0.11.1, AAP 0.14.1 and Rule 1 clause 8's "no spec without an `expect`".
- */
+/** Behavioural spec for the client record's tab strip — the `TabStrip` row of the component inventory, whose one state is "one active of N" (AAP 0.2.3), on the record the flow's third screen shows (Figma node `1:4`) (Rule 1 clause 6, AAP 0.11.1, AAP 0.14.1, Rule 1 clause 8). */
 
-/**
- * The tabs the client record supplies, in its own order and wording (AAP 0.7.4); the component
- * knows neither, which is what lets the last case prove it adds no tab of its own.
- */
+/** The tabs the client record supplies, in its own order and wording (AAP 0.7.4); the component knows neither, which is what lets the last case prove it adds no tab of its own. */
 const TABS: readonly TabDescriptor[] = [
   { id: 'general', label: 'General' },
   { id: 'identities', label: 'Identities' },
@@ -29,8 +20,7 @@ const OUT_OF_SCOPE_LABELS: readonly string[] = [
 ];
 
 describe('TabStripComponent', () => {
-  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines
-  // this spec's only cast to one line and keeps the assertions type-checked (Rule 1 clause 4).
+  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines this spec's only cast to one line and keeps the assertions type-checked (Rule 1 clause 4).
   const host = (fixture: ComponentFixture<TabStripComponent>): HTMLElement =>
     fixture.nativeElement as HTMLElement;
 
@@ -38,10 +28,7 @@ describe('TabStripComponent', () => {
     await TestBed.configureTestingModule({ imports: [TabStripComponent] }).compileComponents();
   });
 
-  /**
-   * Renders the strip with both `input.required` inputs bound before the first change detection;
-   * a fixture that skipped either would throw instead of rendering a half-configured strip.
-   */
+  /** Renders the strip with both `input.required` inputs bound before the first change detection; a fixture that skipped either would throw instead of rendering a half-configured strip. */
   function createStrip(activeId: string): ComponentFixture<TabStripComponent> {
     const fixture = TestBed.createComponent(TabStripComponent);
 
@@ -114,17 +101,13 @@ describe('TabStripComponent', () => {
     const fixture = createStrip('general');
     const lists = host(fixture).querySelectorAll('ul.nav-tabs');
 
-    // One plain list, as legacy's tabset renders: no tablist role, no tab-stop attribute, no
-    // selection state and no key handler on top of the markup AAP 0.5.2 maps (Rule 1 clause 3;
-    // AAP 0.10.5 registers no accessibility difference here).
+    // One plain list, as legacy's tabset renders: no tablist role, no tab-stop attribute, no selection state and no key handler on top of the markup AAP 0.5.2 maps (Rule 1 clause 3; AAP 0.10.5 registers no accessibility.
     expect(lists).toHaveLength(1);
     expect(Array.from(lists, (list) => list.hasAttribute('role'))).toEqual([false]);
     expect(Array.from(lists, (list) => list.hasAttribute('aria-label'))).toEqual([false]);
 
     for (const link of tabLinks(fixture)) {
-      // The anchor is legacy's own link — uib-tab 1.3.2 renders `<a href ng-click="select($event)">`
-      // — so the valueless `href` stays, which is what puts the tab in the tab order and lets a real
-      // Enter activate it; and the ARIA scaffolding an earlier change removed stays out.
+      // The anchor is legacy's own link — uib-tab 1.3.2 renders `<a href ng-click="select($event)">` — so the valueless `href` stays, which is what puts the tab in the tab order and lets a real Enter activate it; and the ARIA.
       expect(link.getAttribute('href')).toBe('');
       expect(link.tabIndex).toBe(0);
       expect(link.hasAttribute('role')).toBe(false);
@@ -154,12 +137,7 @@ describe('TabStripComponent', () => {
     expect(emitted).toEqual([]);
   });
 
-  /**
-   * A tab click selects, it never navigates: the anchor's valueless `href` — legacy's own — would
-   * otherwise reload the current URL and drop the hash route, so the default is cancelled on every
-   * click, the already-active tab included (Rule 1 clause 3 — choosing a tab is no navigation; the
-   * pager's `goToPage` cancels its own for the same reason).
-   */
+  /** A tab click selects, it never navigates: the anchor's valueless `href` — legacy's own — would otherwise reload the current URL and drop the hash route, so the default is cancelled on every click, the already-active tab (Rule 1 clause 3). */
   it.each([
     { outcome: 'an inactive tab', label: 'Identities', expected: ['identities'] },
     { outcome: 'the tab already shown', label: 'General', expected: [] as string[] },
