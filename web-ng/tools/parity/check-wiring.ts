@@ -14,8 +14,10 @@
 //                            a non-empty string literal, with the login form's own `password` control name exempt
 //                            because it names an input rather than storing a value, and the tenant identifier
 //                            deliberately outside the gate (AAP 0.10.4 "Credential gate, defined once").
-//   (f) write-boundary       a file outside `web-ng/**`, the two root packaging files and the root files
-//                            scope-allowlist.json names (AAP 0.4.4 item 2 and criterion 8, which this gate asserts).
+//   (f) write-boundary       a path outside the boundary, judged the way criterion 8 judges it: an added path outside
+//                            `web-ng/**`, the two root packaging files and the root paths scope-allowlist.json names, or a
+//                            path the base commit tracks that has been modified or deleted (AAP 0.4.4 item 2 and
+//                            criterion 8, which this gate asserts).
 //
 // **Composition of the route tree (class c).** `in-scope-routes.json` states in its header how a full path is built:
 // "full paths are app-level parent segments joined with feature child segments; lazy groups mount at path ''". The gate
@@ -52,11 +54,21 @@
 // copy planted a dead `@Injectable`, a component nothing renders, a route only the tree declared, a route only the list
 // held, a route file no lazy route mounts, a redirect whose target the list states differently, a spec with no `expect`,
 // a `secret` assigned a literal (and the same shape in the login template, whose `password` control name stayed exempt
-// while its `secret` failed), a file and a directory written at the repository root, and each was reported with its file
-// and line while the same copy unplanted exited 0.
-import type { Dirent } from 'node:fs';
-import { readdir } from 'node:fs/promises';
+// while its `secret` failed), a file and a directory written at the repository root, a modification and a deletion of a
+// path tracked at the base commit, and each was reported with its file and line while the same copy unplanted exited 0.
+//
+// **Why the base commit, and why the initial one.** Criterion 8 is a `git diff` against the base commit: no modified or
+// deleted tracked file outside `web-ng/`, and additions limited to the two root packaging files and the paths
+// scope-allowlist.json names. Class (f) therefore reads the checkout's own git objects instead of the occupancy of the
+// repository root, so content the work never wrote is judged by what it is rather than by that it exists: a legacy
+// `app/` or `test/` tree the base commit already tracks is existing content, the platform's root evidence directory is
+// allowlisted by name in scope-allowlist.json rather than passed over in silence, and a tracked deletion — which a
+// filesystem listing cannot see at all — is reported. The base is the repository's initial commit, resolved at run time
+// with `git rev-list --max-parents=0 HEAD`, because every path this work's diff measures is measured from that commit and
+// resolving it from the checkout needs no argument and no environment variable to be set correctly.
+import { execFile, type ExecFileOptionsWithStringEncoding } from 'node:child_process';
 import { join, relative, resolve, sep } from 'node:path';
+import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { resolveCliIntent, type CliUsage } from './lib/cli.js';
 import type { CheckOutcome, Violation } from './lib/report.js';
@@ -93,11 +105,9 @@ const TEXT_SUFFIXES: readonly string[] = ['.ts', '.html', '.json', '.sh', '.yml'
 const GENERATED_SKIP: readonly string[] = ['.captures', 'parity-report.json', 'parity-report.md'];
 /** This gate's own file: it states the rule it enforces, so it is exempt from class (e) with a note, never in silence. */
 const SELF_SKIPPED = 'check-wiring.ts';
-/** Root entries that are not work files: the repository's own metadata and an installed dependency tree. */
-const ROOT_SKIP: readonly string[] = ['.git', 'node_modules'];
 /** The two files this work may add at the repository root, beside everything `web-ng/**` holds (AAP 0.4.4 item 2). */
 const ROOT_ADDITIONS: readonly string[] = ['Dockerfile.web-ng', 'docker-compose.web-ng.yml'];
-/** The sentence every write-boundary finding carries, so the file scan and the directory scan state one rule. */
+/** The sentence every added path outside the boundary carries, so the diff and the untracked list state one rule. */
 const OUTSIDE_BOUNDARY = 'is outside the write boundary: the work may occupy web-ng/** and add only Dockerfile.web-ng, docker-compose.web-ng.yml and the root files scope-allowlist.json names (AAP 0.4.4 item 2, criterion 8)';
 
 const DEAD_INJECTABLE = 'dead-injectable';
@@ -125,6 +135,41 @@ const asRows = (record: Record<string, unknown>, key: string): Record<string, un
 
 /** A thrown value is arbitrary data; only the message a reader can act on is kept. */
 const describe = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+/** git, programmatically: no shell ever interprets a path, and every read is decoded as UTF-8 text. */
+const execFileAsync = promisify(execFile);
+/** Options every git read shares: the checkout as working directory, a buffer past any path list, UTF-8 output. */
+const GIT_OPTIONS: ExecFileOptionsWithStringEncoding = { cwd: repoRoot, maxBuffer: 64 * 1024 * 1024, encoding: 'utf8' };
+
+/** One path git reports as changed against the base commit, or as untracked, with the status letter it carries. */
+interface Change { status: string; path: string }
+
+/** Splits one NUL-separated git listing into its fields, dropping the empty field the final separator leaves. */
+const splitZ = (listing: string): string[] => listing.split('\0').filter((field: string): boolean => field.length > 0);
+
+/** Reads a `git diff --name-status -z` listing: `STATUS\0path\0` pairs, the only shape `--no-renames` emits. */
+const readChanges = (listing: string): Change[] => {
+  const fields = splitZ(listing);
+  const changes: Change[] = [];
+  for (let at = 0; at + 1 < fields.length; at += 2) {
+    changes.push({ status: fields[at] ?? '', path: fields[at + 1] ?? '' });
+  }
+  return changes;
+};
+
+/** True when a repo-relative path lies inside `web-ng/`, the one tree this work may occupy (AAP 0.4.4 item 2). */
+const isUnderWebNg = (shown: string): boolean => shown.startsWith('web-ng/');
+
+/**
+ * Runs one git command in the checkout and returns its standard output. The read either arrives whole or the call
+ * throws, so gate (f) reports a listing it could not read rather than judging a truncated one.
+ *
+ * @param args The git arguments, already split into words: no shell parses them.
+ */
+async function git(args: readonly string[]): Promise<string> {
+  const { stdout } = await execFileAsync('git', args, GIT_OPTIONS);
+  return stdout;
+}
 
 /** A data file and the text it was parsed from, so a finding about a row can name the row's own line. */
 interface LoadedData { document: Record<string, unknown>; text: string }
@@ -441,11 +486,11 @@ const WIRING_USAGE: CliUsage = {
     'composes the routes app.routes.ts and the feature route files declare and compares them both ways with in-scope-routes.json (criterion 7)',
     'judges every spec file by whether it holds an expect (Rule 1 clause 8, criterion 7)',
     'judges every source and data file by the credential-shaped literals AAP 0.10.4 defines (Rule 1 clause 9, criterion 7)',
-    'judges every file of the working tree outside web-ng/ against scope-allowlist.json and the two root packaging files (criterion 8)',
-    'writes nothing: the gate only reads the tree and the two data files under web-ng/tools/parity',
+    'judges every path git reports outside web-ng/ against the base commit — added, modified or deleted — against scope-allowlist.json and the two root packaging files (criterion 8)',
+    'writes nothing: the gate only reads the tree, the checkout\'s git objects and the two data files under web-ng/tools/parity',
   ],
   environment: [
-    'none — the gate reads the tree, the repository root and the data files under web-ng/tools/parity, and no environment variable',
+    'none — the gate reads the tree, the checkout\'s git objects and the data files under web-ng/tools/parity, and no environment variable',
   ],
   examples: [
     'npm run check:wiring',
@@ -478,7 +523,7 @@ if (intent.kind === 'run') await runCheck(CHECK, async (): Promise<CheckOutcome>
   let credentials = 0;
   let emptyCredentials = 0;
   let tenants = 0;
-  let boundaryFiles = 0;
+  let boundaryPaths = 0;
   let e2eSpecs = 0;
   const scannedFiles = new Set<string>();
   // The keys of `scanned` are the counter names AAP 0.10.4 and this file's specification state, so the summary line
@@ -504,7 +549,7 @@ if (intent.kind === 'run') await runCheck(CHECK, async (): Promise<CheckOutcome>
       credentialFiles: judgedFiles,
       credentials,
       tenants,
-      boundaryPaths: boundaryFiles,
+      boundaryPaths,
     },
   });
 
@@ -745,9 +790,11 @@ if (intent.kind === 'run') await runCheck(CHECK, async (): Promise<CheckOutcome>
     notes.push(`${emptyCredentials} credential-shaped field(s) were assigned an empty literal and left alone: AAP 0.10.4 forbids a non-empty one, and an empty literal stores no secret`);
   }
 
-  // (f) write-boundary. The work may occupy `web-ng/**` and add exactly two root files; anything else the working tree
-  // holds at the repository root, or under a directory there, is outside the boundary AAP 0.4.4 sets. The scope
-  // allowlist is validated too, because a list that could excuse anything would enforce nothing.
+  // (f) write-boundary, judged the way criterion 8 judges it: a `git diff` against the base commit rather than a listing
+  // of the repository root. An added path outside `web-ng/**`, the two root packaging files and the root paths
+  // scope-allowlist.json names leaves the boundary, and so does a path the base commit tracks that has been modified or
+  // deleted — the allowlist excuses an addition, never a change to content the work must leave byte-identical. The scope
+  // allowlist is validated first, because a list that could excuse anything would enforce nothing.
   const scopeData = await loadData(SCOPE_FILE, WRITE_BOUNDARY, violations);
   const allowedPaths = new Set<string>();
   if (scopeData !== null) {
@@ -773,41 +820,64 @@ if (intent.kind === 'run') await runCheck(CHECK, async (): Promise<CheckOutcome>
   }
   const allowed = (shown: string): boolean => ROOT_ADDITIONS.includes(shown)
     || [...allowedPaths].some((entry) => shown === entry || shown.startsWith(entry.endsWith('/') ? entry : `${entry}/`));
-  let rootEntries: Dirent[] = [];
+  // Every listing is read before any path is judged, so a git read that fails reports one finding rather than a partial
+  // verdict, and each path the run judged outside `web-ng/` is counted for the summary line.
+  const judged = new Set<string>();
   try {
-    rootEntries = await readdir(repoRoot, { withFileTypes: true });
+    const roots: string[] = (await git(['rev-list', '--max-parents=0', 'HEAD']))
+      .split('\n').map((line: string): string => line.trim()).filter((line: string): boolean => line.length > 0);
+    // rev-list prints newest first, so the last line is the repository's initial commit.
+    const base = roots[roots.length - 1];
+    if (base === undefined) {
+      throw new Error('git rev-list --max-parents=0 HEAD named no commit to judge against');
+    }
+    const [changed, untracked, tracked] = await Promise.all([
+      git(['diff', '--name-status', '-z', '--no-renames', base]),
+      git(['ls-files', '--others', '--exclude-standard', '-z']),
+      git(['ls-tree', '-r', '--name-only', '-z', base]),
+    ]);
+    const baseTracked = splitZ(tracked).filter((path: string): boolean => !isUnderWebNg(path));
+    for (const path of baseTracked) {
+      judged.add(path);
+    }
+    // One rule, applied per path: `web-ng/**` is the work's own tree; the two packaging files and the allowlist excuse an
+    // addition only; a path the base commit tracks stays byte-identical, so changing or removing it is a finding even
+    // when the allowlist names it; and a status the gate does not classify is reported rather than passed.
+    const judge = (path: string, status: string): void => {
+      if (path === '' || isUnderWebNg(path)) return;
+      judged.add(path);
+      if (status === 'M' || status === 'T') {
+        violations.push(violation(WRITE_BOUNDARY, path, 0, 'is tracked at the base commit and has been modified, and every path outside web-ng/** must stay byte-identical (AAP 0.4.4 item 2, criterion 8)'));
+        return;
+      }
+      if (status === 'D') {
+        violations.push(violation(WRITE_BOUNDARY, path, 0, 'is tracked at the base commit and has been deleted, and every path outside web-ng/** must stay byte-identical (AAP 0.4.4 item 2, criterion 8)'));
+        return;
+      }
+      if (allowed(path)) return;
+      if (status === 'A' || status === '?') {
+        violations.push(violation(WRITE_BOUNDARY, path, 1, OUTSIDE_BOUNDARY));
+        return;
+      }
+      violations.push(violation(WRITE_BOUNDARY, path, 0, `is outside the write boundary and carries the git status "${status}", which is neither an addition, a modification nor a deletion, so the gate reports rather than passes it (AAP 0.4.4 item 2, criterion 8)`));
+    };
+    for (const change of readChanges(changed)) {
+      judge(change.path, change.status);
+    }
+    for (const path of splitZ(untracked)) {
+      judge(path, '?');
+    }
+    boundaryPaths = judged.size;
+    const shortBase = base.slice(0, 7);
+    const trackedOutside = [...baseTracked].sort().join(', ');
+    notes.push(`the write boundary was judged against base commit ${shortBase}, this repository's initial commit resolved at run time with git rev-list --max-parents=0 HEAD, which is the commit every path of the work's diff is measured from`);
+    notes.push(`${baseTracked.length} path(s) tracked at base commit ${shortBase} lie outside web-ng/ and are therefore existing content rather than additions: ${trackedOutside === '' ? 'none' : trackedOutside}`);
+    notes.push('a git-ignored path is never judged as an addition, because the untracked listing is read with --exclude-standard');
   } catch (error) {
-    violations.push(violation(WRITE_BOUNDARY, '.', 0, `the repository root cannot be listed, so no file outside the boundary can be judged: ${describe(error)}`));
+    // The OS and git errors name the checkout's absolute path, so it is trimmed to keep the log machine-independent.
+    const reason = describe(error).split(repoRoot).join('');
+    violations.push(violation(WRITE_BOUNDARY, '.', 0, `the write boundary cannot be judged, so no path outside web-ng/ was checked: git must run in this checkout as a work tree and its initial commit must resolve, and reading it failed with: ${reason}`));
   }
-  for (const entry of rootEntries) {
-    if (ROOT_SKIP.includes(entry.name) || entry.name === 'web-ng') continue;
-    if (!entry.isDirectory()) {
-      boundaryFiles += 1;
-      if (!allowed(entry.name)) {
-        violations.push(violation(WRITE_BOUNDARY, entry.name, 1, OUTSIDE_BOUNDARY));
-      }
-      continue;
-    }
-    let inside: string[];
-    try {
-      inside = await walk(join(repoRoot, entry.name));
-    } catch (error) {
-      violations.push(violation(WRITE_BOUNDARY, entry.name, 0, `is outside the write boundary and cannot even be listed, so how much of it lies outside cannot be established: ${describe(error)}`));
-      continue;
-    }
-    if (inside.length === 0) {
-      notes.push(`${entry.name}/ is a directory outside the write boundary that holds no file, so no file of it is reported`);
-      continue;
-    }
-    for (const file of inside) {
-      const shown = relative(repoRoot, file).split(sep).join('/');
-      boundaryFiles += 1;
-      if (!allowed(shown)) {
-        violations.push(violation(WRITE_BOUNDARY, shown, 1, OUTSIDE_BOUNDARY));
-      }
-    }
-  }
-  notes.push('the write boundary is asserted over the files the working tree holds; a tracked file deleted from it leaves nothing for a filesystem scan to find, which criterion 8\'s own git diff covers');
 
   return outcome();
 });

@@ -624,20 +624,6 @@ export class ClientsPage {
   }
 
   /**
-   * Opens the global search results for a query by its own route.
-   *
-   * The route segment is percent-encoded, because a query carrying a space or an accented name would
-   * otherwise resolve to a different route than the one asked for. The results screen reads the query
-   * back from the URL and performs the search itself, so nothing is requested here.
-   *
-   * @param query The query to address, e.g. a client's display name.
-   */
-  async openSearchResults(query: string): Promise<void> {
-    await this.navigate(`/search/${encodeURIComponent(query)}`);
-    await this.awaitScreen(SEARCH_ROOT, 'the search results');
-  }
-
-  /**
    * Reads the search results' rows (workflow W3's search half).
    *
    * The table's five columns are type, name, account number, client name and status, and the row's
@@ -690,28 +676,6 @@ export class ClientsPage {
   async findList(text: string): Promise<void> {
     const find = await this.textField('find', 'find');
     await find.fill(text);
-  }
-
-  /**
-   * Ticks or clears the "Show Closed" box.
-   *
-   * The box is a display filter over the rows in hand — never a request parameter, and it is not added
-   * to one here (Rule 1 clause 2).
-   *
-   * @param checked Whether the box must end up ticked.
-   */
-  async toggleShowClosed(checked: boolean): Promise<void> {
-    const box = this.page.locator(`${LIST_ROOT} input[type="checkbox"]`).first();
-
-    if ((await box.count()) === 0) {
-      throw new Error(`the clients list rendered no "Show Closed" checkbox inside ${LIST_ROOT}`);
-    }
-
-    if (checked) {
-      await box.check();
-    } else {
-      await box.uncheck();
-    }
   }
 
   /**
@@ -898,56 +862,6 @@ export class ClientsPage {
         text: reading.text,
       }),
     );
-  }
-
-  /**
-   * Reads the labels of the action controls the current screen actually offers.
-   *
-   * Visibility is the test, never presence: `HasPermissionDirective` hides a denied control with
-   * `display: none` and leaves it in the document, so a reader that counted elements would report
-   * actions the user cannot reach. The sweep covers the cards' primary and secondary controls, the
-   * record's joined action group and its `More` menu, whose items join the answer only once the menu is
-   * open — a hidden control contributes nothing.
-   *
-   * A control that paints only an icon answers with the name it is labelled by, which is the only label
-   * it has; an unnamed icon-only control answers `''`. Reading the label rather than dropping the
-   * control keeps the answer a true statement about what the screen offers.
-   */
-  async readVisibleActions(): Promise<readonly string[]> {
-    const candidates = this.page.locator(
-      [
-        `${LIST_ROOT} a.btn`,
-        `${LIST_ROOT} button.btn`,
-        `${CREATE_ROOT} a.btn`,
-        `${CREATE_ROOT} button.btn`,
-        `${EDIT_ROOT} a.btn`,
-        `${EDIT_ROOT} button.btn`,
-        `${ACTIONS_ROOT} a.btn`,
-        `${ACTIONS_ROOT} button.btn`,
-        `${VIEW_ROOT} a.btn`,
-        `${VIEW_ROOT} button.btn`,
-        `${VIEW_ROOT} .dropdown-menu a`,
-        `${VIEW_ROOT} .dropdown-menu button`,
-      ].join(', '),
-    );
-
-    const count: number = await candidates.count();
-    const labels: string[] = [];
-
-    for (let index = 0; index < count; index += 1) {
-      const candidate = candidates.nth(index);
-      if (!(await candidate.isVisible())) {
-        continue;
-      }
-      const text = normalizeText(await candidate.innerText());
-      labels.push(
-        text.length > 0
-          ? text
-          : normalizeText((await candidate.getAttribute('aria-label')) ?? ''),
-      );
-    }
-
-    return labels;
   }
 
   /**

@@ -87,6 +87,17 @@ export interface LanguageOptionSummary {
   readonly label: string;
 }
 
+/**
+ * What the login screen's submit control currently offers: `'absent'` when the screen renders no submit
+ * control at all, `'hidden'` when it renders one that is not visible, `'disabled'` when it is visible
+ * but cannot be clicked, and `'enabled'` when it can be clicked.
+ *
+ * `web-ng/e2e/pages/legacy/login.page.ts` deliberately declares the identical union on its own, the way
+ * both sides declare `SessionEntrySummary` and `LanguageOptionSummary` independently, so one spec text
+ * drives both projects and neither page object imports the other's types.
+ */
+export type SubmitState = 'absent' | 'hidden' | 'disabled' | 'enabled';
+
 /** Root of the login screen: every other locator in this file is scoped to it. */
 const ROOT_SELECTOR = 'app-login';
 
@@ -238,7 +249,8 @@ function summariseSessionEntries(): SessionEntrySummary[] {
  * drives the baseline application's same screen, and the two page objects agree on every shape a spec
  * helper shared by both projects consumes: `readSessionEntries()` returns a `SessionEntrySummary[]`
  * on either side, with the same four `userIdType` readings; `readLanguages()` returns the same
- * `{ value, label }` pairs; and `readFormError()` returns `''` — never `null` — when no error is shown,
+ * `{ value, label }` pairs; `readSubmitState()` answers in the same `SubmitState` union; and
+ * `readFormError()` returns `''` — never `null` — when no error is shown,
  * and the trimmed message otherwise. What differs is only what the parity report exists to measure:
  * the entry URL, the selectors, and the wait each application's landing needs.
  */
@@ -322,17 +334,31 @@ export class LoginPage {
   }
 
   /**
-   * Whether the primary submit is unavailable, so a spec can sample it before and after a click.
+   * What the screen's submit control currently is, in the four readings a caller can tell apart:
+   * `'absent'` when the login screen renders no submit control at all, `'hidden'` when it renders one
+   * that is not visible, `'disabled'` when it is visible but cannot be clicked, and `'enabled'` when it
+   * can be clicked.
    *
-   * A form that renders no submit at all reports `true`: the button cannot be used either way, and
-   * returning that keeps this reader a pure observation.
+   * The four readings exist because the answer after a successful login differs per side and each is
+   * its own application's behaviour: this one unmounts its login component when the route changes, so
+   * its submit is `'absent'`, while the legacy screen keeps its `LoginFormController` container in the
+   * DOM under `data-ng-hide="currentSession.user != null"` (`app/index.html`), so its submit is present
+   * but `'hidden'`. Reporting that difference rather than one uniform reading is what Rule 1 clause 3
+   * ("match legacy behaviour; don't improve it") requires, and a boolean that folded the absent case
+   * into "disabled" could not tell "the form went away" from "the button is disabled".
+   *
+   * The answer is typed by {@link SubmitState} — no `any`, no cast, no `as` (Rule 1 clause 4) — and the
+   * control is resolved through the same ordered selector chain {@link submit} clicks.
    */
-  async isSubmitDisabled(): Promise<boolean> {
+  async readSubmitState(): Promise<SubmitState> {
     const button = await this.findControl(SUBMIT_SELECTORS);
     if (button === null) {
-      return true;
+      return 'absent';
     }
-    return button.isDisabled();
+    if (!(await button.isVisible())) {
+      return 'hidden';
+    }
+    return (await button.isDisabled()) ? 'disabled' : 'enabled';
   }
 
   /**

@@ -2,6 +2,8 @@ import { ChangeDetectionStrategy, Component, provideZonelessChangeDetection } fr
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { Router, RouterOutlet, provideRouter } from '@angular/router';
+import { provideTranslateService, TranslateService } from '@ngx-translate/core';
+import { firstValueFrom } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AppComponent } from './app.component';
@@ -25,7 +27,9 @@ import { NotificationService } from './core/notifications/notification.service';
  * root `NotificationService`, so the DOM under assertion is the one the application serves: one
  * route carries a stub standalone component as its screen, and
  * `provideZonelessChangeDetection()` keeps the change-detection mode the application runs in
- * (no `zone.js`, AAP 0.4.1).
+ * (no `zone.js`, AAP 0.4.1). The translation stack is the library's own (`provideTranslateService`)
+ * with one bundle seeded, because the notification host names its close control through
+ * `TranslatePipe` (AAP 0.1.1 requirement 1, AAP 0.7.4).
  */
 
 /**
@@ -56,6 +60,14 @@ const ROUTED_TEXT = 'Routed screen';
 const INFO_NOTICE = 'Client saved.';
 const ERROR_NOTICE =
   'The request failed: principal 50,000 exceeds the maximum allowed for this product.';
+
+/**
+ * The bundle this suite seeds for the notification host's close control, whose accessible name is the
+ * one string inside the widget that is translated (AAP 0.1.1 requirement 1, AAP 0.7.4). One key, of
+ * the shape the shipped legacy bundles carry, so the rendered name is text rather than a raw key.
+ */
+const BASE_LANG = 'en';
+const CLOSE_LABEL_BUNDLE: Record<string, string> = { 'label.button.close': 'Close' };
 
 describe('AppComponent', () => {
   let fixture: ComponentFixture<AppComponent>;
@@ -90,8 +102,15 @@ describe('AppComponent', () => {
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([{ path: ROUTED_PATH, component: RoutedStubComponent }]),
+        provideTranslateService(),
       ],
     }).compileComponents();
+
+    // Seeded before the first render, so the close control's accessible name resolves through a
+    // bundle exactly as it does in the application once a bundle has loaded.
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation(BASE_LANG, CLOSE_LABEL_BUNDLE, true);
+    await firstValueFrom(translate.use(BASE_LANG));
 
     router = TestBed.inject(Router);
     notifications = TestBed.inject(NotificationService);

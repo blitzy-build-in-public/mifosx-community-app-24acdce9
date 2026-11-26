@@ -12,6 +12,7 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 import { AuthService } from '../../../core/auth/auth.service';
 import { ApiError } from '../../../core/http/api-error';
+import { bindDocumentLanguage } from '../../../core/i18n/document-language';
 import { AVAILABLE_LANGS, FALLBACK_LANG } from '../../../core/i18n/translate.config';
 import { createSubmitGuard } from '../../../shared/submit-guard.util';
 
@@ -73,6 +74,20 @@ export class LoginComponent {
   readonly currentLang: Signal<string> = computed(
     (): string => this.translate.currentLang() ?? FALLBACK_LANG,
   );
+
+  /**
+   * Binds the host page's `lang` attribute to the active language, so the screen is announced,
+   * hyphenated and spell-checked in the language it is read in rather than in the static
+   * `<html lang="en">` default (WCAG 3.1.1, QA F14).
+   *
+   * This screen hosts the application's second language switcher (AAP 0.7.4), so it is one of the two
+   * places that owe the write while no signed-in shell is mounted.
+   * `core/i18n/document-language.ts` owns it, and it has to be called from a constructor because
+   * `inject(DOCUMENT)` and `effect()` both need an injection context.
+   */
+  constructor() {
+    bindDocumentLanguage(this.translate);
+  }
 
   /**
    * Authenticates and continues to the interrupted route or `#/clients`; an invalid form returns

@@ -205,15 +205,6 @@ const LIST_FIND = 'input[data-ng-model="searchText"], input[ng-model="searchText
  */
 const LIST_SEARCH_BUTTON = '.input-group-btn button.btn.btn-primary, .input-group-btn .btn.btn-primary';
 
-/**
- * The "Show Closed" checkbox — `input#showAll` inside `div.checkbox.form-control label`
- * (clients.html:32-37). Located by id rather than by its text on purpose: the legacy label reads
- * `label.button.showall` ("Show All"), while the design and AAP 0.2.3 call the control "Show
- * Closed", so matching the wording would break on either application. The generic `.checkbox`
- * fallback is the new app's markup.
- */
-const LIST_SHOW_CLOSED = ['#showAll', '.checkbox input[type="checkbox"]'];
-
 /** The navbar global search field — `input#search` (views/_topnavbar.html:119). */
 const SEARCH_FIELD = [
   '#search',
@@ -726,25 +717,6 @@ export class ClientsPage {
   }
 
   /**
-   * Ticks or clears the toolbar's "Show Closed" checkbox, which is what brings the client rows hidden
-   * by `ng-show` into view (clients.html:32-37, :65; AAP 0.2.3 `FilterToolbar`).
-   *
-   * `check()`/`uncheck()` only run when the box is not already in the wanted state, so a repeated
-   * call cannot toggle twice.
-   *
-   * @param checked Whether closed clients should be shown.
-   */
-  async toggleShowClosed(checked: boolean): Promise<void> {
-    const box = await this.firstOf(LIST_SHOW_CLOSED);
-    if ((await box.isChecked()) === checked) return;
-    if (checked) {
-      await box.check();
-    } else {
-      await box.uncheck();
-    }
-  }
-
-  /**
    * The list's column headings, in rendered order and trimmed (AAP 0.2.1 Step 2's six columns;
    * AAP 0.2.3 `ClientList`).
    *
@@ -863,32 +835,6 @@ export class ClientsPage {
     return [];
   }
 
-  /**
-   * Every action label the screen renders, in document order (AAP 0.2.3 `FilterToolbar` and
-   * `ActionButtonGroup`).
-   *
-   * Reported unfiltered on purpose: the legacy list really does render "Import Clients" beside
-   * "Create Client" (clients.html:44-47), and the new app deliberately does not (AAP 0.10.5 item 4).
-   * That difference is `intentional-diff` evidence for the parity report, so suppressing it here
-   * would destroy the evidence rather than remove the difference (Rule 1 clause 3).
-   *
-   * Buttons whose visible text is empty — the toolbar's icon-only search button — are not labels and
-   * are left out.
-   */
-  async readVisibleActions(): Promise<string[]> {
-    const buttons = this.page.locator('.btn');
-    const total = await buttons.count();
-    const labels: string[] = [];
-    for (let index = 0; index < total; index += 1) {
-      const button = buttons.nth(index);
-      if (!(await button.isVisible())) continue;
-      const label = normaliseText(await button.innerText());
-      if (label.length > 0) labels.push(label);
-    }
-    return labels;
-  }
-
-
   // ---------------------------------------------------------------------------------------------
   // Global search (#/search/:query) — W3's search half
   // ---------------------------------------------------------------------------------------------
@@ -916,17 +862,6 @@ export class ClientsPage {
     await field.fill(query);
     await field.press('Enter');
     await this.page.waitForURL((url) => url.hash.startsWith('#/search/'));
-  }
-
-  /**
-   * Opens a search results address directly, without going through the navbar
-   * (AAP 0.8.2's `search/:query` route; AAP 0.10.1 W3).
-   *
-   * @param query Text the results address is built from; encoded into the hash.
-   */
-  async openSearchResults(query: string): Promise<void> {
-    await this.gotoHash(`#/search/${encodeURIComponent(query)}`);
-    await this.page.locator(SCREEN_CARD).first().waitFor({ state: 'visible' });
   }
 
   /**

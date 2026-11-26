@@ -1,18 +1,15 @@
 /**
  * Page object for the new Angular application's individual-loan screens — the `next` project's side
  * of workflows W4 (submit an application after previewing its schedule), W5 (approve and disburse),
- * W6 (make a repayment) and W7 (a Fineract validation error rendered verbatim), plus the loan-charge
- * operations of AAP 0.7.3.
+ * W6 (make a repayment) and W7 (a Fineract validation error rendered verbatim).
  *
- * **The six routes it drives**, the loan tree `web-ng/tools/parity/in-scope-routes.json` declares
+ * **The four routes it drives**, the loan tree `web-ng/tools/parity/in-scope-routes.json` declares
  * and `features/loans/loans.routes.ts` mounts (AAP 0.8.2):
  *
  * - `/newclientloanaccount/:clientId`                      — `LoanNewComponent`, root `app-loan-new`
  * - `/editloanaccount/:id`                                 — `LoanEditComponent`, root `app-loan-edit`
  * - `/viewloanaccount/:id`                                 — `LoanViewComponent`, root `app-loan-view`
  * - `/loanaccount/:id/:action`                             — `LoanActionComponent`, root `app-loan-action`
- * - `/addloancharge/:id`                                   — `LoanChargeFormComponent`, root `app-loan-charge-form`
- * - `/loanaccountcharge/:id/:action/:chargeId`             — the same charge screen, in pay or waive mode
  *
  * The repayment screen is the `repayment` segment of `/loanaccount/:id/:action`: `app-loan-action`
  * renders `<app-loan-repayment>` for that segment, so both roots are on the page and
@@ -152,28 +149,6 @@ export interface LoanTransactionRow {
 }
 
 /**
- * One row of the loan record's charge list: the charge's name and the four figures the section
- * prints. A charge the record carries but the section does not paint a column for reports `null` for
- * that member rather than a zero the server never sent (Rule 1 clause 3).
- */
-export interface LoanChargeRow {
-  /** The charge's name, verbatim from the server and never translated. */
-  readonly name: string;
-  /** The charge's amount, parsed from its cell. */
-  readonly amount: number | null;
-  /** The amount already paid against the charge, parsed from its cell. */
-  readonly amountPaid: number | null;
-  /** The amount waived against the charge, parsed from its cell when the section paints one. */
-  readonly amountWaived: number | null;
-  /** The amount still outstanding on the charge, parsed from its cell. */
-  readonly amountOutstanding: number | null;
-  /** The charge's due date, exactly as the screen formatted it. */
-  readonly dueDate: string;
-  /** Every cell of the row, trimmed, in column order. */
-  readonly cells: readonly string[];
-}
-
-/**
  * What {@link LoansPage.fillApplication} types into the application form. Every member is optional so
  * a caller states only the values it means to set: an omitted control keeps the value the Fineract
  * template supplied, which is what the legacy screen posts when the user changes nothing (AAP 0.7.2
@@ -244,26 +219,6 @@ export interface LoanRepaymentValues {
 }
 
 /**
- * What {@link LoansPage.fillCharge} types into the charge screen, which serves two modes: adding a
- * charge to the loan (`chargeId`, `amount`, and `dueDate` for a charge that falls due on a specified
- * date), and paying or waiving one the loan already carries (`amount` for a payment; neither a date
- * nor a payment type for a waiver, which the endpoint refuses). Only the members a caller supplies are
- * filled, and no member is invented for a mode that does not render it.
- */
-export interface LoanChargeValues {
-  /** Charge to add, by the id of one of the charges the template offers. */
-  readonly chargeId?: number | string;
-  /** Amount the charge is added for, or the amount paid against it. */
-  readonly amount?: number | string;
-  /** `yyyy-mm-dd` due date, for a charge that falls due on a specified date. */
-  readonly dueDate?: string;
-  /** `yyyy-mm-dd` payment date, on the pay form only. */
-  readonly transactionDate?: string;
-  /** Payment type, by id, on the pay form only. */
-  readonly paymentTypeId?: number | string;
-}
-
-/**
  * The `:action` segments the `/loanaccount/:id/:action` route serves for these workflows (AAP 0.8.2):
  * the five lifecycle commands of W5 and AAP 0.9.1, plus the repayment of W6. Exactly these six — a
  * segment this object does not know the screen of is rejected rather than navigated to.
@@ -275,12 +230,6 @@ export type LoanAction =
   | 'disburse'
   | 'undodisbursal'
   | 'repayment';
-
-/**
- * The `:action` segments the `/loanaccountcharge/:id/:action/:chargeId` route serves (AAP 0.7.3
- * "Loan charges"): paying a charge and waiving it.
- */
-export type LoanChargeAction = 'pay' | 'waive';
 
 /** Root element of the individual-loan application screen, `LoanNewComponent`. */
 const APPLICATION_ROOT = 'app-loan-new';
@@ -300,17 +249,11 @@ const SCHEDULE_ROOT = 'app-loan-schedule';
 /** Root element of the record's transactions section, `LoanTransactionsComponent`. */
 const TRANSACTIONS_ROOT = 'app-loan-transactions';
 
-/** Root element of the record's charges section, `LoanChargesComponent`. */
-const CHARGES_ROOT = 'app-loan-charges';
-
 /** Root element of the lifecycle action screen, `LoanActionComponent`. */
 const ACTION_ROOT = 'app-loan-action';
 
 /** Root element of the repayment form, `LoanRepaymentComponent`. */
 const REPAYMENT_ROOT = 'app-loan-repayment';
-
-/** Root element of the loan-charge screen, `LoanChargeFormComponent`. */
-const CHARGE_FORM_ROOT = 'app-loan-charge-form';
 
 /**
  * The screens this object drives, by root element, with the words an error message uses for each. One
@@ -323,10 +266,8 @@ const SCREENS: Readonly<Record<string, string>> = {
   [VIEW_ROOT]: 'the loan record',
   [SCHEDULE_ROOT]: 'the repayment-schedule section',
   [TRANSACTIONS_ROOT]: 'the transactions section',
-  [CHARGES_ROOT]: 'the charges section',
   [ACTION_ROOT]: 'the loan action screen',
   [REPAYMENT_ROOT]: 'the loan repayment screen',
-  [CHARGE_FORM_ROOT]: 'the loan charge screen',
 };
 
 /**
@@ -343,9 +284,6 @@ const LOAN_ACTIONS: readonly string[] = [
   'repayment',
 ];
 
-/** The two charge-command segments accepted at run time. */
-const CHARGE_ACTIONS: readonly string[] = ['pay', 'waive'];
-
 /** `yyyy-mm-dd`, the only form a native date control accepts and the form this object requires. */
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -353,8 +291,8 @@ const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const SCREEN_TIMEOUT_MS = 30_000;
 
 /**
- * Ceiling for a template-driven option list to arrive. The product, officer, fund, payment-type and
- * charge options all come from Fineract template endpoints the screen requests on entry, so a select
+ * Ceiling for a template-driven option list to arrive. The product, officer, fund and payment-type
+ * options all come from Fineract template endpoints the screen requests on entry, so a select
  * is empty for a moment after the form paints.
  */
 const TEMPLATE_TIMEOUT_MS = 30_000;
@@ -511,32 +449,6 @@ const REPAYMENT_FIELD_ORDER: readonly (keyof LoanRepaymentValues)[] = [
 ];
 
 /**
- * The charge screen's controls (`LoanChargeFormComponent`), by the member that carries each value.
- *
- * One component backs two modes: adding a charge renders the picker, the amount and — for a charge that
- * falls due on a specified date — the due date; paying one renders the payment date; waiving one
- * renders no control at all, because the endpoint waives the whole outstanding portion and refuses an
- * amount, a date or a payment type beside the command. A member a mode does not render is therefore
- * rejected by {@link LoansPage.fillCharge} rather than silently skipped.
- */
-const CHARGE_FIELDS = {
-  chargeId: { ids: ['chargeId'], label: 'charge', kind: 'select', description: 'charge select' },
-  amount: { ids: ['amount'], label: 'amount', kind: 'text', description: 'charge amount field' },
-  dueDate: { ids: ['dueDate'], label: 'due', kind: 'date', description: 'charge due date field' },
-  transactionDate: { ids: ['transactionDate'], label: 'transaction', kind: 'date', description: 'payment date field' },
-  paymentTypeId: { ids: ['paymentTypeId'], label: 'payment\\s*type', kind: 'select', description: 'payment type select' },
-} as const satisfies Readonly<Record<keyof LoanChargeValues, FieldSpec>>;
-
-/** The order the charge screen's controls are filled in: the picker first, which reveals the amount. */
-const CHARGE_FIELD_ORDER: readonly (keyof LoanChargeValues)[] = [
-  'chargeId',
-  'amount',
-  'dueDate',
-  'transactionDate',
-  'paymentTypeId',
-];
-
-/**
  * Column aliases of the application preview and of the record's repayment schedule, most specific
  * first.
  *
@@ -563,16 +475,6 @@ const TRANSACTION_COLUMNS = {
   type: ['type', 'transaction type', 'transactiontype'],
   amount: ['amount'],
   outstandingBalance: ['outstanding', 'loan balance', 'loanbalance', 'outstanding balance'],
-} as const;
-
-/** Column aliases of the record's charge list. A section that paints no waived column reports `null`. */
-const CHARGE_COLUMNS = {
-  name: ['name'],
-  dueDate: ['due as of', 'dueasof', 'due date', 'duedate'],
-  amount: ['amount'],
-  amountPaid: ['paid', 'amount paid', 'amountpaid'],
-  amountWaived: ['waived', 'amount waived', 'amountwaived'],
-  amountOutstanding: ['outstanding', 'amount outstanding', 'amountoutstanding'],
 } as const;
 
 /**
@@ -608,7 +510,7 @@ function describeOptions(options: readonly RenderedOption[]): string {
  * id, a non-finite number, or a value carrying `/`, `?` or `#`, each of which would address a
  * different route than the one asked for. Nothing about the application or its behaviour is checked.
  *
- * @param value Client, loan or charge id the caller supplied.
+ * @param value Client or loan id the caller supplied.
  * @param role What the value names, used in the error message.
  * @returns The segment text.
  * @throws When the value is empty, is not a finite number, or carries a route separator.
@@ -640,22 +542,6 @@ function requireLoanAction(action: LoanAction): LoanAction {
   if (!LOAN_ACTIONS.includes(action)) {
     throw new Error(
       `the loan action must be one of ${LOAN_ACTIONS.join(', ')}; received ${describeArgument(action)}`,
-    );
-  }
-  return action;
-}
-
-/**
- * Narrows a charge command to the two segments the charge screen serves. Internal to this module.
- *
- * @param action The charge command a caller supplied.
- * @returns The same command, narrowed.
- * @throws When the command is neither `pay` nor `waive`.
- */
-function requireChargeAction(action: LoanChargeAction): LoanChargeAction {
-  if (!CHARGE_ACTIONS.includes(action)) {
-    throw new Error(
-      `the charge action must be one of ${CHARGE_ACTIONS.join(', ')}; received ${describeArgument(action)}`,
     );
   }
   return action;
@@ -862,22 +748,21 @@ function readGridInPage(root: HTMLElement): TableGrid | null {
 
 /**
  * Drives the new Angular application's individual-loan screens and reads what they render: the
- * `next` side of workflows W4, W5, W6 and W7 plus the loan-charge operations (AAP 0.10.1). One
- * instance per Playwright page, constructed with the page the spec has already authenticated on —
- * this class never logs in, never reads a credential and never touches the session storage (Rule 1
- * clause 9).
+ * `next` side of workflows W4, W5, W6 and W7 (AAP 0.10.1). One instance per Playwright page,
+ * constructed with the page the spec has already authenticated on — this class never logs in,
+ * never reads a credential and never touches the session storage (Rule 1 clause 9).
  *
  * A caller walks a workflow in the order the screens allow, and every step is one public method:
  *
- * 1. {@link openApplication} on the client the loan is applied for, {@link selectProduct} by the
- *    product's visible label, {@link fillApplication} for the terms, {@link previewSchedule} and
- *    {@link readPreviewRows} for W4's evidence, then {@link submitApplication}.
+ * 1. {@link selectProduct} on the application screen the client record's "New Loan" action opens,
+ *    {@link fillApplication} for the terms, {@link previewSchedule} and {@link readPreviewRows} for
+ *    W4's evidence, then {@link submitApplication}.
  * 2. {@link openAction} with `approve`, {@link fillActionForm} and {@link submitAction}; the same
  *    triple with `disburse`. Each successful submit returns the router to `#/viewloanaccount/{id}`,
  *    whose id the caller reads from the URL — generated ids are compared by their role in the sequence
  *    (AAP 0.10.2), never by a value invented here.
- * 3. {@link openView}, {@link readSummary}, {@link readScheduleRows}, {@link readTransactions} and
- *    {@link readCharges} for the verdict, {@link readEmptyStates} for a section that has no rows yet.
+ * 3. {@link openView}, {@link readSummary}, {@link readScheduleRows} and {@link readTransactions}
+ *    for the verdict, {@link readEmptyStates} for a section that has no rows yet.
  * 4. {@link openRepayment}, {@link fillRepayment} and {@link submitRepayment} for W6.
  *
  * Which lifecycle step is legal at any moment is Fineract's decision, not this object's: no step is
@@ -889,23 +774,6 @@ export class LoansPage {
    * @param page The Playwright page the spec has already authenticated on.
    */
   constructor(private readonly page: Page) {}
-
-  /**
-   * Opens the individual-loan application screen for a client.
-   *
-   * Serves the first step of W4 over `#/newclientloanaccount/:clientId` (AAP 0.8.2). The screen's root
-   * is awaited, which is the readiness signal for the card; the product and officer options it requests
-   * arrive a moment later, and {@link selectProduct} waits for them.
-   *
-   * @param clientId Fineract client the loan is applied for — the id the client record's own action
-   * carries.
-   * @throws When the id is empty or would address more than one route segment.
-   */
-  async openApplication(clientId: number | string): Promise<void> {
-    const id = requireRouteId(clientId, 'the client id');
-    await this.navigate(`/newclientloanaccount/${id}`);
-    await this.awaitRoot(APPLICATION_ROOT);
-  }
 
   /**
    * Chooses the loan product by its visible label, case-insensitively.
@@ -1203,42 +1071,6 @@ export class LoansPage {
   }
 
   /**
-   * Reads the record's charge section, one row per charge the loan carries.
-   *
-   * Serves the charge operations of AAP 0.7.3: the amount, the amount paid and the amount outstanding
-   * are what a pay or a waive step moves. The rows come from the loan record's own payload — the
-   * section requests nothing of its own — and the section is revealed through its own tab when another
-   * tab is showing.
-   *
-   * A loan that carries no charges renders the explicit empty state and no table (AAP 0.7.4), which
-   * answers an empty list. A charge member the section paints no column for reports `null`, never a
-   * zero (Rule 1 clause 3).
-   */
-  async readCharges(): Promise<readonly LoanChargeRow[]> {
-    const grid = await this.readGridOf(CHARGES_ROOT, /charges/i);
-    if (grid === null) {
-      return [];
-    }
-
-    const name = columnIndex(grid.columns, CHARGE_COLUMNS.name);
-    const dueDate = columnIndex(grid.columns, CHARGE_COLUMNS.dueDate);
-    const amount = columnIndex(grid.columns, CHARGE_COLUMNS.amount);
-    const amountPaid = columnIndex(grid.columns, CHARGE_COLUMNS.amountPaid);
-    const amountWaived = columnIndex(grid.columns, CHARGE_COLUMNS.amountWaived);
-    const amountOutstanding = columnIndex(grid.columns, CHARGE_COLUMNS.amountOutstanding);
-
-    return grid.rows.map((cells) => ({
-      name: cellAt(cells, name),
-      amount: toAmount(cellAt(cells, amount)),
-      amountPaid: toAmount(cellAt(cells, amountPaid)),
-      amountWaived: toAmount(cellAt(cells, amountWaived)),
-      amountOutstanding: toAmount(cellAt(cells, amountOutstanding)),
-      dueDate: cellAt(cells, dueDate),
-      cells,
-    }));
-  }
-
-  /**
    * Reads the message of every explicit empty state currently visible, in document order.
    *
    * This is how a spec proves AAP 0.7.4's "an explicit empty state and no error" for a list that has no
@@ -1298,7 +1130,7 @@ export class LoansPage {
    *
    * @param values The values to enter; anything omitted keeps what the screen rendered.
    * @throws When a supplied date is not `yyyy-mm-dd`, or when a control the values name is not rendered
-   * by the open mode — the charge and repayment forms are filled by their own methods.
+   * by the open mode — the repayment form is filled by its own method.
    */
   async fillActionForm(values: LoanActionValues): Promise<void> {
     const root = await this.awaitRoot(ACTION_ROOT);
@@ -1367,83 +1199,6 @@ export class LoansPage {
    */
   async submitRepayment(): Promise<void> {
     await this.clickPrimary(REPAYMENT_ROOT);
-  }
-
-  /**
-   * Opens the screen that adds a charge to a loan.
-   *
-   * Serves the add step of AAP 0.7.3's "Loan charges" row over `#/addloancharge/:id` (AAP 0.8.2). The
-   * charge screen's root is awaited; the charge options it requests arrive a moment later, and
-   * {@link fillCharge} waits for them.
-   *
-   * @param loanId Fineract loan id the charge is added to.
-   * @throws When the id is empty or would address more than one route segment.
-   */
-  async openAddCharge(loanId: number | string): Promise<void> {
-    const id = requireRouteId(loanId, 'the loan id');
-    await this.navigate(`/addloancharge/${id}`);
-    await this.awaitRoot(CHARGE_FORM_ROOT);
-  }
-
-  /**
-   * Fills the values the open charge form is to send, and only those.
-   *
-   * Serves the add step of AAP 0.7.3's charge row: the charge to add, the amount it is added for and —
-   * for a charge that falls due on a specified date — its due date. A member the caller omits keeps
-   * what the screen rendered; the picker is filled before the amount, because choosing a charge is what
-   * reveals the amount field and the server's own figure for it.
-   *
-   * Nothing is rounded or bounded: the amount is typed exactly as supplied (Rule 1 clause 3).
-   *
-   * @param values The values to enter; anything omitted keeps what the screen rendered.
-   * @throws When a supplied date is not `yyyy-mm-dd`, or when a control the values name is not
-   * rendered by the open mode.
-   */
-  async fillCharge(values: LoanChargeValues): Promise<void> {
-    const root = await this.awaitRoot(CHARGE_FORM_ROOT);
-    await this.fillFields(root, CHARGE_FIELDS, CHARGE_FIELD_ORDER, values);
-  }
-
-  /**
-   * Submits the open charge form exactly once.
-   *
-   * Finishes the add, pay or waive step of AAP 0.7.3's charge row. None of the three is idempotent, so
-   * the primary control is clicked once and never retried; on success the router returns to
-   * `#/viewloanaccount/{id}`, so the caller re-reads the record with {@link openView} and
-   * {@link readCharges}.
-   *
-   * @throws When the form renders no primary control.
-   */
-  async submitCharge(): Promise<void> {
-    await this.clickPrimary(CHARGE_FORM_ROOT);
-  }
-
-  /**
-   * Opens the screen that pays or waives one charge the loan already carries.
-   *
-   * Serves the pay and waive steps of AAP 0.7.3's charge row over
-   * `#/loanaccountcharge/:id/:action/:chargeId` (AAP 0.8.2). One component backs both modes, so this
-   * method only navigates and waits: the caller then uses {@link fillCharge} and {@link submitCharge}.
-   * A payment carries an amount and a payment date; a waiver carries no control at all, because the
-   * endpoint waives the whole outstanding portion and refuses an amount, a date or a payment type
-   * beside the command.
-   *
-   * @param loanId Fineract loan id the charge belongs to.
-   * @param chargeId Fineract id of the charge, as the record's charge list reported it.
-   * @param action One of the two commands {@link LoanChargeAction} allows.
-   * @throws When either id is empty or would address more than one route segment, or when the command
-   * is neither `pay` nor `waive`.
-   */
-  async openChargeAction(
-    loanId: number | string,
-    chargeId: number | string,
-    action: LoanChargeAction,
-  ): Promise<void> {
-    const id = requireRouteId(loanId, 'the loan id');
-    const charge = requireRouteId(chargeId, 'the charge id');
-    const segment = requireChargeAction(action);
-    await this.navigate(`/loanaccountcharge/${id}/${segment}/${charge}`);
-    await this.awaitRoot(CHARGE_FORM_ROOT);
   }
 
   /**

@@ -10,8 +10,12 @@
  * with no backend, no browser and no credentials. A regression that moved the removal behind a request,
  * or dropped it, fails here instead of in a manual run.
  *
- * {@link discardResultArtefact} is the module's own export, so nothing is re-implemented: the marker is
- * written at the artefact's real path and removed by the same function `runSeed` calls first.
+ * {@link discardResultArtefact} is the module's own export, so nothing is re-implemented. Its default
+ * target is the artefact itself — the file `runSeed` clears — and {@link SEED_RESULT_ARTEFACT_PATH} is
+ * asserted against this spec's own resolution of that path, so the module and a consumer are proven to
+ * name the same file. The stale marker itself is written to a scratch file of this spec's own name
+ * beside the artefact: running the harness's tests must never remove the artefact a real seed run left
+ * for the parity report to read, because this suite and that artefact have to coexist.
  *
  * These are the harness's tests, not the Playwright workflow specs: they run under the `web-ng-harness`
  * vitest project (`e2e/vitest.config.ts`, `npm run test:harness`) in a plain Node environment.
@@ -21,13 +25,20 @@ import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-import { discardResultArtefact } from './seed';
+import { SEED_RESULT_ARTEFACT_PATH, discardResultArtefact } from './seed';
 
 /**
  * The artefact's real path, resolved from this file's URL exactly as `seed.ts` resolves it. Resolving it
  * here independently is what proves the module and a consumer name the same file.
  */
 const ARTEFACT_PATH: string = fileURLToPath(new URL('../.captures/seed.json', import.meta.url));
+
+/**
+ * The scratch file the stale marker goes to: this spec's own name inside the same git-ignored
+ * `.captures` directory, so the removal is exercised on a real path without overwriting — or deleting —
+ * the artefact a seed run wrote.
+ */
+const SCRATCH_PATH: string = fileURLToPath(new URL('../.captures/seed.spec.stale.json', import.meta.url));
 
 /**
  * A previous run's artefact, shaped like the one the finding left behind: a `runDate` and an id that no
@@ -58,20 +69,23 @@ async function isReadable(path: string): Promise<boolean> {
 
 describe('discardResultArtefact', () => {
   it('removes the artefact a previous run left, which the run clears before its first request', async () => {
-    await mkdir(dirname(ARTEFACT_PATH), { recursive: true });
-    await writeFile(ARTEFACT_PATH, STALE_ARTEFACT, 'utf8');
-    expect(await isReadable(ARTEFACT_PATH)).toBe(true);
+    // The default target is the artefact itself; asserting it against this spec's own resolution proves
+    // the module and a consumer name the same file without this test writing to it.
+    expect(SEED_RESULT_ARTEFACT_PATH).toBe(ARTEFACT_PATH);
+    await mkdir(dirname(SCRATCH_PATH), { recursive: true });
+    await writeFile(SCRATCH_PATH, STALE_ARTEFACT, 'utf8');
+    expect(await isReadable(SCRATCH_PATH)).toBe(true);
 
-    await discardResultArtefact();
+    await discardResultArtefact(SCRATCH_PATH);
 
-    expect(await isReadable(ARTEFACT_PATH)).toBe(false);
+    expect(await isReadable(SCRATCH_PATH)).toBe(false);
   });
 
   it('succeeds and leaves no artefact when there was none to remove', async () => {
-    await rm(ARTEFACT_PATH, { force: true });
+    await rm(SCRATCH_PATH, { force: true });
 
-    await discardResultArtefact();
+    await discardResultArtefact(SCRATCH_PATH);
 
-    expect(await isReadable(ARTEFACT_PATH)).toBe(false);
+    expect(await isReadable(SCRATCH_PATH)).toBe(false);
   });
 });

@@ -1,8 +1,8 @@
 {
   "header": {
-    "purpose": "root-level files the Blitzy platform itself adds; no application file may be listed",
+    "purpose": "root-level files and directories the Blitzy platform itself adds; no application file may be listed",
     "boundary": "allowed without appearing here: everything under web-ng/, plus Dockerfile.web-ng and docker-compose.web-ng.yml",
-    "observedAtBaseCommit": "the base commit holds exactly one file, README.md, created by the Blitzy platform",
+    "observedAtBaseCommit": "the base commit holds exactly one file, README.md, created by the Blitzy platform; blitzy/ is created by the platform at run time and is empty at that commit",
     "generatedOn": "2026-11-24",
     "rule": "any path listed here must have a stated reason; a path may never be listed to silence a boundary violation (AAP 0.10.4)"
   },
@@ -10,6 +10,10 @@
     {
       "path": "README.md",
       "reason": "repository root README created by the Blitzy platform at the base commit; present on disk, not authored by this run"
+    },
+    {
+      "path": "blitzy/",
+      "reason": "root-level evidence directory the Blitzy platform creates for this run's screenshots and screen recordings; it holds no application file and is never committed"
     }
   ]
 }

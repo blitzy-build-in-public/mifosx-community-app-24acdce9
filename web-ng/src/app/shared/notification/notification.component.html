@@ -8,6 +8,13 @@
   assigns them to the inline validation and server error banner, a different widget. Each close
   control names the one notice it drops, and dismissal is the Angular `(click)` on `.close` with
   no Bootstrap JS.
+
+  The notice body is Fineract's own text and stays untranslated (Rule 1 clause 3). The close
+  control's accessible name is the application's own copy, though, so it resolves through the
+  legacy bundle's existing `label.button.close` key — "Close", "Clôturer", "Cerrar" in the shipped
+  en/fr/es bundles — rather than being the English literal a non-English user would hear (AAP
+  0.1.1 requirement 1's i18n, AAP 0.7.4; Rule 1 clauses 3 and 6: an existing legacy key is reused,
+  never invented, and no bundle is edited).
 -->
 <div class="notification-container">
   @for (message of messages(); track message.id) {
@@ -18,7 +25,12 @@
       [class.notification-error]="message.kind === 'error'"
       role="alert"
     >
-      <button type="button" class="close" aria-label="Dismiss" (click)="dismiss(message.id)">
+      <button
+        type="button"
+        class="close"
+        [attr.aria-label]="'label.button.close' | translate"
+        (click)="dismiss(message.id)"
+      >
         <span aria-hidden="true">&times;</span>
       </button>{{ message.message }}
     </div>

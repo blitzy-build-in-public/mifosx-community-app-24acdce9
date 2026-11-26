@@ -6,7 +6,7 @@
     "generatorGap": "app/scripts/services/ResourceFactoryProvider.js is absent from this checkout (base commit holds only README.md); entries are transcribed from AAP 0.7.3",
     "generatedOn": "2026-11-24",
     "pathConventions": "paths are relative to apiPath, begin with '/', use {id}-style templates, carry no query string and no trailing slash; query names live in queryParameters",
-    "matching": "membership is method + templated path; a {…} or numeric segment is collapsed to {} on both sides",
+    "matching": "membership is method-agnostic and path-only: a literal is judged only against a row's `path`, both sides collapsed to `{}` wherever a segment is a `${…}` interpolation, a `{…}` template, a `:param` or numeric (canonicalPath, web-ng/tools/parity/lib/source-scan.ts:88,92-97); each row's `method` records the endpoint table's method (AAP 0.7.3) and is never part of the comparison, and query parameters and `?command=` are judged by the parity comparison (AAP 0.10.2), not here; a literal under web-ng/src is judged against this list's rows alone, while a literal under web-ng/e2e or web-ng/tools may resolve against this list or harness-allowlist.json (web-ng/tools/parity/check-endpoints.ts:386-391,449-450), so a tool-only write whose path this list already declares is covered by that row and cannot also be declared in harness-allowlist.json, because npm run check:endpoints fails any harness row whose path this list declares (the allowlist-overlap rule, web-ng/tools/parity/check-endpoints.ts:381-383) — the seed's seed-only POST /entityDatatableChecks (web-ng/e2e/seed/seed.ts:748-758, OpenAPI createEntityDatatableCheck) resolves against this list's GET /entityDatatableChecks row on both grounds: its method is never compared, and a literal under web-ng/e2e may resolve here",
     "additionPolicy": "a URL absent from this file needs a written justification recorded here AND the matching OpenAPI operation (the fork's *ApiResourceSwagger annotation) named in the entry's note, per AAP 0.10.4"
   },
   "entries": [
@@ -97,9 +97,10 @@
         "offset",
         "limit",
         "orderBy",
-        "sortOrder"
+        "sortOrder",
+        "searchText"
       ],
-      "note": "AAP 0.7.3 leaves the exact search parameter set to the shipped legacy client controller; the new app sends what that controller sends."
+      "note": "AAP 0.7.3's row bounds this endpoint's surface as offset, limit, orderBy, sortOrder and the legacy clientResource's search parameters; ClientService.listQuery (web-ng/src/app/features/clients/client.service.ts:467-484) serialises all five from ClientListParams (client.models.ts:683-697), and the in-scope list screen sends only offset and limit. The fork's ClientsApiResource.retrieveAll accepts no searchText, which is why the legacy find runs through GET /search instead."
     },
     {
       "workflow": "Client list and edit",
@@ -176,7 +177,7 @@
       "queryParameters": [
         "limit"
       ],
-      "note": "AAP 0.7.3 names no legacy resource for this row. Sent with limit=-1 before any client action."
+      "note": "AAP 0.7.3 names no legacy resource for this row. Sent with limit=-1 before any client action. Its path also covers the seed's seed-only POST /entityDatatableChecks write (OpenAPI createEntityDatatableCheck): membership is path-only, so a harness-allowlist.json row repeating this path would fail the gate's allowlist-overlap rule."
     },
     {
       "workflow": "Client actions: datatable gate",

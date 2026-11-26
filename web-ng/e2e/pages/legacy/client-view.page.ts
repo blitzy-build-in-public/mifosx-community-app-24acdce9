@@ -49,14 +49,6 @@ export interface ClientViewHeader {
   statusClass: string;
 }
 
-/** One label/value row of the record's right-hand profile card (AAP 0.2.3 `ProfileCard`). */
-export interface ProfileField {
-  /** Row label as rendered, trimmed. */
-  label: string;
-  /** Row value as rendered, trimmed; `''` when the field has no value. */
-  value: string;
-}
-
 /** One row of the General tab's accounts table (AAP 0.10.1 W3, from `GET /clients/{id}/accounts`). */
 export interface AccountRow {
   /** Which account family the row belongs to, derived from the route the row links to. */
@@ -136,13 +128,6 @@ const ACTION_GROUP = `${TAB_PANEL}.active .btn-group`;
 const ACTION_MENU = '.dropdown-menu';
 
 /**
- * AAP 0.2.3 `ProfileCard`: the right-hand card
- * (`<div class="thumbnail row"><table class="table-minified">`, app/views/clients/viewclient.html:767,787),
- * whose rows pair a bold `th` label with a `td` value.
- */
-const PROFILE_TABLE = '.thumbnail .table-minified';
-
-/**
  * Tab labels as the legacy English translations render them: `label.heading.general` = "General" and
  * `label.heading.identities` = "Identities" (app/global-translations/locale-en.json). The harness runs
  * the legacy app in English (`LOCALE` in the fixtures), so these are the rendered labels.
@@ -153,14 +138,13 @@ const IDENTITIES_TAB = 'Identities';
 
 /**
  * Action labels as the legacy English translations render them: `label.button.more` = "More",
- * `label.button.newloan` = "New Loan", `label.button.newsaving` = "New Saving" and
- * `label.button.edit` = "Edit" (app/scripts/models/clientStatus.js:90-110 and
- * app/global-translations/locale-en.json). Confirm against the running legacy app.
+ * `label.button.newloan` = "New Loan" and `label.button.newsaving` = "New Saving"
+ * (app/scripts/models/clientStatus.js:90-110 and app/global-translations/locale-en.json). Confirm
+ * against the running legacy app.
  */
 const MORE_LABEL = 'More';
 const NEW_LOAN_LABEL = 'New Loan';
 const NEW_SAVING_LABEL = 'New Saving';
-const EDIT_LABEL = 'Edit';
 
 /**
  * Hash prefixes of the routes the record's actions lead to: `location.path('/viewloanaccount/' + id)`
@@ -171,7 +155,6 @@ const EDIT_LABEL = 'Edit';
 const LOAN_ACCOUNT_ROUTE = '#/viewloanaccount/';
 const NEW_LOAN_ROUTE = '#/newclientloanaccount/';
 const NEW_SAVING_ROUTE = '#/new_client_saving_application/';
-const EDIT_CLIENT_ROUTE = '#/editclient/';
 
 /**
  * How long a hash jump is given to take effect before the helper drives `location.hash` directly.
@@ -289,31 +272,6 @@ function readAccountRows(rows: Element[]): (AccountRow | null)[] {
       productName: texts[productIndex < 0 ? 1 : productIndex] ?? '',
       statusClass: statusMarker === undefined ? '' : (statusMarker.getAttribute('class') ?? ''),
       balance: balanceIndex < 0 ? '' : (texts[balanceIndex] ?? ''),
-    });
-  }
-  return results;
-}
-
-/**
- * Runs inside the legacy page, so it references nothing from module scope.
- *
- * Reads the profile card's rows as `{ label, value }` in document order (AAP 0.2.1 Step 3,
- * AAP 0.2.3 `ProfileCard`). Only rows pairing a `th` label with a `td` value are fields, so the
- * card's `colspan` section headings — "Performance History" among them — are skipped. A field the
- * client has no value for returns `''`, which is how the design shows several rows of the card.
- */
-function readProfileRows(rows: Element[]): (ProfileField | null)[] {
-  const results: (ProfileField | null)[] = [];
-  for (const element of rows) {
-    const label = element instanceof HTMLTableRowElement ? element.querySelector('th') : null;
-    const value = element instanceof HTMLTableRowElement ? element.querySelector('td') : null;
-    if (label === null || value === null) {
-      results.push(null);
-      continue;
-    }
-    results.push({
-      label: (label.textContent ?? '').replace(/\s+/g, ' ').trim(),
-      value: (value.textContent ?? '').replace(/\s+/g, ' ').trim(),
     });
   }
   return results;
@@ -498,27 +456,16 @@ export class ClientViewPage {
     await this.openActionMenu();
     const entry = this.labelled(this.actionMenu(), label);
     if ((await entry.count()) === 0) {
-      const known = await this.readVisibleLabels(this.actionMenu().locator('a'));
-      await this.closeActionMenu();
+      // `readActionLabels()` names every action the record offers — the joined buttons as well as the
+      // menu's entries — and leaves the menu closed, which is the state a miss should leave the record
+      // in. The next application's `startAction` names the same list in its own message.
+      const known = await this.readActionLabels();
       throw new Error(
         `"${label}" is neither a button nor a "More" entry of this client record. ` +
-          `Menu entries: ${known.length === 0 ? 'none' : known.map((name) => `"${name}"`).join(', ')}.`,
+          `Actions: ${known.length === 0 ? 'none' : known.map((name) => `"${name}"`).join(', ')}.`,
       );
     }
     await entry.first().click();
-  }
-
-  /**
-   * The right-hand profile card's rows as `{ label, value }` in document order (AAP 0.2.1 Step 3,
-   * AAP 0.2.3 `ProfileCard`). Rows the client has no value for return `''`: the design shows several
-   * such rows, and inventing a placeholder would be an improvement the migration forbids
-   * (Rule 1 clause 3).
-   */
-  async readProfileFields(): Promise<ProfileField[]> {
-    const rows = this.page.locator(`${PROFILE_TABLE} tr`).filter({ visible: true });
-    if ((await rows.count()) === 0) return [];
-    const read = await rows.evaluateAll(readProfileRows);
-    return read.filter((row): row is ProfileField => row !== null);
   }
 
   /**
@@ -580,15 +527,6 @@ export class ClientViewPage {
   async startNewSaving(): Promise<void> {
     await this.startAction(NEW_SAVING_LABEL);
     await this.hashStartsWith(NEW_SAVING_ROUTE);
-  }
-
-  /**
-   * Opens the client's edit form and waits for its route (AAP 0.10.1 "Client list and edit";
-   * `#/editclient/:id`).
-   */
-  async startEdit(): Promise<void> {
-    await this.startAction(EDIT_LABEL);
-    await this.hashStartsWith(EDIT_CLIENT_ROUTE);
   }
 
   /**

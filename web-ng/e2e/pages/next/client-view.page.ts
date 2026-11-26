@@ -7,8 +7,8 @@
  * **Route.** `#/viewclient/:id` (AAP 0.8.2; `web-ng/tools/parity/in-scope-routes.json`), rendered by
  * `features/clients/client-view/client-view.component.ts` under the root element `app-client-view`.
  * The record's own blocks — `app-record-header`, `app-tab-strip`, `app-action-button-group`,
- * `app-client-summary`, `app-client-accounts`, `app-client-identifiers` and `app-profile-card` — are
- * the sub-roots every other locator in this file is scoped to.
+ * `app-client-summary`, `app-client-accounts` and `app-client-identifiers` — are the sub-roots
+ * every other locator in this file is scoped to.
  *
  * **Entry URL (Rule 2; AAP 0.4.4 decision 5).** Every navigation composes
  * `${NEXT_URL}/?baseApiUrl=${encodeURIComponent(FINERACT_URL)}&tenantIdentifier=${TENANT_ID}#<route>`.
@@ -22,21 +22,22 @@
  *
  * **What it reads, and what it only drives.** Every reader returns text the screen rendered, trimmed
  * and with its whitespace runs collapsed: the record header, the two tab labels, the visible action
- * labels, the profile card's label/value rows, the accounts table and the identifiers table. Nothing
- * is parsed into a number, reformatted or normalised beyond that, because display normalisation is the
- * capture's and the parity report's business (AAP 0.10.2; Rule 1 clause 3). The object issues no HTTP
+ * labels, the accounts table and the identifiers table. Nothing is parsed into a number,
+ * reformatted or normalised beyond that, because display normalisation is the capture's and the
+ * parity report's business (AAP 0.10.2; Rule 1 clause 3). The object issues no HTTP
  * request of its own: the only effects are clicks and reads of what the record's own service fetched
  * (Rule 1 clause 2), and it holds no clock read of any kind — a date reaches a caller as the screen
  * printed it, through the application's one display pattern.
  *
  * **The record's four states (AAP 0.7.4).** While the record read is outstanding the screen paints
- * nothing; a 404 paints the not-found message *in place of* the record, so `app-client-view` is on the
- * page while `app-record-header`, the strip, the action row and the card are all absent; any other
- * 4xx paints Fineract's own message above a record that stays usable; a 5xx raises the interceptor's
- * single notification. The readers therefore return `''` or `[]` for a sub-root the screen did not
- * paint rather than raising, with one exception: {@link ClientViewPage.readHeader} throws an `Error`
- * naming `app-record-header`, because a caller that cannot find the header is reading a record the
- * server refused and needs to know which of the two it hit. That is an exception, never an assertion.
+ * nothing; a 404 paints the not-found message *in place of* the record, so `app-client-view` is on
+ * the page while `app-record-header`, the strip, the action row and the profile card are all absent;
+ * any other 4xx paints Fineract's own message above a record that stays usable; a 5xx raises the
+ * interceptor's single notification. The readers therefore return `''` or `[]` for a sub-root the
+ * screen did not paint rather than raising, with one exception: {@link ClientViewPage.readHeader}
+ * throws an `Error` naming `app-record-header`, because a caller that cannot find the header is
+ * reading a record the server refused and needs to know which of the two it hit. That is an
+ * exception, never an assertion.
  *
  * **Deliberate differences the readers respect (AAP 0.10.5).** The record keeps exactly the two
  * in-scope tabs, `General` and `Identities` (item 6), and the in-scope actions (items 5 and 7): the
@@ -49,8 +50,8 @@
  *
  * **Locators (Rule 1 clause 6).** Taken from the templates above and only from them: the Bootstrap 3
  * classes the templates render (`.panel`, `.table`, `.nav-tabs`, `.btn-group`, `.btn.btn-primary`,
- * `.dropdown-menu`, `.breadcrumb`, `.value-key`), the application's status colour classes, and the
- * component selectors that are the templates' own roots. Every visible caption is translated at run
+ * `.dropdown-menu`, `.breadcrumb`), the application's status colour classes, and the component
+ * selectors that are the templates' own roots. Every visible caption is translated at run
  * time from the legacy locale bundles, so a text match is a case-insensitive pattern built from the
  * caller's label and paired with a structural fallback. No attribute is required on `web-ng/src` for
  * this file to work, and the dropdown's open position is the Angular-bound `.open` class — clicked,
@@ -81,14 +82,6 @@ export interface ClientHeaderView {
   readonly staff: string;
   /** The indicator's colour class — `status-active`, `status-pending`, `status-closed`, `status-other`, or `''`. */
   readonly statusClass: string;
-}
-
-/** One label/value row of the record, as the screen renders it. */
-export interface LabelValue {
-  /** The row's label text, trimmed. */
-  readonly label: string;
-  /** The row's value text, trimmed; `''` when the row renders no value. */
-  readonly value: string;
 }
 
 /** One row of the record's accounts table (AAP 0.10.1 W3, from `GET /clients/{id}/accounts`). */
@@ -163,9 +156,6 @@ const TAB_STRIP_SELECTOR = 'app-tab-strip';
 
 /** The record's joined action row, with its `More` dropdown. */
 const ACTION_GROUP_SELECTOR = 'app-action-button-group';
-
-/** The record's right-hand profile card. */
-const PROFILE_CARD_SELECTOR = 'app-profile-card';
 
 /** `General` tab's accounts section. */
 const ACCOUNTS_SELECTOR = 'app-client-accounts';
@@ -386,36 +376,6 @@ function readHeaderBlock(element: HTMLElement): HeaderReading {
   }
 
   return { displayName, statusClass, runs };
-}
-
-/**
- * Runs inside the page: the profile card's label/value rows, in document order.
- *
- * A row is the card's own row shape — a key cell carrying `.value-key` beside a value cell — so the
- * card's heading and its avatar image are skipped by construction, and the rows the card paints under
- * its `Performance History` sub-heading are read as the same pairs. A value cell the card renders
- * empty answers `''`; the screen never substitutes a stand-in for a field the record does not carry
- * (AAP 0.7.4), so nothing here can invent one.
- *
- * Self-contained on purpose: see {@link readHeaderBlock}.
- *
- * @param element The `app-profile-card` element.
- */
-function readProfileFieldsInPage(element: HTMLElement): LabelValue[] {
-  const fields: LabelValue[] = [];
-  for (const row of Array.from(element.querySelectorAll('.row'))) {
-    const key = row.querySelector('.value-key');
-    if (key === null) {
-      continue;
-    }
-    const cells = Array.from(row.children);
-    const valueCell = cells.length > 1 ? cells[1] : null;
-    fields.push({
-      label: (key.textContent ?? '').replace(/\s+/g, ' ').trim(),
-      value: valueCell === null ? '' : (valueCell.textContent ?? '').replace(/\s+/g, ' ').trim(),
-    });
-  }
-  return fields;
 }
 
 /**
@@ -678,23 +638,6 @@ export class ClientViewPage {
   }
 
   /**
-   * Reads the profile card's label/value rows, in document order.
-   *
-   * Every row the card paints is reported, including the ones under its `Performance History`
-   * sub-heading and the ones whose value is empty, because the card shows those rows with an empty value
-   * cell and omitting them would misreport what the screen shows (AAP 0.7.4).
-   *
-   * @returns The rows, trimmed; `[]` when the record paints no card.
-   */
-  async readProfileFields(): Promise<readonly LabelValue[]> {
-    const card = (await this.record()).locator(PROFILE_CARD_SELECTOR).first();
-    if ((await card.count()) === 0) {
-      return [];
-    }
-    return card.evaluate(readProfileFieldsInPage);
-  }
-
-  /**
    * Reads the `General` tab's accounts table — the client's loan and savings accounts as the section
    * renders them (AAP 0.10.1 W3, from `GET /clients/{id}/accounts`).
    *
@@ -799,15 +742,6 @@ export class ClientViewPage {
    */
   async startNewSaving(): Promise<void> {
     await this.startAction('New Saving');
-  }
-
-  /**
-   * Leaves the record for the client's edit form.
-   *
-   * @throws When the row does not offer the entry to the user, naming the labels it does offer.
-   */
-  async startEdit(): Promise<void> {
-    await this.startAction('Edit');
   }
 
   /** Root locator: every other locator in this class is scoped to the record. */

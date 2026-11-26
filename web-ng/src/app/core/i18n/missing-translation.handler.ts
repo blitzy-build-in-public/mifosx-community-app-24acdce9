@@ -66,6 +66,37 @@ export function humaniseKey(key: string): string {
 }
 
 /**
+ * The application's own default copy for the strings this application introduces, keyed exactly as
+ * the templates render them.
+ *
+ * **Why the application has to carry them.** Every other label in this migration resolves through the
+ * flat `app/global-translations/locale-*.json` bundles the legacy application ships, which are read in
+ * place and never copied or edited (Rule 1 clauses 1 and 6, AAP 0.4.3). Two strings are not in that key
+ * space at all: the idle warning and its "Stay signed in" action. The warning is new copy — the legacy
+ * application never rendered one, because its `$idleTimeout` handler logged out silently
+ * (`app/scripts/controllers/main/MainController.js:139-143`) — and AAP 0.1.1 requires it ("a 10-second
+ * warning before logout"), so the AAP adds the sentence and the frozen bundles cannot carry it. Its
+ * keys are therefore the application's own: `label.message.session.expiring` and
+ * `label.button.stay.signed.in`.
+ *
+ * **Where this map sits in the lookup.** ngx-translate calls the missing-translation handler only
+ * after the active language and the configured fallback language (`FALLBACK_LANG`, `en`) have both
+ * failed to answer the key, so a served bundle that carries either key answers it first and this map
+ * is never consulted for that key. A bundle that later ships the two keys therefore wins with no code
+ * change here, and the English text below is the default the application falls back to instead of the
+ * humanised key.
+ *
+ * **Not a hidden key space.** These two keys are declared here because they are the application's own
+ * copy, and they are answered before the missing-key path so they are neither humanised (which would
+ * render "Session Expiring") nor reported as missing. Every other absent key keeps the humanise-and-
+ * warn behaviour documented on {@link FineractMissingTranslationHandler}.
+ */
+export const APP_OWNED_TRANSLATIONS: ReadonlyMap<string, string> = new Map<string, string>([
+  ['label.message.session.expiring', 'You have been inactive and will be signed out shortly.'],
+  ['label.button.stay.signed.in', 'Stay signed in'],
+]);
+
+/**
  * Replaces ngx-translate's key-echoing default handler, so a key that the active locale and the
  * fallback locale both lack is still rendered as a readable label. This is the guarantee that a
  * raw dotted key never appears in the interface.
@@ -80,6 +111,11 @@ export function humaniseKey(key: string): string {
  * which renders the raw key. The dotted key space, the loader prefix and the fallback language are
  * untouched: ngx-translate calls this handler only after the configured fallback language has
  * already failed, so the handler neither retries a lookup nor translates the result.
+ *
+ * **The application's own copy is answered first.** A key {@link APP_OWNED_TRANSLATIONS} carries is a
+ * string this application introduces rather than one the legacy bundles ever held, so the handler
+ * returns that default instead of humanising the key — and, because the key is not missing, it
+ * reports nothing. Every other absent key keeps the humanised label and the development-only warning.
  */
 export class FineractMissingTranslationHandler implements MissingTranslationHandler {
   /**
@@ -90,9 +126,16 @@ export class FineractMissingTranslationHandler implements MissingTranslationHand
 
   /**
    * @param params ngx-translate's missing-key context; only `key` is read from it
-   * @returns the humanised last segment of the missing key — never the key itself
+   * @returns the application's own default copy for a key it introduces, else the humanised last
+   *   segment of the missing key — never the key itself
    */
   handle(params: MissingTranslationHandlerParams): string {
+    const appOwned: string | undefined = APP_OWNED_TRANSLATIONS.get(params.key);
+
+    if (appOwned !== undefined) {
+      return appOwned;
+    }
+
     if (isDevMode() && !this.warnedKeys.has(params.key)) {
       this.warnedKeys.add(params.key);
       console.warn(`[i18n] missing translation key: ${params.key}`);

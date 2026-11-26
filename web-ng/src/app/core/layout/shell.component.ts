@@ -11,12 +11,13 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterOutlet, type ActivatedRouteSnapshot, type Event } from '@angular/router';
-import { TranslateService } from '@ngx-translate/core';
-import { filter } from 'rxjs';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { filter, merge } from 'rxjs';
 
 import { AuthService } from '../auth/auth.service';
 import { IdleService } from '../auth/idle.service';
 import { SessionService } from '../auth/session.service';
+import { bindDocumentLanguage } from '../i18n/document-language';
 import { BreadcrumbComponent } from './breadcrumb.component';
 import { NavbarComponent } from './navbar.component';
 
@@ -32,11 +33,35 @@ interface ShellBreadcrumb {
 }
 
 /**
- * The document events that count as the session being in use, which re-arm the idle clock exactly as
- * ng-idle's own DOM interruption list did (`app/scripts/initialTasks.js:72-78`, wired by
- * `$idleProvider`): a key, a click, a movement of the pointer, a wheel scroll or a touch.
+ * The document events that count as the session being in use and re-arm the idle clock immediately:
+ * a key, a click and a touch — the three of ng-idle's own DOM interruption list that say the user has
+ * actually done something (`app/scripts/initialTasks.js:72-78`, wired by `$idleProvider`).
+ *
+ * They stay immediate because each one is a discrete interaction rather than a stream: a keypress, a
+ * click or a tap must dismiss a showing warning at once and restart the whole 30-minute window
+ * (AAP 0.1.1 requirement 1; AAP 0.4.2 "emits a warning at 29:50 and logs out at 30:00").
  */
-const ACTIVITY_EVENTS: readonly string[] = ['keydown', 'mousedown', 'mousemove', 'wheel', 'touchstart'];
+const IMMEDIATE_ACTIVITY_EVENTS: readonly string[] = ['keydown', 'mousedown', 'touchstart'];
+
+/**
+ * The document events that say the pointer is moving. They prove the user is present but arrive at
+ * their own rate — a trackpad emits hundreds of `mousemove` events per second — so they are counted
+ * through the throttle below instead of one reset per event.
+ */
+const POINTER_ACTIVITY_EVENTS: readonly string[] = ['mousemove', 'wheel'];
+
+/**
+ * The window in which one pointer event may re-arm the idle clock: one second (QA report F11 at
+ * `shell.component.ts:39`).
+ *
+ * `IdleService.reset()` is not free: it reads `AppConfigService.config` and clears and re-creates
+ * three `window` timers, so resetting once per `mousemove` re-armed timers and allocated closures at
+ * pointer-event rate on every authenticated screen. One second is far below the granularity that
+ * matters to a 30-minute window with a 10-second warning: a pointer that never stops moving still
+ * re-arms the clock every second, so the session cannot expire while the user is there, and the first
+ * movement after any lull still resets it at once.
+ */
+const ACTIVITY_THROTTLE_MS = 1_000;
 
 /**
  * Reads the breadcrumb trail a matched route declares in `data['breadcrumb']` (AAP 0.8.2, "each
@@ -94,7 +119,9 @@ function declaredBreadcrumbKeys(value: unknown): readonly string[] {
  * - while `AuthService.session()` is non-null the clock runs (`start()`), and it is stopped
  *   (`stop()`) the moment the session clears, which is what legacy's `scope.start(session)` /
  *   `$idle.watch()` wiring did (`app/scripts/controllers/main/MainController.js:151-157`);
- * - document activity re-arms it (`reset()`), only while a session is in effect;
+ * - document activity re-arms it (`reset()`), only while a session is in effect — a key, a click or a
+ *   touch immediately, and pointer movement through a one-second throttle so a burst of `mousemove`
+ *   events re-arms the three timers once per second instead of once per event (QA report F11);
  * - `warning$` raises the alert and `timeout$` ends the session and returns to `/login`, exactly the
  *   `$idleTimeout` handler legacy ran (`MainController.js:139-143`);
  * - `ngOnDestroy` stops the clock and removes the listeners, so a destroyed shell neither logs out a
@@ -120,7 +147,7 @@ function declaredBreadcrumbKeys(value: unknown): readonly string[] {
 @Component({
   selector: 'app-shell',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, NavbarComponent, BreadcrumbComponent],
+  imports: [RouterOutlet, NavbarComponent, BreadcrumbComponent, TranslatePipe],
   templateUrl: './shell.component.html',
 })
 export class ShellComponent implements OnDestroy {
@@ -168,12 +195,19 @@ export class ShellComponent implements OnDestroy {
 
   /**
    * The trail derived from the active route tree: the `data['breadcrumb']` keys of the matched
-   * routes from the root down, translated through {@link translate}.
+   * routes from the root down, translated through {@link translate} into the language in force.
    *
-   * Held in a signal because it is recomputed on every `NavigationEnd` and read by an OnPush
-   * template. The constructor fills it once from the router's current snapshot, because the
-   * navigation that activates this view completes before the view exists, and its `NavigationEnd`
-   * therefore never reaches this component's subscription.
+   * Held in a signal because it is recomputed on every `NavigationEnd`, whenever the active language
+   * or the loaded bundles change, and read by an OnPush template. The constructor fills it once from
+   * the router's current snapshot, because the navigation that activates this view completes before
+   * the view exists, and its `NavigationEnd` therefore never reaches this component's subscription.
+   *
+   * **It holds resolved text, so it follows the language and not only the route.** A switch from
+   * either language switcher performs no navigation, so {@link publishBreadcrumb} is re-run on
+   * `onLangChange` and on `onTranslationChange` as well: the first re-resolves the trail against the
+   * bundle that just became active, the second against a bundle that arrived after the switch that
+   * asked for it (AAP 0.7.4 "the language switcher changes the active translation without a page
+   * reload"; AAP 0.9.1 item 1).
    */
   private readonly trail = signal<readonly ShellBreadcrumb[]>([]);
 
@@ -209,8 +243,8 @@ export class ShellComponent implements OnDestroy {
   readonly idleWarning = signal(false);
 
   /**
-   * Wires the idle clock to the session and to the document, keeps the trail in step with the route,
-   * and registers the activity listeners.
+   * Wires the idle clock to the session and to the document, keeps the trail in step with the route
+   * and with the active language, and registers the activity listeners.
    *
    * The clock's gate is an `effect()` on `AuthService.session()`, so the one signal that says a
    * session is in effect drives start and stop: a login starts the clock without a second caller,
@@ -232,6 +266,24 @@ export class ShellComponent implements OnDestroy {
 
     this.publishBreadcrumb();
 
+    // The switcher changes the active language without a reload (AAP 0.7.4), so the document's own
+    // `lang` attribute has to follow it: an interface read in French or Spanish must not still be
+    // announced as English (WCAG 3.1.1, QA F14). `core/i18n/document-language.ts` owns that write, and
+    // this screen and the login screen are the two that host a switcher.
+    bindDocumentLanguage(this.translate);
+
+    // The trail is translated text, so it follows the language as well as the route: a switch from
+    // either switcher performs no navigation, and without these two subscriptions the visible crumb
+    // would keep the previous language until the next `NavigationEnd` (AAP 0.7.4 requires the switch
+    // to take effect without a reload; AAP 0.9.1 item 1 places the switcher in this scope).
+    // `onTranslationChange` covers a bundle that arrives after the switch that asked for it, so a late
+    // bundle re-resolves the same keys instead of leaving the trail on the text it already had.
+    merge(this.translate.onLangChange, this.translate.onTranslationChange)
+      .pipe(takeUntilDestroyed())
+      .subscribe((): void => {
+        this.publishBreadcrumb();
+      });
+
     this.router.events
       .pipe(
         filter((event: Event): event is NavigationEnd => event instanceof NavigationEnd),
@@ -250,8 +302,15 @@ export class ShellComponent implements OnDestroy {
       this.signOutAfterTimeout();
     });
 
-    for (const activity of ACTIVITY_EVENTS) {
+    for (const activity of IMMEDIATE_ACTIVITY_EVENTS) {
       this.document.addEventListener(activity, this.onActivity, { passive: true });
+    }
+
+    // Pointer movement keeps the session alive through the throttle below rather than once per event:
+    // it arrives at pointer-event rate, and each reset re-arms three timers and re-reads the
+    // configuration (QA report F11, ACTIVITY_THROTTLE_MS).
+    for (const activity of POINTER_ACTIVITY_EVENTS) {
+      this.document.addEventListener(activity, this.onPointerActivity, { passive: true });
     }
   }
 
@@ -273,27 +332,72 @@ export class ShellComponent implements OnDestroy {
    *
    * The subscriptions on `warning$`, `timeout$` and the router's events end with the injector
    * context's `takeUntilDestroyed()`, so this method owns exactly the two things that are not
-   * observables: the timer the shell started and the listeners it registered.
+   * observables: the timer the shell started and the listeners it registered — the immediate ones and
+   * the throttled pointer ones, each removed with the handler reference it was added with.
    */
   ngOnDestroy(): void {
     this.idle.stop();
 
-    for (const activity of ACTIVITY_EVENTS) {
+    for (const activity of IMMEDIATE_ACTIVITY_EVENTS) {
       this.document.removeEventListener(activity, this.onActivity);
+    }
+
+    for (const activity of POINTER_ACTIVITY_EVENTS) {
+      this.document.removeEventListener(activity, this.onPointerActivity);
     }
   }
 
   /**
-   * The document listener's handler, an arrow property so the same reference is added on subscribe
-   * and removed in `ngOnDestroy` — and so it keeps the component's `this` when the document calls it.
+   * The handler of the immediate activity events — `keydown`, `mousedown`, `touchstart` — an arrow
+   * property so the same reference is added on subscribe and removed in `ngOnDestroy`, and so it
+   * keeps the component's `this` when the document calls it.
+   *
+   * Every one of these counts, with no throttle: a single click has to dismiss the warning and
+   * restart the window on the spot.
    */
   private readonly onActivity = (): void => {
     this.noteActivity();
   };
 
   /**
+   * When a pointer event was last allowed to re-arm the clock, as `Date.now()` milliseconds.
+   *
+   * `-Infinity` rather than `0`, so the very first pointer event of a session always passes whatever
+   * the clock reads: `Date.now()` is never negative, and a zero start would swallow that first event
+   * on a fake clock that begins at the epoch.
+   */
+  private lastPointerActivityAt = Number.NEGATIVE_INFINITY;
+
+  /**
+   * The handler of the pointer activity events — `mousemove` and `wheel` — as a one-second
+   * leading-edge throttle over {@link ACTIVITY_THROTTLE_MS}.
+   *
+   * The first pointer event of each window calls {@link noteActivity} and re-arms the idle clock;
+   * every later event inside the same window is dropped, because a burst of pointer movement carries
+   * no more information about idleness than its first event does, and each reset re-reads the
+   * configuration and re-creates three timers (QA report F11). The window is measured with
+   * `Date.now()` rather than kept in a timer handle, so there is nothing to clear when the shell is
+   * destroyed — `ngOnDestroy` only has to remove the listener — and the unit suite drives it by
+   * moving the clock.
+   */
+  private readonly onPointerActivity = (): void => {
+    const now: number = Date.now();
+
+    if (now - this.lastPointerActivityAt < ACTIVITY_THROTTLE_MS) {
+      return;
+    }
+
+    this.lastPointerActivityAt = now;
+    this.noteActivity();
+  };
+
+  /**
    * Counts the session as being in use: it dismisses a showing warning and re-arms the idle window,
    * and it does nothing at all while no session is in effect.
+   *
+   * It is the single place both activity handlers end up — {@link onActivity} for the immediate events
+   * and {@link onPointerActivity} once its throttle window has elapsed — so the session gate, the
+   * dismissal and the reset cannot drift between the two.
    *
    * The gate matters because the listeners outlive a logout by one destruction cycle: a keystroke on
    * the login screen must not arm a clock for a session that no longer exists. `IdleService.reset()`
@@ -333,6 +437,12 @@ export class ShellComponent implements OnDestroy {
    * The tree is walked from the root down `firstChild`, the same walk the router's own
    * `pathFromRoot` documents, because a layout route's child is the screen: every matched node that
    * declares a `data['breadcrumb']` contributes its keys in that order.
+   *
+   * Each key is resolved with `translate.instant()` here, so the published trail is text in the
+   * language that is in force at this moment. That is why it runs on a language change and on a
+   * translation change as well as on a navigation: a switch hands the application a different bundle
+   * without navigating, and a bundle that arrives late has to re-resolve the same keys rather than
+   * leave the crumb on the language it was first rendered in (AAP 0.7.4, AAP 0.9.1 item 1).
    */
   private publishBreadcrumb(): void {
     const keys: readonly string[] = this.declaredKeys(this.router.routerState.snapshot.root);

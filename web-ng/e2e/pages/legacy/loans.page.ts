@@ -3,15 +3,13 @@
  * unchanged Mifos X community-app served on port 9090, which the parity run measures before the new
  * Angular application is judged (AAP 0.10.1, "Baseline first"; AAP 0.9.3, "Baseline").
  *
- * Six hash routes of the legacy route table are driven here (AAP 0.8.2, mirrored by
+ * Four hash routes of the legacy route table are driven here (AAP 0.8.2, mirrored by
  * `web-ng/tools/parity/in-scope-routes.json`):
  *
  * - `#/newclientloanaccount/:clientId` — the application wizard (newloanaccount.html)
  * - `#/editloanaccount/:id` — the application form in edit mode
  * - `#/viewloanaccount/:id` — the loan record (viewloanaccountdetails.html)
  * - `#/loanaccount/:id/:action` — the action forms (loanaccountactions.html)
- * - `#/addloancharge/:id` — the add-charge form (addloancharge.html)
- * - `#/loanaccountcharge/:id/:action/:chargeId` — the charge pay/waive forms
  *
  * Workflows served (AAP 0.10.1): **W4** the application submitted after a repayment-schedule
  * preview, **W5** approve and disburse with exactly one request per action, **W6** the repayment of
@@ -156,41 +154,20 @@ export interface TransactionRow {
   reversed: string;
 }
 
-/** One row of the loan record's charge list. */
-export interface ChargeRow {
-  /** Name column, the charge's Fineract `name`. */
-  name: string;
-  /** Due column, the charge's Fineract `amount`. */
-  amount: string;
-  /** Paid column, Fineract's `amountPaid`. */
-  amountPaid: string;
-  /** Waived column, Fineract's `amountWaived`. */
-  amountWaived: string;
-  /** Outstanding column, Fineract's `amountOutstanding`. */
-  amountOutstanding: string;
-}
-
-/** The values an action, repayment or charge form is filled with. */
+/** The values an action or repayment form is filled with. */
 export interface LoanActionValues {
   /** The form's transaction or action date control, typed as `dd MMMM yyyy`. */
   date?: Date;
-  /** The transaction amount or charge amount input, exactly as the caller supplies it. */
+  /** The transaction amount input, exactly as the caller supplies it. */
   amount?: string;
   /** The note textarea, on the forms whose legacy controller renders one. */
   note?: string;
   /** Visible label of `select#paymentTypeId`, the payment type the transaction template fills. */
   paymentType?: string;
   /**
-   * Visible label of the charge the add-charge form's `select#chargeId` offers. The legacy option
-   * text is `"<charge name> (<currency name>)"`, e.g. `Parity Fee (US Dollar)`, and the option's
-   * value is the charge's id, which the form posts as `chargeId` (AAP 0.7.3, "Loan charges").
-   */
-  chargeName?: string;
-  /**
    * Reason, for a form that renders a reason control — the `select#reasonId` /
    * `select[ng-model*="eason"]` probe of `fillActionForm`. No in-scope legacy loan screen renders
-   * one today, so no workflow depends on it; it is not the charge on the add-charge form, which
-   * `chargeName` names.
+   * one today, so no workflow depends on it.
    */
   reasonName?: string;
 }
@@ -206,20 +183,6 @@ export type LoanAccountAction =
   | 'disburse'
   | 'undodisbursal'
   | 'repayment';
-
-/** The loan-charge actions `#/loanaccountcharge/:id/:action/:chargeId` accepts (AAP 0.7.3). */
-export type LoanChargeAction = 'pay' | 'waive';
-
-/**
- * The route segment each charge action occupies. The union names the Fineract command
- * (`?command=pay`, `?command=waive`, AAP 0.7.3); the legacy route spells the same action
- * `paycharge`/`waivecharge`, as the links in viewloanaccountdetails.html and the `case` labels of
- * LoanAccountActionsController.js do. Confirm against the running legacy app.
- */
-const CHARGE_ROUTE_SEGMENT: Readonly<Record<LoanChargeAction, string>> = {
-  pay: 'paycharge',
-  waive: 'waivecharge',
-};
 
 /** Positions a period column of the application form's preview table (newloanaccount.html). */
 const PREVIEW_TABLE_HEADERS = ['principal due', 'interest due', 'due'] as const;
@@ -284,15 +247,6 @@ const TRANSACTION_COLUMNS = {
   outstandingBalance: ['loan balance', 'outstanding balance', 'balance'],
 } as const;
 
-/** Column aliases per charge field, most specific first. */
-const CHARGE_COLUMNS = {
-  name: ['name'],
-  amount: ['due', 'amount'],
-  amountPaid: ['paid', 'amount paid'],
-  amountWaived: ['waived', 'amount waived'],
-  amountOutstanding: ['outstanding', 'amount outstanding'],
-} as const;
-
 /** The legacy form control each fillable field resolves to, by label text and by element id. */
 interface FieldSpec {
   /** Field key as the models spell it, used for the `formControlName` fallback. */
@@ -305,8 +259,8 @@ interface FieldSpec {
 
 /**
  * The four fields `fillApplication` types into, by the model's own key, plus the two the action and
- * charge forms carry. `fillFieldByLabel` resolves one of these by its label text first, then by the
- * element id the legacy template fixes, then by `formControlName`, then by placeholder.
+ * repayment forms carry. `fillFieldByLabel` resolves one of these by its label text first, then by
+ * the element id the legacy template fixes, then by `formControlName`, then by placeholder.
  */
 const FILLABLE_FIELDS: ReadonlyMap<string, FieldSpec> = new Map<string, FieldSpec>([
   ['principal', { key: 'principal', id: 'principal', labels: ['Principal'] }],
@@ -638,7 +592,7 @@ function cellAt(cells: readonly string[], index: number): string {
  * The text is the `dd MMMM yyyy` form every date-bearing Fineract payload carries
  * (Rule 1 clause 2), which is also the format the legacy `datepicker-pop` attribute declares. The
  * modified plugin parses the field on blur and may rewrite it, so the value is read back and, when
- * it did not stick — or when the field is the read-only one addloancharge.html renders — written
+ * it did not stick — or when the field the template renders is read-only — written
  * through native events before being checked once more. Confirm against the running legacy app.
  */
 async function setLegacyDate(input: Locator, date: Date): Promise<void> {
@@ -667,8 +621,8 @@ async function setLegacyDate(input: Locator, date: Date): Promise<void> {
 
 
 /**
- * The legacy application's individual-loan screens: the application wizard, the loan record, the
- * action forms and the charge forms.
+ * The legacy application's individual-loan screens: the application wizard, the loan record and the
+ * action forms.
  *
  * Every method takes and answers plain values. Nothing here asserts, retries or reports: a method
  * that cannot do what it was asked raises an `Error` naming the control or the value it looked for,
@@ -684,14 +638,6 @@ export class LoansPage {
   // ---------------------------------------------------------------------------------------------
   // Application form — W4 and W7 (AAP 0.10.1)
   // ---------------------------------------------------------------------------------------------
-
-  /**
-   * Opens the loan application form for one client — `#/newclientloanaccount/:clientId` (AAP 0.8.2)
-   * — and waits for the product select that the first wizard step renders (AAP 0.10.1 W4).
-   */
-  async openApplication(clientId: number): Promise<void> {
-    await this.gotoHash(`/newclientloanaccount/${clientId}`, this.page.locator('select#productId'));
-  }
 
   /**
    * Selects the loan product by its visible name (AAP 0.10.1 W4, AAP 0.3.4 row 14).
@@ -943,27 +889,6 @@ export class LoansPage {
   }
 
   /**
-   * Reads the record's charges (AAP 0.7.3: the loan-charge list the add, pay and waive workflows read
-   * back). `[]` when the loan carries no charges.
-   */
-  async readCharges(): Promise<ChargeRow[]> {
-    await this.sectionPane(SECTION_TABS.charges);
-    const grid = await this.readTable(CHARGE_TABLE_HEADERS);
-    const name = columnIndex(grid, CHARGE_COLUMNS.name);
-    const amount = columnIndex(grid, CHARGE_COLUMNS.amount);
-    const paid = columnIndex(grid, CHARGE_COLUMNS.amountPaid);
-    const waived = columnIndex(grid, CHARGE_COLUMNS.amountWaived);
-    const outstanding = columnIndex(grid, CHARGE_COLUMNS.amountOutstanding);
-    return grid.rows.map((cells) => ({
-      name: cellAt(cells, name),
-      amount: cellAt(cells, amount),
-      amountPaid: cellAt(cells, paid),
-      amountWaived: cellAt(cells, waived),
-      amountOutstanding: cellAt(cells, outstanding),
-    }));
-  }
-
-  /**
    * Reads the empty-state block of each of the three sections the request requires one on — the
    * repayment schedule, the transactions and the charges (AAP 0.11.1, AAP 0.7.4) — answering `''`
    * for a section that shows data.
@@ -1080,64 +1005,6 @@ export class LoansPage {
   /** Submits the repayment exactly once (AAP 0.10.1 W6). */
   async submitRepayment(): Promise<void> {
     await this.clickPrimarySubmit('The repayment form');
-  }
-
-  // ---------------------------------------------------------------------------------------------
-  // Loan charges — AAP 0.7.3
-  // ---------------------------------------------------------------------------------------------
-
-  /**
-   * Opens the add-charge form — `#/addloancharge/:id` (AAP 0.8.2) — and waits for the charge select,
-   * which the charge template fills (AAP 0.7.3: `GET /loans/{id}/charges/template`).
-   */
-  async openAddCharge(loanId: number): Promise<void> {
-    await this.gotoHash(
-      `/addloancharge/${loanId}`,
-      this.page.locator('form[name="loanchargeform"]'),
-    );
-    await this.page.locator('select#chargeId').first().waitFor({ state: 'visible' });
-  }
-
-  /**
-   * Fills the add-charge form (AAP 0.7.3: `POST /loans/{id}/charges`).
-   *
-   * `chargeName` names the charge to apply — the visible label of the option `select#chargeId`
-   * offers. The form reveals its amount and due date only after a charge has been chosen, so naming
-   * one is what makes the rest of the form fillable. A charge that carries no due date leaves the
-   * date control absent, and a supplied date is then not entered — the capture of the request shows
-   * that.
-   */
-  async fillCharge(values: LoanActionValues): Promise<void> {
-    if (values.chargeName !== undefined) {
-      await chooseOption(this.page, this.page.locator('select#chargeId').first(), values.chargeName);
-    }
-    if (values.amount !== undefined) {
-      const amount = this.page.locator('input#amount').first();
-      await amount.waitFor({ state: 'visible' });
-      await amount.fill(values.amount);
-    }
-    if (values.date !== undefined) {
-      const dueDate = this.page.locator('input#dueDate');
-      if ((await dueDate.count()) > 0) {
-        await setLegacyDate(dueDate, values.date);
-      }
-    }
-  }
-
-  /** Submits the charge exactly once (AAP 0.7.3). */
-  async submitCharge(): Promise<void> {
-    await this.clickPrimarySubmit('The add-charge form');
-  }
-
-  /**
-   * Opens a charge's pay or waive form — `#/loanaccountcharge/:id/:action/:chargeId` (AAP 0.8.2) —
-   * and waits for it (AAP 0.7.3). The union names the Fineract command; the legacy route spells the
-   * same action `paycharge`/`waivecharge`.
-   */
-  async openChargeAction(loanId: number, chargeId: number, action: LoanChargeAction): Promise<void> {
-    const segment = CHARGE_ROUTE_SEGMENT[action];
-    await this.gotoHash(`/loanaccountcharge/${loanId}/${segment}/${chargeId}`, this.actionForm());
-    await this.waitForActionForm();
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -1324,7 +1191,7 @@ export class LoansPage {
     }
   }
 
-  /** The action and charge-action forms share one template, and one form name. */
+  /** The action forms share one template, and one form name. */
   private actionForm(): Locator {
     return this.page.locator('form[name="loanactionform"]');
   }

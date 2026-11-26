@@ -10,12 +10,15 @@ repository root; `app/`, `test/` and the legacy root `Dockerfile` are read-only.
 ## Prerequisites
 
 - Node >= 22.22.3 and npm — the engine floor `@angular/*` 22.3.0 declares; the image build stage is `node:22`
+- A JDK 25 — Temurin is what the fork is built and verified with; the `./gradlew` wrapper ships in the clone
 - Docker with Compose, for the backend and for the packaging check
+- Playwright's Chromium, which no install step downloads: `npx playwright install chromium` once, from `web-ng/`
 - A POSIX shell: every script runs unchanged on macOS and Linux
 
 ## Install, build, lint, test
 
-Run every command in this file from `web-ng/`.
+Run the `npm` and `npx ng` blocks here from `web-ng/`; the backend block runs inside the `blitzy-fineract`
+clone it creates, the legacy baseline in the legacy checkout, and the packaging block in the repository root.
 
 ```bash
 npm install                  # never npm ci; no lockfile is committed
@@ -49,7 +52,7 @@ The only permitted backend is `Blitzy-Sandbox/blitzy-fineract`, built from sourc
 
 ```bash
 git clone https://github.com/Blitzy-Sandbox/blitzy-fineract.git
-cd blitzy-fineract && ./gradlew :fineract-provider:jibDockerBuild -x test
+cd blitzy-fineract && ./gradlew :fineract-provider:jibDockerBuild -x test   # every line below is in the clone
 docker compose -f docker-compose-postgresql.yml up -d --pull never
 ```
 
@@ -66,7 +69,8 @@ naming the variable when it is unset.
 export FINERACT_COMPOSE_FILE=/absolute/path/to/blitzy-fineract/docker-compose-postgresql.yml
 npm run check:backend    # proves the backend is Blitzy-Sandbox/blitzy-fineract, records its commit
 npm run reset:db         # pull db -> recreate with --pull never -> wait for /actuator/health -> seed
-npm run seed             # staff, loan product, loan charge, savings product (fixed values)
+npm run seed             # staff, loan product, loan charge, savings product, the closure, rejection and
+                         # withdrawal client-action reasons, and the client-action datatable gate (fixed values)
 npm run e2e              # legacy baseline, then the new app, then parity-report.{md,json}
 ```
 
@@ -78,16 +82,19 @@ works is reported `legacy-broken` without failing, and `parity-report.{md,json}`
 Static gates:
 
 ```bash
-npm run check:endpoints  # every Fineract URL in src/ is in tools/parity/endpoint-allowlist.json
+npm run check:endpoints  # fails on a src/ URL outside endpoint-allowlist.json, an e2e/ or tools/ URL
+                         # outside either allowlist, and any demo host anywhere in the scanned tree
 npm run check:templates  # every in-scope legacy template endpoint is called by the new services
 npm run check:wiring     # no dead injectable or component, no route drift, no spec without a test,
                          # no credential literal, no file written outside the boundary
-npm run check:all        # all three, in that order
+npm run check:all        # the three checks above, in that order
+npm run typecheck:harness # tsc over e2e/ and tools/ — the tree ng build never type-checks
+npm run test:harness     # the vitest specs under e2e/, with coverage
 ```
 
 A human performs these steps: the Docker-backed `npm run e2e`, inspection of the parity report, the
-legacy baseline (`docker build --platform linux/amd64 -t community-app-legacy .` then
-`docker run -d --platform linux/amd64 -p 9090:80 community-app-legacy`), and the packaging check below.
+legacy baseline in the legacy checkout (`docker build --platform linux/amd64 -t community-app-legacy .`
+then `docker run -d --platform linux/amd64 -p 9090:80 community-app-legacy`), and the packaging check below.
 
 ## Development credentials
 
@@ -95,8 +102,8 @@ The development user is `mifos`; the password is not stored in the repository. T
 name from `E2E_USER` or `FINERACT_USERNAME` and the password from `E2E_PASSWORD` or `FINERACT_PASSWORD`.
 
 ```bash
-export E2E_USER=mifos
-export E2E_PASSWORD=...      # supplied per environment, deliberately omitted here
+set -a; . ./.env.local; set +a                 # in web-ng/: E2E_USER and E2E_PASSWORD from the git-ignored .env.local
+read -rs E2E_PASSWORD && export E2E_PASSWORD   # or prompt for the password: no echo, no shell history
 ```
 
 Both are read at run time and have no default. Type them into the login screen for the human-verified
@@ -107,30 +114,35 @@ and recorded requests and responses are masked before storage.
 
 Two verification environments, differing only by environment variables — never by code.
 
-- **macOS (A):** `FINERACT_USER=502`, `FINERACT_GROUP=20`; accept the self-signed certificate once in
-  the browser; ports 8443 (backend), 9090 (legacy), 4300 (new app).
-- **Codespaces (B):** ids are commonly `1000/1000`; forward port 8443 as HTTPS with **Public**
-  visibility for manual browser checks; URLs carry the query parameters, e.g.
+- **macOS (A):** `FINERACT_USER=502` and `FINERACT_GROUP=20` are the uid:gid the Fineract container runs
+  as (`user:` in the fork's `config/docker/compose/fineract.yml`, included by `docker-compose-postgresql.yml`);
+  accept the self-signed certificate once in the browser; ports 8443 (backend), 9090 (legacy), 4300 (new app).
+- **Codespaces (B):** ids are commonly `1000/1000`; forward 8443 as HTTPS with **Public** visibility for manual
+  browser checks; the URLs carry the query parameters and no port in the host, on 9090 and 4300 alike, e.g.
   `https://<codespace>-9090.app.github.dev/?baseApiUrl=https://<codespace>-8443.app.github.dev&tenantIdentifier=default`
-  and the same on port 4300, with no port number in the host.
 
 Parity runs use the localhost defaults in both environments, because Playwright runs beside the
 containers: `FINERACT_URL` (`https://localhost:8443`), `LEGACY_URL` (`http://localhost:9090`),
 `NEXT_URL` (`http://localhost:4300`), tenant from `TENANT_ID` or `FINERACT_TENANT_ID` (`default`).
+Three more the harness reads: `FINERACT_COMMIT` pins the backend revision, `check:backend` failing unless
+`/actuator/info` reports it; `CODESPACES`, set by Codespaces, records the run environment (else `mac`);
+`FINERACT_HEALTH_MAX_ATTEMPTS` is `reset:db`'s health-wait budget, 450 attempts at 2 s — raise it on a loaded machine.
 
 ## Packaging
 
 ```bash
+# from the repository root: Dockerfile.web-ng's COPY sources and the compose build context are relative to it
 docker build -f Dockerfile.web-ng -t web-ng .
 docker compose -f docker-compose.web-ng.yml up -d
 ```
 
-Open `http://localhost:4300/`: the entrypoint rewrites `assets/config.json` from `API_BASE_URL` and
-`TENANT_ID` at container start, and the browser calls Fineract directly, with no proxy in the image.
+Open `http://localhost:4300/`: step 2 runs at container start, and the browser calls Fineract directly — no proxy.
 
 ## Legacy assets
 
 Translations (`app/global-translations/`), images (`app/images/`) and styles (`app/styles-dev/main/**`) are
-wired through the `assets` mappings and `stylePreprocessorOptions.includePaths` in `angular.json`, never
-copied. This checkout has no legacy `app/` tree: while a mapping or partial is absent the build uses only
-the in-scope rules reproduced in `src/styles.scss`, and the mappings apply unchanged once it is restored.
+wired through `angular.json`'s `assets` and `stylePreprocessorOptions.includePaths`, never copied. Those
+paths resolve against the workspace root `web-ng/`, so a legacy tree restored at the repository root is not
+what they read, and pointing them at it is an `angular.json` change. `Dockerfile.web-ng` copies only the
+manifest, the workspace files and `web-ng/src`, so today's image carries neither translations nor images;
+with no legacy `app/` tree here, the build compiles the in-scope rules reproduced in `src/styles.scss`.

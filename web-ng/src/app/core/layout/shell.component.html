@@ -30,20 +30,21 @@
   The idle warning, shown from `IdleService.warning$` until activity, "Stay signed in", the timeout or
   the end of the session dismisses it (AAP 0.1.1 requirement 1: a 10-second warning before logout).
 
-  Its sentence is English in the template, and deliberately not a translation key. No idle or
-  session-expiry key exists to translate: `app/global-translations/locale-en.json` carries only
-  `label.message.password.expired`, and the legacy application never rendered an ng-idle warning at
-  all — its `$idleTimeout` handler logged out silently (`app/scripts/controllers/main/
-  MainController.js:139-143`). Inventing a `label.*` key here would render as humanised placeholder
-  text through the missing-translation handler, which is exactly what that handler exists to prevent,
-  and adding one to the frozen legacy bundles would change files the migration reads in place
-  (Rule 1 clause 6). The difference from legacy is therefore stated here rather than smuggled into the
-  key space.
+  Both strings are rendered through `TranslatePipe`, so the language switcher reaches them exactly as
+  it reaches every other label — a switch performs no navigation and no reload (AAP 0.7.4; AAP 0.9.1
+  item 1). The copy is the application's own: legacy never rendered an idle warning — its
+  `$idleTimeout` handler logged out silently (`app/scripts/controllers/main/MainController.js:139-143`)
+  — so no served bundle carries these two keys, and none can be added to the bundles the migration
+  reads in place (Rule 1 clauses 1 and 6). `core/i18n/missing-translation.handler.ts` holds their
+  English defaults, and these are the keys a served bundle overrides the moment it carries them: the
+  handler answers a key only after the active language and the fallback language have both missed.
 -->
 @if (idleWarning()) {
   <div class="alert alert-warning" role="alert">
-    <span>You have been inactive and will be signed out shortly.</span>
-    <button type="button" class="btn btn-sm btn-primary" (click)="staySignedIn()">Stay signed in</button>
+    <span>{{ 'label.message.session.expiring' | translate }}</span>
+    <button type="button" class="btn btn-sm btn-primary" (click)="staySignedIn()">
+      {{ 'label.button.stay.signed.in' | translate }}
+    </button>
   </div>
 }
 

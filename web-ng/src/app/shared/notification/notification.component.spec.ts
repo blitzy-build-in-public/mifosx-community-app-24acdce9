@@ -1,5 +1,7 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideTranslateService, TranslateService } from '@ngx-translate/core';
+import { firstValueFrom } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NotificationService } from '../../core/notifications/notification.service';
@@ -14,9 +16,12 @@ import { NotificationComponent } from './notification.component';
  * belongs to.
  *
  * The suite injects the real root `NotificationService` rather than a stub, so the queue under
- * test is the one the HTTP interceptor feeds. The component adds nothing to it beyond rendering
- * and per-notice dismissal, which is all these tests assert: no auto-hide, no animation, no
- * whole-queue clear and no translation exist here to test (AAP 0.7.1).
+ * test is the one the HTTP interceptor feeds, and the real `TranslateService` rather than a stub, so
+ * the close control's accessible name resolves through a bundle the way it does in the application.
+ * The component adds nothing to the queue beyond rendering and per-notice dismissal, which is what
+ * these tests assert: no auto-hide, no animation, no whole-queue clear and no translated notice body
+ * (the body is Fineract's own text). The one string the component does translate — the close
+ * control's name — is covered by the language case at the end (AAP 0.1.1 requirement 1, AAP 0.7.4).
  */
 
 /**
@@ -43,6 +48,25 @@ const PADDED_INFO = '  Saved: 50,000.  ';
 const TEMPLATE_TAIL = ' ';
 
 /**
+ * The close control's accessible name in the two bundles this suite serves, under the legacy key
+ * `label.button.close`.
+ *
+ * Distinct, synthetic values rather than the shipped "Close"/"Clôturer": what the case proves is that
+ * the name comes from the active bundle and moves with the language, and writing the shipped wording
+ * into a spec would copy translation text the build reads in place (Rule 1 clause 6). The key itself
+ * is the shipped one — that is the point of reusing it rather than inventing one.
+ */
+const CLOSE_LABEL_EN = 'Close notice';
+const CLOSE_LABEL_FR = 'Fermer la notification';
+
+/** The legacy key the close control is named through; the shipped bundles already carry it. */
+const CLOSE_LABEL_KEY = 'label.button.close';
+
+/** The language the suite starts on, and the one a switch activates. */
+const BASE_LANG = 'en';
+const OTHER_LANG = 'fr';
+
+/**
  * Returns the notice's rendered text with its dismiss control removed, so the comparison measures
  * only the message Fineract sent and not the close glyph the template also renders. Nothing is
  * trimmed: the message has to reach the host character for character (AAP 0.5.2 "Carries Fineract's
@@ -59,7 +83,13 @@ function renderedText(notice: HTMLElement): string {
 describe('NotificationComponent', () => {
   let fixture: ComponentFixture<NotificationComponent>;
   let service: NotificationService;
+  let translate: TranslateService;
   let host: HTMLElement;
+
+  /** The accessible name the close control of `notice` reports, or `''` when none is rendered. */
+  function closeLabel(notice: HTMLElement): string {
+    return notice.querySelector<HTMLButtonElement>('.close')?.getAttribute('aria-label') ?? '';
+  }
 
   beforeEach(async () => {
     // Reset first so every test starts on a fresh root injector and therefore an empty queue: a
@@ -68,10 +98,18 @@ describe('NotificationComponent', () => {
     TestBed.resetTestingModule();
     await TestBed.configureTestingModule({
       imports: [NotificationComponent],
-      providers: [provideZonelessChangeDetection()],
+      providers: [provideZonelessChangeDetection(), provideTranslateService()],
     }).compileComponents();
 
     service = TestBed.inject(NotificationService);
+
+    // Both bundles are seeded before the first render, so every case sees the close control's name
+    // resolved rather than a raw key, exactly as the application does once a bundle has loaded.
+    translate = TestBed.inject(TranslateService);
+    translate.setTranslation(BASE_LANG, { [CLOSE_LABEL_KEY]: CLOSE_LABEL_EN }, true);
+    translate.setTranslation(OTHER_LANG, { [CLOSE_LABEL_KEY]: CLOSE_LABEL_FR }, true);
+    await firstValueFrom(translate.use(BASE_LANG));
+
     fixture = TestBed.createComponent(NotificationComponent);
     // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps the
     // assertions below type-checked and confines the boundary cast to this line.
@@ -174,5 +212,33 @@ describe('NotificationComponent', () => {
     expect(spies.map((spy) => spy.mock.calls.length)).toEqual([0, 0, 0]);
 
     vi.restoreAllMocks();
+  });
+
+  it('names the close control through the active bundle and follows a language switch', async () => {
+    service.show('info', SHORT_INFO);
+    service.show('error', LONG_ERROR);
+    fixture.detectChanges();
+
+    const notices = host.querySelectorAll<HTMLElement>('.notification');
+
+    expect(closeLabel(notices[0])).toBe(CLOSE_LABEL_EN);
+    expect(closeLabel(notices[1])).toBe(CLOSE_LABEL_EN);
+    // Not the raw key: the name resolved through the bundle rather than being echoed (AAP 0.1.1
+    // requirement 1's i18n rule), and not the English literal the template used to carry.
+    expect(closeLabel(notices[0])).not.toBe(CLOSE_LABEL_KEY);
+    expect(closeLabel(notices[0])).not.toBe('Dismiss');
+
+    await firstValueFrom(translate.use(OTHER_LANG));
+    fixture.detectChanges();
+
+    // A switch is neither a navigation nor a re-render of the queue: the same two notices stay and
+    // only their control's accessible name changes (AAP 0.7.4 "without a page reload").
+    const switched = host.querySelectorAll<HTMLElement>('.notification');
+
+    expect(switched).toHaveLength(2);
+    expect(closeLabel(switched[0])).toBe(CLOSE_LABEL_FR);
+    expect(closeLabel(switched[1])).toBe(CLOSE_LABEL_FR);
+    // The notice body is Fineract's own text and is never translated (Rule 1 clause 3).
+    expect(renderedText(switched[0])).toBe(`${SHORT_INFO}${TEMPLATE_TAIL}`);
   });
 });

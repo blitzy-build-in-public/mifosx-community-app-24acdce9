@@ -283,10 +283,10 @@ test.describe('W3 search for a client and view details', () => {
       // ---------------------------------------------------------------------------------------
       // 2. The navbar's global search — AAP 0.7.3 "Shell: global search".
       //
-      //    `searchGlobal()` submits the control and lands on the results route, which is the address
-      //    `openSearchResults()` would compose; entering it a second time would be a navigation no
-      //    user makes and a second read the comparison would have to explain, so the workflow takes
-      //    the user's own path once.
+      //    `searchGlobal()` submits the control and lands on the results route, `#/search/:query`
+      //    (AAP 0.8.2); navigating to that address a second time would be a navigation no user makes
+      //    and a second read the comparison would have to explain, so the workflow takes the user's
+      //    own path once.
       // ---------------------------------------------------------------------------------------
       await pages.clients.searchGlobal(SEARCH_TEXT, 'clients');
 

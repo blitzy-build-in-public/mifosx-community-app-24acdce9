@@ -1,13 +1,17 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { isDevMode } from '@angular/core';
+import { Component, isDevMode, input } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { MissingTranslationHandler, TranslateService } from '@ngx-translate/core';
+import { MissingTranslationHandler, TranslatePipe, TranslateService } from '@ngx-translate/core';
 import type { MissingTranslationHandlerParams } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { FineractMissingTranslationHandler, humaniseKey } from './missing-translation.handler';
+import {
+  APP_OWNED_TRANSLATIONS,
+  FineractMissingTranslationHandler,
+  humaniseKey,
+} from './missing-translation.handler';
 import { provideTranslate, TRANSLATE_LOADER_PREFIX, TRANSLATE_LOADER_SUFFIX } from './translate.config';
 
 /**
@@ -35,11 +39,42 @@ const LEGACY_EN_BUNDLE: Record<string, string> = {
  */
 const LEGACY_EN_BUNDLE_URL = 'global-translations/locale-en.json';
 
+/**
+ * A one-line host that renders a key the way both templates do — through `TranslatePipe` — so the
+ * suite can prove the pipe path reaches this handler and not only `TranslateService.instant()`.
+ *
+ * The default key is the idle warning's sentence, because that is the string a user reads through the
+ * pipe on a screen whose bundle cannot carry it (AAP 0.1.1 requirement 1).
+ */
+@Component({
+  selector: 'app-translate-probe',
+  imports: [TranslatePipe],
+  template: '{{ key() | translate }}',
+})
+class TranslateProbeComponent {
+  /** The key the probe renders; supplied by a case that needs a different one. */
+  readonly key = input<string>('label.message.session.expiring');
+}
+
 /** The live i18n stack and the HTTP mock that serves its bundles. */
 interface TranslateHarness {
   readonly translate: TranslateService;
   readonly httpMock: HttpTestingController;
 }
+
+/**
+ * The two keys the application itself introduces, each with the English copy it must render.
+ *
+ * Written out rather than read back from `APP_OWNED_TRANSLATIONS`, so a changed default is reported
+ * here as a difference instead of being compared against itself. Both are the application's own copy:
+ * no legacy bundle carries an idle warning — AAP 0.1.1 requires one and the legacy `$idleTimeout`
+ * handler logged out silently (`app/scripts/controllers/main/MainController.js:139-143`) — and the
+ * bundles in `app/global-translations/` are read in place and never edited (Rule 1 clauses 1 and 6).
+ */
+const APP_OWNED_COPY: readonly (readonly [key: string, text: string])[] = [
+  ['label.message.session.expiring', 'You have been inactive and will be signed out shortly.'],
+  ['label.button.stay.signed.in', 'Stay signed in'],
+];
 
 /**
  * Composes the production i18n providers with the HTTP testing backend.
@@ -245,6 +280,82 @@ describe('FineractMissingTranslationHandler', () => {
       // The restore itself is pinned, so a leaked flag cannot silence the dev-mode warning above.
       expect(isDevMode()).toBe(true);
     });
+
+    it.each(APP_OWNED_COPY)(
+      'answers the application-owned key %s with its default copy and reports nothing',
+      async (key: string, expected: string) => {
+        const harness = createHarness();
+
+        await loadLegacyBundle(harness);
+
+        const warnings = captureWarnings();
+
+        // The key reaches the handler — the bundle below carries neither of the two — and the
+        // application's own copy comes back instead of a humanised key, which is what makes the idle
+        // warning translatable rather than frozen English (AAP 0.1.1 requirement 1; AAP 0.7.4).
+        expect(harness.translate.instant(key)).toBe(expected);
+        expect(harness.translate.instant(key)).not.toBe(key);
+
+        // An application-owned key is not a missing key, so it never reaches the console (AAP 0.14.2).
+        expect(warnings).toHaveLength(0);
+      },
+    );
+
+    it('holds exactly the two keys the application introduces, so no legacy key is shadowed', () => {
+      // A third entry would answer a key a served bundle is meant to own, and a missing entry would
+      // leave the idle warning humanised — both would be silent at run time, so the set is pinned here.
+      expect([...APP_OWNED_TRANSLATIONS.keys()]).toEqual(APP_OWNED_COPY.map(([key]) => key));
+
+      for (const [key, text] of APP_OWNED_COPY) {
+        expect(APP_OWNED_TRANSLATIONS.get(key)).toBe(text);
+      }
+    });
+
+    it('still humanises and warns once for an unrelated key after answering an application-owned one', async () => {
+      const harness = createHarness();
+
+      await loadLegacyBundle(harness);
+
+      const warnings = captureWarnings();
+
+      expect(harness.translate.instant('label.button.stay.signed.in')).toBe('Stay signed in');
+      expect(warnings).toHaveLength(0);
+
+      // The map answers two keys, not the key space: every other absent key keeps the humanised label
+      // and the single development-only warning the handler has always emitted.
+      expect(harness.translate.instant('label.heading.missing')).toBe('Missing');
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toContain('label.heading.missing');
+    });
+  });
+
+  describe('through the translation pipe', () => {
+    it.each(APP_OWNED_COPY)(
+      'renders the application-owned key %s as its default copy rather than as the key',
+      async (key: string, expected: string) => {
+        const harness = createHarness();
+        const warnings = captureWarnings();
+
+        // Rendered before the bundle is flushed, so the key really is absent at the moment the pipe
+        // asks for it — the state the idle warning is in on every screen of the application.
+        const fixture = TestBed.createComponent(TranslateProbeComponent);
+        fixture.componentRef.setInput('key', key);
+        fixture.detectChanges();
+
+        await loadLegacyBundle(harness);
+        fixture.detectChanges();
+
+        // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines
+        // the boundary cast to this line (Rule 1 clause 4).
+        const rendered: string = (fixture.nativeElement as HTMLElement).textContent?.trim() ?? '';
+
+        // The template renders the application's own English copy: not the raw key, not a humanised
+        // label, and nothing reported to the console (AAP 0.1.1 requirement 1, AAP 0.14.2).
+        expect(rendered).toBe(expected);
+        expect(rendered).not.toBe(key);
+        expect(warnings).toHaveLength(0);
+      },
+    );
   });
 });
 

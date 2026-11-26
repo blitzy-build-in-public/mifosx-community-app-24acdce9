@@ -1,4 +1,11 @@
 <!doctype html>
+<!--
+  `lang` is the pre-render default only, and it equals `DEFAULT_APP_CONFIG.locale` ('en'). At run time
+  `core/i18n/document-language.ts` owns this attribute: the shell and the login screen bind it to the
+  active language, so a switch performed by either language switcher updates it in place with no
+  reload (AAP 0.7.4) and the document is announced, hyphenated and spell-checked in the language the
+  interface is really in (WCAG 3.1.1, QA F14).
+-->
 <html lang="en">
   <head>
     <meta charset="utf-8" />

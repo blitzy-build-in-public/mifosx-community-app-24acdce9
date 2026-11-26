@@ -434,8 +434,8 @@ function readTransactionCells(root: HTMLElement): string[][] {
  *
  * A caller walks W8 in the order the screens allow, and every step is one public method:
  *
- * 1. {@link openApplication} on the client the account is opened for, {@link selectProduct} by the
- *    product's visible label, the submitted-on date typed into the markup the class doc names, then
+ * 1. {@link selectProduct} on the application screen the client record's "New Saving" action opens,
+ *    the submitted-on date typed into the markup this class doc names, then
  *    {@link submitApplication} — which lands on `#/viewsavingaccount/{id}`, the id the record's URL
  *    carries.
  * 2. {@link openAction} with `approve`, then {@link fillTransaction} and {@link submitAction}; the
@@ -453,23 +453,6 @@ export class SavingsPage {
    * @param page The Playwright page the spec has already authenticated on.
    */
   constructor(private readonly page: Page) {}
-
-  /**
-   * Opens the savings application screen for a client.
-   *
-   * Serves the first step of W8 over `#/new_client_saving_application/:clientId` (AAP 0.8.2). The
-   * screen's root is awaited, which is the readiness signal for the card; the product options it
-   * requests arrive a moment later and {@link selectProduct} waits for them.
-   *
-   * @param clientId Fineract client the account is opened for — the id the client record's own action
-   * carries.
-   * @throws When the id is empty or would address more than one route segment.
-   */
-  async openApplication(clientId: number | string): Promise<void> {
-    const id = requireRouteId(clientId, 'the client id');
-    await this.navigate(`/new_client_saving_application/${id}`);
-    await this.awaitRoot(APPLICATION_ROOT, 'the savings application screen');
-  }
 
   /**
    * Chooses the savings product by its visible label, case-insensitively.

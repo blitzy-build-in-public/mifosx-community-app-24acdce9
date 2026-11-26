@@ -8,7 +8,7 @@ import {
   type RouterState,
 } from '@angular/router';
 import { provideTranslateService, TranslateService } from '@ngx-translate/core';
-import { Subject } from 'rxjs';
+import { Subject, firstValueFrom } from 'rxjs';
 import { beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
 import { AuthService } from '../auth/auth.service';
@@ -36,15 +36,23 @@ import { ShellComponent } from './shell.component';
  *   Accounting, Reports or Admin destination (AAP 0.10.5 item 8);
  * - the idle clock starts while a session is in effect, stops when it clears, and refuses to re-arm
  *   for a document event dispatched with no session behind it;
- * - every document event ng-idle counted as activity reaches the clock;
+ * - every document event ng-idle counted as activity reaches the clock — a key, a click and a touch at
+ *   once, and pointer movement through a one-second throttle, so a burst of `mousemove` events re-arms
+ *   the clock once and the first event of the next window re-arms it again (QA report F11);
  * - `warning$` raises the alert without ending the session, and "Stay signed in" dismisses it and
  *   re-arms the clock;
+ * - the warning's sentence and its action resolve through the active bundle, so a language switch
+ *   re-renders them in the new language with no navigation (AAP 0.1.1 requirement 1, AAP 0.7.4);
  * - activity dismisses a showing warning with the same reset;
  * - `timeout$` logs out and returns to `/login`, in that order;
  * - `ngOnDestroy` stops the clock and leaves no listener behind;
  * - the trail is the `breadcrumb` input when one is supplied and the active route's translated
  *   `data['breadcrumb']` keys otherwise, re-derived on the next navigation and empty when the route
- *   declares none.
+ *   declares none;
+ * - the trail follows the active language, so a switch re-resolves it with no navigation (AAP 0.7.4,
+ *   AAP 0.9.1 item 1);
+ * - the document's own `lang` attribute follows the active language too, so the signed-in interface is
+ *   announced in the language it is read in (WCAG 3.1.1, QA F14).
  *
  * Providers and what their absence proves. `AuthService`, `IdleService` and `SessionService` are
  * replaced by stubs typed against the real classes, so none of the three can drift and the suite
@@ -91,7 +99,40 @@ const SPEC_BUNDLE: Record<string, string> = {
   'label.input.adhoc.search.loans': 'Loans',
   'label.heading.clients': 'Clients list',
   'label.heading.viewclient': 'Client record',
+  'label.message.session.expiring': 'You have been inactive and will be signed out shortly.',
+  'label.button.stay.signed.in': 'Stay signed in',
 };
+
+/**
+ * The bundle the language-switch cases activate: every key of {@link SPEC_BUNDLE} with a different
+ * value for the ones a switch has to re-resolve, so text that stayed in the previous language is
+ * visible instead of looking identical. Test input only, written for this suite: it reproduces no
+ * shipped translation text and adds no locale file (Rule 1 clause 6).
+ */
+const SPEC_BUNDLE_FR: Record<string, string> = {
+  ...SPEC_BUNDLE,
+  'label.heading.clients': 'Liste des clients',
+  'label.heading.viewclient': 'Fiche du client',
+  'label.message.session.expiring': 'Vous avez été inactif et serez déconnecté sous peu.',
+  'label.button.stay.signed.in': 'Rester connecté',
+};
+
+/** The language the suite starts on: the fallback bundle every other language is completed from. */
+const BASE_LANG = 'en';
+
+/** The language a switch activates; one the application's own list offers (AAP 0.7.4). */
+const SWITCHED_LANG = 'fr';
+
+/**
+ * The window in which one pointer event may re-arm the idle clock, as `ShellComponent` documents it
+ * (QA report F11). Stated here rather than imported, because the constant is private to the component:
+ * a longer window would stop the case below from re-arming on a second event, and a shorter one from
+ * suppressing the events inside the first window, so a change to it fails here.
+ */
+const POINTER_THROTTLE_MS = 1_000;
+
+/** The instant the pointer-throttle cases start their fake clock at: the epoch, so any value works. */
+const START_OF_WINDOW = new Date(0);
 
 /**
  * The value `AuthService.session()` reports while a session is in effect.
@@ -216,6 +257,7 @@ describe('ShellComponent', () => {
   let events: Subject<RouterEvent>;
   let routerRoot: RouteNode;
   let destroyed: boolean;
+  let translate: TranslateService;
 
   // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps the
   // assertions below type-checked and confines the boundary to this line (Rule 1 clause 4).
@@ -278,11 +320,14 @@ describe('ShellComponent', () => {
       ],
     });
 
-    const translate = TestBed.inject(TranslateService);
-    for (const [language, bundle] of [['en', SPEC_BUNDLE], ['fr', SPEC_BUNDLE]] as const) {
+    translate = TestBed.inject(TranslateService);
+    for (const [language, bundle] of [
+      [BASE_LANG, SPEC_BUNDLE],
+      [SWITCHED_LANG, SPEC_BUNDLE_FR],
+    ] as const) {
       translate.setTranslation(language, bundle, true);
     }
-    translate.use('en');
+    translate.use(BASE_LANG);
 
     const router = TestBed.inject(Router);
     navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
@@ -296,6 +341,11 @@ describe('ShellComponent', () => {
     if (!destroyed) {
       destroyShell();
     }
+
+    // `bindDocumentLanguage` writes the real document, which every case in this runner shares: the
+    // attribute is put back on the static default so one case's switch cannot be read as the next
+    // case's starting state.
+    document.documentElement.lang = BASE_LANG;
   });
 
   it('renders the navbar, the breadcrumb and the routed outlet, with the outlet beside the page container', () => {
@@ -393,6 +443,56 @@ describe('ShellComponent', () => {
     },
   );
 
+  it('re-arms the clock on every key, click and touch, with no throttle at all', () => {
+    auth.signIn();
+    createShell();
+
+    for (const activity of ['keydown', 'keydown', 'mousedown', 'touchstart', 'keydown']) {
+      document.dispatchEvent(new Event(activity));
+    }
+
+    // The immediate events are never throttled: a click has to dismiss the warning and restart the
+    // whole window on the spot, however recently the previous one happened (AAP 0.1.1 requirement 1).
+    expect(idle.reset).toHaveBeenCalledTimes(5);
+  });
+
+  it('re-arms the clock once for a burst of pointer events, and again in the next window', () => {
+    // Only `Date` is faked: the throttle reads `Date.now()`, and nothing else in the shell should lose
+    // its own timers to a fake clock.
+    vi.useFakeTimers({ toFake: ['Date'] });
+
+    try {
+      vi.setSystemTime(START_OF_WINDOW);
+      auth.signIn();
+      createShell();
+
+      // The first pointer event of the window re-arms the clock, from a clock that reads zero — which
+      // is what the handler's `-Infinity` starting point is for.
+      document.dispatchEvent(new Event('mousemove'));
+      expect(idle.reset).toHaveBeenCalledTimes(1);
+
+      // The rest of the burst is dropped, whichever pointer event it is.
+      for (let move = 0; move < 20; move += 1) {
+        document.dispatchEvent(new Event('mousemove'));
+      }
+      document.dispatchEvent(new Event('wheel'));
+      expect(idle.reset).toHaveBeenCalledTimes(1);
+
+      // One millisecond short of the window: still suppressed.
+      vi.setSystemTime(new Date(START_OF_WINDOW.getTime() + POINTER_THROTTLE_MS - 1));
+      document.dispatchEvent(new Event('wheel'));
+      expect(idle.reset).toHaveBeenCalledTimes(1);
+
+      // The first pointer event of the next window re-arms it again, so a pointer that keeps moving
+      // keeps the session alive.
+      vi.setSystemTime(new Date(START_OF_WINDOW.getTime() + POINTER_THROTTLE_MS));
+      document.dispatchEvent(new Event('mousemove'));
+      expect(idle.reset).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('shows the idle warning on warning$ without ending the session', () => {
     auth.signIn();
     createShell();
@@ -407,6 +507,38 @@ describe('ShellComponent', () => {
     expect(alert.textContent).toContain('signed out');
     expect(auth.logout).not.toHaveBeenCalled();
     expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('renders the warning from the active bundle and follows a language switch with no navigation', async () => {
+    auth.signIn();
+    createShell();
+    idle.warning$.next();
+    fixture.detectChanges();
+
+    const alert = find<HTMLElement>('.alert.alert-warning');
+
+    expect(alert.textContent).toContain(SPEC_BUNDLE['label.message.session.expiring']);
+    expect(find<HTMLButtonElement>('.alert-warning button').textContent?.trim()).toBe(
+      SPEC_BUNDLE['label.button.stay.signed.in'],
+    );
+
+    // The switch a navbar or login switcher performs: no `NavigationEnd` is emitted and nothing is
+    // navigated to, so a warning hardcoded in English would stay in English here (AAP 0.7.4).
+    await firstValueFrom(translate.use(SWITCHED_LANG));
+    fixture.detectChanges();
+
+    const switched = find<HTMLElement>('.alert.alert-warning');
+
+    expect(navigate).not.toHaveBeenCalled();
+    expect(switched.textContent).toContain(SPEC_BUNDLE_FR['label.message.session.expiring']);
+    expect(switched.textContent).not.toContain(SPEC_BUNDLE['label.message.session.expiring']);
+    expect(find<HTMLButtonElement>('.alert-warning button').textContent?.trim()).toBe(
+      SPEC_BUNDLE_FR['label.button.stay.signed.in'],
+    );
+    // Still the same warning about the same session: a switch re-renders the copy, it does not end
+    // the session or dismiss the alert.
+    expect(auth.logout).not.toHaveBeenCalled();
+    expect(host().querySelector('.alert.alert-warning')).not.toBeNull();
   });
 
   it('dismisses a showing warning and re-arms the clock on "Stay signed in"', () => {
@@ -462,6 +594,12 @@ describe('ShellComponent', () => {
 
     document.dispatchEvent(new KeyboardEvent('keydown'));
     expect(idle.reset).not.toHaveBeenCalled();
+
+    // The throttled pointer listener is removed with the same reference the constructor added, so a
+    // destroyed shell cannot re-arm a later session's clock through it either.
+    document.dispatchEvent(new Event('mousemove'));
+    document.dispatchEvent(new Event('wheel'));
+    expect(idle.reset).not.toHaveBeenCalled();
   });
 
   it('renders the breadcrumb input when one is supplied and the route-declared trail otherwise', () => {
@@ -492,6 +630,66 @@ describe('ShellComponent', () => {
     fixture.detectChanges();
 
     expect(crumbLabels()).toEqual(['Client record', 'Clients list']);
+  });
+
+  it('re-resolves the trail in the newly active language on a switch, with no navigation', async () => {
+    routerRoot = routeNode({}, routeNode({ breadcrumb: 'label.heading.clients' }));
+    createShell();
+    expect(crumbLabels()).toEqual([SPEC_BUNDLE['label.heading.clients']]);
+
+    // A switch and nothing else: no `NavigationEnd` is emitted anywhere in this case, and nothing is
+    // navigated to — which is exactly the state a navbar or login switch produces (AAP 0.7.4).
+    await firstValueFrom(translate.use(SWITCHED_LANG));
+    fixture.detectChanges();
+
+    expect(navigate).not.toHaveBeenCalled();
+    expect(crumbLabels()).toEqual([SPEC_BUNDLE_FR['label.heading.clients']]);
+
+    // Back again, so the case cannot pass by rendering the second language unconditionally.
+    await firstValueFrom(translate.use(BASE_LANG));
+    fixture.detectChanges();
+
+    expect(crumbLabels()).toEqual([SPEC_BUNDLE['label.heading.clients']]);
+  });
+
+  it('re-resolves a multi-key trail on a switch, in trail order', async () => {
+    routerRoot = routeNode(
+      {},
+      routeNode({ breadcrumb: ['label.heading.viewclient', 'label.heading.clients'] }),
+    );
+    createShell();
+    expect(crumbLabels()).toEqual([
+      SPEC_BUNDLE['label.heading.viewclient'],
+      SPEC_BUNDLE['label.heading.clients'],
+    ]);
+
+    await firstValueFrom(translate.use(SWITCHED_LANG));
+    fixture.detectChanges();
+
+    // The keys come from the route and the text from the bundle, so a switch translates every crumb
+    // without re-reading the tree: order and count are unchanged (AAP 0.2.3 `Breadcrumb` items).
+    expect(crumbLabels()).toEqual([
+      SPEC_BUNDLE_FR['label.heading.viewclient'],
+      SPEC_BUNDLE_FR['label.heading.clients'],
+    ]);
+  });
+
+  it('binds the document language to the active one and follows a switch', async () => {
+    createShell();
+
+    // The static `<html lang="en">` in `src/index.html` is only the pre-render default; the shell
+    // writes the language actually in force as it is constructed.
+    expect(document.documentElement.lang).toBe(BASE_LANG);
+
+    await firstValueFrom(translate.use(SWITCHED_LANG));
+    fixture.detectChanges();
+
+    expect(document.documentElement.lang).toBe(SWITCHED_LANG);
+
+    await firstValueFrom(translate.use(BASE_LANG));
+    fixture.detectChanges();
+
+    expect(document.documentElement.lang).toBe(BASE_LANG);
   });
 
   it('clears the trail when the route it reaches declares no breadcrumb', () => {

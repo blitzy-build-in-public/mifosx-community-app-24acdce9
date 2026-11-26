@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { NotificationService } from '../../core/notifications/notification.service';
 
@@ -17,11 +18,19 @@ import { NotificationService } from '../../core/notifications/notification.servi
  * per-kind accent bars the template emits (AAP 0.4.4 decision 4, AAP 0.5.2, Rule 1 clause 6). The
  * notice text is Fineract's own, so it is interpolated verbatim and never translated (Rule 1
  * clause 3).
+ *
+ * **The close control's accessible name is the one string here that is the application's own**, so it
+ * is the one that resolves through the translation stack: the template binds it to the legacy
+ * bundle's existing `label.button.close` key, which the shipped en/fr/es bundles already carry as
+ * "Close", "Clôturer" and "Cerrar". A non-English user therefore hears the control named in the
+ * language the interface is in, and no key is invented for it (AAP 0.1.1 requirement 1's i18n;
+ * AAP 0.7.4; Rule 1 clauses 3 and 6).
  */
 @Component({
   selector: 'app-notification',
   templateUrl: './notification.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [TranslatePipe],
 })
 export class NotificationComponent {
   /** The queue owner; the component reads its `messages` signal and calls only `dismiss(id)`. */

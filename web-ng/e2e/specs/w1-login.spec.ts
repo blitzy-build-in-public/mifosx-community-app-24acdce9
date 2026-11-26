@@ -26,10 +26,12 @@
  * **Which side it asserts.** Its own side only, as every spec in this suite does: the cross-UI
  * comparison belongs to `report/parity-report.ts`, and a body that throws is recorded `legacy-broken`
  * on project `legacy` and `fail` on project `next` by `fixtures/parity-fixture.ts`. Two steps
- * therefore branch once on `pages.uiProject`, and only where the archived baseline's own code
- * genuinely differs: `MainController.js:175` routes a successful legacy login to `#/home` rather than
- * `#/clients`, and `MainController.js`'s `logout()` routes to `#/`. Rule 1 clause 3 ("match legacy
- * behaviour; don't improve it") is what makes those the accepted legacy readings — the new app is
+ * therefore branch on `pages.uiProject`, and only where the archived baseline's own code genuinely
+ * differs: `MainController.js:175` routes a successful legacy login to `#/home` rather than `#/clients`;
+ * `MainController.js`'s `logout()` routes to `#/`; and `app/index.html` keeps its login container in the
+ * DOM under `data-ng-hide="currentSession.user != null"`, so a signed-in legacy page still carries a
+ * hidden submit where this application's login component has been unmounted. Rule 1 clause 3 ("match
+ * legacy behaviour; don't improve it") is what makes those the accepted legacy readings — the new app is
  * still held to `#/clients` and `#/login` exactly.
  *
  * **Security (Rule 1 clause 9).** No password, authentication key, `Authorization` value or tenant
@@ -261,11 +263,11 @@ test.describe('W1 log in and log out', () => {
         await pages.login.selectLanguage(LOCALE);
       }
 
-      // 3. The credential exchange. The submit is available before the click — "unavailable" covers a
-      //    disabled button in this application and the hidden one the legacy screen swaps in while its
-      //    request is in flight — and one click sends one request (AAP 0.14.1).
+      // 3. The credential exchange. The submit is enabled before the click on both sides — not the
+      //    disabled state this application's button takes while its request is in flight, not the hidden
+      //    one the legacy screen swaps in, and not absent — and one click sends one request (AAP 0.14.1).
       await pages.login.fillCredentials(credentials.username, credentials.password);
-      expect(await pages.login.isSubmitDisabled()).toBe(false);
+      expect(await pages.login.readSubmitState()).toBe('enabled');
       await pages.login.submit();
 
       // 4. The landing screen. The hash is compared as the route it is, never as a full URL
@@ -278,8 +280,17 @@ test.describe('W1 log in and log out', () => {
       } else {
         expect(LEGACY_LANDING_HASHES).toContain(landingHash);
       }
-      // The anonymous form is gone: no submit is reachable once the shell has replaced it.
-      expect(await pages.login.isSubmitDisabled()).toBe(true);
+      // The anonymous screen is gone, and the submit-state reading now separates "the form went away"
+      // from "the button is disabled": this application unmounts its login component, so nothing is left
+      // to read and the state is `absent`, while the legacy baseline keeps its `LoginFormController`
+      // container in the DOM under `data-ng-hide="currentSession.user != null"` (`app/index.html`), so
+      // its submit is present but hidden. Each answer is its own application's behaviour (Rule 1
+      // clause 3), which is why the expectation branches here as the landing hash above does.
+      if (pages.uiProject === 'next') {
+        expect(await pages.login.readSubmitState()).toBe('absent');
+      } else {
+        expect(await pages.login.readSubmitState()).toBe('hidden');
+      }
 
       // 5. The legacy-shaped session (AAP 0.4.4 decision 3): exactly one entry, under the legacy prefix
       //    and name, carrying the three fields the unmigrated screens read. Shape only — the entry's
@@ -359,7 +370,9 @@ test.describe('W1 log in and log out', () => {
         // the user (Rule 1 clause 3: its behaviour, not an improvement on it).
         expect(LEGACY_LOGIN_HASHES).toContain(loginHash);
       }
-      expect(await pages.login.isSubmitDisabled()).toBe(false);
+      // The form is back and enabled on both sides, which is the state the step proves: the session is
+      // gone and a fresh sign-in is possible.
+      expect(await pages.login.readSubmitState()).toBe('enabled');
     });
   });
 });

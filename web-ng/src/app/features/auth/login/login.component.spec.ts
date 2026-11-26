@@ -3,7 +3,7 @@ import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, type ParamMap } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import { Observable } from 'rxjs';
-import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { AuthService } from '../../../core/auth/auth.service';
 import { ApiError } from '../../../core/http/api-error';
@@ -39,7 +39,10 @@ import { LoginComponent } from './login.component';
  *     application's one language list; a bundle that fails to load is reported and the switcher is put
  *     back on the language in force, while a switch that takes effect withdraws only that language
  *     failure and never a sign-in failure (AAP 0.7.4; AAP 0.14.2 "no `catch` swallows an error
- *     silently").
+ *     silently");
+ *  9. the document's own `lang` attribute follows the active language, so the screen is announced in
+ *     the language it is read in rather than in the static `<html lang="en">` default (WCAG 3.1.1,
+ *     QA F14; AAP 0.7.4 "without a page reload").
  *
  * **What the suite replaces, and why.** Every collaborator is a typed object literal provided at its
  * own injection token, so the unit under test is the component and nothing else:
@@ -333,6 +336,13 @@ describe('LoginComponent', () => {
     fixture.detectChanges();
   });
 
+  afterEach(() => {
+    // `bindDocumentLanguage` writes the real document, which every case in this runner shares: the
+    // attribute is put back on the static default so a language one case selected cannot be read as
+    // the next case's starting state.
+    document.documentElement.lang = FALLBACK_LANG;
+  });
+
   it('is the login screen itself, rendered outside the signed-in shell', () => {
     expect(component).toBeInstanceOf(LoginComponent);
     expect(host().querySelector('#uid')).not.toBeNull();
@@ -512,6 +522,27 @@ describe('LoginComponent', () => {
     // A language switch is not a navigation: the user stays on the form (AAP 0.7.4).
     expect(router.navigateByUrl).not.toHaveBeenCalled();
     expect(failureBanner()).toBeNull();
+  });
+
+  it('binds the document language to the active one and follows a switch', () => {
+    // The static `<html lang="en">` is only the pre-render default: this screen's constructor has
+    // already written the language in force, which is the fallback until a bundle resolves.
+    expect(document.documentElement.lang).toBe(FALLBACK_LANG);
+
+    const selector = languageSelector();
+    selector.value = OTHER_LANG;
+    component.onLangChange(OTHER_LANG, selector);
+    fixture.detectChanges();
+
+    expect(document.documentElement.lang).toBe(OTHER_LANG);
+
+    // A second switch, so the attribute is shown to follow the language rather than being written once.
+    component.onLangChange(THIRD_LANG, selector);
+    fixture.detectChanges();
+
+    expect(document.documentElement.lang).toBe(THIRD_LANG);
+    // Nothing reloaded and nothing navigated: the attribute moved with the switch itself (AAP 0.7.4).
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
   });
 
   it('reports a bundle that failed to load and puts the switcher back on the language in force', () => {

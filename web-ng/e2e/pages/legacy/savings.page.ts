@@ -479,21 +479,6 @@ export class SavingsPage {
   }
 
   /**
-   * Opens the new-savings-account application for a client.
-   *
-   * Serves the application step of W8 over `#/new_client_saving_application/:clientId` (AAP 0.8.2),
-   * whose first step is the product choice, so the product select is the screen's readiness signal.
-   *
-   * @param clientId Fineract client the account is opened for.
-   */
-  async openApplication(clientId: number): Promise<void> {
-    await this.gotoHash(
-      `#/new_client_saving_application/${clientId}`,
-      this.page.locator(PRODUCT_SELECT),
-    );
-  }
-
-  /**
    * Chooses the savings product and waits for the fields that depend on it.
    *
    * Serves the application step of W8 (AAP 0.7.3 — `GET /savingsaccounts/template?clientId=&productId=`).

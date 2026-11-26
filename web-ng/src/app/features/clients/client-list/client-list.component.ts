@@ -126,12 +126,11 @@ interface ClientListToolbarValues {
  * service"; AAP 0.4.2).
  *
  * **Why the find does not travel on the list request.** `searchText` is not a parameter of
- * `GET /clients`: the fork's `ClientsApiResource.retrieveAll` does not accept it, and this
- * application's `web-ng/tools/parity/endpoint-allowlist.json` declares `offset`, `limit`, `orderBy`
- * and `sortOrder` for that row and nothing else. Sent there, the parameter was ignored and the find
- * answered with the unfiltered first page — a search that silently did not search, and a request the
- * parity harness flags (Rule 1 clause 2). The search endpoint's own `query`, `resource` and
- * `exactMatch` are the three parameters legacy's find sends, derived exactly as legacy derives them:
+ * `GET /clients`: the fork's `ClientsApiResource.retrieveAll` does not accept it, so a parameter
+ * sent there is ignored and the find answers with the unfiltered first page — a search that
+ * silently did not search, and a request the parity harness flags (Rule 1 clause 2). The search
+ * endpoint's own `query`, `resource` and `exactMatch` are the three parameters legacy's find sends,
+ * derived exactly as legacy derives them:
  * `ClientController.search()` strips the field's surrounding double quotes and sets `exactMatch`
  * from whether that stripping changed the text (`app/scripts/controllers/client/ClientController.js:44-62`),
  * so a quoted find reaches Fineract without its quotes and matches exactly (Rule 1 clause 2;
@@ -464,10 +463,9 @@ export class ClientListComponent {
    * The request carries `offset` and `limit` and nothing else. `offset` is the page in view's start,
    * `(page - 1) * 15`, which is how legacy pages the same endpoint. `orderBy` and `sortOrder` stay
    * unset because the in-scope screen offers no sort affordance and the legacy list sends neither;
-   * `searchText` is deliberately not sent, because this endpoint does not accept it and the
-   * allowlist does not declare it — the find is the separate search read below. `dateFormat` and
-   * `locale` are absent because a list read carries no date payload — the service applies that pair
-   * to the bodies that do (Rule 1 clause 2).
+   * `searchText` is deliberately not sent, because this endpoint does not accept it — the find is
+   * the separate search read below. `dateFormat` and `locale` are absent because a list read carries
+   * no date payload — the service applies that pair to the bodies that do (Rule 1 clause 2).
    *
    * The subscription is tied to the component's lifetime with `takeUntilDestroyed`, and `finalize`
    * clears {@link loading} whether the response arrived or the request failed. A failure becomes

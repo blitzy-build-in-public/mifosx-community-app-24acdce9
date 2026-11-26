@@ -74,6 +74,17 @@ export interface LanguageOptionSummary {
   label: string;
 }
 
+/**
+ * What the login screen's submit control currently offers: `'absent'` when the screen renders no submit
+ * control at all, `'hidden'` when it renders one that is not visible, `'disabled'` when it is visible
+ * but cannot be clicked, and `'enabled'` when it can be clicked.
+ *
+ * `web-ng/e2e/pages/next/login.page.ts` declares the identical union on its own, the way both sides
+ * declare `SessionEntrySummary` and `LanguageOptionSummary` independently, so one spec text drives both
+ * projects and neither page object imports the other's types.
+ */
+export type SubmitState = 'absent' | 'hidden' | 'disabled' | 'enabled';
+
 /** How long the login form is given to appear on a fresh navigation (AAP 0.10.1 W1). */
 const LOGIN_FORM_TIMEOUT_MS = 5_000;
 
@@ -380,20 +391,32 @@ export class LoginPage {
   }
 
   /**
-   * Whether the primary submit is unavailable (AAP 0.2.3 `LoginForm`: the button disables while its
-   * request is in flight).
+   * What the baseline screen's submit control currently is, in the four readings a caller can tell
+   * apart: `'absent'` when the screen renders no submit control at all, `'hidden'` when it renders one
+   * that is not visible, `'disabled'` when it is visible but cannot be clicked, and `'enabled'` when it
+   * can be clicked.
    *
-   * "Unavailable" covers both forms the two applications express it in: the new app disables the
-   * button, while legacy hides it and shows a "loading..." primary button instead (`app/index.html`,
-   * `data-ng-show="!load"` on the submit and `data-ng-show="load"` on the loading one). A hidden
-   * submit is therefore reported as disabled, as is a form that carries no submit at all.
+   * The four readings exist because the answer after a successful login differs per side, and each is
+   * its own application's behaviour — Rule 1 clause 3, "match legacy behaviour; don't improve it". The
+   * legacy screen never unmounts its form: `app/index.html` keeps the `LoginFormController` container in
+   * the DOM under `data-ng-hide="currentSession.user != null"`, so its submit is present but `'hidden'`
+   * once a session exists, while the new application unmounts its login component and reads `'absent'`.
+   * The same screen also hides the submit and shows a "loading..." primary button while a login is in
+   * flight (`data-ng-show="!load"` on the submit, `data-ng-show="load"` on the loading one), which is a
+   * `'hidden'` reading inside a session-less form; a form carrying no submit at all is `'absent'`.
+   *
+   * The answer is typed by {@link SubmitState} — no `any`, no cast, no `as` (Rule 1 clause 4) — and the
+   * control is the one {@link submit} clicks.
    */
-  async isSubmitDisabled(): Promise<boolean> {
+  async readSubmitState(): Promise<SubmitState> {
     const button = this.submitButton();
-    if ((await button.count()) === 0 || !(await button.isVisible())) {
-      return true;
+    if ((await button.count()) === 0) {
+      return 'absent';
     }
-    return button.isDisabled();
+    if (!(await button.isVisible())) {
+      return 'hidden';
+    }
+    return (await button.isDisabled()) ? 'disabled' : 'enabled';
   }
 
   /**

@@ -142,6 +142,14 @@ const SUCCESS_STATUSES: readonly number[] = [200, 201];
 const RESULT_ARTEFACT_URL = new URL('../.captures/seed.json', import.meta.url);
 
 /**
+ * Absolute path of the artefact {@link runSeed} writes, resolved from this module's own URL. Exported so
+ * a consumer states where the artefact lives instead of re-deriving it, and so a spec that exercises
+ * {@link discardResultArtefact} can assert that the default target is this file while pointing its own
+ * scratch marker elsewhere — a test must never remove a real run's artefact.
+ */
+export const SEED_RESULT_ARTEFACT_PATH: string = fileURLToPath(RESULT_ARTEFACT_URL);
+
+/**
  * The public demo Fineract servers the harness must never talk to (Rule 2), written as escaped-dot
  * patterns anchored on a label boundary: each one matches its host itself and any subdomain of it.
  * A refused address is rejected before the first network call.
@@ -773,10 +781,14 @@ async function createClientActionGate(context: APIRequestContext): Promise<SeedC
  * artefact it could not remove (AAP 0.14.2, "no `catch` swallows an error silently"). A `--help`
  * invocation never reaches it, because the CLI answers usage before {@link runSeed} is called.
  *
+ * @param path File to remove: {@link SEED_RESULT_ARTEFACT_PATH} unless a caller names another one. The
+ * default is what {@link runSeed} relies on; a spec exercising the removal passes its own scratch path so
+ * a real run's artefact survives the test suite, because `npm run test:harness` runs beside the artefact
+ * rather than in place of it.
  * @throws When the artefact exists and cannot be removed.
  */
-export async function discardResultArtefact(): Promise<void> {
-  await rm(fileURLToPath(RESULT_ARTEFACT_URL), { force: true });
+export async function discardResultArtefact(path: string = SEED_RESULT_ARTEFACT_PATH): Promise<void> {
+  await rm(path, { force: true });
 }
 
 /**
@@ -798,7 +810,7 @@ export async function discardResultArtefact(): Promise<void> {
  * file cannot be renamed into place. The error's own message is preserved.
  */
 async function writeResultArtefact(result: SeedResult): Promise<void> {
-  const path = fileURLToPath(RESULT_ARTEFACT_URL);
+  const path = SEED_RESULT_ARTEFACT_PATH;
   const temporaryPath = `${path}.tmp`;
   await mkdir(dirname(path), { recursive: true });
   try {
@@ -880,7 +892,7 @@ function describeFailure(error: unknown): string[] {
 export async function runSeed(): Promise<SeedResult> {
   // The run's first statement, before the backend is vetted and before any request: every later
   // failure path has already passed this point, so none of them can leave an earlier run's artefact
-  // readable (finding qa3-F02).
+  // readable.
   await discardResultArtefact();
   assertPermittedBackend(FINERACT_URL);
   // Read before any call so a missing variable fails immediately, naming itself, instead of
@@ -935,7 +947,7 @@ export async function runSeed(): Promise<SeedResult> {
 }
 
 /**
- * What `--help` prints (finding 406f-F02): the writes this command performs, the variables it reads —
+ * What `--help` prints: the writes this command performs, the variables it reads —
  * named, never valued (Rule 1 clause 9) — and the two ways it is invoked.
  */
 const SEED_USAGE: CliUsage = {
@@ -969,8 +981,8 @@ const SEED_USAGE: CliUsage = {
  * the password never reach the console (Rule 1 clause 9).
  */
 async function main(): Promise<void> {
-  // Usage is answered before runSeed(), so `--help` inspects the four writes without performing one
-  // (finding 406f-F02). The code is set on process.exitCode rather than forced, so a piped line survives.
+  // Usage is answered before runSeed(), so `--help` inspects the four writes without performing one.
+  // The code is set on process.exitCode rather than forced, so a piped line survives.
   const intent = resolveCliIntent(SEED_USAGE, process.argv.slice(2));
   if (intent.kind === 'handled') {
     process.exitCode = intent.exitCode;
