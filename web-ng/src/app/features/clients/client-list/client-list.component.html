@@ -56,23 +56,67 @@
             </ng-template>
           }
 
-          <!-- The pager: the legacy client list's own fifteen rows per page, driven through `on-page-change="getResultsPage(newPageNumber)"` (`app/views/clients/clients.html:79-82`), which is why the request carries `offset: (page - 1) * limit` and `totalFilteredRecords` is what the control counts (`.pagination` styling: AAP 0.5.4). It is painted only when the match spans more than one page — legacy's `dir-pagination-controls` auto-hides to one page, and the design's capture of five clients paints none — so a single-page result keeps the card as the design shows it. Each page link carries no `href`, so open-in-new-tab has nothing to follow instead of reloading, and it keeps `tabindex="0"` and the Enter and Space activation `goToPage` gives it. It is withheld while the rows on screen are none: legacy's `dir-pagination-controls` counts the server's `filteredRecords`, so a filter matching nothing leaves it painted beneath the empty table offering pages of a result set no longer on screen, where this screen's empty state is an explicit statement about the rows the display filters produced (Rule 1 clause 3). The condition is the empty state's own, so the pager returns with the first match. -->
+          <!-- The pager: the legacy client list's own fifteen rows per page, driven through `on-page-change="getResultsPage(newPageNumber)"` (`app/views/clients/clients.html:79-82`), which is why the request carries `offset: (page - 1) * limit` and `totalFilteredRecords` is what the control counts (`.pagination` styling: AAP 0.5.4). Its shape is that control's own — `dir-pagination-controls` with `boundary-links="true"` (`app/views/clients/clients.html:79-82`) — so the one `ul.pagination` holds the items of its default template in their order: the boundary first link, the direction previous link, the numbered links, the direction next link and the boundary last link (AAP 0.5.4 "matches it"; Rule 1 clause 6). Any page is therefore one click away, a page past the nine-link window included, which the numbered links alone could not offer: they are a nine-wide window centred on the page in view, as the control's own `max-size` default makes them. An item is an `li` carrying Bootstrap's `disabled` class, and the anchor inside it carries `aria-disabled` for assistive technology, while its target page is out of range — first and previous on page 1, next and last on the final page, exactly the items the legacy control disables — and Bootstrap's `.pagination > .disabled > a` then paints it grey with the not-allowed cursor and withholds the pointer, while `goToPage`'s own `1..pageCount` guard keeps the activation inert even where a synthetic event reaches it, so the page read stays the one `GET /clients?offset=(page-1)*15&limit=15` legacy sends. It is painted only when the match spans more than one page — legacy's `dir-pagination-controls` auto-hides to one page, and the design's capture of five clients paints none — so a single-page result keeps the card as the design shows it. Each link carries no `href`, so open-in-new-tab has nothing to follow instead of reloading, and it keeps `tabindex="0"` and the Enter and Space activation `goToPage` gives it. It is withheld while the rows on screen are none: legacy's `dir-pagination-controls` counts the server's `filteredRecords`, so a filter matching nothing leaves it painted beneath the empty table offering pages of a result set no longer on screen, where this screen's empty state is an explicit statement about the rows the display filters produced (Rule 1 clause 3). The condition is the empty state's own, so the pager returns with the first match. -->
           @if (pageCount() > 1 && !isEmpty()) {
-            <!-- The pager is a `nav` landmark named "Pagination", and each page link carries `aria-current="page"` while its page is the one shown. The name is an invisible English literal, because no shipped bundle carries a key for it and `aria-label` is the only way to distinguish this navigation from the breadcrumb's (the same wording decision `client-view.component.html` records). The wrapper adds no box of its own and `.active` is unchanged; the pager is painted only while the filtered rows exist, so the explicit empty state stands alone. -->
+            <!-- The pager is a `nav` landmark named "Pagination", and each page link carries `aria-current="page"` while its page is the one shown. Every name the pager's controls carry — the landmark's "Pagination", the four boundary controls' "First page", "Previous page", "Next page" and "Last page", and each numbered link's "Page N" — is an invisible English literal, because no shipped locale bundle carries a key for any of them, and a key invented here would be one only this build defines on a surface legacy leaves in English (Rule 1 clauses 3 and 6); the landmark's name is in any case the only way to tell this navigation from the breadcrumb's, the same wording decision `client-view.component.html` records. Each numbered link's name repeats the digit it prints, so a spoken name and a visible label still match on it (WCAG 2.5.3, label in name). The wrapper adds no box of its own and `.active` is unchanged; the pager is painted only while the filtered rows exist, so the explicit empty state stands alone. -->
             <div class="text-center">
               <nav aria-label="Pagination">
                 <ul class="pagination">
+                  <!-- The boundary first link and the direction previous link — the two legacy items that precede the numbered links, drawn with the glyphs the control's default template uses (`app/views/clients/clients.html:79-82`; AAP 0.5.4). Each is a real control: `role="button"`, because the anchor carries no `href` and would otherwise have no role at all; `tabindex="0"`, so it is a tab stop; the same Enter and Space activation `goToPage` gives the numbered links; and an accessible name, an English literal for the reason the comment above the pager records. Both are disabled while page 1 is in view, which is the legacy control's own boundary: `[class.disabled]` on the list item gives it Bootstrap's grey look and not-allowed cursor and withholds the pointer, `[attr.aria-disabled]` on the anchor — the element a screen reader reaches, where a `listitem`'s own disabled state says nothing about the control inside it — announces the same to assistive technology, and `goToPage` returns before any read on a page below 1 and on the page already shown. -->
+                  <li [class.disabled]="page() === 1">
+                    <a
+                      role="button"
+                      tabindex="0"
+                      aria-label="First page"
+                      [attr.aria-disabled]="page() === 1 ? 'true' : null"
+                      (click)="goToPage($event, 1)"
+                      (keydown)="goToPage($event, 1)"
+                    >&laquo;</a>
+                  </li>
+                  <li [class.disabled]="page() === 1">
+                    <a
+                      role="button"
+                      tabindex="0"
+                      aria-label="Previous page"
+                      [attr.aria-disabled]="page() === 1 ? 'true' : null"
+                      (click)="goToPage($event, page() - 1)"
+                      (keydown)="goToPage($event, page() - 1)"
+                    >&lsaquo;</a>
+                  </li>
                   @for (pageNumber of pageNumbers(); track pageNumber) {
                     <li [class.active]="pageNumber === page()">
-                      <!-- No `href` at all: the hash route cannot change, so a middle click has nothing to open and no default to reload. `[attr.aria-current]` writes `page` on the anchor whose page is in view and nothing on the rest; the anchor's own text is its accessible name, and `tabindex` with the Enter and Space activation `goToPage` gives it keep the control in the tab order and operable from the keyboard without one. -->
+                      <!-- No `href` at all: the hash route cannot change, so a middle click has nothing to open and no default to reload. An anchor without one exposes no role at all, so the control states its own — `role="button"` — and names itself "Page N", the digit it prints carried inside the name (WCAG 2.5.3, label in name); `[attr.aria-current]` writes `page` on the anchor whose page is in view and nothing on the rest, and `tabindex` with the Enter and Space activation `goToPage` gives it keep the control in the tab order and operable from the keyboard without a link target. -->
                       <a
+                        role="button"
                         tabindex="0"
+                        [attr.aria-label]="'Page ' + pageNumber"
                         [attr.aria-current]="pageNumber === page() ? 'page' : null"
                         (click)="goToPage($event, pageNumber)"
                         (keydown)="goToPage($event, pageNumber)"
                       >{{ pageNumber }}</a>
                     </li>
                   }
+                  <!-- The direction next link and the boundary last link — the two legacy items that follow the numbered links, drawn with the glyphs the control's default template uses (`app/views/clients/clients.html:79-82`; AAP 0.5.4). They are the first pair's mirror: the same role, tab stop, key activation and accessible name, disabled on the final page instead of the first, which is the legacy control's own other boundary. One click reaches the final page from any page of the window, and `goToPage` returns before any read on a page past `pageCount()` and on the page already shown, so neither sends a read it should not. -->
+                  <li [class.disabled]="page() === pageCount()">
+                    <a
+                      role="button"
+                      tabindex="0"
+                      aria-label="Next page"
+                      [attr.aria-disabled]="page() === pageCount() ? 'true' : null"
+                      (click)="goToPage($event, page() + 1)"
+                      (keydown)="goToPage($event, page() + 1)"
+                    >&rsaquo;</a>
+                  </li>
+                  <li [class.disabled]="page() === pageCount()">
+                    <a
+                      role="button"
+                      tabindex="0"
+                      aria-label="Last page"
+                      [attr.aria-disabled]="page() === pageCount() ? 'true' : null"
+                      (click)="goToPage($event, pageCount())"
+                      (keydown)="goToPage($event, pageCount())"
+                    >&raquo;</a>
+                  </li>
                 </ul>
               </nav>
             </div>

@@ -50,6 +50,9 @@ const PAGE_LIMIT = '15';
 /** The second page's offset: fifteen rows skipped, which is legacy's `(page - 1) * clientsPerPage`. */
 const SECOND_PAGE_OFFSET = '15';
 
+/** The eleventh page's offset: ten pages of fifteen rows skipped — legacy's `(page - 1) * clientsPerPage` for the eleven-page match `w007-F06` measured. */
+const LAST_PAGE_OFFSET = '150';
+
 /** The office the Head Office fixtures are filed under. */
 const OFFICE_NAME = 'Head Office';
 
@@ -154,6 +157,18 @@ const LARGE_MATCH_FIRST_PAGE = {
 /** The same match on its second page: the same server-side total, a different row. */
 const LARGE_MATCH_SECOND_PAGE = {
   totalFilteredRecords: 31,
+  pageItems: [PENDING_CLIENT],
+} as const;
+
+/** The match `w007-F06` measured on the QA tenant: 155 clients at fifteen per page is eleven pages, one more page than the pager's nine-link window — `dir-pagination-controls`' own `max-size` default, which `pageNumbers()` reproduces — so pages ten and eleven sit in no numbered link and only a boundary control reaches them. */
+const ELEVEN_PAGE_FIRST_PAGE = {
+  totalFilteredRecords: 155,
+  pageItems: [ACTIVE_CLIENT],
+} as const;
+
+/** The same eleven-page match as its last page answers it: the same count, so the pager still spans eleven pages once the boundary link has moved the screen there. */
+const ELEVEN_PAGE_LAST_PAGE = {
+  totalFilteredRecords: 155,
   pageItems: [PENDING_CLIENT],
 } as const;
 
@@ -278,9 +293,29 @@ describe('ClientListComponent', () => {
     return (toolbar.componentInstance as FilterToolbarComponent).form;
   }
 
-  /** The pager's page links as rendered. The pager paints only for a match larger than one page, so nothing but the pager cases observes it. */
+  /** The pager's numbered links as rendered, the four boundary and direction controls beside them left out: they share the list item and the anchor element, so the selection names the numbered ones by the accessible name they carry ("Page 1", "Page 2", …, while the others are "First page", "Previous page", "Next page" and "Last page"). The pager paints only for a match larger than one page, so nothing but the pager cases observes it. */
   function pageLinks(): readonly HTMLAnchorElement[] {
+    const numbered = '.pagination li a[aria-label^="Page "]';
+
+    return Array.from(host().querySelectorAll<HTMLAnchorElement>(numbered));
+  }
+
+  /** Every control the pager renders, in document order — legacy's boundary first link, direction previous link, the numbered links, direction next link and boundary last link (`app/views/clients/clients.html:79-82`; AAP 0.5.4) — so a case can assert an item's own attributes and where it stands in the list. */
+  function pagerControls(): readonly HTMLAnchorElement[] {
     return Array.from(host().querySelectorAll<HTMLAnchorElement>('.pagination li a'));
+  }
+
+  /** One pager control by the accessible name it carries, or a named failure when the pager painted none: a boundary control is an anchor like a numbered one, so its name is what a case reaches it by. */
+  function pagerControl(accessibleName: string): HTMLAnchorElement {
+    const control = pagerControls().find(
+      (candidate) => candidate.getAttribute('aria-label') === accessibleName,
+    );
+
+    if (control === undefined) {
+      throw new Error(`the pager rendered no control named ${accessibleName}`);
+    }
+
+    return control;
   }
 
   beforeEach(async () => {
@@ -989,6 +1024,170 @@ describe('ClientListComponent', () => {
     fixture.detectChanges();
 
     expect(pageLinks()).toEqual([]);
+  });
+
+  /** w007-F06 and w007-F09 at the DOM: the legacy control renders a boundary first link, a direction previous link, the numbered links, a direction next link and a boundary last link inside the one `ul.pagination`, in that order (`app/views/clients/clients.html:79-82`; AAP 0.5.4 "matches it"), and every one of them is a control a pointer, a keyboard and a screen reader can operate — an anchor with no `href` exposes no role of its own, so each carries `role="button"`, a tab stop and an accessible name (Rule 1 clause 6; WCAG 2.5.3). */
+  it('renders the first, previous, next and last controls around the numbered links, each a named button', () => {
+    mount();
+    initialRead.flush(LARGE_MATCH_FIRST_PAGE);
+    fixture.detectChanges();
+
+    const controls = pagerControls();
+    const boundaryNames = ['First page', 'Previous page', 'Next page', 'Last page'];
+
+    // The legacy control's own item order: the boundary and direction links stand outside the numbered ones on both sides.
+    expect(controls.map((control) => control.getAttribute('aria-label'))).toEqual([
+      'First page',
+      'Previous page',
+      'Page 1',
+      'Page 2',
+      'Page 3',
+      'Next page',
+      'Last page',
+    ]);
+    // The glyphs the control's default template draws on those four items.
+    expect(boundaryNames.map((name) => pagerControl(name).textContent?.trim())).toEqual([
+      '«',
+      '‹',
+      '›',
+      '»',
+    ]);
+    // Seven of one kind and no exceptions: every one of them is a button rather than an unroled anchor, and every one is a tab stop.
+    expect(controls.map((control) => control.getAttribute('role'))).toEqual([
+      'button',
+      'button',
+      'button',
+      'button',
+      'button',
+      'button',
+      'button',
+    ]);
+    expect(controls.map((control) => control.getAttribute('tabindex'))).toEqual([
+      '0',
+      '0',
+      '0',
+      '0',
+      '0',
+      '0',
+      '0',
+    ]);
+    // Each is announced by a name, and none of them is a link, so open-in-new-tab still has nothing to follow.
+    expect(controls.every((control) => (control.getAttribute('aria-label') ?? '') !== '')).toBe(true);
+    expect(controls.every((control) => !control.hasAttribute('href'))).toBe(true);
+  });
+
+  /** w007-F06's reproduction, pinned: an eleven-page match leaves pages ten and eleven in no numbered link, so the boundary last link is the one-click route to the final page — one click, one read, at that page's own offset (AAP 0.5.4; Rule 1 clauses 2 and 3). */
+  it('reaches the final page in one click from the last control, with one read at that page’s offset', () => {
+    mount();
+    initialRead.flush(ELEVEN_PAGE_FIRST_PAGE);
+    fixture.detectChanges();
+
+    expect(component.pageCount()).toBe(11);
+    // The nine-link window `pageNumbers()` renders with page 1 in view: the links stop at 9, so pages 10 and 11 are in none of them.
+    expect(pageLinks().map((link) => link.textContent?.trim())).toEqual([
+      '1',
+      '2',
+      '3',
+      '4',
+      '5',
+      '6',
+      '7',
+      '8',
+      '9',
+    ]);
+
+    const click = new MouseEvent('click', { cancelable: true });
+
+    pagerControl('Last page').dispatchEvent(click);
+
+    expect(click.defaultPrevented).toBe(true);
+
+    const lastPageRead = httpMock.match(isClientListRead);
+    expect(lastPageRead).toHaveLength(1);
+    // Legacy's paging arithmetic at the final page: `offset: (pageCount - 1) * clientsPerPage`, with the page size kept.
+    expect(lastPageRead[0].request.params.get('offset')).toBe(LAST_PAGE_OFFSET);
+    expect(lastPageRead[0].request.params.get('limit')).toBe(PAGE_LIMIT);
+
+    lastPageRead[0].flush(ELEVEN_PAGE_LAST_PAGE);
+
+    expect(component.page()).toBe(11);
+  });
+
+  /** w007-F06's disabled boundaries, as the legacy control draws them: first and previous are disabled on page 1 and next and last on the final page (`app/views/clients/clients.html:79-82`; AAP 0.5.4), the state reaches assistive technology as `aria-disabled`, and a disabled control stays inert — `goToPage` no-ops outside `1..pageCount` and on the page in view — so no read goes out (AAP 0.1.1 duplicate-submission protection; Rule 1 clause 3). */
+  it('disables the first and previous controls on the first page and the next and last controls on the last page, without a read', () => {
+    mount();
+    initialRead.flush(ELEVEN_PAGE_FIRST_PAGE);
+    fixture.detectChanges();
+
+    /** The list item a named control sits in: legacy puts `disabled` on the `li`, and so does this screen, which is where the Bootstrap rule that paints it grey and withholds the pointer begins. The state assistive technology reads is on the anchor instead — a `listitem`'s own disabled state says nothing about the control inside it — so the two assertions below are taken from where each actually lives. */
+    const itemFor = (accessibleName: string): HTMLLIElement => {
+      const item = pagerControl(accessibleName).closest('li');
+
+      if (item === null) {
+        throw new Error(`the pager rendered ${accessibleName} outside a list item`);
+      }
+
+      return item;
+    };
+
+    expect(itemFor('First page').classList.contains('disabled')).toBe(true);
+    expect(pagerControl('First page').getAttribute('aria-disabled')).toBe('true');
+    expect(itemFor('Previous page').classList.contains('disabled')).toBe(true);
+    expect(pagerControl('Previous page').getAttribute('aria-disabled')).toBe('true');
+    expect(itemFor('Next page').classList.contains('disabled')).toBe(false);
+    expect(pagerControl('Next page').getAttribute('aria-disabled')).toBeNull();
+    expect(itemFor('Last page').classList.contains('disabled')).toBe(false);
+    expect(pagerControl('Last page').getAttribute('aria-disabled')).toBeNull();
+
+    // A disabled boundary control does nothing: a page below 1 and the page already shown are both no-ops, so neither costs a read.
+    pagerControl('First page').dispatchEvent(new MouseEvent('click', { cancelable: true }));
+    pagerControl('Previous page').dispatchEvent(new MouseEvent('click', { cancelable: true }));
+
+    httpMock.expectNone(isClientListRead);
+    expect(component.page()).toBe(1);
+
+    // The mirror on the final page, reached in the one click the boundary last link offers.
+    pagerControl('Last page').dispatchEvent(new MouseEvent('click', { cancelable: true }));
+    httpMock.match(isClientListRead)[0].flush(ELEVEN_PAGE_LAST_PAGE);
+    fixture.detectChanges();
+
+    expect(component.page()).toBe(11);
+    expect(itemFor('First page').classList.contains('disabled')).toBe(false);
+    expect(pagerControl('First page').getAttribute('aria-disabled')).toBeNull();
+    expect(itemFor('Previous page').classList.contains('disabled')).toBe(false);
+    expect(pagerControl('Previous page').getAttribute('aria-disabled')).toBeNull();
+    expect(itemFor('Next page').classList.contains('disabled')).toBe(true);
+    expect(pagerControl('Next page').getAttribute('aria-disabled')).toBe('true');
+    expect(itemFor('Last page').classList.contains('disabled')).toBe(true);
+    expect(pagerControl('Last page').getAttribute('aria-disabled')).toBe('true');
+
+    pagerControl('Next page').dispatchEvent(new MouseEvent('click', { cancelable: true }));
+    pagerControl('Last page').dispatchEvent(new MouseEvent('click', { cancelable: true }));
+
+    httpMock.expectNone(isClientListRead);
+    expect(component.page()).toBe(11);
+  });
+
+  /** w007-F09 at the DOM: the numbered link of the page in view is the pager's one current control, and the four boundary and direction controls are never current — each moves to a page of its own rather than being that page, so marking one would announce two current pages (AAP 0.5.4; WCAG 2.5.3). */
+  it('marks only the numbered link of the page in view as current, and no boundary control at all', () => {
+    mount();
+    initialRead.flush(LARGE_MATCH_FIRST_PAGE);
+    fixture.detectChanges();
+
+    expect(pageLinks().map((link) => link.getAttribute('aria-current'))).toEqual([
+      'page',
+      null,
+      null,
+    ]);
+    expect(
+      ['First page', 'Previous page', 'Next page', 'Last page'].map((name) =>
+        pagerControl(name).getAttribute('aria-current'),
+      ),
+    ).toEqual([null, null, null, null]);
+    // Exactly one current control in the pager as a whole, so the page in view is announced once.
+    expect(
+      pagerControls().filter((control) => control.getAttribute('aria-current') === 'page'),
+    ).toHaveLength(1);
   });
 
   it('withholds the pager while the filter matches nothing, and paints it again once a row matches', () => {
