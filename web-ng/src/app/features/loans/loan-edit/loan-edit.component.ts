@@ -11,6 +11,7 @@ import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
 import { ApiError, screenFailure, toDisplayableFailure } from '../../../core/http/api-error';
+import { isResourceId } from '../../../core/http/path-segment.util';
 import { fromFineractDate } from '../../../shared/date-format.util';
 import { DateFieldComponent } from '../../../shared/date-field/date-field.component';
 import { PanelCardComponent } from '../../../shared/panel-card/panel-card.component';
@@ -284,7 +285,7 @@ export class LoanEditComponent {
   /** `true` until the read settles, which is what the template shows while the card fills. */
   readonly loading = signal(true);
 
-  /** `true` when the loan does not exist, or when the body is not a loan at all. */
+  /** `true` when the loan does not exist, when the body is not a loan at all, or when the id the URL names is not a Fineract resource identifier. */
   readonly notFound = signal(false);
 
   /** The failure to render above the form, verbatim: the 4xx `screenFailure` hands back, and `null` while there is none or when the interceptor has already reported the failure it mapped. */
@@ -314,7 +315,7 @@ export class LoanEditComponent {
   /** The same controls by name, so the template hands single controls to the shared fields. */
   readonly controls: LoanEditFormControls;
 
-  /** The route's `:id`, kept as the raw string so the read, the save and the return link cannot disagree about which loan they address; `null` before the route emits and when it carried none. */
+  /** The route's `:id`, kept as the raw string so the read, the save and the return link cannot disagree about which loan they address; `null` before the route emits and when it carried none, and a value that is not a Fineract resource identifier issues no read either, because it addresses no loan. */
   readonly loanId = signal<string | null>(null);
 
   /** Creates the form once, so every control reference the template binds is stable, and subscribes to the route's parameters, which is the screen's whole entry point. */
@@ -466,6 +467,14 @@ export class LoanEditComponent {
     const loanId = this.loanId();
 
     if (loanId === null) {
+      this.notFound.set(true);
+      this.loading.set(false);
+
+      return;
+    }
+
+    if (!isResourceId(loanId)) {
+      // The URL names something that is not a loan, so no request is issued and the not-found branch paints in place of the form. The predicate answers before the read, so the refusal `resourceId()` would throw inside `LoanService.getWithTemplate` never has to be caught (AAP 0.7.4; Rule 1 clause 2).
       this.notFound.set(true);
       this.loading.set(false);
 

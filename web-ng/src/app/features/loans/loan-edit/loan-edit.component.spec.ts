@@ -476,6 +476,15 @@ describe('LoanEditComponent', () => {
     expect(host().textContent).toContain('The requested resource is not available.');
     expect(host().querySelector('form')).toBeNull();
   });
+  it('renders the not-found message for a route whose id is not a Fineract identifier, with no request', async () => {
+    await show('abc');
+    fixture.detectChanges();
+    httpMock.expectNone(() => true);
+    expect(component.notFound()).toBe(true);
+    expect(component.loading()).toBe(false);
+    expect(host().textContent).toContain('The requested resource is not available.');
+    expect(host().querySelector('form')).toBeNull();
+  });
   it('renders the not-found message in place of the form when Fineract answers 404', async () => {
     await show();
     const read = httpMock.expectOne(isEditSeedRead(LOAN_ID));

@@ -581,6 +581,7 @@ describe('LoanViewComponent', () => {
 
   it.each<[string, string | null]>([
     ['a route that names no loan', null],
+    ['a route whose id is not a Fineract identifier', 'abc'],
     ['a 404 from the loan read', LOAN_ID],
   ])('renders the not-found message in place of the record for %s', async (_label, id) => {
     await show(id, () => throwError(() => failure(404, NOT_FOUND_MESSAGE)));
@@ -600,7 +601,8 @@ describe('LoanViewComponent', () => {
     expect(host().querySelector('.btn-group')).toBeNull();
     expect(host().querySelectorAll('.alert')).toHaveLength(1);
 
-    expect(readLoan).toHaveBeenCalledTimes(id === null ? 0 : 1);
+    // Only the id that addresses a loan reaches the service: a route that names none and a route whose id is not a Fineract resource identifier both issue no request (AAP 0.7.4; Rule 1 clause 2).
+    expect(readLoan).toHaveBeenCalledTimes(id === LOAN_ID ? 1 : 0);
     expect(component.charges()).toBeNull();
   });
 

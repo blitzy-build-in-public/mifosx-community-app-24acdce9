@@ -11,6 +11,7 @@ import { ActivatedRoute, RouterLink, type ParamMap } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
 import { ApiError } from '../../../core/http/api-error';
+import { isResourceId } from '../../../core/http/path-segment.util';
 import { HasPermissionDirective } from '../../../shared/has-permission.directive';
 import { MoneyPipe } from '../../../shared/money/money.pipe';
 import { PanelCardComponent } from '../../../shared/panel-card/panel-card.component';
@@ -195,7 +196,7 @@ export class LoanViewComponent {
   private readonly route = inject(ActivatedRoute);
   /** Ties the single outstanding read to this component's lifetime, so leaving cancels it. */
   private readonly destroyRef = inject(DestroyRef);
-  /** The loan id from the route, as text — the `:id` of `#/viewloanaccount/:id`, empty when the route carried none, which is the only case in which the read is not issued; a signal rather than a snapshot value because the router reuses this component when the URL moves from one record to another. */
+  /** The loan id from the route, as text — the `:id` of `#/viewloanaccount/:id`, empty when the route carried none. Neither an empty id nor one that is not a Fineract resource identifier ({@link isResourceId}) issues a read, because neither addresses a loan; a signal rather than a snapshot value because the router reuses this component when the URL moves from one record to another. */
   readonly loanId = signal('');
   /** Which read is the current one, incremented by every run of {@link LoanViewComponent.load}: the router reuses this component across records, so a superseded run compares its own number after each await and returns instead of writing, and a late response can neither paint the earlier loan under the later loan's URL nor clear the loading state of the run that replaced it. */
   private loadSequence = 0;
@@ -207,7 +208,7 @@ export class LoanViewComponent {
   readonly charges = signal<readonly LoanCharge[] | null>(null);
   /** The failure the read ended in, or `null`; the template derives its error branches from this. */
   readonly error = signal<ApiError | null>(null);
-  /** Whether the route carried no loan id at all; set by the load of the emission that named none. */
+  /** Whether the id the URL names addresses no loan at all — it is empty, or it is not a Fineract resource identifier ({@link isResourceId}); cleared by {@link LoanViewComponent.reset} and set again by {@link LoanViewComponent.load} on every route emission, so it always describes the current URL. */
   private readonly missingId = signal(false);
   /** Resolves the record's tab captions through the one shared label helper, `shared/translated-label.util.ts`, so the `Translation → string` boundary and the language-change and bundle-arrival subscriptions that re-resolve a caption exist once in the application rather than once per screen; this record needs it because `TabStripComponent` takes plain display text rather than keys `TranslatePipe` could re-resolve, so the three tab captions are the only labels on the page that cannot go through the pipe (Rule 1 clauses 3 and 4; AAP 0.14.1). Declared before the caption fields because field initializers run in declaration order. */
   private readonly labels = createTranslatedLabels();
@@ -217,7 +218,7 @@ export class LoanViewComponent {
   private readonly transactionsTabLabel = this.labels('label.heading.transactions');
   /** Already-translated caption of the charges tab (legacy `label.heading.charges`). */
   private readonly chargesTabLabel = this.labels('label.heading.charges');
-  /** Whether the record does not exist — the route named no id, or Fineract answered 404 — in which case the template renders the not-found message in place of the record (AAP 0.7.4). */
+  /** Whether the record does not exist — the route named no loan id or an id that is not a Fineract resource identifier, or Fineract answered 404 — in which case the template renders the not-found message in place of the record (AAP 0.7.4). */
   readonly notFound = computed<boolean>(() => this.missingId() || this.error()?.status === 404);
   /** The failure this screen must render itself: a 4xx other than 404, whose Fineract message is shown verbatim with the screen still usable (AAP 0.7.4). The discriminator is deliberate: a 5xx or a transport failure (`status` 0) has already produced exactly one notification in the interceptor, so it answers `null` here and the message is never shown twice, and a 404 answers `null` because `notFound` owns that state. */
   readonly clientError = computed<ApiError | null>(() => {
@@ -305,12 +306,18 @@ export class LoanViewComponent {
     this.activeTab.set(SCHEDULE_TAB);
     this.loading.set(true);
   }
-  /** Reads the loan for the emission that is current, then paints the record and its charges together — one read, because the record carries the schedule, the transactions and the loan's charges (AAP 0.14.2). */
+  /** Reads the loan for the emission that is current, then paints the record and its charges together — one read, because the record carries the schedule, the transactions and the loan's charges (AAP 0.14.2). A route that names no loan issues no request: `missingId` drives the not-found branch and `loading` is cleared here, because no read will settle either. A route whose id is not a Fineract resource identifier — `#/viewloanaccount/abc`, a truncated or hand-typed link — takes that same branch: it names no loan either, so no request is issued and the not-found message replaces the record instead of the id reaching a path segment `LoanService.get` would have to refuse (AAP 0.7.4; Rule 1 clause 2). */
   private async load(): Promise<void> {
     const load = ++this.loadSequence;
     const loanId = this.loanId();
     if (loanId.length === 0) {
       // No request is issued for a route that names no loan, so this is the one path on which `loading` is cleared without a read settling it: leaving it `true` would keep the screen on its loading state for ever and the not-found branch could never paint.
+      this.missingId.set(true);
+      this.loading.set(false);
+      return;
+    }
+    if (!isResourceId(loanId)) {
+      // The URL names something that is not a loan, so no request is issued and the not-found branch paints. Asking the predicate before the read — rather than catching the refusal `resourceId()` would throw inside `LoanService.get` — keeps a request off the wire for an address that cannot be addressed and keeps `loading` from being raised for a read that never runs; `missingId` is the same signal the branch above drives, so the two cases in which the route names no loan reach the screen through one state (AAP 0.7.4; Rule 1 clause 2).
       this.missingId.set(true);
       this.loading.set(false);
       return;
