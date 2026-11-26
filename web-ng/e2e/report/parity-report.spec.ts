@@ -131,10 +131,12 @@ describe('parity-report line budget', () => {
     expect(markdown).toContain('58,643 generated lines across 245 tracked files');
     expect(markdown).toContain('git ls-files | grep -v package-lock.json | xargs wc -l');
     expect(markdown).toContain('inside the ceiling by 1,357 lines');
-    // The prose trim, then the scope cut AAP 0.9.3's fixed order required, with the totals on either side of it.
-    expect(markdown).toContain('84,770 lines before the prose trim');
-    expect(markdown).toContain('65,259 after it');
-    expect(markdown).toContain('AAP 0.9.3\'s fixed cut order engaged at 65,259 lines');
+    // The prose trim and the cut on either side of it, then the crossing of the ceiling that engaged the fixed order.
+    expect(markdown).toContain('88,418 lines at `4a13dc7`, the commit the prose trim follows');
+    expect(markdown).toContain('58,799 at `c05766d`');
+    expect(markdown).toContain('the tree crossed AAP 0.9.3\'s 60,000-line ceiling while the workflow screens landed');
+    // Restoring the cut half: the fixture measures 58,643 lines and the 17 cut files carry 5,214.
+    expect(markdown).toContain('the delivered tree plus them measures 63,857');
     expect(markdown).toContain('no Must scope was dropped');
     // The check scripts' recorded share against the plan's about 600, stated as a revised share.
     expect(markdown).toContain('1,479 lines against AAP 0.9.3\'s share of about 600');

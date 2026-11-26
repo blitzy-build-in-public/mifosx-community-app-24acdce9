@@ -135,7 +135,7 @@ export interface ParityReport {
   readonly lineBudget?: LineBudget;
 }
 
-/** AAP 0.9.3's size record, taken on the plan's own basis at report time: the delivered tree's generated lines, the ceiling they are held to, the trim that brought them under it with no scope cut, and the check scripts' recorded share. */
+/** AAP 0.9.3's size record, taken on the plan's own basis at report time: the delivered tree's generated lines, the ceiling they are held to, the prose trim, the scope cut AAP 0.9.3's fixed order required once the tree crossed that ceiling, and the check scripts' recorded share. */
 export interface LineBudget {
   /** Generated lines across every tracked file except `package-lock.json`; `null` when the tree could not be listed. */
   readonly measuredLines: number | null;
@@ -153,11 +153,14 @@ export const LINE_CEILING = 60_000;
 /** The planning target AAP 0.9.3 names beside the ceiling. */
 export const PLANNING_TARGET = 50_000;
 
-/** Generated lines the tree carried before the documentation-prose trim, as the size finding measured it (AAP 0.9.3). */
-export const LINES_BEFORE_TRIM = 84_770;
+/** Generated lines the tracked tree carried at `4a13dc7`, the commit the documentation-prose trim follows — the crossing of AAP 0.9.3's ceiling that engaged the plan's fixed cut order — measured the report's own way, `git ls-files | grep -v package-lock.json | xargs wc -l` from the repository root (AAP 0.9.3). */
+export const LINES_BEFORE_TRIM = 88_418;
 
-/** Generated lines the tree carried when AAP 0.9.3's fixed cut order engaged — after the prose trim and after this checkpoint's two landed work units, as the size finding measured it (AAP 0.9.3). */
-export const LINES_BEFORE_CUT = 65_259;
+/** Generated lines the tracked tree carried at `c05766d`, the prose trim and the commit the savings cut follows: below AAP 0.9.3's ceiling, which is why the cut is recorded against the crossing {@link LINES_BEFORE_TRIM} states and never against this commit (AAP 0.9.3). */
+export const LINES_AT_CUT_COMMIT = 58_799;
+
+/** Lines the savings cut removed from the tracked tree, measured at `c05766d`: the 17 files it deleted — 3,926 in the 14 `src/app/features/savings` files and 1,288 in its two page objects and its W8 spec (AAP 0.9.3). */
+export const SAVINGS_CUT_LINES = 5_214;
 
 /** The repository root every measurement below is taken from — `web-ng/`'s parent — resolved from this module's own URL so `git ls-files` sees the whole delivered tree. */
 const REPO_ROOT_DIR = fileURLToPath(new URL('../../../', import.meta.url));
@@ -817,7 +820,7 @@ function group(value: number): string {
   return value.toLocaleString('en-US');
 }
 
-/** The `## Line budget` section's lines: ceiling, measured total with the command that settles it, the prose trim, the scope cut AAP 0.9.3's fixed order required and why, the revised totals and the check scripts' recorded share (AAP 0.9.3, Rule 1 clause 10). */
+/** The `## Line budget` section's lines: ceiling, measured total with the command that settles it, the prose trim, the revised totals at the two commits on either side of it, the scope cut AAP 0.9.3's fixed order required and why — with the total restoring the cut half would measure — and the check scripts' recorded share (AAP 0.9.3, Rule 1 clause 10). */
 function lineBudgetLines(budget: LineBudget | undefined): string[] {
   if (budget === undefined || budget.measuredLines === null) {
     return ['', 'Not measured: `git ls-files` could not list the tree in this environment, so the generated-line total and the cut record are unestablished here.'];
@@ -831,8 +834,8 @@ function lineBudgetLines(budget: LineBudget | undefined): string[] {
     `- Ceiling: ${group(LINE_CEILING)} generated lines across code, tests, configuration and documentation, with a planning target of about ${group(PLANNING_TARGET)} (AAP 0.9.3).`,
     `- Measured: ${group(measured)} generated lines across ${group(budget.measuredFiles)} tracked files, \`package-lock.json\` aside — \`git ls-files | grep -v package-lock.json | xargs wc -l\`, the plan's own basis; the tree stands ${standing}.`,
     '- Trim applied: the documentation prose was compressed to one line per declaration across the delivered tree, keeping a doc comment on every exported service method, component input/output and model field (AAP 0.14.2), every recorded decision and every citation a comment carries — the multi-line blocks collapsed, the facts they stated did not.',
-    `- Revised totals: ${group(LINES_BEFORE_TRIM)} lines before the prose trim, ${group(LINES_BEFORE_CUT)} after it and after the two work units this checkpoint landed, ${group(measured)} after the cut below.`,
-    `- Scope cut: AAP 0.9.3's fixed cut order engaged at ${group(LINES_BEFORE_CUT)} lines, so its first step — drop Stretch — was applied and the second is contained in it, because the savings workflow (W8) was the only Stretch workflow and its spec the only Stretch spec. The savings screens, their three routes, their e2e page objects, their seed product and the client record's "New Saving" entry point are therefore not delivered. Every Must workflow (W1–W7 and the W2→W4→W5→W6 chain) keeps its screen and its spec: no Must scope was dropped, and the three check scripts are untouched.`,
+    `- Revised totals: ${group(LINES_BEFORE_TRIM)} lines at \`4a13dc7\`, the commit the prose trim follows, ${group(LINES_AT_CUT_COMMIT)} at \`c05766d\`, the trim itself and the commit the cut follows, and ${group(measured)} in the delivered tree as measured above.`,
+    `- Scope cut: the tree crossed AAP 0.9.3's ${group(LINE_CEILING)}-line ceiling while the workflow screens landed — ${group(LINES_BEFORE_TRIM)} lines before the prose trim — which engaged the plan's fixed cut order, so its first step — drop Stretch — was applied and the second is contained in it, because the savings workflow (W8) was the only Stretch workflow and its spec the only Stretch spec. Restoring what was cut would cross that ceiling again: the 17 cut files carry ${group(SAVINGS_CUT_LINES)} lines, so the delivered tree plus them measures ${group(measured + SAVINGS_CUT_LINES)}. The savings screens, their three routes, their e2e page objects, their seed product and the client record's "New Saving" entry point are therefore not delivered, and the eight W8 savings rows were removed from \`endpoint-allowlist.json\` so that list stays a true statement about the application (AAP 0.10.4). Every Must workflow (W1–W7 and the W2→W4→W5→W6 chain) keeps its screen and its spec: no Must scope was dropped, and the three check scripts are untouched.`,
     `- Check scripts and their \`lib/\` helpers: ${group(budget.checkScriptLines)} lines against AAP 0.9.3's share of about 600. That share was estimated for skeleton checks, while the delivered gates enforce 0.10.4's whole rules over the tree (endpoint allowlist, template coverage, wiring, scope and credential), so the figure above is the revised share: it is recorded here, never met by weakening a gate (Rule 1 clauses 2 and 8).`,
   ];
 }

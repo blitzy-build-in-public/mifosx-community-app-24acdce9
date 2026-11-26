@@ -69,6 +69,7 @@ describe('the deliberate-difference register\'s readings', () => {
     expect(item5?.delivered).toContain('the savings screens are not delivered');
     expect(item5?.delivered).toContain('no Must scope was dropped');
     expect(item5?.why).toContain('AAP 0.9.3 fixes the cut order');
+    expect(item5?.why).toContain('5,214 lines in 17 files');
     expect(item5?.why).toContain('The revised totals stand in the report');
   });
 

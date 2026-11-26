@@ -1,7 +1,8 @@
 {
   "header": {
     "apiPath": "/fineract-provider/api/v1",
-    "source": "AAP 0.7.3 workflow endpoint table",
+    "source": "AAP 0.7.3 workflow endpoint table; the W8 savings rows are absent because AAP 0.9.3's fixed cut order dropped that workflow — header.cutRecord records the removal",
+    "cutRecord": "the eight W8 savings entries were removed with the savings workflow — GET /savingsaccounts/template, POST /savingsaccounts, POST /savingsaccounts/{id} with command=approve and with command=activate, GET /savingsaccounts/{id}/transactions/template, POST /savingsaccounts/{id}/transactions with command=deposit and with command=withdrawal, and GET /savingsaccounts/{id} with associations=all — because AAP 0.9.3's fixed cut order applied its first step, drop Stretch, once the tree crossed the 60,000-line ceiling, and no screen, service or route under web-ng/src can call them any more; AAP 0.10.4's allowlist rule makes this file a true statement about the application, so a row no code can call is a false one; the cut with its revised totals is recorded in web-ng/README.md and in the `## Line budget` section of parity-report.md",
     "resource": "the legacy resourceFactory key that performs the call, from app/scripts/services/ResourceFactoryProvider.js at the pinned legacy commit; null where the legacy app has no equivalent and AAP 0.7.3 names none. AuthenticationService is the exception: the legacy app authenticates through a service file rather than a factory resource, so that row carries AAP 0.7.3's own label",
     "generatorGap": "app/scripts/services/ResourceFactoryProvider.js is absent from this checkout (base commit holds only README.md); entries are transcribed from AAP 0.7.3",
     "generatedOn": "2026-11-24",
@@ -430,83 +431,6 @@
       "resource": "loanResource",
       "queryParameters": [],
       "note": "The same operation as the W4 submit; recorded separately for the 400 or 403 negative case that returns errors[].defaultUserMessage (AAP 0.7.3)."
-    },
-    {
-      "workflow": "W8 savings (Stretch)",
-      "family": "Savings",
-      "method": "GET",
-      "path": "/savingsaccounts/template",
-      "resource": "savingsTemplateResource",
-      "queryParameters": [
-        "clientId",
-        "productId"
-      ]
-    },
-    {
-      "workflow": "W8 savings (Stretch)",
-      "family": "Savings",
-      "method": "POST",
-      "path": "/savingsaccounts",
-      "resource": "savingsResource",
-      "queryParameters": [],
-      "note": "savingsResource is the legacy factory key for /savingsaccounts[/:accountId]; its :resourceType and :chargeId parameters are absent from this call."
-    },
-    {
-      "workflow": "W8 savings (Stretch)",
-      "family": "Savings",
-      "method": "POST",
-      "path": "/savingsaccounts/{id}",
-      "resource": "savingsResource",
-      "command": "approve",
-      "queryParameters": [],
-      "note": "savingsResource is the legacy factory key for /savingsaccounts[/:accountId]; its :resourceType and :chargeId parameters are absent from this call."
-    },
-    {
-      "workflow": "W8 savings (Stretch)",
-      "family": "Savings",
-      "method": "POST",
-      "path": "/savingsaccounts/{id}",
-      "resource": "savingsResource",
-      "command": "activate",
-      "queryParameters": [],
-      "note": "savingsResource is the legacy factory key for /savingsaccounts[/:accountId]; its :resourceType and :chargeId parameters are absent from this call."
-    },
-    {
-      "workflow": "W8 savings (Stretch)",
-      "family": "Savings",
-      "method": "GET",
-      "path": "/savingsaccounts/{id}/transactions/template",
-      "resource": "savingsTrxnsTemplateResource",
-      "queryParameters": []
-    },
-    {
-      "workflow": "W8 savings (Stretch)",
-      "family": "Savings",
-      "method": "POST",
-      "path": "/savingsaccounts/{id}/transactions",
-      "resource": "savingsTrxnsResource",
-      "command": "deposit",
-      "queryParameters": []
-    },
-    {
-      "workflow": "W8 savings (Stretch)",
-      "family": "Savings",
-      "method": "POST",
-      "path": "/savingsaccounts/{id}/transactions",
-      "resource": "savingsTrxnsResource",
-      "command": "withdrawal",
-      "queryParameters": []
-    },
-    {
-      "workflow": "W8 savings (Stretch)",
-      "family": "Savings",
-      "method": "GET",
-      "path": "/savingsaccounts/{id}",
-      "resource": "savingsResource",
-      "queryParameters": [
-        "associations"
-      ],
-      "note": "associations=all (AAP 0.7.3). savingsResource is the legacy factory key for /savingsaccounts[/:accountId]; its :resourceType and :chargeId parameters are absent from this call."
     }
   ]
 }

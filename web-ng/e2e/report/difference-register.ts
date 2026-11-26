@@ -24,9 +24,11 @@ export const DIFFERENCE_REGISTER_READINGS: readonly DifferenceRegisterReading[] 
     why:
       'AAP 0.9.3 fixes the cut order for the case its 60,000-line ceiling cannot otherwise be met — first drop Stretch '
       + '(savings, workflow W8), then trim the e2e suite to the Must workflows, and stop there — and requires every cut to '
-      + 'be recorded with its reason and its revised totals. The integrated tree measured 65,259 generated lines, so that '
-      + 'order engaged: W8 was the only Stretch workflow and its spec the only Stretch spec, so its first step contains the '
-      + 'second. The revised totals stand in the report\'s `## Line budget` section, and Rule 1 clause 10 is met by that record.',
+      + 'be recorded with its reason and its revised totals. The tree crossed that ceiling while the workflow screens '
+      + 'landed and stood at 88,418 lines before the prose trim, so the order engaged: W8 was the only Stretch workflow and '
+      + 'its spec the only Stretch spec, so its first step contains the second. Restoring the cut half — 5,214 lines in 17 '
+      + 'files — would put the tree back over that ceiling, which is why the cut stands and is not undone. '
+      + 'The revised totals stand in the report\'s `## Line budget` section, and Rule 1 clause 10 is met by that record.',
   },
   {
     where: 'AAP 0.10.5 item 15 — the default dates a form opens with',
@@ -34,7 +36,7 @@ export const DIFFERENCE_REGISTER_READINGS: readonly DifferenceRegisterReading[] 
       'activation, submission, disbursement and repayment dates default from the browser clock exactly '
       + 'as legacy\'s do, and only the harness derives its run date from the tenant business date',
     delivered:
-      'the submission, activation, approve, withdraw, deposit and create-client dates default from the '
+      'the submission, activation, approve, withdraw and create-client dates default from the '
       + 'browser clock; the loan application\'s disbursement date and the repayment form\'s transaction date '
       + 'are the values the Fineract template that seeds the screen carries (GET /loans/template and '
       + 'GET /loans/{id}/transactions/template?command=repayment), because a template-seeded control keeps '

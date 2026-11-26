@@ -46,9 +46,8 @@ Configuration is resolved in three steps, the last winning:
 
 ## Backend
 
-The only permitted backend is `Blitzy-Sandbox/blitzy-fineract`, built from source into a local
-`fineract:latest` image. No downloaded Fineract image and no public demo server (`demo.mifos.io`,
-`demo.fineract.dev`) may back either front end.
+The only permitted backend is `Blitzy-Sandbox/blitzy-fineract`, built from source into a local `fineract:latest` image.
+No downloaded Fineract image and no public demo server (`demo.mifos.io`, `demo.fineract.dev`) may back either front end.
 
 ```bash
 git clone https://github.com/Blitzy-Sandbox/blitzy-fineract.git
@@ -56,12 +55,11 @@ cd blitzy-fineract && ./gradlew :fineract-provider:jibDockerBuild -x test   # ev
 docker compose -f docker-compose-postgresql.yml up -d --pull never
 ```
 
-`--pull never` is mandatory: it stops Docker substituting a downloaded image for the one built
-locally. Fineract then answers on `https://localhost:8443/fineract-provider/api/v1` with tenant
-`default`, behind a self-signed certificate (`curl -k`; Playwright sets `ignoreHTTPSErrors`).
-`npm run reset:db` needs `FINERACT_COMPOSE_FILE`, the absolute path of that clone's
-`docker-compose-postgresql.yml`, whose location differs per environment; the script exits non-zero
-naming the variable when it is unset.
+`--pull never` is mandatory: it stops Docker substituting a downloaded image for the one built locally. Fineract then
+answers on `https://localhost:8443/fineract-provider/api/v1` with tenant `default`, behind a self-signed certificate
+(`curl -k`; Playwright sets `ignoreHTTPSErrors`). `npm run reset:db` needs `FINERACT_COMPOSE_FILE`, the absolute path of
+that clone's `docker-compose-postgresql.yml`, whose location differs per environment; the script exits non-zero naming
+the variable when it is unset.
 
 ## Seed, reset, provenance, parity
 
@@ -79,8 +77,11 @@ the seed is not idempotent. `npm run e2e` runs every workflow against the legacy
 with `?baseApiUrl=&tenantIdentifier=`), then the new app (port 4300): a legacy screen that no longer
 works is reported `legacy-broken` without failing, and `parity-report.{md,json}` land in `web-ng/` (git-ignored).
 
-The savings workflow (W8, Stretch) is not delivered: AAP 0.9.3's 60,000-line ceiling engaged its fixed cut
-order, so the savings screens, their routes and their spec were cut while every Must workflow keeps its own.
+The savings workflow (W8, Stretch) is not delivered: AAP 0.9.3's fixed cut order applied its first step — drop
+Stretch — and every Must workflow keeps its own screen and spec. The revised totals, by `git ls-files | grep -v
+package-lock.json | xargs wc -l`, are 88,418 lines at `4a13dc7` before the prose trim, 58,799 at `c05766d` where
+that trim had brought the tree inside the ceiling, 59,237 when this record was corrected, and 64,451 with the cut
+half's 17 files and 5,214 lines restored — over the ceiling, so the cut stands and the report re-measures each run.
 
 Static gates:
 
@@ -109,9 +110,8 @@ set -a; . ./.env.local; set +a                 # in web-ng/: E2E_USER and E2E_PA
 read -rs E2E_PASSWORD && export E2E_PASSWORD   # or prompt for the password: no echo, no shell history
 ```
 
-Both are read at run time and have no default. Type them into the login screen for the human-verified
-steps; no `Authorization` header, authentication key or password is ever logged or written to a capture,
-and recorded requests and responses are masked before storage.
+Both are read at run time with no default; type them into the login screen for the human-verified steps. No
+`Authorization` header, authentication key or password is logged or captured, and captures are masked before storage.
 
 ## Environments
 
