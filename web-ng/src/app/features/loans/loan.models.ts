@@ -1,10 +1,10 @@
-/** The loans family's single model module: one typed model for every request body and every response shape the individual-loan screens use, in Fineract's own wire field names (Rule 1 clause 2, AAP 0.7.2, Rule 1 clause 4, Rule 1 clause 3). */
+/** The loans family's single model module: one typed model for every request body and every response shape the individual-loan screens use, in Fineract's own wire field names (Rule 1 clause 2). */
 import type { AppDateFormat } from '../../core/config/app-config.model';
 import type { FineractDate } from '../../shared/date-format.util';
 import type { MoneyCurrency } from '../../shared/money/money.pipe';
 import { normaliseStatusCode, type StatusKey } from '../../shared/status-key.util';
 
-/** One row of a Fineract option list — `productOptions`, `loanOfficerOptions`, `fundOptions`, `chargeOptions`, `paymentTypeOptions` — which all arrive in this `{id, name}` shape (AAP 0.4.3) (Rule 1 clause 3). */
+/** One row of a Fineract option list — `productOptions`, `loanOfficerOptions`, `fundOptions`, `chargeOptions`, `paymentTypeOptions` — which all arrive in this `{id, name}` shape (AAP 0.4.3). */
 export interface OptionItem {
   /** Identifier the posted body carries, e.g. the `chargeId` of a picked charge. */
   readonly id: number;
@@ -12,7 +12,7 @@ export interface OptionItem {
   readonly name: string;
 }
 
-/** The currency object a loan payload sends for the money it carries, as `GET /loans/{id}?associations=all` reports it at the payload's top level, on its `repaymentSchedule` and inside every `charges[]` entry, and `GET /clients/{id}/accounts` on each `loanAccounts[]` entry: `{code: "USD", name: "US Dollar", decimalPlaces: 2, displaySymbol: "$", displayLabel: "US Dollar ($)"}`. `code` is required here because the wire always carries it, while {@link MoneyCurrency} keeps it optional for a reader that only renders a symbol; requiring it keeps a charge's currency a valid `LoanChargeOption` currency, so a template's own charges can stand in for its charge options (Rule 1 clause 4, AAP 0.7.2). */
+/** The currency object a loan payload sends for the money it carries, as `GET /loans/{id}?associations=all` reports it at the payload's top level, on its `repaymentSchedule` and inside every `charges[]` entry, and `GET /clients/{id}/accounts` on each `loanAccounts[]` entry: `{code: "USD", name: "US Dollar", decimalPlaces: 2, displaySymbol: "$", displayLabel: "US Dollar ($)"}`. `code` is required here because the wire always carries it, while {@link MoneyCurrency} keeps it optional for a reader that only renders a symbol; requiring it keeps a charge's currency a valid `LoanChargeOption` currency (Rule 1 clause 4). */
 export interface LoanCurrency extends MoneyCurrency {
   /** ISO code the money is denominated in, e.g. `USD` — sent with every currency the loan endpoints report. */
   readonly code: string;
@@ -28,7 +28,7 @@ export interface TransactionProcessingStrategyOption {
   readonly id?: number;
 }
 
-/** One row of an enumeration option list — `termFrequencyTypeOptions`, `repaymentFrequencyTypeOptions`, `interestRateFrequencyTypeOptions`, `amortizationTypeOptions`, `interestTypeOptions` or `interestCalculationPeriodTypeOptions` — and the very shape Fineract sends for a persisted enumeration member of the same name, which is why one interface serves both (AAP 0.7.2, Rule 1 clause 2, Rule 1 clause 4). */
+/** One row of an enumeration option list — `termFrequencyTypeOptions`, `repaymentFrequencyTypeOptions`, `interestRateFrequencyTypeOptions`, `amortizationTypeOptions`, `interestTypeOptions` or `interestCalculationPeriodTypeOptions` — and the very shape Fineract sends for a persisted enumeration member of the same name, which is why one interface serves both (AAP 0.7.2). */
 export interface LoanEnumOption {
   /** Numeric id the posted body carries, e.g. the `repaymentFrequencyType` an application sends. */
   readonly id: number;
@@ -38,7 +38,7 @@ export interface LoanEnumOption {
   readonly value?: string;
 }
 
-/** One row of `loanOfficerOptions`: a staff member the loan may be assigned to, labelled by the server's `displayName` and, where it sent none, by `firstname`/`lastname` (AAP 0.7.2, Rule 1 clause 2). */
+/** One row of `loanOfficerOptions`: a staff member the loan may be assigned to, labelled by the server's `displayName` and, where it sent none, by `firstname`/`lastname` (AAP 0.7.2). */
 export interface LoanOfficerOption {
   /** Staff id the body posts as `loanOfficerId`. */
   readonly id: number;
@@ -106,7 +106,7 @@ export interface LoanChargeOption extends OptionItem {
   readonly dueDate?: FineractDate;
 }
 
-/** `GET /loans/template?templateType=individual&clientId=&productId=` — the dropdown options and the defaults the new-loan form is seeded from, and the same shape the edit form is seeded from (AAP 0.7.3, "W4 loan application"; Rule 1 clause 3: every option list comes from the template endpoint, never from a constant in this application). */
+/** `GET /loans/template?templateType=individual&clientId=&productId=` — the dropdown options and the defaults the new-loan form is seeded from, and the same shape the edit form is seeded from (AAP 0.7.3, "W4 loan application"). */
 export interface LoanTemplate {
   /** Client the loan is opened for, echoed back from the request. */
   readonly clientId?: number;
@@ -158,7 +158,7 @@ export interface LoanTemplate {
   readonly transactionProcessingStrategyCode?: string;
   /** Strategies the form's picker offers, in the received order. */
   readonly transactionProcessingStrategyOptions?: readonly TransactionProcessingStrategyOption[];
-  /** The charge rows the payload carries, in the server's order: the loan's own charges on an edit seed, in the same `LoanCharge` shape `LoanAccount.charges` declares, which is why the edit form re-posts them unchanged (AAP 0.7.2, AAP 0.3.4). */
+  /** The charge rows the payload carries, in the server's order: the loan's own charges on an edit seed, in the same `LoanCharge` shape `LoanAccount.charges` declares, which is why the edit form re-posts them unchanged (AAP 0.7.2). */
   readonly charges?: readonly LoanCharge[];
   /** Charges applicable to the application, offered as the application form's charge picker. */
   readonly chargeOptions?: readonly LoanChargeOption[];
@@ -200,7 +200,7 @@ export interface LoanTimeline {
   readonly withdrawnOnDate?: FineractDate;
 }
 
-/** A loan account as `GET /loans/{id}?associations=all` returns it — the record the view screen renders — and the same body `GET /loans/{id}?template=true&associations=...` returns to seed the edit form (AAP 0.7.3, "Loan edit"; AAP 0.7.4, AAP 0.7.2, AAP 0.3.4, Rule 1 clause 2). */
+/** A loan account as `GET /loans/{id}?associations=all` returns it — the record the view screen renders — and the same body `GET /loans/{id}?template=true&associations=...` returns to seed the edit form (AAP 0.7.4). */
 export interface LoanAccount {
   /** Loan id, the `{id}` of every loan endpoint. */
   readonly id: number;
@@ -214,7 +214,7 @@ export interface LoanAccount {
   readonly loanProductId?: number;
   /** Product name, the fork's `LoanAccountData.loanProductName`, where AAP 0.7.2 names the member `productName`; displayed on the record. */
   readonly loanProductName?: string;
-  /** The currency the payload reports for the money this record prints — the record's principal and its five summary figures — so the record renders them with the symbol the loan is denominated in and every other surface stays bare, as the legacy record does (Rule 1 clause 3, AAP 0.7.2). */
+  /** The currency the payload reports for the money this record prints — the record's principal and its five summary figures — so the record renders them with the symbol the loan is denominated in and every other surface stays bare, as the legacy record does (Rule 1 clause 3). */
   readonly currency?: LoanCurrency;
   /** Principal applied for, the amount every disbursement and schedule is based on. */
   readonly principal: number;
@@ -241,9 +241,9 @@ export interface LoanAccount {
 /** `GET /loans/{id}?template=true&associations=charges,collateral,meeting,multiDisburseDetails` — the edit form's one read: the loan record the save re-posts (ids, terms, status, timeline and charges) together with the template members that seed the form (the persisted enumerations, their option lists, the officer and fund pickers). The endpoint answers one shape, so the edit screen reads every member from this type instead of guessing between two (AAP 0.7.3, "Loan edit"). */
 export type LoanEditSeed = LoanAccount & LoanTemplate;
 
-/** One row of a repayment schedule — the `periods[]` of `RepaymentSchedule`, and the rows the preview table renders after `POST /loans?command=calculateLoanSchedule` (AAP 0.7.2) (Rule 1 clause 2). */
+/** One row of a repayment schedule — the `periods[]` of `RepaymentSchedule`, and the rows the preview table renders after `POST /loans?command=calculateLoanSchedule` (AAP 0.7.2). */
 export interface RepaymentPeriod {
-  /** Period number, 1-based; the schedule table's first column. Optional because the fork omits the member on the disbursement pseudo-period described above: that row carries no period number, so a reader treats a missing one as "not a repayment period" and the cell prints nothing rather than a substituted 0 (Rule 1 clause 3). */
+  /** Period number, 1-based; the schedule table's first column. Optional because the fork omits the member on the disbursement pseudo-period: that row carries no period number, so a reader treats a missing one as "not a repayment period" and the cell prints nothing rather than a substituted 0 (Rule 1 clause 3). */
   readonly period?: number;
   /** Date the period starts. */
   readonly fromDate: FineractDate;
@@ -279,7 +279,7 @@ export interface RepaymentPeriod {
   readonly complete: boolean;
 }
 
-/** A repayment schedule: the ordered periods, plus the loan-wide money totals the fork returns alongside them (AAP 0.7.2, AAP 0.3.4). */
+/** A repayment schedule: the ordered periods, plus the loan-wide money totals the fork returns alongside them (AAP 0.7.2). */
 export interface RepaymentSchedule {
   /** Periods in schedule order; the array order is meaningful and is preserved. */
   readonly periods: readonly RepaymentPeriod[];
@@ -337,15 +337,15 @@ export interface LoanTransaction {
   readonly manuallyReversed: boolean;
 }
 
-/** A charge attached to a loan, as the loan's own reads report it: the `charges` array of `GET /loans/{id}?associations=all` and of the edit seed `GET /loans/{id}?template=true&associations=charges,…` (AAP 0.7.2 row `LoanCharge`; AAP 0.7.3). */
+/** A charge attached to a loan, as the loan's own reads report it: the `charges` array of `GET /loans/{id}?associations=all` and of the edit seed `GET /loans/{id}?template=true&associations=charges,…` (AAP 0.7.2 row `LoanCharge`). */
 export interface LoanCharge {
   /** Charge id, the `{chargeId}` of the charge action endpoint. */
   readonly id: number;
-  /** Definition id of the charge this loan carries, the fork's `LoanChargeData.chargeId` (AAP 0.7.2, AAP 0.3.4). */
+  /** Definition id of the charge this loan carries, the fork's `LoanChargeData.chargeId` (AAP 0.7.2). */
   readonly chargeId: number;
   /** Charge name, rendered as the server sent it. */
   readonly name: string;
-  /** The currency the payload reports for this charge's own money — `amount`, `amountPaid`, `amountWaived` and `amountOutstanding` — so the record's charge table prefixes their symbol exactly as the legacy table does (Rule 1 clause 3, AAP 0.7.2). */
+  /** The currency the payload reports for this charge's own money — `amount`, `amountPaid`, `amountWaived` and `amountOutstanding` — so the record's charge table prefixes their symbol exactly as the legacy table does (Rule 1 clause 3). */
   readonly currency?: LoanCurrency;
   /** Amount charged. */
   readonly amount: number;
@@ -377,9 +377,9 @@ export interface LoanCharge {
   readonly dueDate?: FineractDate;
 }
 
-/** The charge payload the two charge readers share: the answer of `GET /loans/{id}/charges/template`, which offers the loan's applicable charges as `chargeOptions`, and the answer of `GET /charges/{id}?template=true` (AAP 0.7.3, Rule 1 clause 4). */
+/** The charge payload the two charge readers share: the answer of `GET /loans/{id}/charges/template`, which offers the loan's applicable charges as `chargeOptions`, and the answer of `GET /charges/{id}?template=true` (AAP 0.7.3). */
 export interface ChargeTemplate {
-  /** Charges applicable to the loan, rendered as the charge picker in the received order (AAP 0.7.2, Rule 1 clause 4). */
+  /** Charges applicable to the loan, rendered as the charge picker in the received order (AAP 0.7.2). */
   readonly chargeOptions?: readonly LoanChargeOption[];
   /** The charge's own amount, as `GET /charges/{id}?template=true` reports it at the top level — the figure a picked charge seeds into the application's amount field. */
   readonly amount?: number;
@@ -401,11 +401,11 @@ export interface ChargeTemplate {
  *
  * `POST`/`PUT` bodies are assembled by the forms, so, unlike the response models above, they are not `readonly`: a screen builds one member at a time from its form values. One convention holds for every one of
  * them, and it is the one AAP 0.7.2 "Date handling" sets: a request body holds the values the form holds — each date a `Date | null`, `dateFormat` and `locale` required — and `loan.service.ts` converts each date
- * with `toFineractDate(date, locale)` and fills `dateFormat` from `AppConfig` and `locale` from `AppConfigService.activeLocale` at the boundary. No model stores a formatted date (AAP 0.14.1 "Dates never travel
- * as strings built in a template"), and a body that omitted `dateFormat` or `locale` would not compile (Rule 1 clause 2).
+ * with `toFineractDate(date, locale)` and fills `dateFormat` from `AppConfig` and `locale` from `AppConfigService.activeLocale` at the boundary. No model stores a formatted date, and a body that omitted
+ * `dateFormat` or `locale` would not compile.
  */
 
-/** The body `POST /loans` submits, and the same body `POST /loans?command=calculateLoanSchedule` previews (AAP 0.7.3, "W4 loan application") (Rule 1 clause 3). */
+/** The body `POST /loans` submits, and the same body `POST /loans?command=calculateLoanSchedule` previews (AAP 0.7.3, "W4 loan application"). */
 export interface LoanApplicationRequest {
   /** Client the loan is opened for. */
   clientId: number;
@@ -445,7 +445,7 @@ export interface LoanApplicationRequest {
   loanOfficerId?: number;
   /** Fund to draw on, when one was chosen from `fundOptions`. */
   fundId?: number;
-  /** Charges carried by the body, one row per charge, in the order the form lists them (AAP 0.7.2, AAP 0.3.4). */
+  /** Charges carried by the body, one row per charge, in the order the form lists them (AAP 0.7.2). */
   charges?: readonly {
     /** Loan charge the row keeps, on an edit that re-posts a charge the loan already carries. */
     readonly id?: number;
@@ -462,10 +462,10 @@ export interface LoanApplicationRequest {
   locale: string;
 }
 
-/** The body `PUT /loans/{id}` submits for a loan edit (AAP 0.7.3, "Loan edit") (Rule 1 clause 3, AAP 0.3.4). */
+/** The body `PUT /loans/{id}` submits for a loan edit (AAP 0.7.3, "Loan edit"). */
 export type LoanEditRequest = LoanApplicationRequest;
 
-/** The body of one loan lifecycle action, as a discriminated union on the command the endpoint takes in its query string (AAP 0.7.2 row `LoanActionRequest`; AAP 0.7.3, "W5 approve and disburse") (Rule 1 clause 2, AAP 0.3.4). */
+/** The body of one loan lifecycle action, as a discriminated union on the command the endpoint takes in its query string (AAP 0.7.2 row `LoanActionRequest`). */
 export type LoanActionRequest =
   | {
       /** Approves the submitted loan. */
@@ -539,13 +539,13 @@ export type LoanActionRequest =
       command: 'undodisbursal';
     };
 
-/** The body `POST /loans/{id}/transactions?command=repayment` posts (AAP 0.7.3, "W6 repayment") (AAP 0.10.5, AAP 0.7.2). */
+/** The body `POST /loans/{id}/transactions?command=repayment` posts (AAP 0.7.3, "W6 repayment"). */
 export interface LoanRepaymentRequest {
   /** Date the repayment is recorded on, as the form holds it; `null` when it is empty. */
   transactionDate: Date | null;
   /** Amount repaid. */
   transactionAmount: number;
-  /** Payment type id, taken from the template's `paymentTypeOptions`; sent whenever the template offers a payment type, which is the ordinary case — the form preselects the first entry and the user may choose another, as the legacy repayment form does (Rule 1 clause 3, AAP 0.7.2). */
+  /** Payment type id, taken from the template's `paymentTypeOptions`; the form preselects the first entry and the user may choose another, as the legacy repayment form does (Rule 1 clause 3). */
   paymentTypeId?: number;
   /** Free-text note recorded with the repayment. */
   note?: string;
@@ -569,7 +569,7 @@ export interface LoanChargeRequest {
   locale: string;
 }
 
-/** The body of one loan-charge action, as a discriminated union on the command `POST /loans/{id}/charges/{loanChargeId}?command=` takes (AAP 0.7.2 row `LoanChargeActionRequest`; AAP 0.7.3, "Loan charges"). **The member sets are the ones the running server accepts**: `pay` takes the booked date beside the format pair and `waive` the format pair alone (AAP 0.3.4). */
+/** The body of one loan-charge action, as a discriminated union on the command `POST /loans/{id}/charges/{loanChargeId}?command=` takes (AAP 0.7.2 row `LoanChargeActionRequest`). **The member sets are the ones the running server accepts**: `pay` takes the booked date beside the format pair and `waive` the format pair alone. */
 export type LoanChargeActionRequest =
   | {
       /** Pays the charge's whole outstanding portion. */
@@ -629,7 +629,7 @@ export interface LoanTransactionTemplate {
  * Pure helpers. Same input, same output: no clock read, no dependency, no side effect.
  */
 
-/** The id of a persisted enumeration member, which the fork sends either as a plain number or as the `{id, code, value}` object every `…Options` list is built from (AAP 0.7.2, Rule 1 clause 3). */
+/** The id of a persisted enumeration member, which the fork sends either as a plain number or as the `{id, code, value}` object every `…Options` list is built from (AAP 0.7.2). */
 export function readSelectedId(value: unknown): number | null {
   if (typeof value === 'number') {
     return Number.isFinite(value) ? value : null;
@@ -678,7 +678,7 @@ const STATUS_BY_NAME: Readonly<Partial<Record<string, StatusKey>>> = {
   overpaid: 'closed',
 };
 
-/** The indicator colour for a loan status, from either the numeric `LoanStatus` id or a `loanStatusType.*` message code (AAP 0.10.5, Rule 1 clause 3). */
+/** The indicator colour for a loan status, from either the numeric `LoanStatus` id or a `loanStatusType.*` message code (AAP 0.10.5). */
 export function toLoanStatusKey(code: string | number | null | undefined): StatusKey {
   if (code === null || code === undefined) {
     return 'other';

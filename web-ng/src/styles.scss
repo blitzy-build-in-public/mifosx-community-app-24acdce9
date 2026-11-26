@@ -1,24 +1,35 @@
-// ============================================================================= Mifos X — the single global stylesheet of the Angular application Cascade order, top to bottom (AAP 0.4.4).
+// =============================================================================
+// Mifos X — the single global stylesheet of the Angular application.
+//
+// Cascade order: (1) the product's brand overrides, declared before anything is imported so no `!default`
+// value can win; (2-3) Bootstrap 3 and Font Awesome 4.7.0 from npm, with the icon font face; (4) the legacy
+// Bootstrap 3 rules the in-scope screens need, reproduced inline because `app/styles-dev/styles.scss` is never
+// compiled (its five `../bower_components/...` imports do not exist and `app/` is read-only) and the partials
+// must not be edited. `_chosen.scss`, `_nv.d3.scss`, `_report.scss` and `_leftnav.scss` are deliberately not
+// reproduced: the select is native, dashboards and reports are out of scope and no in-scope screen renders the
+// rail. Every value below is a Bootstrap variable, a legacy partial rule, or a token measured from the design
+// and recorded in AAP 0.2.2, whose name is written beside it.
+// =============================================================================
 
-// ----------------------------------------------------------------------------- 1.
+// ----------------------------------------------------------------------------- 1. Brand overrides -----------------------------------------------------------------------------
 
-// $brand-primary is the product's own override [app/styles-dev/styles.scss:2]. Everything derived from it (links, .btn-primary, the active nav item, focus glows) follows.
-$brand-primary: rgba(79, 153, 237, 1);
+// One brand blue for the whole product: AAP 0.2.2's `color-brand-blue` #5099ED, the product's own override [app/styles-dev/styles.scss:2]. Every link, nav item and primary button derives from this one value, so a link and the button beside it can never come out a shade apart.
+$brand-primary: rgba(80, 153, 237, 1);
 
-// The design's primary-button border is #378CEB. Bootstrap derives the border as darken($btn-primary-bg, 5%) on $brand-primary — rgba(79, 153, 237, 1) above — which lands on #388CEB, one step off the measured value, so.
+// The design's primary-button border is #378CEB. Bootstrap derives it as darken($btn-primary-bg, 5%) on $brand-primary, which lands one step off the measured value, so the border is declared instead of derived.
 $btn-primary-border: #378CEB;
 
 // Not set on purpose: $brand-success/#1abc9c is the left-rail accent, and the rail is not rendered.
 
-// The two icon-font locations, both resolved from npm. Angular inlines the Sass into this one stylesheet and then resolves every url() relative to it, so the packages' own defaults ("../fonts/..." from the partial) would.
+// The two icon-font locations, both resolved from npm. Angular inlines the Sass into this one stylesheet and then resolves every url() relative to it, so the packages' own defaults ("../fonts/..." from the partial) would not resolve.
 $icon-font-path: "../node_modules/bootstrap-sass/assets/fonts/bootstrap/";
 $fa-font-path: "../node_modules/font-awesome/fonts";
 
-// ----------------------------------------------------------------------------- 2-3.
+// ----------------------------------------------------------------------------- 2-3. Bootstrap 3 and Font Awesome 4.7.0, from npm -----------------------------------------------------------------------------
 
 @import "bootstrap-sass/assets/stylesheets/bootstrap";
 
-// Font Awesome 4.7.0, the icon family the legacy screens draw. The package's entry point (@import "font-awesome/scss/font-awesome") is not used: its _path.scss appends "?v=4.7.0" to every font URL, and the Angular CSS.
+// Font Awesome 4.7.0, the icon family the legacy screens draw. The package's entry point (@import "font-awesome/scss/font-awesome") is not used: its _path.scss appends "?v=4.7.0" to every font URL, and the Angular CSS pipeline cannot resolve a query string on a font resource. The partials are imported individually and the @font-face below is declared here, with the same rules and the same fonts.
 @import "font-awesome/scss/variables";
 @import "font-awesome/scss/mixins";
 
@@ -43,7 +54,7 @@ $fa-font-path: "../node_modules/font-awesome/fonts";
 @import "font-awesome/scss/icons";
 @import "font-awesome/scss/screen-reader";
 
-// ----------------------------------------------------------------------------- 4.
+// ----------------------------------------------------------------------------- 4. The legacy Bootstrap 3 layer, reproduced inline -----------------------------------------------------------------------------
 
 // Typography
 $mx-font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; // $font-family-sans-serif
@@ -66,7 +77,8 @@ $mx-text-select: #333333; // color-select-value — $gray-dark
 // Surfaces and rules
 $mx-surface: #FFFFFF; // color-surface — $body-bg
 $mx-app-bg: #EBEFF1; // color-app-bg — surface behind the signed-in cards
-$mx-table-head: #F5F5F5; // color-table-head — $table-bg-active, the .table th band
+$mx-table-head: #F5F5F5; // color-table-head — the legacy _content.scss override of $table-bg-accent
+                         // (Bootstrap declares $table-bg-accent as #f9f9f9 [_variables.scss:155]; the measured .table th band is the partial's own value)
 $mx-rule: #DDDDDD; // color-rule — $table-border-color
 $mx-section-rule: #E5E5E5; // color-section-rule — panel heading rule
 $mx-hairline: #EEEEEE; // color-hairline — $gray-lighter
@@ -78,8 +90,8 @@ $mx-navbar-border: #DFDFDF; // color-navbar-border
 // Values the legacy partials carry that the AAP 0.2.2 manifest does not tokenise, each verified against the partial named beside it and declared here so this stylesheet stays a closed set of documented values.
 $mx-input-focus: #BCE0FD; // _inputs.scss:11 — the .form-control focus border
 $mx-notice-border: #CCCCCC; // _notifications.scss — the notification panel's 1px border
-$mx-legacy-blue: #4F99ED; // _notifications.scss `.new-notification` and _layout.scss's nav-link pin —
-                          // the partials' own blue literal, the literal expansion of the product's `$brand-primary: rgba(79, 153, 237, 1)` declared at the top of this file, which AAP 0.2.2 records as color-brand-blue #5099ED
+$mx-legacy-blue: #5099ED; // _notifications.scss `.new-notification` and _layout.scss's nav-link pin —
+                          // the partials' own blue literal, the same value as the brand token above, so the hover fill and a link are one colour
 $mx-notice-accent: $mx-legacy-blue; // _notifications.scss `.new-notification` — the 2px accent bar
 $mx-danger: #d9534f; // $brand-danger as the legacy variables leave it [_variables.scss:23] — the
                      // required marker's colour [_content.scss:148] and the notification widget's error accent
@@ -108,6 +120,7 @@ $mx-radius-card: 0; // radius-card — .panel
 $mx-radius-button: 2px; // _buttons.scss:2 — every button in the product
 $mx-radius-notice: 2px; // _alerts.scss:4 — .alert; the notification widget takes the partial's 0
 $mx-shadow-card: 0 1px 3px rgba(0, 0, 0, .14); // shadow-card — .panel, no border stroke
+$mx-profile-key-width: 179px; // the profile card's key column: its widest label, "Number of active saving(s)" at 14px/700
 
 // ----------------------------------------------------------------------------- Base typography (_variables.scss scaffolding + the body rule of _content.scss).
 
@@ -193,7 +206,7 @@ hr {
   border-top: 1px solid $mx-hairline; // color-hairline
 }
 
-// The section rule the record header closes with, which AAP 0.2.3 draws at #E5E5E5: color-section-rule, opt-in by class so no other <hr> in the build changes, and declared here because a component carries no colour of its (Rule 1 clause 6).
+// The section rule the record header closes with, which AAP 0.2.3 draws at #E5E5E5: color-section-rule, opt-in by class so no other <hr> in the build changes, and declared here because a component carries no colour of its own (Rule 1 clause 6).
 hr.section-rule {
   border-top-color: $mx-section-rule; // color-section-rule
 }
@@ -210,17 +223,24 @@ hr.section-rule {
     padding: $mx-cell-padding; // space-cell
     border-top: 1px solid $mx-rule;
   }
+
+  // The head band's 2px rule is the whole separator: the first body row's own 1px top border would stack with it and paint a 3px line where the design draws 2px.
+  > tbody > tr:first-child > td {
+    border-top: 0;
+  }
 }
 
-// Column proportions of the clients list: the design's own sizing, Name widest at ~28% and Staff narrowest at ~8.5% (AAP 0.7.4 "Clients list"), with the four middle columns dividing what is left (Rule 1 clause 6).
+// Column proportions of the clients list, and why they hold: the design's six widths, Name widest at 28.00% down to Staff at 8.50% (AAP 0.7.4 "Clients list"). `table-layout: fixed` makes the columns the declared proportion at every width instead of letting the longest value on the page decide, and it keeps the table inside its container rather than growing to its widest row.
 .table.client-list {
-  > thead > tr > th:first-child {
-    width: 28%;
-  }
+  table-layout: fixed;
 
-  > thead > tr > th:last-child {
-    width: 8.5%;
-  }
+  // The six columns in the design's own order: Name 28.00%, Client No. 19.68%, External ID 17.51%, Status 10.46%, Office 15.85%, Staff 8.50% (AAP 0.7.4 "Clients list").
+  > thead > tr > th:nth-child(1) { width: 28%; } // Name
+  > thead > tr > th:nth-child(2) { width: 19.68%; } // Client No.
+  > thead > tr > th:nth-child(3) { width: 17.51%; } // External ID
+  > thead > tr > th:nth-child(4) { width: 10.46%; } // Status
+  > thead > tr > th:nth-child(5) { width: 15.85%; } // Office
+  > thead > tr > th:nth-child(6) { width: 8.5%; } // Staff, the design's narrowest column
 }
 
 // The list's row affordance: the legacy row names it `class="pointer-main"` (`app/views/clients/clients.html:64`) and the partial paints cursor, blue fill and white text in `.pointer-main:hover` (`_content.scss:413-417`), which _content.scss nests under `.card` — the `.panel.panel-default` of AAP 0.5.2 the in-scope list renders. The scoped selector (0,3,0) also outranks Bootstrap's zebra rule (0,2,2), so an odd row's fill cannot paint over the hover fill.
@@ -278,24 +298,20 @@ hr.section-rule {
     border-color: $mx-input-focus;
     box-shadow: inset 0 1px 1px rgba(0, 0, 0, .075), 0 0 2px rgba(102, 175, 233, .6);
 
-    // BLITZY [A11Y]: the design's focus indicator is this move of the border from #E0E0E0 to #BCE0FD (about 1.3:1 between the two states, about 1.5:1 against the white field) plus the soft glow, and Bootstrap's own.
+    // The design's focus indicator is this move of the border from #E0E0E0 to #BCE0FD — about 1.3:1 between the two states, about 1.5:1 against the white field — together with the soft glow, which is why the stronger designed ring below hangs on `:focus-visible` rather than on every focus.
   }
 
-  // BLITZY [A11Y]: the measured placeholder #999999 on #FFFFFF is 2.85:1, below WCAG AA for 14px text.
+  // The design's placeholder #999999 on #FFFFFF measures 2.85:1, below WCAG AA for 14px text. The colour stays the design's, and the field's own label carries the same words at full contrast above it.
   &::placeholder {
     color: $mx-text-placeholder; // color-placeholder
     opacity: 1;
   }
 }
 
-// BLITZY [A11Y]: one designed keyboard focus ring for every form control and every button, in the design's `color-primary-border` #378CEB — the 2px ring the nav links draw. Legacy leaves both to the user agent (a field signals focus only by the #E0E0E0→#BCE0FD border move and glow above, a primary button only by a darker fill), so WCAG 2.4.7 (Focus Visible) reads neither as focused: measured at HEAD, the navbar's search field and its scope select reported `outline: none, 0px`. #378CEB is 3.3:1 against the white card and bar, clear of the 3:1 non-text contrast guidance, and it paints on `:focus-visible` alone. The offset is outside the box on purpose: an inset ring vanishes into the primary button's own #378CEB border and #5099ED fill.
+// One designed keyboard focus ring for every form control and every button, in the design's `color-primary-border` #378CEB — the 2px ring the nav links draw. Legacy leaves both to the user agent (a field signals focus only by the #E0E0E0→#BCE0FD border move and glow above, a primary button only by a darker fill), so WCAG 2.4.7 (Focus Visible) reads neither as focused: measured at HEAD, the navbar's search field and its scope select reported `outline: none, 0px`. #378CEB is 3.3:1 against the white card and bar, clear of the 3:1 non-text contrast guidance, and it paints on `:focus-visible` alone. The offset is outside the box on purpose: an inset ring vanishes into the primary button's own #378CEB border and #5099ED fill.
 .form-control:focus-visible,
-.btn:focus-visible {
-  outline: 2px solid $mx-brand-border;
-  outline-offset: 1px;
-}
-
-// BLITZY [A11Y]: Bootstrap answers an open dropdown with `.btn-group.open .dropdown-toggle { outline: 0 }` (0,3,0), which outranks the ring above and would strip it when a keyboard user presses Enter on the record's More button. The open toggle keeps the same ring: the expanded menu is a second cue, not a replacement for the first.
+.btn:focus-visible,
+// Bootstrap answers an open dropdown with `.btn-group.open .dropdown-toggle { outline: 0 }`, which would strip the ring when a keyboard user presses Enter on the record's More button: the open toggle keeps the same ring, the expanded menu being a second cue.
 .btn-group.open .dropdown-toggle:focus-visible {
   outline: 2px solid $mx-brand-border;
   outline-offset: 1px;
@@ -310,7 +326,18 @@ input[type="date"].form-control {
   color: $mx-text-select; // color-select-value
 }
 
-// The "Show Closed" control is the browser's own input[type=checkbox] (AAP 0.5.2), whose box the user agent draws: a border or background declared here never paints, and the design shows no treatment of it — which is why the token block records AAP 0.2.2's checkbox border as the user agent's own rendering.
+// The "Show Closed" control is the browser's own input[type=checkbox] (AAP 0.5.2), whose box the user agent draws: a border or background declared here never paints, and the design shows no treatment of it — which is why the token block records AAP 0.2.2's checkbox border as the user agent's own rendering.  It sits in the find field's `.input-group`, which Bootstrap lays out as a table, so the choice is one of the group's cells: the native box and its label on the field's own 34px line, with a gutter after the search button. The wrapper carries no `.form-control` (the legacy markup did), because that class is what painted an input-shaped frame around the choice and made it read as a third text field (AAP 0.2.3 FilterToolbar).
+.input-group > .checkbox {
+  display: table-cell;
+  width: 1%; // shrink to the choice's own width inside the table
+  padding-inline-start: $mx-cell-padding;
+  vertical-align: middle;
+  white-space: nowrap; // the label stays on one line beside its box
+
+  label {
+    margin-bottom: 0;
+  }
+}
 
 // Invalid fields use Bootstrap's own .has-error / .help-block treatment; there is no second validation mechanism.
 
@@ -335,11 +362,17 @@ span.required {
   margin-bottom: 0;
 }
 
-// ----------------------------------------------------------------------------- Login language switcher (AAP 0.2.3 `LanguageSwitcher`: "label 13px #666F74 + native select 24px tall") The row the login screen renders is a (Rule 1 clause 6).
+// ----------------------------------------------------------------------------- Login language switcher (AAP 0.2.3 `LanguageSwitcher`: "label 13px #666F74 + native select 24px tall") -----------------------------------------------------------------------------
 
 .language-switcher {
   font-size: $mx-font-size-switcher; // AAP 0.2.3 LanguageSwitcher label size
   color: $mx-text-strong; // color-text-strong — the design's #666F74 label
+
+  // The label keeps a gutter of its own instead of sitting on the select's border: at 320px the navbar's copy of this row has no whitespace left between the two, so the pair read as one string.
+  label {
+    margin-bottom: 0;
+    margin-inline-end: 6px;
+  }
 
   select {
     height: 24px; // AAP 0.2.3 LanguageSwitcher: the design's 24px-tall native select
@@ -347,19 +380,33 @@ span.required {
   }
 }
 
-// ----------------------------------------------------------------------------- Login hero lockup (AAP 0.2.1 Step 1, AAP 0.2.4: "hero size 283.5x75.5 on the login screen") Legacy governed the hero's rendered width with an inline `width:80%; margin:auto` pinned to the form column [app/index.html:80]. The delivered value is the AAP's: 283.5px measured in a raster captured at the ≈110% zoom the plan documents for steps 1 and 2 is 283.5 / 1.1 ≈ 257.7px CSS, which of the 360px form column (the `.col-sm-4` content box under the same scale, the measured 396px form) is 71.6%. --------------------
+// ----------------------------------------------------------------------------- Login hero lockup (AAP 0.2.1 Step 1, AAP 0.2.4: "hero size 283.5x75.5 on the login screen") -----------------------------------------------------------------------------
 
+// The legacy screen renders `images/mifos-logo-flat.png` at 80% of the form column (app/index.html:78-80), which is the wordmark-plus-mark lockup the design shows. The asset is 520x178 with its ink inset to 465x124 — aspect 3.75:1, the design's 3.76:1 — so 317px of rendered width puts the ink at 283.5x75.6, the size AAP 0.2.1 measures. `.img-responsive`'s own `max-width: 100%` keeps it inside the column below the `sm` breakpoint.
 .login-hero {
-  width: 71.6%; // 257.7px (283.5 / 1.1) inside the design's 360px form column
+  width: 317px;
+  height: auto; // the asset's own aspect
+  max-width: 100%; // narrow viewports shrink it with the column
 }
 
-// ----------------------------------------------------------------------------- Login page offset: legacy's own `margin-top: 10vh` on the login container (app/index.html:30). -----------------------------------------------------------------------------
+// The login form's column. AAP 0.2.1 fixes the form at 396px, which is wider than the 360px content box Bootstrap's `.col-sm-4` leaves inside the design's 1170px `.container`, so the column is sized to the form plus the grid's two 15px paddings and centred on the page. Below `sm` the column keeps the grid's full width, so the form follows the viewport (345px at 375, the flow's narrowest in-scope width).
+@media (min-width: $screen-sm-min) {
+  .login-form-column {
+    float: none;
+    width: 426px; // 396px form + 2 × 15px padding
+    margin-inline: auto;
+  }
+}
+
+// ----------------------------------------------------------------------------- Login page offset: legacy's own `margin-top: 10vh` on the login container (app/index.html:30) -----------------------------------------------------------------------------
 
 .login-page {
   margin-top: 10vh; // legacy app/index.html:30 — the login page's own offset
 }
 
-// ----------------------------------------------------------------------------- Login footer headings. The footer's three column headings are `<h2>` elements: they are the only headings the login screen renders, so at the `<h5>` legacy uses in the same three places [app/index.html:202,216,233] the page's outline began at level 5. The level belongs to the element; the visible size stays on this class, reproducing Bootstrap 3's h5 box ($font-size-h5, $headings-font-weight, $headings-line-height and the h4–h6 `$line-height-computed / 2` margins) so no pixel moves. -------------------------
+// ----------------------------------------------------------------------------- Login footer headings -----------------------------------------------------------------------------
+
+// The footer's three column headings are `<h2>` elements: they are the only headings the login screen renders, so at the `<h5>` legacy uses in the same three places [app/index.html:202,216,233] the page's outline began at level 5. The level belongs to the element; the visible size stays on this class, reproducing Bootstrap 3's h5 box ($font-size-h5, $headings-font-weight, $headings-line-height and the h4–h6 `$line-height-computed / 2` margins) so no pixel moves.
 
 .footer-heading {
   font-size: $font-size-h5; // the h5 size (14px), not the h2 size (30px) the element carries
@@ -369,14 +416,24 @@ span.required {
   margin-bottom: $line-height-computed * 0.5;
 }
 
-// ----------------------------------------------------------------------------- Login footer link wrapping.
-//
-// Each footer link column is a Bootstrap `.col-xs-4` — 125px at a 375px viewport with 95px of content inside its gutter — and a translated label offering no break opportunity is wider than that box, so measured at 375x812 the CONTRIBUTE label ran to x=389.53 and `documentElement.scrollWidth` was 390 against an `innerWidth` of 375. Only a break opportunity removes that: the three columns are the design's, no link may be hidden and no label shortened, so the label wraps inside its column.
-//
-// `anywhere` rather than `break-word`, and on `.login-footer`'s anchors alone: the labels are translated, so the rule has to hold for whatever text arrives rather than for the one that overflowed, and the class keeps the wrap off every other link. -----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------- Login footer — columns inside the rule box, and their wrapping -----------------------------------------------------------------------------
 
+// The footer's three link columns sit inside the 1140px box the dividers span. Bootstrap's `.row` pulls 15px past each end of that box, which made the three 390px columns span 1170px, so the links row is cleared of its negative gutters and its columns divide the content box the rules draw.
+.login-footer > .login-footer-links {
+  margin-inline: 0;
+}
+
+// Each footer link column is a Bootstrap `.col-xs-4` — 125px at a 375px viewport with 95px of content inside its gutter — and a translated label offering no break opportunity is wider than that box, so at 375x812 the CONTRIBUTE label ran to x=389.53 and `documentElement.scrollWidth` was 390 against an `innerWidth` of 375. Only a break opportunity removes that: the three columns are the design's, no link may be hidden and no label shortened, so the label wraps inside its column.  `anywhere` rather than `break-word`, and on `.login-footer`'s anchors alone: the labels are translated, so the rule has to hold for whatever text arrives rather than for the one that overflowed, and the class keeps the wrap off every other link.
 .login-footer a {
   overflow-wrap: anywhere;
+}
+
+// Below the flow's narrowest in-scope width (375px) the three columns hold 77px of content each at 320, where an uppercase heading such as "CONTRIBUTE" is wider than its box and a link label has to break inside a word. The columns stack full width there, so every heading and label fits on its own line.
+@media (max-width: 359px) {
+  .login-footer .col-xs-4 {
+    float: none;
+    width: 100%;
+  }
 }
 
 // ----------------------------------------------------------------------------- Navbar (_navbar.scss, _layout.scss) -----------------------------------------------------------------------------
@@ -389,9 +446,7 @@ app-navbar {
   z-index: $zindex-navbar-fixed;
 }
 
-// Bootstrap 3 applies `margin-bottom: $navbar-margin-bottom` to `.navbar` [_navbar.scss:15], a 20px band. The bar's surface is painted by the bar and the
-// #EBEFF1 surface by `.content-wrapper`, so that margin paints a 20px body-white band between the bar's 1px #DFDFDF rule and the content surface, where
-// AAP 0.2.3 `AppShell` places the white navbar directly over the #EBEFF1 background (measured before this rule: `.navbar` bottom 52px, `.content-wrapper` top 72px). The margin is cleared and no compensating padding is needed, because the surface paint already lives on `.content-wrapper`.
+// Bootstrap 3 applies `margin-bottom: $navbar-margin-bottom` to `.navbar` [_navbar.scss:15], a 20px band. The bar's surface is painted by the bar and the #EBEFF1 surface by `.content-wrapper`, so that margin paints a 20px body-white band between the bar's 1px #DFDFDF rule and the content surface, where AAP 0.2.3 `AppShell` places the white navbar directly over the #EBEFF1 background (measured before this rule: `.navbar` bottom 52px, `.content-wrapper` top 72px). The margin is cleared and no compensating padding is needed, because the surface paint already lives on `.content-wrapper`.
 .navbar {
   min-height: 50px; // the design's navbar height
   background-color: $mx-surface;
@@ -408,7 +463,7 @@ app-navbar {
   }
 }
 
-// The collapse row is a flex row, which is what lets the bar's source order be its visual order and therefore the order Tab visits its groups (AAP 0.2.3 `Navbar`, AAP 0.7.4: brand, "Clients", the global search with its scope selector, the language switcher, the user menu). Bootstrap floats the right-hand groups and lands the first-authored one at the right-hand end, so matching the design with floats meant authoring them backwards — and the Tab order with them. Every group is a flex item here, so the `float: right !important` `.navbar-right` pins is inert, the left-hand list's automatic right margin pushes the rest to the edge in source order, and the -15px right margin moves to the row's last group so its right edge stays flush. Below the breakpoint the bar keeps Bootstrap's stacked layout, in source order.
+// The collapse row is a flex row, which is what lets the bar's source order be its visual order and therefore the order Tab visits its groups (AAP 0.2.3 `Navbar`, AAP 0.7.4: brand, "Clients", the global search with its scope selector, the language switcher, the user menu). Bootstrap floats the right-hand groups and lands the first-authored one at the right-hand end, so matching the design with floats meant authoring them backwards — and the Tab order with them (QA finding F13). Every group is a flex item here, so the `float: right !important` `.navbar-right` pins is inert, the left-hand list's automatic right margin pushes the rest to the edge in source order, and the -15px right margin moves to the row's last group so its right edge stays flush. Below the breakpoint the bar keeps Bootstrap's stacked layout, in source order.
 @media (min-width: $grid-float-breakpoint) {
   .navbar-collapse {
     display: flex;
@@ -455,7 +510,7 @@ app-navbar {
   color: $mx-brand-blue;
 }
 
-// BLITZY [A11Y]: legacy and this stylesheet leave the nav link's focus indicator to the user agent (`outline: auto`). A designed indicator appears on `:focus-visible` alone — never on hover and never at rest, the states legacy pins — in the design's `color-primary-border` #378CEB, 3.4:1 against the white bar and so clear of the 3:1 non-text contrast guidance. It does not darken the link colour, nor the `.form-control:focus` border this file leaves at the design value.
+// Legacy and this stylesheet leave the nav link's focus indicator to the user agent (`outline: auto`). A designed indicator appears on `:focus-visible` alone — never on hover and never at rest, the states legacy pins — in the design's `color-primary-border` #378CEB, 3.4:1 against the white bar and so clear of the 3:1 non-text contrast guidance. It does not darken the link colour, nor the `.form-control:focus` border this file leaves at the design value.
 .navbar-default .navbar-nav > li > a:focus-visible {
   outline: 2px solid $mx-brand-border;
   outline-offset: -2px;
@@ -496,7 +551,7 @@ app-navbar {
   }
 }
 
-// ----------------------------------------------------------------------------- Tabs (the record's tab strip, _content.scss) -----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------- Tabs — the record's tab strip (_content.scss, Bootstrap .nav-tabs) -----------------------------------------------------------------------------
 
 .nav-tabs {
   > li > a {
@@ -516,15 +571,71 @@ app-navbar {
   }
 }
 
+// A tab that has focus keeps the design's treatment: the user agent's own ring (a 2px #101010 frame at offset -2) is drawn over the inner two pixels of the 3px accent bar and leaves one pixel of #428BCA showing. The application's focus token is drawn inside the tab instead, clear of the accent, so the accent stays 3px and the focus indicator is still plainly visible (WCAG 2.4.7).
+.nav-tabs > li > a:focus {
+  outline: 2px solid $mx-brand-border;
+  outline-offset: -3px;
+}
+
+// The strip's two decorative scroll chevrons (AAP 0.2.1 Step 3): the design's blue glyphs at the strip's ends, in the colour of the inactive tabs. They are painted rather than operated — the template marks them aria-hidden and gives them no control — and the strip itself scrolls at narrow widths, so neither is a dead button.
+.nav-tabs > .tab-strip-chevron {
+  padding: 10px 8px; // the tab's own vertical rhythm, so the glyph sits on the strip's baseline
+  color: $mx-brand-blue; // color-brand-blue — the inactive tab label's colour
+
+  .fa {
+    font-size: $mx-font-size-small;
+  }
+}
+
+// The record's blocks are separated (AAP 0.2.1 Step 3): the strip closes with its own 1px rule and the action row stands below it, and the action row in turn leaves a gap above the tab body, so no control reads as the label of the field beneath it.
+app-tab-strip,
+app-action-button-group {
+  display: block;
+  margin-bottom: 15px;
+}
+
 // The record's tabs and the client list's page links carry no `href` on purpose: a role, a tab stop and a key handler reach and operate them without a link target, and an empty `href` reloads the screen on open-in-new-tab instead of doing nothing (Rule 1 clause 3). An anchor without `href` also loses the pointer cursor a browser gives a link, so that one visible consequence is restored here rather than by handing the controls a `href` they must not have (Rule 1 clause 6).
 a[role='tab'],
 .pagination > li > a {
   cursor: pointer;
 }
 
-// ----------------------------------------------------------------------------- Client status (plan 0.2.4: CSS on the legacy status class, consumed by StatusSwatch) Geometry and colour only — the design shows a colour (AAP 0.10.5, Rule 1 clause 6).
-/* BLITZY [A11Y]: colour is the only carrier of client status. The migration keeps the design's colour-only indicator (AAP 0.10.5 item 11) and StatusSwatch's span is aria-hidden, so a screen reader learns the status only. */
-// -----------------------------------------------------------------------------
+// The record's profile card rows (AAP 0.2.3 `ProfileCard`: bold key column, value column at a fixed offset). The key column is one width for every row — the widest label, 179px at 14px/700 — so no label wraps and every value starts at the same offset; legacy builds the same rows as a two-column table [app/views/clients/viewclient.html:792]. The columns' own 15px paddings are withdrawn because the card body already carries the inset.
+app-profile-card .panel-body > .row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+app-profile-card .panel-body > .row > [class*='col-xs-'] {
+  float: none;
+  width: auto;
+  min-width: 0;
+  padding-inline: 0;
+}
+
+app-profile-card .panel-body > .row > .col-xs-7 {
+  flex: 0 0 $mx-profile-key-width;
+}
+
+app-profile-card .panel-body > .row > .col-xs-5 {
+  flex: 1 1 auto;
+}
+
+// Below the width the design was measured at, the profile column takes a third of the row so that key column and a full date still share one line each in a 1280px screen; at and above 1400px the design's own 9/3 split stands.
+@media (min-width: $screen-md-min) and (max-width: 1399px) {
+  .record-main-column {
+    width: 66.66666667%;
+  }
+
+  .record-profile-column {
+    width: 33.33333333%;
+  }
+}
+
+// ----------------------------------------------------------------------------- Client status (AAP 0.2.4: CSS on the legacy status class, consumed by StatusSwatch) -----------------------------------------------------------------------------
+
+// Geometry and colour only: the design shows a colour and no word (AAP 0.10.5, Rule 1 clause 6). That makes colour the sole carrier of client status, and StatusSwatch's span is aria-hidden, so a screen reader learns nothing from it and under `forced-colors: active` every swatch paints the same. Telling the states apart without colour — a border weight, a glyph, a visually hidden label — changes the indicator the design specifies and so needs a designer's decision rather than a rule here.
 
 .status-swatch {
   display: inline-block;
@@ -542,21 +653,11 @@ a[role='tab'],
   border-radius: 50%;
 }
 
-.status-active {
-  background-color: $mx-status-active; // color-status-active
-}
-
-.status-pending {
-  background-color: $mx-status-pending; // color-status-pending
-}
-
-.status-closed {
-  background-color: $mx-status-closed; // the closed key's own neutral, #777777 as before
-}
-
-.status-other {
-  background-color: $mx-status-other; // the other key's own neutral, #999999 as before
-}
+// The four keys StatusSwatch paints. AAP 0.2.2 fixes the active and pending colours; closed and other keep the neutrals they paint today, so a later change to a body-text token cannot silently repaint a status indicator.
+.status-active { background-color: $mx-status-active; } // color-status-active
+.status-pending { background-color: $mx-status-pending; } // color-status-pending
+.status-closed { background-color: $mx-status-closed; } // the closed key's neutral, #777777
+.status-other { background-color: $mx-status-other; } // the other key's neutral, #999999
 
 // ----------------------------------------------------------------------------- Alerts and notifications (_alerts.scss, _notifications.scss) -----------------------------------------------------------------------------
 
@@ -677,17 +778,17 @@ a[role='tab'],
     box-shadow: none;
   }
 
-  // (b) The list toolbar's find field. `.input-group` is Bootstrap's shrink-to-fit `display: table` and the "Show Closed" control is one of its cells (it wears `.form-control`), which leaves the field at the intrinsic width its `size` attribute gives it — 177px of a 315px row at 375 — with its placeholder cut. The group is made fluid and the choice becomes the table's caption instead of a cell: `caption-side: bottom` is the one placement CSS offers for a box that belongs to the group but not to its row, so it takes a row of its own under the field at the group's full width.
+  // (b) The list toolbar's find field. `.input-group` is Bootstrap's shrink-to-fit `display: table`, which leaves the field at the intrinsic width its `size` attribute gives it — 177px of a 315px row at 375 — with its placeholder cut. The group is made fluid and the "Show Closed" choice becomes the table's caption instead of a cell: `caption-side: bottom` is the one placement CSS offers for a box that belongs to the group but not to its row, so it takes a row of its own under the field at the group's full width.
   app-filter-toolbar .input-group {
     width: 100%;
   }
 
-  app-filter-toolbar .input-group > .checkbox.form-control {
+  app-filter-toolbar .input-group > .checkbox {
     float: none; // a float is blockified, which would discard the caption display below
     display: table-caption;
     caption-side: bottom;
     width: 100%;
-    height: auto; // a caption is not a control: it takes its own content's height
+    padding-inline-start: 0;
   }
 
   // (c) The record's tab strip. Bootstrap lays `.nav-tabs` out as floats, which wrap once their widths exceed the card — measured on the loan record at 375, where three tabs and the two decorative chevrons need 370px of a 315px card and the strip became two rows 80.13px tall. The strip becomes one row that scrolls sideways: its items are size-to-content flex items, which take no part in float layout, so the right-hand chevron's `.pull-right` stays in the row without this file out-shouting it, and the row never wraps. A two-tab strip fits the width and shows no scrollbar.
@@ -699,6 +800,20 @@ a[role='tab'],
 
     > li {
       flex: 0 0 auto; // a tab keeps its label's width; the strip scrolls rather than squeezing it
+    }
+
+    // The right-hand chevron keeps the row's right edge in a flex row, where its `float` has no meaning.
+    > .tab-strip-chevron-end {
+      margin-inline-start: auto;
+    }
+  }
+
+  // (d) The clients list's table. Its columns are fixed proportions (see `.table.client-list`), so at 375 the six of them share the card's width instead of pushing the table 157px past it and clipping the Status header mid-glyph. Bootstrap's own `.table-responsive > .table` rule sets `white-space: nowrap` below this breakpoint, which in a fixed-proportion table leaves every header wider than its column and spilling over its neighbour, so the cells wrap inside their own column — and a value with no break opportunity breaks there too rather than over the next cell.
+  .table-responsive > .table.client-list {
+    > thead > tr > th,
+    > tbody > tr > td {
+      white-space: normal;
+      overflow-wrap: anywhere;
     }
   }
 }

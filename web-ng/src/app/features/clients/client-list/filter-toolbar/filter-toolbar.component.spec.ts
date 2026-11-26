@@ -11,7 +11,7 @@ import { FilterToolbarComponent } from './filter-toolbar.component';
  * Behavioural spec for `FilterToolbarComponent`, the list toolbar AAP 0.2.3's inventory requires the new app to provide (row `FilterToolbar`, whose props are the four outputs; Figma node `1:3`; Rule 1 clause
  * 8, which allows no empty or boilerplate specs). It pins what the extraction must not change: the legacy element ids, names and control names (`#filterText`, `#find`, `#showAll`) the parity page objects and
  * the clients list's own spec address the toolbar by (Rule 1 clause 3); the legacy Bootstrap 3 structure — `.form-horizontal` > `.form-group`, `.input-group` with `.input-group-btn`, the `fa fa-search` submit,
- * `.checkbox.form-control` and `a.btn.btn-primary.pull-right` with `fa fa-plus` (Rule 1 clause 6); each of the four outputs publishing on the interaction the inventory names; the create control's own
+ * `.checkbox` and `a.btn.btn-primary.pull-right` with `fa fa-plus` (Rule 1 clause 6); each of the four outputs publishing on the interaction the inventory names; the create control's own
  * `routerLink="/createclient"` and `CREATE_CLIENT` gate, so the navigation stays declarative and the gate fails closed; and the search button disabling while a read is in flight (AAP 0.1.1
  * "duplicate-submission protection"). The permission gate is supplied at its real token with a stub typed against the real service, and the router is provided empty because no case completes a navigation. No
  * translation bundle is served, so a bound key renders as that key — which makes "the legacy key is the one bound" an assertion, not a guess.
@@ -104,11 +104,14 @@ describe('FilterToolbarComponent', () => {
     expect(showClosed.name).toBe(SHOW_CLOSED_ID);
     expect(showClosed.type).toBe('checkbox');
 
-    // The legacy layout: `.form-horizontal` over `.form-group`, the find field in an `.input-group` with its own button, and the boxed checkbox inside that group (Rule 1 clause 6).
+    // The legacy layout: `.form-horizontal` over `.form-group`, the find field in an `.input-group` with its own button, and the native checkbox inside that group (Rule 1 clause 6).
     expect(form.classList.contains('form-horizontal')).toBe(true);
     expect(form.querySelectorAll('.form-group')).toHaveLength(1);
     expect(control<HTMLElement>(host, '.input-group').querySelector(`#${FIND_ID}`)).toBe(find);
-    expect(control<HTMLElement>(host, '.checkbox').classList.contains('form-control')).toBe(true);
+    // The choice is Bootstrap's plain `.checkbox` cell and not a `.form-control` box: the bordered input-shaped frame that class painted around it is not reproduced (AAP 0.5.2; AAP 0.2.3 row `FilterToolbar`).
+    const choice = control<HTMLElement>(host, '.checkbox');
+    expect(choice.classList.contains('form-control')).toBe(false);
+    expect(control<HTMLElement>(host, '.input-group').contains(choice)).toBe(true);
     expect(host.querySelector('label')?.getAttribute('for')).toBe(SHOW_CLOSED_ID);
 
     // Both text fields carry the legacy bundle's key as their accessible name, because a placeholder is not a label; with no bundle served the pipe renders the key itself.

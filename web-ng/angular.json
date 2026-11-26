@@ -53,6 +53,11 @@
                 "glob": "**/*",
                 "input": "app/images",
                 "output": "images"
+              },
+              {
+                "glob": "favicon.ico",
+                "input": "app/images",
+                "output": "/"
               }
             ],
             "outputPath": "dist/web-ng"

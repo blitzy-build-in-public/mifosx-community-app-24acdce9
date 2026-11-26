@@ -84,13 +84,9 @@ describe('TabStripComponent', () => {
     return event;
   }
 
-  /** Anything the strip paints outside its tabs — a scroll chevron, or an item hidden from the accessibility tree — which the in-scope record never needs (AAP 0.10.5 items 6 and 8). */
-  function extras(fixture: ComponentFixture<TabStripComponent>): HTMLElement[] {
-    return Array.from(
-      host(fixture).querySelectorAll<HTMLElement>(
-        'i.fa-chevron-left, i.fa-chevron-right, li[aria-hidden]',
-      ),
-    );
+  /** The two decorative chevrons the design draws at the strip's ends: they paint the strip's own horizontal scroll and control nothing (AAP 0.2.1 step 3, AAP 0.2.4). */
+  function chevrons(fixture: ComponentFixture<TabStripComponent>): HTMLElement[] {
+    return Array.from(host(fixture).querySelectorAll<HTMLElement>('li.tab-strip-chevron'));
   }
 
   it('renders one tab per descriptor, in the parent’s order, with its label verbatim', () => {
@@ -221,13 +217,44 @@ describe('TabStripComponent', () => {
     expect(activeLabels(fixture)).toEqual(['General']);
   });
 
-  it('renders no scroll chevron and nothing hidden from the accessibility tree', () => {
+  it('paints one decorative chevron at each end of the strip and gives neither a control', () => {
     const fixture = createStrip('general');
+    const items = Array.from(host(fixture).querySelectorAll<HTMLElement>('ul.nav-tabs > li'));
+    const [start, end] = chevrons(fixture);
 
-    // The design's two chevrons are not painted at all: with at most three tabs in scope the strip never scrolls, so they would have nothing to scroll, and a painted control that does nothing is the broken affordance the plan refuses (AAP 0.10.5 items 6 and 8; Rule 1 clause 3).
-    expect(extras(fixture)).toEqual([]);
+    // One chevron at each end of the tab row, so the list is the tabs plus exactly those two items (AAP 0.2.1 step 3, AAP 0.2.4).
+    expect(chevrons(fixture)).toHaveLength(2);
+    expect(items).toHaveLength(TABS.length + 2);
+    expect(items[0]).toBe(start);
+    expect(items[items.length - 1]).toBe(end);
+    expect(host(fixture).querySelectorAll('[role="tab"]')).toHaveLength(TABS.length);
 
-    expect(host(fixture).querySelectorAll('ul.nav-tabs > li')).toHaveLength(TABS.length);
+    for (const chevron of [start, end]) {
+      expect(chevron.getAttribute('aria-hidden')).toBe('true');
+      expect(chevron.getAttribute('role')).toBe('presentation');
+
+      // Decoration only: no anchor, button, `href`, tab stop or text, so it is neither reachable nor readable (Rule 1 clause 3).
+      expect(chevron.querySelectorAll('a, button, [href], [tabindex]').length).toBe(0);
+      expect(chevron.hasAttribute('tabindex')).toBe(false);
+      expect(chevron.textContent?.trim()).toBe('');
+    }
+
+    // Font Awesome glyphs rather than a new asset, and Bootstrap's own float puts the trailing one at the row's right edge (AAP 0.2.4; Rule 1 clause 6).
+    expect(start.querySelector('i')?.classList.contains('fa-chevron-left')).toBe(true);
+    expect(end.querySelector('i')?.classList.contains('fa-chevron-right')).toBe(true);
+    expect(end.classList.contains('pull-right')).toBe(true);
+
+    // Activating a chevron reaches no handler and selects no tab, which is why painting it adds no control legacy lacks (Rule 1 clause 3).
+    const emitted = recordChanges(fixture);
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+    const key = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+
+    start.dispatchEvent(click);
+    end.dispatchEvent(key);
+
+    expect(emitted).toEqual([]);
+    expect(click.defaultPrevented).toBe(false);
+    expect(key.defaultPrevented).toBe(false);
   });
 
   it('paints nothing at all when the parent supplies no tabs', () => {
@@ -239,7 +266,7 @@ describe('TabStripComponent', () => {
     expect(host(fixture).querySelectorAll('ul.nav-tabs')).toHaveLength(0);
     expect(host(fixture).querySelectorAll('a')).toHaveLength(0);
     expect(tabLinks(fixture)).toHaveLength(0);
-    expect(extras(fixture)).toHaveLength(0);
+    expect(chevrons(fixture)).toHaveLength(0);
     expect(host(fixture).childElementCount).toBe(0);
   });
 

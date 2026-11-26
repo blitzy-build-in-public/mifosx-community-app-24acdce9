@@ -159,6 +159,8 @@ describe('ClientAccountsComponent', () => {
     expect(component.loading()).toBe(true);
     expect(host().querySelector('#client-accounts')).toBeNull();
     expect(host().querySelector('app-empty-state')).toBeNull();
+    // The wrapper is the region the read marks busy; the card body belongs to the record template, not to this section (QA report F20).
+    expect(host().querySelector('[aria-busy="true"]')).not.toBeNull();
     read.flush(ACCOUNTS);
     await fixture.whenStable();
     fixture.detectChanges();
@@ -182,6 +184,11 @@ describe('ClientAccountsComponent', () => {
     expect(component.failed()).toBe(false);
     expect(renderedRows()).toHaveLength(3);
     expect(Array.from(host().querySelectorAll('#client-accounts thead th'))).toHaveLength(4);
+    // Inside Bootstrap 3's `.table-responsive` the table scrolls below 768px instead of pushing the card sideways (QA report F14), and
+    // no `.panel-body` here: the record template provides the card's body, so a second one would inset the table 15px from the
+    // anchor the record's heading, labels and tabs share (QA report F20).
+    expect(host().querySelector('#client-accounts')?.parentElement?.classList.contains('table-responsive')).toBe(true);
+    expect(host().querySelector('.panel-body')).toBeNull();
   });
   it('leaves the balance cell empty for a row whose family reported no figure', async () => {
     mount(CLIENT_ID);
@@ -221,7 +228,7 @@ describe('ClientAccountsComponent', () => {
     fixture.detectChanges();
     expect(component.rows()).toEqual([]);
     expect(component.failed()).toBe(false);
-    expect(host().querySelector('.panel-body app-empty-state')).not.toBeNull();
+    expect(host().querySelector('app-empty-state')).not.toBeNull();
     expect(host().querySelector('#client-accounts')).toBeNull();
     expect(host().querySelector('.alert')).toBeNull();
     expect((host().textContent ?? '').toLowerCase()).not.toContain('error');
@@ -235,7 +242,9 @@ describe('ClientAccountsComponent', () => {
     expect(component.rows()).toEqual([]);
     expect(component.loading()).toBe(false);
     expect(host().querySelector('#client-accounts')).toBeNull();
-    expect(host().querySelector('.panel-body')).not.toBeNull();
+    // The section keeps its one wrapper — the region the read marks busy — with the busy state cleared once the read has answered.
+    expect(host().children).toHaveLength(1);
+    expect(host().querySelector('[aria-busy]')).toBeNull();
     expect(host().querySelector('.alert')).toBeNull();
     expect(host().querySelector('app-empty-state')).toBeNull();
   });

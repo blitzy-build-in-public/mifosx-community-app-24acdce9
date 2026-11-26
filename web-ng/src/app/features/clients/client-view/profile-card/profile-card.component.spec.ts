@@ -139,6 +139,24 @@ describe('ProfileCardComponent', () => {
       expect(row.querySelectorAll('[data-testid="profile-field-value"]')).toHaveLength(1);
     }
   });
+  it('gives every row the same key and value cells, performance history included', () => {
+    const fixture = createCard();
+    const history: readonly ProfileCardField[] = [{ label: 'No. of Loan Cycle', value: '' }];
+    fixture.componentRef.setInput('historyFields', history);
+    fixture.detectChanges();
+
+    // One key cell and one value cell per row across the whole card, so the stylesheet sets a single key width for every row: no label
+    // wraps and every value starts at one offset (QA report F09, AAP 0.2.3 row `ProfileCard`).
+    const renderedRows = [
+      ...rows(fixture),
+      ...Array.from(host(fixture).querySelectorAll<HTMLElement>('[data-testid="profile-history-field"]')),
+    ];
+    expect(renderedRows).toHaveLength(FIELDS.length + history.length);
+    for (const row of renderedRows) {
+      expect(row.querySelector('[data-testid$="-label"]')?.parentElement?.classList).toContain('col-xs-7');
+      expect(row.querySelector('[data-testid$="-value"]')?.parentElement?.classList).toContain('col-xs-5');
+    }
+  });
   it('renders the heading and no rows at all when there are no fields', () => {
     const fixture = createCard(DISPLAY_NAME, []);
     expect(host(fixture).querySelector('h2.panel-title')?.textContent?.trim()).toBe(DISPLAY_NAME);

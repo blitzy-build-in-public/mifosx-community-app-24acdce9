@@ -133,7 +133,7 @@ describe('parity-report line budget', () => {
     expect(markdown).toContain('every crossing named above was answered by the same comment-only prose trim');
     expect(markdown).toContain('the last two of the trims packing the blocks the earlier ones had left onto one line each');
     expect(markdown).toContain('model field (AAP 0.14.2)');
-    expect(markdown).toContain('every `BLITZY [A11Y]` rule-override note with the Rule clause and finding it names');
+    expect(markdown).toContain('every rule-override note with the Rule clause and finding it names');
     expect(markdown).toContain('No code line changed');
     // The scope cut: its reason, the saving it makes, the total restoring it would measure, and the Must scope kept.
     expect(markdown).toContain('the tree crossed AAP 0.9.3\'s 60,000-line ceiling at 88,418 lines before the prose trim');
