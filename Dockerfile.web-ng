@@ -64,11 +64,33 @@ RUN printf '%s\n' \
 
 COPY --from=build /src/dist/web-ng/browser /usr/share/nginx/html
 
-# The entrypoint rewrites the served assets/config.json from API_BASE_URL and TENANT_ID and
-# then execs nginx itself, so the image declares no CMD and nothing starts a second nginx.
+# The two directories nginx writes to belong to the image's own nginx user (uid 101): the document
+# root, because the entrypoint rewrites assets/config.json in place and renames the result over it,
+# and the cache directory, because the master creates its client/proxy/fastcgi/uwsgi/scgi temp
+# directories there at start. The pid file moves to /tmp with them, since /run belongs to root and
+# the master writes that file itself; the grep turns a future base image that relocates the
+# directive into a build failure instead of a container that cannot write its own pid.
+RUN chown -R nginx:nginx /usr/share/nginx/html /var/cache/nginx \
+ && sed -i 's|^pid[[:space:]].*|pid /tmp/nginx.pid;|' /etc/nginx/nginx.conf \
+ && grep -qx 'pid /tmp/nginx.pid;' /etc/nginx/nginx.conf
+
+# The entrypoint rewrites the served assets/config.json from API_BASE_URL and TENANT_ID and then
+# execs nginx itself, ignoring any arguments it is handed. Declaring ENTRYPOINT already discards
+# the CMD nginx:alpine ships (["nginx","-g","daemon off;"]), and the empty CMD at the end of this
+# file states that nothing follows, so the entrypoint alone runs and exactly one nginx starts.
 COPY web-ng/docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod 0755 /usr/local/bin/entrypoint.sh
+
+# Both the entrypoint and the nginx master it execs run as the image's own nginx user, never as
+# root; port 4300 is above 1024, so no capability is needed to bind it. The base image's own
+# `user nginx;` directive stays in nginx.conf: it is a no-op once the master is unprivileged, and
+# it still drops the workers if the image is ever run as root.
+USER nginx
 
 EXPOSE 4300
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+
+# Declared rather than left as the side effect of the ENTRYPOINT instruction above: the image takes
+# no arguments, and none is passed through to nginx.
+CMD []
