@@ -32,10 +32,9 @@ import { SearchResultsComponent } from './features/search/search-results.compone
 
 /**
  * The nineteen paths `web-ng/tools/parity/in-scope-routes.json` declares, in its own order, with the
- * response status the list gives each of them. Restated here because a spec cannot read a JSON file
- * through `node:fs` under this project's `tsconfig.spec.json` (its `types` are `vitest/globals` only)
- * and because the expected value of a gate is part of the gate: a route added to or removed from the
- * tree without this list changing must fail here.
+ * response status the list gives each of them. Restated here because the expected value of a gate is
+ * part of the gate: a route added to or removed from the tree without this list changing must fail
+ * here, and a spec that read the very list it checks would move with it.
  */
 const IN_SCOPE_PATHS: readonly string[] = [
   'login',

@@ -1,4 +1,4 @@
-import { provideHttpClient, type HttpRequest } from '@angular/common/http';
+import { provideHttpClient, type HttpErrorResponse, type HttpRequest } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
@@ -307,24 +307,26 @@ describe('SearchService', () => {
 
   it('propagates a failed search unchanged, so the interceptor can map the message the screen shows', () => {
     const received: SearchResult[][] = [];
-    const failures: unknown[] = [];
+    const failures: HttpErrorResponse[] = [];
+    const refusal = { defaultUserMessage: 'The search could not be run' };
 
     service.search({ query: QUERY, resource: 'loans' }).subscribe({
       next: (rows) => received.push(rows),
-      error: (failure: unknown) => failures.push(failure),
+      error: (failure: HttpErrorResponse) => failures.push(failure),
     });
 
     httpMock
       .expectOne(isRequest('GET', searchUrl(SEARCH_PATH)))
-      .flush(
-        { defaultUserMessage: 'The search could not be run' },
-        { status: 500, statusText: 'Server Error' },
-      );
+      .flush(refusal, { status: 500, statusText: 'Server Error' });
 
-    // One failure, no emission and no completion: the service maps nothing and swallows nothing
-    // (AAP 0.4.2, AAP 0.14.2 "Error handling").
+    // One failure, no emission and no completion: the service maps nothing and swallows nothing, and
+    // the status and body it hands on are the ones Fineract sent rather than a failure re-created in
+    // the service, so the interceptor can map `defaultUserMessage` for the screen (AAP 0.4.2,
+    // AAP 0.14.2 "Error handling").
     expect(failures).toHaveLength(1);
     expect(received).toEqual([]);
+    expect(failures[0]?.status).toBe(500);
+    expect(failures[0]?.error).toEqual(refusal);
   });
 
   it('re-reads the result set on every call, because a search is never cached', () => {

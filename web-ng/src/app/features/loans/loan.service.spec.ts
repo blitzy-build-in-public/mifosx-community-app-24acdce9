@@ -1272,28 +1272,62 @@ describe('LoanService', () => {
 
   it('refuses to post the charge action when the body describes the other command', () => {
     // The command travels in the query string and the discriminator in the body, so a mismatched pair
-    // would post one command's payload to the other's non-idempotent endpoint.
-    expect(() => service.chargeAction(LOAN_ID, CHARGE_ID, 'pay', { command: 'waive' })).toThrow(
-      /waive/,
-    );
+    // would post one command's payload to the other's non-idempotent endpoint. The refusal arrives as
+    // an observable error — `defer` runs the guard on subscribe — and no request is issued.
+    const messages: string[] = [];
+    let emissions = 0;
 
+    service.chargeAction(LOAN_ID, CHARGE_ID, 'pay', { command: 'waive' }).subscribe({
+      next: () => (emissions += 1),
+      error: (failure: unknown) => {
+        messages.push(failure instanceof Error ? failure.message : String(failure));
+      },
+    });
+
+    expect(emissions).toBe(0);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatch(/waive/);
     httpMock.expectNone(isRequest('POST', loanUrl('loans', LOAN_ID, 'charges', CHARGE_ID)));
+    httpMock.expectNone(() => true);
   });
 
   it('refuses a lifecycle action whose body describes another command, and issues no request', () => {
     // The two travel separately — the command in the query string, the discriminator in the body — and
-    // neither action endpoint is idempotent, so a mismatched pair never reaches the server.
-    expect(() =>
-      service.action(LOAN_ID, 'approve', { command: 'reject', rejectedOnDate: SUBMITTED_DATE }),
-    ).toThrow(/reject/);
+    // neither action endpoint is idempotent, so a mismatched pair never reaches the server. It reaches
+    // the subscriber as an observable error instead of an exception thrown out of the call.
+    const messages: string[] = [];
+    let emissions = 0;
 
+    service.action(LOAN_ID, 'approve', { command: 'reject', rejectedOnDate: SUBMITTED_DATE }).subscribe({
+      next: () => (emissions += 1),
+      error: (failure: unknown) => {
+        messages.push(failure instanceof Error ? failure.message : String(failure));
+      },
+    });
+
+    expect(emissions).toBe(0);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatch(/reject/);
     httpMock.expectNone(isRequest('POST', loanUrl('loans', LOAN_ID)));
+    httpMock.expectNone(() => true);
   });
 
   it('refuses a dated command with no body rather than posting an empty one', () => {
-    expect(() => service.action(LOAN_ID, 'approve')).toThrow(/approve/);
+    const messages: string[] = [];
+    let emissions = 0;
 
+    service.action(LOAN_ID, 'approve').subscribe({
+      next: () => (emissions += 1),
+      error: (failure: unknown) => {
+        messages.push(failure instanceof Error ? failure.message : String(failure));
+      },
+    });
+
+    expect(emissions).toBe(0);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatch(/approve/);
     httpMock.expectNone(isRequest('POST', loanUrl('loans', LOAN_ID)));
+    httpMock.expectNone(() => true);
   });
 
   it('sets no authorization and no tenant header, because both belong to the HTTP interceptor', () => {

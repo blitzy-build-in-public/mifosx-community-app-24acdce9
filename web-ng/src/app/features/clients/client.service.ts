@@ -46,6 +46,15 @@ import type {
  * `defer`, which reaches the caller as an observable error with no request issued, while a valid id
  * still composes the byte-identical URL legacy sent (Rule 1 clause 2).
  *
+ * **Nothing is composed until the returned observable is subscribed.** Every method below wraps its
+ * whole request — the URL, the `HttpParams`, the body and the locale its dates are written in — in
+ * `defer`, so `AppConfigService.apiUrl()`, which throws until the configuration has resolved,
+ * `toFineractDate`, which throws for a locale the runtime does not register, and the command/body
+ * invariant all raise their refusal at subscribe time. Each refusal therefore reaches the subscriber
+ * as an error on the returned observable and never as an exception thrown out of the call, so a caller
+ * that handles only the `error` notification still sees every failure (AAP 0.14.1 "Errors are values,
+ * not exceptions in components").
+ *
  * **What this file deliberately does not own.**
  *
  *   - Headers and failures. `core/http/fineract.interceptor.ts` sets the authorization and tenant
@@ -233,9 +242,11 @@ export class ClientService {
    * @returns the envelope the list screen renders and pages through.
    */
   list(params: ClientListParams): Observable<ClientListPage> {
-    return this.http.get<ClientListPage>(this.config.apiUrl('clients'), {
-      params: this.listQuery(params),
-    });
+    return defer(() =>
+      this.http.get<ClientListPage>(this.config.apiUrl('clients'), {
+        params: this.listQuery(params),
+      }),
+    );
   }
 
   /**
@@ -251,9 +262,11 @@ export class ClientService {
    * @returns the template whose options the form renders and whose dates it starts from.
    */
   template(officeId?: number, staffInSelectedOfficeOnly?: boolean): Observable<ClientTemplate> {
-    return this.http.get<ClientTemplate>(this.config.apiUrl('clients/template'), {
-      params: this.templateQuery(officeId, staffInSelectedOfficeOnly),
-    });
+    return defer(() =>
+      this.http.get<ClientTemplate>(this.config.apiUrl('clients/template'), {
+        params: this.templateQuery(officeId, staffInSelectedOfficeOnly),
+      }),
+    );
   }
 
   /**
@@ -358,7 +371,9 @@ export class ClientService {
    * @returns the command result carrying the new client's ids.
    */
   create(body: ClientCreateRequest): Observable<ClientMutationResponse> {
-    return this.http.post<ClientMutationResponse>(this.config.apiUrl('clients'), this.createWire(body));
+    return defer(() =>
+      this.http.post<ClientMutationResponse>(this.config.apiUrl('clients'), this.createWire(body)),
+    );
   }
 
   /**
@@ -372,12 +387,10 @@ export class ClientService {
    * @returns the command result carrying the client's ids.
    */
   update(id: number | string, body: ClientEditInput): Observable<ClientMutationResponse> {
-    const payload = this.editWire(body);
-
     return defer(() =>
       this.http.put<ClientMutationResponse>(
         this.config.apiUrl(`clients/${resourceId(id, 'ClientService.update')}`),
-        payload,
+        this.editWire(body),
       ),
     );
   }
@@ -400,9 +413,11 @@ export class ClientService {
   commandParam(
     action: Extract<ClientActionCommand, 'close' | 'reject' | 'withdraw'>,
   ): Observable<ClientNarrationTemplate> {
-    return this.http.get<ClientNarrationTemplate>(this.config.apiUrl('clients/template'), {
-      params: new HttpParams().set('commandParam', action),
-    });
+    return defer(() =>
+      this.http.get<ClientNarrationTemplate>(this.config.apiUrl('clients/template'), {
+        params: new HttpParams().set('commandParam', action),
+      }),
+    );
   }
 
   /**
@@ -418,38 +433,39 @@ export class ClientService {
    * The command in the query string and the command the body describes are checked to be the same
    * one, because the two travel separately and a mismatch would post one action's payload to another
    * action's endpoint — a wrong request against a financial record, refused only after it reached the
-   * server. The guard runs before the request is issued and throws, because a caller that passes
-   * mismatched arguments has a bug this service cannot resolve.
+   * server. The guard runs before the request is issued and throws through the returned observable —
+   * never synchronously — because a caller that passes mismatched arguments has a bug this service
+   * cannot resolve, and the refusal still arrives on the one error channel every caller handles.
    *
    * @param id the client the command applies to.
    * @param command the command to run, as the `command` query parameter.
    * @param body the body of that command.
    * @returns the command result carrying the client's ids.
-   * @throws Error when `body` describes a different command than `command`.
+   * @throws through the returned observable — never synchronously — when `body` describes a different
+   * command than `command`, with no request issued.
    */
   action(
     id: number | string,
     command: ClientActionCommand,
     body: ClientActionInput,
   ): Observable<ClientMutationResponse> {
-    if (body.command !== command) {
-      throw new Error(
-        `ClientService.action: the body describes the '${body.command}' command but the request issues ` +
-          `'${command}'. Post the body that belongs to the command, so one action cannot carry another ` +
-          "action's payload.",
-      );
-    }
+    return defer(() => {
+      if (body.command !== command) {
+        throw new Error(
+          `ClientService.action: the body describes the '${body.command}' command but the request issues ` +
+            `'${command}'. Post the body that belongs to the command, so one action cannot carry another ` +
+            "action's payload.",
+        );
+      }
 
-    const payload = this.actionWire(body);
-    const params = new HttpParams().set('command', command);
+      const params = new HttpParams().set('command', command);
 
-    return defer(() =>
-      this.http.post<ClientMutationResponse>(
+      return this.http.post<ClientMutationResponse>(
         this.config.apiUrl(`clients/${resourceId(id, 'ClientService.action')}`),
-        payload,
+        this.actionWire(body),
         { params },
-      ),
-    );
+      );
+    });
   }
 
   /**

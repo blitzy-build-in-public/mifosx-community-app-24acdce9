@@ -60,7 +60,7 @@ import { ClientsPage as NextClientsPage } from '../pages/next/clients.page';
 import { LoansPage as NextLoansPage } from '../pages/next/loans.page';
 import { LoginPage as NextLoginPage } from '../pages/next/login.page';
 import { SavingsPage as NextSavingsPage } from '../pages/next/savings.page';
-import { WORKFLOW_IDS, writeWorkflowRecord } from '../report/parity-report';
+import { WORKFLOW_IDS, redactEntryLocation, writeWorkflowRecord } from '../report/parity-report';
 import type { UiProject, WorkflowId, WorkflowRecord, WorkflowStatus } from '../report/parity-report';
 import { FINERACT_URL, readBusinessDate, resetBusinessDateCache } from '../seed/fixtures';
 
@@ -375,10 +375,18 @@ async function businessDateFor(project: UiProject): Promise<Date> {
  * What a thrown value says, as the non-empty text a verdict's `reason` must carry (AAP 0.10.4's
  * `legacy-broken` record is unreadable without one). A value that is not an `Error`, and an `Error`
  * whose message is blank, both get text a reader can act on rather than an empty reason.
+ *
+ * The text is masked before it is returned, because the two channels it feeds are both output: the
+ * record's `reason`, which reaches `parity-report.md`, `parity-report.json` and the record artefact, and
+ * the annotation pushed onto the test. A page object's own message quotes the entry URL it opened, which
+ * carries `?baseApiUrl=<FINERACT_URL>&tenantIdentifier=<TENANT_ID>`, so the values are replaced by the
+ * mask AAP 0.10.2 uses while the sentence, the call and the status it names survive (Rule 1 clause 9;
+ * AAP 0.10.4 keeps the tenant identifier out of the credential gate, so masking is what protects it).
  */
 function describeError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
-  return message.trim().length > 0 ? message : 'the workflow failed without a message';
+  const text = message.trim().length > 0 ? message : 'the workflow failed without a message';
+  return redactEntryLocation(text);
 }
 
 /** The legacy baseline's five page objects, all driving one page. */
@@ -497,12 +505,15 @@ export const test = base.extend<ParityFixtures>({
     const session = startCapture(page, { project: uiProject, workflow: label, runDate });
     await use(session);
     // Stop, then assert, then write (Rule 2; AAP 0.10.2). The write happens even when the assertion
-    // throws, so a run that left the backend still leaves the evidence that shows it doing so.
+    // throws, so a run that left the backend still leaves the evidence that shows it doing so, and
+    // the write goes through `capturePathOf`, the guard `runWorkflow` uses: a filesystem failure is
+    // annotated on this test rather than thrown, so a workflow that behaved correctly is not failed
+    // over an artefact that could not be written (AAP 0.10.2; AAP 0.10.4).
     const exchanges = session.stop();
     try {
       assertBackendHost(exchanges);
     } finally {
-      evidence.capturePath ??= await session.write();
+      evidence.capturePath = await capturePathOf(session, evidence.capturePath, testInfo);
     }
   },
 

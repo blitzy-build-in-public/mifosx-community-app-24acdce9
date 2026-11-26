@@ -29,7 +29,9 @@
 #
 # The health probe needs no credentials and no tenant header, and it is the only backend URL this script
 # calls (tools/parity/harness-allowlist.json records it against this file). No credential, tenant value
-# or auth key is read, echoed or passed on a command line here (Rule 1 clause 9).
+# or auth key is read, echoed or passed on a command line here (Rule 1 clause 9), so the one line the
+# probe reports on exhaustion is its own — curl's stderr, or the body a backend answered with — held in
+# a shell variable and never written to a file.
 #
 # Portable across macOS bash 3.2 and Linux: no bash-4-only constructs, no GNU-only flags, no in-place
 # rewrites of any file, no compose v1 binary. It writes nothing anywhere and changes no file of the legacy
@@ -113,10 +115,36 @@ printf 'reset-db: step 2/4 recreating the stack with --pull never\n'
 ( cd "$compose_dir" && docker compose -f "$compose_file" up -d --force-recreate --pull never )
 
 # Step 3 — readiness, not a fixed sleep. `-k` because the fork serves a self-signed certificate.
+# Every probe keeps its own report: curl's stderr when curl itself failed, and the response body when
+# curl answered but the body never reached UP. The last one is printed once if the wait is exhausted, so
+# a refused connection, a TLS failure, a 503 from a starting backend and a body that stays short of UP
+# are told apart from this script's own output instead of from an opened container log. Nothing is
+# printed per attempt, and nothing at all on success.
 printf 'reset-db: step 3/4 waiting for %s (up to %s attempts, %s seconds apart)\n' \
   "$health_url" "$health_max_attempts" "$health_poll_interval"
 attempt=0
-until curl -kfsS --max-time 5 "$health_url" 2>/dev/null | grep -q '"status"[[:space:]]*:[[:space:]]*"UP"'; do
+probe_report=''
+while :; do
+  # `2>&1` collects both of the probe's signals into one value, and the `if` form is what keeps a
+  # failing curl from tripping `set -e`: an assignment from a failing command substitution on its own
+  # would abort the script, whereas one in a condition is exempt.
+  if probe_output=$(curl -kfsS --max-time 5 "$health_url" 2>&1); then
+    if printf '%s' "$probe_output" | grep -q '"status"[[:space:]]*:[[:space:]]*"UP"'; then
+      break
+    fi
+    # Curl succeeded, so the report is whatever the backend said. Only its first line is kept: the
+    # message it lands in is one line.
+    probe_report=${probe_output%%$'\n'*}
+    if [ -z "$probe_report" ]; then
+      probe_report='the backend answered with an empty body'
+    fi
+  else
+    probe_status=$?
+    probe_report=${probe_output%%$'\n'*}
+    if [ -z "$probe_report" ]; then
+      probe_report="curl exited $probe_status without a diagnostic"
+    fi
+  fi
   attempt=$((attempt + 1))
   sleep "$health_poll_interval"
   if [ "$attempt" -ge "$health_max_attempts" ]; then
@@ -130,6 +158,7 @@ until curl -kfsS --max-time 5 "$health_url" 2>/dev/null | grep -q '"status"[[:sp
     fi
     printf 'reset-db: backend is not UP after %s attempts over %s: %s\n' \
       "$attempt" "$waited_text" "$health_url" >&2
+    printf 'reset-db: the last probe reported: %s\n' "$probe_report" >&2
     printf 'reset-db: every reset replays the Liquibase migrations from an empty cluster; raise FINERACT_HEALTH_MAX_ATTEMPTS to wait longer.\n' >&2
     printf 'reset-db: inspect it with: docker compose -f "%s" logs\n' "$compose_file" >&2
     exit 1

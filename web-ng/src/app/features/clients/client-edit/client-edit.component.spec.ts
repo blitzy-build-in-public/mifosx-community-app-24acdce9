@@ -351,8 +351,15 @@ describe('ClientEditComponent', () => {
       'locale',
       'mobileNo',
     ]);
+    // `client.service.spec.ts` pins the wire body this endpoint receives — 'dd MMMM yyyy' plus the
+    // active locale, in English and moved to French — so the pair asserted here is the one the screen
+    // hands `ClientService.update`, the owner of the wire pair, not the one that reaches the wire.
     expect(body?.dateFormat).toBe(DISPLAY_DATE_FORMAT);
-    expect(body?.locale).toBe('');
+    expect(
+      body?.locale,
+      'Placeholder before serialisation, not the wire value: ClientService.update fills `locale` from ' +
+        'the active language before the body reaches the wire',
+    ).toBe('');
 
     expect(navigate).toHaveBeenCalledTimes(1);
     expect(navigate).toHaveBeenCalledWith(['/viewclient', CLIENT_ID]);

@@ -240,29 +240,27 @@ export class SavingsService {
    * `?command=activate` (AAP 0.7.3 W8 row). One call is one POST, and the response body is
    * discarded — the caller returns to the record, whose own read shows the account's new status.
    *
-   * The request body follows the command the caller named, and a pair that disagrees throws before
-   * any request is issued (see `assertCommandMatchesBody()`): that is a mistake in the screen's code
-   * rather than something the server can be asked about, and stopping here is what keeps one click to
-   * one POST.
+   * The request body follows the command the caller named, and a pair that disagrees is refused
+   * before any request is issued (see `assertCommandMatchesBody()`): that is a mistake in the screen's
+   * code rather than something the server can be asked about, and stopping here is what keeps one click
+   * to one POST. Like every other refusal below, it reaches the subscriber as an error on the returned
+   * observable and never as an exception thrown out of the call (AAP 0.14.1).
    *
    * @param id Account identifier, as the record route carries it.
    * @param command The lifecycle transition to perform.
    * @param body The matching date the form collected, without the format members this service fills.
-   * @throws Error when `command` and the body's date member disagree.
+   * @throws through the returned observable — never synchronously — when `command` and the body's date
+   * member disagree, with no request issued.
    */
   action(id: number | string, command: SavingsCommand, body: SavingsActionInput): Observable<void> {
-    // The pair check stays a synchronous throw, outside `defer`: a caller that passes mismatched
-    // arguments has a bug this service cannot resolve, so the refusal reaches the call site rather
-    // than a subscriber. `defer` wraps the request composition only.
-    this.assertCommandMatchesBody(command, body);
-
     return defer(() => {
       const params = new HttpParams().set('command', command);
+      const request = this.actionBody(command, body);
 
       return this.http
         .post<unknown>(
           this.config.apiUrl(`savingsaccounts/${resourceId(id, 'SavingsService.action')}`),
-          this.actionBody(command, body),
+          request,
           { params },
         )
         .pipe(map((): void => undefined));
@@ -356,13 +354,14 @@ export class SavingsService {
    * The body `command` asks for, with the two format members this service fills. The `in` test is the
    * narrowing: `approvedOnDate` is the member only an approval body carries, and testing for it keeps
    * a cast out of the path a mismatched pair would otherwise travel through to the server. The pairing
-   * itself is checked by `assertCommandMatchesBody()`, which `action()` also runs before it defers, so
-   * both entry points share one wording.
+   * itself is checked by `assertCommandMatchesBody()`, which this builder runs first, so `action()`
+   * reaches the same check and the same wording without a second call of its own.
    *
    * Called inside `defer`, so the body and the locale it carries are composed when the request is
-   * subscribed.
+   * subscribed and a mismatched pair reaches the subscriber as an error on the returned observable.
    *
-   * @throws Error when the body carries the other command's date member.
+   * @throws Error when the body carries the other command's date member — raised inside `action()`'s
+   * `defer`, so it surfaces on the returned observable with no request issued.
    */
   private actionBody(
     command: SavingsCommand,
@@ -385,9 +384,10 @@ export class SavingsService {
    * Refuses a command and a body that name different lifecycle dates, so one action's payload can
    * never be posted to the other action's command.
    *
-   * Called from both entry points on purpose: `action()` runs it synchronously, before it defers, so a
-   * caller's mistake throws at the call site; `actionBody()` runs it again inside `defer`, so the body
-   * builder refuses a mismatched pair on its own. Each message is written here once.
+   * Called by `actionBody()` alone, and `action()` runs that builder inside its own `defer`, so a
+   * caller's mistake reaches the subscriber as an error on the returned observable with no request
+   * issued — the one error channel every caller already handles — rather than as an exception thrown
+   * out of the call. Each message is written here once.
    *
    * @param command The lifecycle transition the caller asked for.
    * @param body The body the caller handed over.

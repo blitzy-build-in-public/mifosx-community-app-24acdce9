@@ -1,4 +1,4 @@
-import { provideHttpClient, type HttpRequest } from '@angular/common/http';
+import { provideHttpClient, type HttpErrorResponse, type HttpRequest } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal, type WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
@@ -554,11 +554,25 @@ describe('SavingsService', () => {
   for (const { label, command, request: body, message } of MISMATCHED_ACTION_CASES) {
     it(`refuses ${label} and issues no request`, () => {
       // A pair that disagrees is a mistake in the screen's code rather than something the server can
-      // be asked about, and stopping here is what keeps one click to one POST (AAP 0.1.1).
-      expect(() => service.action(ACCOUNT_ID, command, body)).toThrowError(message);
+      // be asked about, and refusing it is what keeps one click to one POST (AAP 0.1.1). The refusal
+      // arrives as an observable error — `action()` runs the pair check inside its `defer` — so a
+      // caller that handles only the `error` notification still sees it (AAP 0.14.1).
+      const messages: string[] = [];
+      let emissions = 0;
+
+      service.action(ACCOUNT_ID, command, body).subscribe({
+        next: () => (emissions += 1),
+        error: (failure: unknown) => {
+          messages.push(failure instanceof Error ? failure.message : String(failure));
+        },
+      });
+
+      expect(emissions).toBe(0);
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toMatch(message);
       httpMock.expectNone(isRequest('POST', savingsUrl('savingsaccounts', ACCOUNT_ID)));
-      // Stronger than the one path above: the refusal happens before `defer` composes anything, so
-      // the controller saw no request of any method or URL for this call.
+      // Stronger than the one path above: the pair check runs before the URL is composed, so the
+      // controller saw no request of any method or URL for this call.
       httpMock.expectNone(() => true);
     });
   }
@@ -691,24 +705,26 @@ describe('SavingsService', () => {
 
   it('propagates a failed record read unchanged, so the interceptor can map the message the screen shows', () => {
     const received: SavingsAccount[] = [];
-    const failures: unknown[] = [];
+    const failures: HttpErrorResponse[] = [];
+    const refusal = { defaultUserMessage: 'The savings account could not be read' };
 
     service.get(ACCOUNT_ID).subscribe({
       next: (account) => received.push(account),
-      error: (failure: unknown) => failures.push(failure),
+      error: (failure: HttpErrorResponse) => failures.push(failure),
     });
 
     httpMock
       .expectOne(isRequest('GET', savingsUrl('savingsaccounts', ACCOUNT_ID)))
-      .flush(
-        { defaultUserMessage: 'The savings account could not be read' },
-        { status: 404, statusText: 'Not Found' },
-      );
+      .flush(refusal, { status: 404, statusText: 'Not Found' });
 
-    // One failure, no emission and no completion: the service maps nothing and swallows nothing, so
-    // the screen can render the not-found message in place of the record (AAP 0.7.4).
+    // One failure, no emission and no completion: the service maps nothing and swallows nothing, and
+    // the status and body it hands on are the ones Fineract sent rather than a failure re-created in
+    // the service, so the screen can render the not-found message in place of the record (AAP 0.7.4,
+    // AAP 0.4.2, AAP 0.14.2 "Error handling").
     expect(failures).toHaveLength(1);
     expect(received).toEqual([]);
+    expect(failures[0]?.status).toBe(404);
+    expect(failures[0]?.error).toEqual(refusal);
   });
 
   it('re-reads the record on every call, because its state changes through the commands this service posts', () => {

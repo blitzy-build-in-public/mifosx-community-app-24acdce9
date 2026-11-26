@@ -259,11 +259,21 @@ type LoanChargeActionBody = LoanChargePayBody | LoanChargeWaiveBody;
  * are rendered in — pairing English month names with a non-English `locale` is a payload Fineract
  * cannot parse.
  *
+ * **Nothing is composed until the returned observable is subscribed.** Every method below wraps its
+ * whole request — the URL, the `HttpParams`, the body and the locale its dates are written in — in
+ * `defer`, so `AppConfigService.apiUrl()`, which throws until the configuration has resolved, and
+ * `toFineractDate`, which throws for a locale the runtime does not register, are both read at
+ * subscribe time. A refusal therefore reaches the subscriber as an error on the returned observable
+ * and never as an exception thrown out of the call, so a caller that handles only the `error`
+ * notification still sees every failure (AAP 0.14.1 "Errors are values, not exceptions in
+ * components").
+ *
  * **The command and the body agree, or nothing is posted.** {@link action} compares the command in its
  * query string with the discriminator inside the body it was handed and throws before any request is
  * issued, because these lifecycle endpoints are not idempotent and one command's payload must never
  * reach another command's endpoint; {@link chargeAction} holds the same invariant for `pay` and
- * `waive`.
+ * `waive`. That refusal travels through the returned observable like every other one, never out of the
+ * call.
  *
  * **One request per click.** Every command here is a single POST, which is what lets a caller's
  * `runOnce` guard keep one click to one request against a non-idempotent action endpoint (AAP 0.1.1).
@@ -294,12 +304,14 @@ export class LoanService {
    * @returns The template's option lists and defaults.
    */
   template(clientId: number | string, productId?: number | string): Observable<LoanTemplate> {
-    const params = new HttpParams()
-      .set('templateType', 'individual')
-      .set('clientId', String(clientId));
+    return defer(() => {
+      const params = new HttpParams()
+        .set('templateType', 'individual')
+        .set('clientId', String(clientId));
 
-    return this.http.get<LoanTemplate>(this.config.apiUrl('/loans/template'), {
-      params: productId === undefined ? params : params.set('productId', String(productId)),
+      return this.http.get<LoanTemplate>(this.config.apiUrl('/loans/template'), {
+        params: productId === undefined ? params : params.set('productId', String(productId)),
+      });
     });
   }
 
@@ -333,11 +345,11 @@ export class LoanService {
    * @returns The calculated schedule.
    */
   previewSchedule(body: LoanApplicationInput): Observable<RepaymentSchedule> {
-    const params = new HttpParams().set('command', 'calculateLoanSchedule');
-
-    return this.http.post<RepaymentSchedule>(this.config.apiUrl('/loans'), this.toApplicationBody(body), {
-      params,
-    });
+    return defer(() =>
+      this.http.post<RepaymentSchedule>(this.config.apiUrl('/loans'), this.toApplicationBody(body), {
+        params: new HttpParams().set('command', 'calculateLoanSchedule'),
+      }),
+    );
   }
 
   /**
@@ -349,7 +361,9 @@ export class LoanService {
    * @returns The created loan's id and the changes the server applied.
    */
   create(body: LoanApplicationInput): Observable<LoanActionResult> {
-    return this.http.post<LoanActionResult>(this.config.apiUrl('/loans'), this.toApplicationBody(body));
+    return defer(() =>
+      this.http.post<LoanActionResult>(this.config.apiUrl('/loans'), this.toApplicationBody(body)),
+    );
   }
 
   /**
@@ -422,12 +436,10 @@ export class LoanService {
    * @returns The loan's id and the changes the server applied.
    */
   update(id: number | string, body: LoanApplicationInput): Observable<LoanActionResult> {
-    const payload = this.toApplicationBody(body);
-
     return defer(() =>
       this.http.put<LoanActionResult>(
         this.config.apiUrl(`/loans/${resourceId(id, 'LoanService.update')}`),
-        payload,
+        this.toApplicationBody(body),
       ),
     );
   }
@@ -491,9 +503,10 @@ export class LoanService {
    * The command in the query string and the command the body describes are checked to be the same one,
    * because the two travel separately and a mismatch would post one action's payload to another
    * action's endpoint — a wrong request against a financial record, refused only after it reached the
-   * server. The guard runs before the request is issued and throws, because a caller that passes
-   * mismatched arguments has a bug this service cannot resolve. A dated command with no body at all is
-   * refused the same way rather than posted as an empty object the server could only answer generically.
+   * server. The guard runs before the request is issued and throws through the returned observable —
+   * never synchronously — because a caller that passes mismatched arguments has a bug this service
+   * cannot resolve. A dated command with no body at all is refused the same way rather than posted as
+   * an empty object the server could only answer generically.
    *
    * Exactly one POST per call, which is what the caller's `runOnce` guard relies on to keep one click
    * to one request against an endpoint that is not idempotent.
@@ -502,19 +515,20 @@ export class LoanService {
    * @param command Command to run.
    * @param body The command's body, mandatory for the three dated commands.
    * @returns The affected loan's id and the changes the server applied.
-   * @throws Error when the body describes a different command, or when a dated command has no body.
+   * @throws through the returned observable — never synchronously — when the body describes a
+   * different command, or when a dated command has no body, with no request issued.
    */
   action(id: number | string, command: LoanCommand, body?: LoanActionInput): Observable<LoanActionResult> {
-    const payload = this.toActionBody(command, body);
-    const params = new HttpParams().set('command', command);
+    return defer(() => {
+      const payload = this.toActionBody(command, body);
+      const params = new HttpParams().set('command', command);
 
-    return defer(() =>
-      this.http.post<LoanActionResult>(
+      return this.http.post<LoanActionResult>(
         this.config.apiUrl(`/loans/${resourceId(id, 'LoanService.action')}`),
         payload,
         { params },
-      ),
-    );
+      );
+    });
   }
 
   /**
@@ -530,18 +544,21 @@ export class LoanService {
    * @param id Loan being repaid.
    * @param body The repayment as the form holds it.
    * @returns The loan's id and the changes the server applied.
+   * @throws through the returned observable — never synchronously — when the configuration has not
+   * resolved or the active locale is not registered, so the body's date cannot be written and no
+   * request is issued.
    */
   repay(id: number | string, body: LoanRepaymentInput): Observable<LoanActionResult> {
-    const params = new HttpParams().set('command', 'repayment');
-    const payload = this.toRepaymentBody(body);
+    return defer(() => {
+      const params = new HttpParams().set('command', 'repayment');
+      const payload = this.toRepaymentBody(body);
 
-    return defer(() =>
-      this.http.post<LoanActionResult>(
+      return this.http.post<LoanActionResult>(
         this.config.apiUrl(`/loans/${resourceId(id, 'LoanService.repay')}/transactions`),
         payload,
         { params },
-      ),
-    );
+      );
+    });
   }
 
   /**
@@ -572,12 +589,10 @@ export class LoanService {
    * @returns The loan's id and the changes the server applied.
    */
   addCharge(id: number | string, body: LoanChargeInput): Observable<LoanActionResult> {
-    const payload = this.toAddChargeBody(body);
-
     return defer(() =>
       this.http.post<LoanActionResult>(
         this.config.apiUrl(`/loans/${resourceId(id, 'LoanService.addCharge')}/charges`),
-        payload,
+        this.toAddChargeBody(body),
       ),
     );
   }
@@ -605,7 +620,8 @@ export class LoanService {
    * @param command Action to take.
    * @param body The action as the form holds it.
    * @returns The loan's id and the changes the server applied.
-   * @throws Error when the body describes a different command than `command`.
+   * @throws through the returned observable — never synchronously — when the body describes a
+   * different command than `command`, with no request issued.
    */
   chargeAction(
     id: number | string,
@@ -613,16 +629,17 @@ export class LoanService {
     command: LoanChargeActionCommand,
     body: LoanChargeActionInput,
   ): Observable<LoanActionResult> {
-    const payload = this.toChargeActionBody(command, body);
-    const params = new HttpParams().set('command', command);
-
     return defer(() => {
       const loan = resourceId(id, 'LoanService.chargeAction');
       const charge = resourceId(loanChargeId, 'LoanService.chargeAction');
+      const params = new HttpParams().set('command', command);
+      const payload = this.toChargeActionBody(command, body);
 
-      return this.http.post<LoanActionResult>(this.config.apiUrl(`/loans/${loan}/charges/${charge}`), payload, {
-        params,
-      });
+      return this.http.post<LoanActionResult>(
+        this.config.apiUrl(`/loans/${loan}/charges/${charge}`),
+        payload,
+        { params },
+      );
     });
   }
 

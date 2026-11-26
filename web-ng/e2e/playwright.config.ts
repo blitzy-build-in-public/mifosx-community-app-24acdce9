@@ -31,7 +31,17 @@
  * `retries: 0` is deliberate: a retry would hide exactly the behavioural
  * difference the parity report exists to expose.
  *
- * No credential, auth header or browser session state is configured here; both
+ * Tracing is deliberately `off`. A Playwright trace is a second, unmasked
+ * network log: it records every request's headers and post data, so a retained
+ * trace would keep the `Authorization: Basic <key>` header of every Fineract
+ * call and the `POST /authentication` body's password in clear, which Rule 1
+ * clause 9 forbids writing to test output. The harness's evidence path is the
+ * capture that masks those values as it records them (AAP 0.10.2) and the record
+ * attached to each workflow, so no trace is needed. Failure output is closed
+ * against the same leak from the other side too: the DOM page snapshot
+ * Playwright would otherwise render into `error-context.md` is switched off at
+ * module scope below, so no field value - a filled password included - can reach
+ * that file. No browser session state is configured here either; both
  * applications authenticate through their own login screens.
  */
 import { defineConfig } from '@playwright/test';
@@ -52,6 +62,22 @@ const htmlReportDir = fileURLToPath(
   new URL('../playwright-report', import.meta.url),
 );
 
+/**
+ * Failure artefacts carry no credential (Rule 1 clause 9). For every failed test
+ * Playwright writes `error-context.md` into that test's output directory and
+ * attaches it to the HTML report; unless this switch is set, the file carries a
+ * `# Page snapshot` block - an aria rendering of the live DOM in which a filled
+ * password field prints its value in clear, which both login flows here can
+ * leave behind when a submit never lands or the landing times out.
+ * `PLAYWRIGHT_NO_COPY_PROMPT` is the environment variable Playwright itself
+ * reads to skip that snapshot (`playwright/lib/index.js`, `_takePageSnapshot`),
+ * so setting it at module scope - before `defineConfig` runs, in the process
+ * that writes the file - removes the block for every run of this config. The
+ * masked capture, the workflow record and the failure screenshot remain the
+ * evidence path (AAP 0.10.1, 0.10.2).
+ */
+process.env['PLAYWRIGHT_NO_COPY_PROMPT'] = '1';
+
 export default defineConfig({
   testDir: './specs',
   testMatch: '**/*.spec.ts',
@@ -68,7 +94,7 @@ export default defineConfig({
   use: {
     // Fineract on 8443 serves a self-signed certificate; the API is local.
     ignoreHTTPSErrors: true,
-    trace: 'retain-on-failure',
+    trace: 'off',
     screenshot: 'only-on-failure',
     video: 'off',
     actionTimeout: 20_000,

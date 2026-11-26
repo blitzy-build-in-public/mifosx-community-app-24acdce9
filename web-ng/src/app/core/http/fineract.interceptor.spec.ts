@@ -48,7 +48,7 @@ import {
 import { Injector, runInInjectionContext, signal, type WritableSignal } from '@angular/core';
 import { Router } from '@angular/router';
 import { firstValueFrom, of, throwError, type Observable } from 'rxjs';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SessionData } from '../auth/session.model';
 import { SessionService } from '../auth/session.service';
@@ -225,6 +225,12 @@ async function navigationSettled(): Promise<void> {
 describe('fineractInterceptor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    // Uninstall the console spies a case installs, so no later case runs against a stubbed console;
+    // the `clearAllMocks()` above empties their call history but leaves them patched in place.
+    vi.restoreAllMocks();
   });
 
   it('attaches the tenant and Basic headers, and leaves the URL, method and query untouched', async () => {

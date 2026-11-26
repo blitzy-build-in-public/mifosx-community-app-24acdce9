@@ -4,6 +4,8 @@ import { Component, isDevMode, input } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { MissingTranslationHandler, TranslatePipe, TranslateService } from '@ngx-translate/core';
 import type { MissingTranslationHandlerParams } from '@ngx-translate/core';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { firstValueFrom } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -15,15 +17,22 @@ import {
 import { provideTranslate, TRANSLATE_LOADER_PREFIX, TRANSLATE_LOADER_SUFFIX } from './translate.config';
 
 /**
- * Stand-in for the legacy English bundle `app/global-translations/locale-en.json`.
+ * Stand-in for the legacy English bundle `app/global-translations/locale-en.json`, served only where
+ * a checkout carries no legacy tree.
  *
- * That file belongs to the read-only legacy checkout and is not present in this repository, so the
- * spec flushes an object of the same flat, dotted shape through `HttpTestingController` instead.
+ * The criterion's case below serves the legacy file itself, read in place by
+ * {@link readLegacyEnglishBundle}: the file is never copied, imported into the build or regenerated
+ * (Rule 1 clause 6, AAP 0.6.2). This checkout carries no `app/` tree — the same absence
+ * `web-ng/tools/parity/lib/legacy-scan.ts` reports for `check:templates` and `src/styles.scss` records
+ * for the legacy partials — so this object answers there instead and the case still runs. It repeats
+ * the two keys the criterion names, with the values the legacy bundle gives them, so what the case
+ * proves is the same whichever source serves it.
+ *
  * Flat keys are the point: the legacy bundles are not nested, and the migrated screens address
  * `label.heading.clients` and its neighbours directly.
  *
- * Test input only. This object is never an application translation source, adds no locale file and
- * is not derived from any translation text the build ships (Rule 1 clause 6).
+ * Test input only. This object is never an application translation source, adds no locale file and is
+ * not copied into the build (Rule 1 clause 6).
  */
 const LEGACY_EN_BUNDLE: Record<string, string> = {
   'label.heading.clients': 'Clients',
@@ -38,6 +47,86 @@ const LEGACY_EN_BUNDLE: Record<string, string> = {
  * prefix move the assertion with it and pass while every label 404s.
  */
 const LEGACY_EN_BUNDLE_URL = 'global-translations/locale-en.json';
+
+/** One legacy bundle read in place: the file it came from and its flat contents. */
+interface LegacyEnglishBundle {
+  /** Absolute path of the file the bundle was read from. */
+  readonly path: string;
+  /** That file's contents: flat, dotted keys mapped to their translations. */
+  readonly bundle: Record<string, string>;
+}
+
+/** Narrows an untyped JSON value to the object its entries can be read from. */
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Parses one legacy bundle file and proves it holds what every legacy translation file holds: a flat
+ * JSON object whose every value is a translated string.
+ *
+ * A file that is present but of another shape is a broken legacy tree rather than an absent one, so it
+ * throws with the file and the offending key named. Reading it as an empty or partial bundle would let
+ * the case below pass on nothing, which is the failure mode this whole reader exists to rule out.
+ *
+ * @param path absolute path of the bundle file.
+ * @returns the file's flat, dotted contents.
+ */
+function parseLegacyBundle(path: string): Record<string, string> {
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(readFileSync(path, 'utf8'));
+  } catch (error) {
+    const reason: string = error instanceof Error ? error.message : String(error);
+
+    throw new Error(`The legacy bundle ${path} is present but cannot be read as JSON: ${reason}`);
+  }
+
+  if (!isJsonObject(parsed)) {
+    throw new Error(`The legacy bundle ${path} is present but does not hold a JSON object.`);
+  }
+
+  const bundle: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(parsed)) {
+    if (typeof value !== 'string') {
+      throw new Error(`The legacy bundle ${path} is present but "${key}" is not a translated string.`);
+    }
+
+    bundle[key] = value;
+  }
+
+  return bundle;
+}
+
+/**
+ * Reads the legacy English bundle in place, or answers `null` where no checkout-visible copy exists.
+ *
+ * AAP 0.10.3 criterion 2 asks for a test that loads a legacy `app/global-translations` file, so the
+ * case below serves this file's own contents through the real loader wherever it can be found, and the
+ * file is read where it stands rather than copied into the repository, imported into the build or
+ * regenerated (Rule 1 clause 6, AAP 0.6.2). The two candidates are the repository root — the parent of
+ * the workspace `npm test` runs from — and the workspace-relative location `angular.json`'s asset input
+ * names. `import.meta.url` cannot locate the tree here: the unit-test builder serves a spec from an
+ * `http` URL, not a `file` one.
+ *
+ * @returns the path of the bundle found and its flat contents, or `null` when no candidate exists.
+ */
+function readLegacyEnglishBundle(): LegacyEnglishBundle | null {
+  const candidates: readonly string[] = [
+    resolve(process.cwd(), '..', 'app/global-translations/locale-en.json'),
+    resolve(process.cwd(), 'app/global-translations/locale-en.json'),
+  ];
+
+  for (const path of candidates) {
+    if (existsSync(path)) {
+      return { path, bundle: parseLegacyBundle(path) };
+    }
+  }
+
+  return null;
+}
 
 /**
  * A one-line host that renders a key the way both templates do — through `TranslatePipe` — so the
@@ -169,6 +258,44 @@ describe('FineractMissingTranslationHandler', () => {
       expect(translate.instant('label.input.username')).toBe('Username');
 
       // A key the bundle answers never reaches the missing-translation handler.
+      expect(handle).not.toHaveBeenCalled();
+    });
+
+    it('serves the legacy global-translations bundle and resolves its flat dotted keys unchanged', async () => {
+      const legacy = readLegacyEnglishBundle();
+      const { translate, httpMock } = createHarness();
+      const handle = vi.spyOn(FineractMissingTranslationHandler.prototype, 'handle');
+      // The legacy file's own contents wherever this checkout lets the spec read one, the stand-in that
+      // repeats the criterion's two keys where it does not; every assertion below holds for either source.
+      const bundle: Record<string, string> = legacy === null ? LEGACY_EN_BUNDLE : legacy.bundle;
+      // Named in the assertions below, so a failure states which source answered: the legacy file itself
+      // or the stand-in standing in for a checkout that carries no legacy tree.
+      const source: string =
+        legacy === null ? 'the in-memory stand-in, this checkout carrying no legacy app/ tree' : legacy.path;
+
+      const loaded = firstValueFrom(translate.use('en'));
+      const request = httpMock.expectOne(LEGACY_EN_BUNDLE_URL);
+
+      request.flush(bundle);
+      await loaded;
+      httpMock.verify();
+
+      // The served bundle carries both keys, so what follows resolves them instead of falling through to
+      // the missing-translation handler — the case is a proof of resolution, not of the handler's answer.
+      expect(Object.keys(bundle)).toContain('label.heading.clients');
+      expect(Object.keys(bundle)).toContain('label.input.username');
+
+      // AAP 0.10.3 criterion 2, key by key: the flat dotted keys of the legacy bundle resolve to the
+      // translations that bundle itself carries, and the example the criterion names resolves as the
+      // legacy file answers it.
+      expect(translate.instant('label.heading.clients'), `bundle source: ${source}`).toBe(
+        bundle['label.heading.clients'],
+      );
+      expect(translate.instant('label.input.username'), `bundle source: ${source}`).toBe(
+        bundle['label.input.username'],
+      );
+      expect(translate.instant('label.heading.clients')).toBe('Clients');
+
       expect(handle).not.toHaveBeenCalled();
     });
 

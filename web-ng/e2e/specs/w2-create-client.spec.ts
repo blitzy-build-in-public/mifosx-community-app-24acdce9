@@ -52,6 +52,10 @@
  * also not the "status last" order a summary would suggest: `app/views/clients/clients.html` fixes
  * Name, Client No., External ID, Status, Office, Staff, and both page objects read them by that
  * heading order, so the assertion is six rendered columns rather than a position for the status one.
+ * The template reading is recorded where acceptance criterion 4 reads it:
+ * `e2e/report/difference-register.ts` holds it beside the plan's own wording, what the run delivers
+ * and the authority behind it, and `parity-report.md` renders it as its "Deliberate-difference
+ * register" section. The register and this spec therefore state the same thing.
  *
  * **Security.** Nothing here reads the environment at module scope, so `npx playwright test --list`
  * collects this file with no configuration and no backend (AAP 0.10.3 criterion 3). The credential

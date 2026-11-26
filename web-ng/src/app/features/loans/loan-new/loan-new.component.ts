@@ -47,22 +47,23 @@ interface ChargeRowControls {
 }
 
 /**
- * Reads a template payload as the loosely typed record of members the plan does not model.
+ * Whether a value is a plain object whose members can be read by key.
  *
  * `LoanTemplate` declares the members this application consumes, and the fork sends more beside
- * them: the option list of every enumerated term (`amortizationTypeOptions`,
+ * them: the option list of every enumerated term (`amortizationTypeOptions`, `productOptions`,
  * `repaymentFrequencyTypeOptions`, …) and the selected value of several of those enumerations as an
- * object (`{id, code, value}`) rather than as the plain number the model declares. This is the
- * single documented boundary where those extra members are read as `unknown` and narrowed by the
- * guards below; no member of the plan's model is re-declared here and no field of the file is
- * `any` (Rule 1 clause 4). Reading a member the model does declare through this record would lose
- * the model's type for nothing, so every declared member is read off the model directly.
+ * object (`{id, code, value}`) rather than as the plain number the model declares. Those are the
+ * payloads read through this predicate, and it is the single documented boundary where they are
+ * reached as `unknown` and then narrowed by the guards below — no member of the plan's model is
+ * re-declared here, no value is asserted past the type system, and no field of the file is `any`
+ * (Rule 1 clause 4, AAP 0.14.1). Reading a member the model does declare through this record would
+ * lose the model's type for nothing, so every declared member is read off the model directly.
  *
- * @param value A response body the model describes partially.
- * @returns The same object, member by member, as `unknown` values.
+ * A value that is an array is not a record: it carries no member this screen reads by name, so a
+ * reply of the wrong shape yields no option row instead of a member invented from its indices.
  */
-function toWire(value: object): Readonly<Record<string, unknown>> {
-  return value as unknown as Readonly<Record<string, unknown>>;
+function isWireObject(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /**
@@ -135,11 +136,11 @@ function readRowName(record: Readonly<Record<string, unknown>>): string | null {
  * legacy screens listed.
  */
 function readOptionRow(value: unknown): SelectOption | null {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+  if (!isWireObject(value)) {
     return null;
   }
 
-  const record = toWire(value);
+  const record = value;
   const id = asId(record['id']);
   if (id === null) {
     return null;
@@ -212,11 +213,12 @@ function today(): Date {
  * the payload and the pickers from the payload's own lists, in the payload's order. Where the plan's
  * model does not declare a list the fork sends (`amortizationTypeOptions`, `interestTypeOptions`,
  * `interestCalculationPeriodTypeOptions`, `loanTermFrequencyTypeOptions`,
- * `repaymentFrequencyTypeOptions`, `interestRateFrequencyTypeOptions`) it is read through `toWire`
- * and narrowed by the readers above — never replaced by a constant written into this file, because a
- * hard-coded enumeration is a dropdown the legacy screen never showed (Rule 1 clause 3). `principal`
- * and every amount carry `Validators.required` and nothing else: legacy applies no bound, and W7
- * exists to prove Fineract itself rejects a principal above the product maximum (Rule 1 clause 3).
+ * `repaymentFrequencyTypeOptions`, `interestRateFrequencyTypeOptions`) it is read through
+ * `isWireObject` and narrowed by the readers above — never replaced by a constant written into this
+ * file, because a hard-coded enumeration is a dropdown the legacy screen never showed (Rule 1
+ * clause 3). `principal` and every amount carry `Validators.required` and nothing else: legacy
+ * applies no bound, and W7 exists to prove Fineract itself rejects a principal above the product
+ * maximum (Rule 1 clause 3).
  *
  * **The strategy field is named for the legacy form but carries the code.** The control is
  * `transactionProcessingStrategyId`, the id the legacy template fixes and the E2E page object
@@ -744,7 +746,9 @@ export class LoanNewComponent {
    * @param template The payload of `GET /loans/template`.
    */
   private applyTemplate(template: LoanTemplate): void {
-    const wire = toWire(template);
+    // A payload that is not a plain object carries no option list and no default, so the record every
+    // read below goes through is then empty and every field keeps the value it already holds.
+    const wire: Readonly<Record<string, unknown>> = isWireObject(template) ? template : {};
 
     this.productOptions.set(readOptionRows(wire['productOptions']));
     this.loanOfficerOptions.set(readOptionRows(wire['loanOfficerOptions']));

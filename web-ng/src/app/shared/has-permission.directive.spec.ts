@@ -1,4 +1,4 @@
-import { Component, provideZonelessChangeDetection, Signal, signal } from '@angular/core';
+import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -56,9 +56,6 @@ class PermissionsStub implements Pick<PermissionsService, 'can' | 'has'> {
    * nothing.
    */
   private readonly sessionPresent = signal(false);
-
-  /** Mirror of the service's public list, so a test can assert what the directive is reading. */
-  readonly permissions: Signal<readonly string[]> = this.granted.asReadonly();
 
   /** Plain membership; `ALL_FUNCTIONS` grants every code, as it does in legacy. */
   can(key: string): boolean {
@@ -232,8 +229,16 @@ describe('HasPermissionDirective', () => {
     stub.grant(['CLIENT_VIEW']);
     fixture.detectChanges();
 
-    expect(stub.permissions()).toEqual(['CLIENT_VIEW']);
     expect(gated.style.display).toBe('');
+
+    // A second grant holding something else entirely: the element closes again, so the verdict
+    // follows the code this host bound rather than the arrival of any permission list, and a
+    // directive that revealed on any change would fail here. No other case withdraws a permission
+    // this way — the negated case drops the list to empty, and the last one ends in a logout.
+    stub.grant(['UPDATE_CLIENT']);
+    fixture.detectChanges();
+
+    expect(gated.style.display).toBe('none');
   });
 
   it('hides both elements while no session is present and reveals only the negated one once one is', () => {

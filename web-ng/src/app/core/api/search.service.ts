@@ -1,6 +1,6 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import type { Observable } from 'rxjs';
+import { defer, type Observable } from 'rxjs';
 
 import { AppConfigService } from '../config/app-config.service';
 
@@ -196,6 +196,13 @@ export interface SearchTemplate {
  * It adds nothing legacy did not do: no debounce, no retry, no cache, no pagination and no mapping
  * of the server's rows into a different shape (Rule 1 clause 3), and it logs nothing at all — a
  * search carries a client's name or identifier in its own URL (Rule 1 clause 9).
+ *
+ * **Nothing is composed until the returned observable is subscribed.** Both calls below wrap their
+ * whole request — the URL and the `HttpParams` — in `defer`, so `AppConfigService.apiUrl()`, which
+ * throws until the configuration has resolved, is read at subscribe time. That refusal therefore
+ * reaches the subscriber as an error on the returned observable rather than as an exception thrown out
+ * of the call, so a caller that handles only the `error` notification still sees it (AAP 0.14.1
+ * "Errors are values, not exceptions in components").
  */
 @Injectable({ providedIn: 'root' })
 export class SearchService {
@@ -217,17 +224,19 @@ export class SearchService {
    * @returns the matching rows, one element per result.
    */
   search(params: GlobalSearchParams): Observable<SearchResult[]> {
-    let queryParams: HttpParams = new HttpParams()
-      .set('query', params.query)
-      .set('resource', toResourceParam(params.resource));
+    return defer(() => {
+      let queryParams: HttpParams = new HttpParams()
+        .set('query', params.query)
+        .set('resource', toResourceParam(params.resource));
 
-    // `!== undefined`, not truthiness: legacy sends `exactMatch=false` when the user turned exact
-    // matching off, and omits the parameter when the flag was never set.
-    if (params.exactMatch !== undefined) {
-      queryParams = queryParams.set('exactMatch', String(params.exactMatch));
-    }
+      // `!== undefined`, not truthiness: legacy sends `exactMatch=false` when the user turned exact
+      // matching off, and omits the parameter when the flag was never set.
+      if (params.exactMatch !== undefined) {
+        queryParams = queryParams.set('exactMatch', String(params.exactMatch));
+      }
 
-    return this.http.get<SearchResult[]>(this.config.apiUrl('search'), { params: queryParams });
+      return this.http.get<SearchResult[]>(this.config.apiUrl('search'), { params: queryParams });
+    });
   }
 
   /**
@@ -254,6 +263,6 @@ export class SearchService {
    * @returns the ad-hoc query template as the server sends it.
    */
   template(): Observable<SearchTemplate> {
-    return this.http.get<SearchTemplate>(this.config.apiUrl('search/template'));
+    return defer(() => this.http.get<SearchTemplate>(this.config.apiUrl('search/template')));
   }
 }

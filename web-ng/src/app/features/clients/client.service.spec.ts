@@ -1073,13 +1073,27 @@ describe('ClientService', () => {
       closureDate: CLIENT_DATE,
       closureReasonId: 5,
     };
+    const messages: string[] = [];
+    let emissions = 0;
 
     // The command travels in the query string and the body describes the action, so a mismatch would
-    // post one action's payload to another action's endpoint. It is refused before any request.
-    expect(() => service.action(CLIENT_ID, 'activate', closure)).toThrowError(
-      /describes the 'close' command but the request issues 'activate'/,
-    );
+    // post one action's payload to another action's endpoint. It is refused before any request, and
+    // the refusal arrives as an observable error — not as an exception thrown out of the call —
+    // because `defer` runs the guard when the observable is subscribed, which is the one error
+    // channel every caller of this service already handles (AAP 0.14.1).
+    service.action(CLIENT_ID, 'activate', closure).subscribe({
+      next: () => (emissions += 1),
+      error: (failure: unknown) => {
+        messages.push(failure instanceof Error ? failure.message : String(failure));
+      },
+    });
+
+    expect(emissions).toBe(0);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatch(/describes the 'close' command but the request issues 'activate'/);
     httpMock.expectNone(isRequest('POST', clientUrl('clients', CLIENT_ID)));
+    // No request of any other shape was issued either: the guard runs before the URL is composed.
+    httpMock.expectNone(() => true);
   });
 
   it('refuses a crafted route id with the guard message and issues no request at all', () => {
