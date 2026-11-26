@@ -46,15 +46,17 @@ function readingWhere(prefix: string): DifferenceRegisterReading | undefined {
 }
 
 describe('the deliberate-difference register\'s readings', () => {
-  it('holds the four readings this run takes from the plan, and no other', () => {
-    expect(DIFFERENCE_REGISTER_READINGS).toHaveLength(4);
+  it('holds the six readings this run takes from the plan, and no other', () => {
+    expect(DIFFERENCE_REGISTER_READINGS).toHaveLength(6);
     expect(readingWhere('AAP 0.10.5 item 5')).toBeDefined();
     expect(readingWhere('AAP 0.10.5 item 15')).toBeDefined();
     expect(readingWhere('AAP 0.10.1')).toBeDefined();
     expect(readingWhere('AAP 0.10.5 — the session-expiry warning')).toBeDefined();
+    expect(readingWhere('AAP 0.10.5 — the bounded request')).toBeDefined();
+    expect(readingWhere('AAP 0.10.5 — a credential refusal')).toBeDefined();
   });
 
-  it('states all four members of every reading rather than leaving one empty', () => {
+  it('states all six members of every reading rather than leaving one empty', () => {
     for (const reading of DIFFERENCE_REGISTER_READINGS) {
       expect(reading.where.trim().length).toBeGreaterThan(0);
       expect(reading.plan.trim().length).toBeGreaterThan(0);
@@ -96,6 +98,29 @@ describe('the deliberate-difference register\'s readings', () => {
     expect(sessionExpiry?.why).toContain('AAP 0.1.1 requires the 10-second warning before logout');
     expect(sessionExpiry?.why).toContain('Rule 1 clause 6 keeps app/ read-only');
   });
+
+  it('records the bounded request as a 30-second limit with its own sentence, one notice and an untouched answer inside the bound', () => {
+    const timeout = readingWhere('AAP 0.10.5 — the bounded request');
+    expect(timeout?.plan).toContain('no request the application sends carries a client-side time limit');
+    expect(timeout?.delivered).toContain('fails once 30 seconds pass without an answer');
+    expect(timeout?.delivered).toContain('timeout({ first: 30_000, each: 30_000 })');
+    expect(timeout?.delivered).toContain('The server did not answer in time. Try again in a moment.');
+    expect(timeout?.delivered).toContain('raises exactly one notification for it and rethrows it');
+    expect(timeout?.delivered).toContain('A request that answers inside the bound is untouched');
+    expect(timeout?.why).toContain('AAP 0.14.2 requires every HTTP call path to end in a rendered message');
+  });
+
+  it('records the status-0 credential refusal as the session end a 401 cannot deliver, with a re-validation that keeps a working session', () => {
+    const refusal = readingWhere('AAP 0.10.5 — a credential refusal');
+    expect(refusal?.delivered).toContain('fails with status 0 and the one re-validation read');
+    expect(refusal?.delivered).toContain('the stored entry is removed');
+    expect(refusal?.delivered).toContain('a single notice says the session has ended and to sign in again');
+    expect(refusal?.delivered).toContain('A status-0 failure whose re-validation answers 200 is a transport fault');
+    expect(refusal?.delivered).toContain('a backend that refuses the connection outright answers status 0 at once');
+    expect(refusal?.delivered).toContain('not before the router\'s first navigation');
+    expect(refusal?.why).toContain('401 sent outside its CORS filter');
+    expect(refusal?.why).toContain('legacy leaves the refused key in storage and its screen blank');
+  });
 });
 
 describe('the rendered register', () => {
@@ -105,10 +130,12 @@ describe('the rendered register', () => {
     expect(indexOfLine(lines, REGISTER_HEADING)).toBeGreaterThanOrEqual(0);
     expect(lines).toContain(
       'The register itself is AAP 0.10.5\'s sixteen deliberate differences, and every `intentional-diff` row '
-        + 'above cites one of them by number. The entries below are the ones this run reads more narrowly than '
-        + 'the plan wrote them — or, at item 5, does not deliver at all, as AAP 0.9.3\'s fixed cut order required — '
-        + 'or, at the session-expiry warning, carries copy of the application\'s own because no legacy bundle '
-        + 'supplies it, stated with what the run delivers so that the register and the specs agree.',
+        + 'above cites one of them by number. The entries below are the ones this run states on the register\'s '
+        + 'behalf: readings narrower than the plan wrote them — at item 5 a difference the run does not deliver at '
+        + 'all, as AAP 0.9.3\'s fixed cut order required, and at the session-expiry warning copy of the '
+        + 'application\'s own because no legacy bundle supplies it — and the two failure behaviours this run adds '
+        + 'where the sixteen differences name none, each stated with what the run delivers so that the register and '
+        + 'the specs agree.',
     );
   });
 

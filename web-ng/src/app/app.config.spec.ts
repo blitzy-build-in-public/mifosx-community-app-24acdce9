@@ -92,10 +92,12 @@ describe('appConfig', () => {
     // `HttpHandler` rather than `HttpClient`: web-ng/eslint.config.js restricts the `HttpClient` import to the six Fineract URL-owning files, and `HttpHandler` is what `provideHttpClient` resolves *after* the interceptor chain, so this request passes through the same chain.
     const handler = TestBed.inject(HttpHandler);
     const http = TestBed.inject(HttpTestingController);
+    // The interceptor stamps the tenant header on a call to the configured API origin and on nothing else, so the request is made where the services make it: the URL `apiUrl()` composes (AAP 0.4.2).
+    const clientsUrl = TestBed.inject(AppConfigService).apiUrl('clients');
 
-    handler.handle(new HttpRequest('GET', 'clients')).subscribe();
+    handler.handle(new HttpRequest('GET', clientsUrl)).subscribe();
 
-    const request = http.expectOne('clients');
+    const request = http.expectOne(clientsUrl);
 
     expect(request.request.headers.get('Fineract-Platform-TenantId')).toBe('spec-tenant');
 

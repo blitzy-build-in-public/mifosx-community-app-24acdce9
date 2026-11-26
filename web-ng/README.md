@@ -76,12 +76,12 @@ npm run e2e              # legacy baseline, then the new app, then parity-report
 the seed is not idempotent. `npm run e2e` runs every workflow against the legacy app first (port 9090,
 with `?baseApiUrl=&tenantIdentifier=`), then the new app (port 4300): a legacy screen that no longer
 works is reported `legacy-broken` without failing, and `parity-report.{md,json}` land in `web-ng/` (git-ignored).
+`e2e/.captures/` and both report files are per-run artefacts: `npm run e2e` deletes the previous run's copies
+before it captures anything. Masked of credentials, they still keep client data (AAP 0.10.2).
 
-The savings workflow (W8, Stretch) is not delivered: AAP 0.9.3's fixed cut order applied its first step — drop
-Stretch — and every Must workflow keeps its own screen and spec. The revised totals, by `git ls-files | grep -v
-package-lock.json | xargs wc -l`, are 88,418 lines at `4a13dc7` before the prose trim, 58,799 at `c05766d` where
-that trim had brought the tree inside the ceiling, 59,237 when this record was corrected, and 64,451 with the cut
-half's 17 files and 5,214 lines restored — over the ceiling, so the cut stands and the report re-measures each run.
+The savings workflow (W8, Stretch) is not delivered: AAP 0.9.3's fixed cut order applied its first step —
+drop Stretch — and every Must workflow keeps its own screen and spec, so the cut stands and its revised
+totals are re-measured each run by `git ls-files | grep -v package-lock.json | xargs wc -l`.
 
 Static gates:
 

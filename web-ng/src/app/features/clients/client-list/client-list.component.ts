@@ -32,9 +32,7 @@ import { FilterToolbarComponent } from './filter-toolbar/filter-toolbar.componen
 /** How many page links the pager renders at once — `dir-pagination-controls`' own `max-size` default. */
 const PAGE_NUMBER_WINDOW = 9;
 
-  /** One rendered row of the clients table: the six values it prints, the track key, the id a row opens and the raw status code "Show Closed" reads — the shape is
-   * the screen's own because `GET /clients` names a client through `displayName`/`accountNo`/`officeName`/`staffName` while `GET /search` names it through
-   * `entityName`/`entityAccountNo`/`parentName`; a member the payload did not carry is `''`, never a dash the design does not show (Rule 1 clause 3). */
+  /** One rendered row of the clients table: the six values it prints, the track key, the id a row opens and the raw status code "Show Closed" reads — the shape is the screen's own because `GET /clients` names a client through `displayName`/`accountNo`/`officeName`/`staffName` while `GET /search` names it through `entityName`/`entityAccountNo`/`parentName`; a member the payload did not carry is `''`, never a dash the design does not show (Rule 1 clause 3). */
 export interface ClientListRow {
   /** Stable key for the template's `track`, unique across both sources: the client's id on a list page, the search row's entity type plus entity id on a result. */
   readonly key: string;
@@ -57,22 +55,17 @@ export interface ClientListRow {
   /** The loan officer's name, `''` when the payload carried none. */
   readonly staffName: string;
 
-  /** The status indicator's key, from `toClientStatusKey`, resolved once per row so the colour cannot drift between renders: colour only (AAP 0.10.5 item 11), the closed
-   * family painting `closed` and a rejected or withdrawn row `other`. The "Show Closed" filter reads {@link statusCode}, not this key. */
+  /** The status indicator's key, from `toClientStatusKey`, resolved once per row so the colour cannot drift between renders: colour only (AAP 0.10.5 item 11), the closed family painting `closed` and a rejected or withdrawn row `other`. The "Show Closed" filter reads {@link statusCode}, not this key. */
   readonly statusKey: StatusKey;
 
-  /** The raw Fineract status code the payload carried — e.g. `'clientStatusType.closed'` — or `''`; what {@link isClosedClientStatus} decides "Show Closed" with, and
-   * deliberately not {@link statusKey}: the legacy checkbox tests one code only (`app/views/clients/clients.html:65`), so the code hides exactly what legacy hides (Rule 1 clause 3). */
+  /** The raw Fineract status code the payload carried — e.g. `'clientStatusType.closed'` — or `''`; what {@link isClosedClientStatus} decides "Show Closed" with, and deliberately not {@link statusKey}: the legacy checkbox tests one code only (`app/views/clients/clients.html:65`), so the code hides exactly what legacy hides (Rule 1 clause 3). */
   readonly statusCode: string;
 }
 
-  /** Declares what the Status cell template receives, so Angular compiles it against {@link ClientListRow} instead of `any` (Rule 1 clause 4; AAP 0.2.3 rows `ClientList /
-   * DataTable` and `StatusSwatch`): a bare `<ng-template let-row>` is `TemplateRef<any>`, so a renamed member would reach `toClientStatusKey` as an unknown code. */
+  /** Declares what the Status cell template receives, so Angular compiles it against {@link ClientListRow} instead of `any` (Rule 1 clause 4; AAP 0.2.3 rows `ClientList / DataTable` and `StatusSwatch`): a bare `<ng-template let-row>` is `TemplateRef<any>`, so a renamed member would reach `toClientStatusKey` as an unknown code. */
 @Directive({ selector: '[appClientListCell]' })
 export class ClientListCellDirective {
-  /** States the context object the table hands a cell template, so `strictTemplates` compiles `let-row`, `let-column` and `let-value` against {@link ClientListRow}, its
-   * column definition and the column's text: `app-data-table` builds exactly this context. `@param directive` the directive it is declared on; `@param context` the context
-   * the outlet supplied; `@returns` true, narrowing `context` to a {@link ClientListRow}'s cell context. */
+  /** States the context object the table hands a cell template, so `strictTemplates` compiles `let-row`, `let-column` and `let-value` against {@link ClientListRow}, its column definition and the column's text: `app-data-table` builds exactly this context. `@param directive` the directive it is declared on; `@param context` the context the outlet supplied; `@returns` true, narrowing `context` to a {@link ClientListRow}'s cell context. */
   static ngTemplateContextGuard(
     directive: ClientListCellDirective,
     context: unknown,
@@ -110,9 +103,7 @@ export class ClientListComponent {
   /** The component's own lifetime, handed to `takeUntilDestroyed` for every read, so a late response cannot write to a destroyed view. */
   private readonly destroyRef = inject(DestroyRef);
 
-  /**
-   * The legacy bundle's key for each of the table's six captions, resolved through `shared/translated-label.util.ts` so a language switch or a late-arriving bundle repaints them (`app/views/clients/clients.html:53-60`; Rule 1 clause 3).
-   */
+  /** The legacy bundle's key for each of the table's six captions, resolved through `shared/translated-label.util.ts` so a language switch or a late-arriving bundle repaints them (`app/views/clients/clients.html:53-60`; Rule 1 clause 3). */
   private readonly label = createTranslatedLabels();
 
   /** One signal per caption, in the legacy table's column order. */
@@ -125,9 +116,7 @@ export class ClientListComponent {
     staff: this.label('label.heading.staff'),
   } as const;
 
-  /**
-   * The six columns in the legacy table's own order — name, client number, external id, status, office, staff — each headed by that table's bundle key and reading one member of {@link ClientListRow} (AAP 0.2.3 row `ClientList / DataTable`; AAP 0.7.4; Figma node `1:3`; `app/views/clients/clients.html:53-60`), computed from {@link columnLabels} so the captions follow the active language; the Status column contributes no text (AAP 0.10.5 item 11), so its `value` is the empty string.
-   */
+  /** The six columns in the legacy table's own order — name, client number, external id, status, office, staff — each headed by that table's bundle key and reading one member of {@link ClientListRow} (AAP 0.2.3 row `ClientList / DataTable`; AAP 0.7.4; Figma node `1:3`; `app/views/clients/clients.html:53-60`), computed from {@link columnLabels} so the captions follow the active language; the Status column contributes no text (AAP 0.10.5 item 11), so its `value` is the empty string. */
   readonly columns = computed<readonly ColumnDef<ClientListRow>[]>(() => [
     { key: 'name', header: this.columnLabels.name(), value: (row) => row.name },
     { key: 'clientNumber', header: this.columnLabels.clientNumber(), value: (row) => row.accountNo },
@@ -140,50 +129,34 @@ export class ClientListComponent {
   /** The key the table tracks a row by: {@link ClientListRow.key}, unique across a page and a search answer alike, so the loop never falls back to the index (AAP 0.2.3 row `ClientList / DataTable`). */
   readonly rowKey = (row: ClientListRow): string => row.key;
 
-  /**
-   * The destination a row opens: `#/viewclient/:id`, the record the legacy cell's `routeTo(client.id)` opened and W3's entry point — the whole row is the link, as the legacy table made every cell one (AAP 0.7.4; Figma node `1:3`; Rule 1 clause 3).
-   */
+  /** The destination a row opens: `#/viewclient/:id`, the record the legacy cell's `routeTo(client.id)` opened and W3's entry point — the whole row is the link, as the legacy table made every cell one (AAP 0.7.4; Figma node `1:3`; Rule 1 clause 3). */
   readonly rowLink = (row: ClientListRow): readonly (string | number)[] => [
     '/viewclient',
     row.clientId,
   ];
 
-  /**
-   * The rows the last successful read returned, projected at receipt into the table's view and kept in the server's order; empty until the first response and after a failed read, so the table area stays blank rather than showing invented rows (AAP 0.7.4).
-   */
+  /** The rows the last successful read returned, projected at receipt into the table's view and kept in the server's order; empty until the first response and after a failed read, so the table area stays blank rather than showing invented rows (AAP 0.7.4). */
   readonly rows = signal<readonly ClientListRow[]>([]);
 
-  /**
-   * Whether a read is in flight: the template keeps the empty state out of the frame before the first response, and the toolbar's `busy` input disables the find submit. It paints nothing itself — the design has no spinner (AAP 0.2.4).
-   */
+  /** Whether a read is in flight: the template keeps the empty state out of the frame before the first response, and the toolbar's `busy` input disables the find submit. It paints nothing itself — the design has no spinner (AAP 0.2.4). */
   readonly loading = signal(false);
 
-  /**
-   * Whether the last read failed: with {@link errorMessage} empty it marks a failure whose text may not be rendered — a 5xx or a transport fault the interceptor has already notified — so the screen shows neither rows nor a "no clients" claim (AAP 0.7.4).
-   */
+  /** Whether the last read failed: with {@link errorMessage} empty it marks a failure whose text may not be rendered — a 5xx or a transport fault the interceptor has already notified — so the screen shows neither rows nor a "no clients" claim (AAP 0.7.4). */
   readonly failed = signal(false);
 
-  /**
-   * Fineract's own failure text, verbatim, or `null`, populated for a 4xx only: the interceptor raises its single notification for status `0` and `>= 500` alone, so rendering those here too would report the same problem twice (AAP 0.7.4; Rule 1 clause 9 — nothing is logged).
-   */
+  /** Fineract's own failure text, verbatim, or `null`, populated for a 4xx only: the interceptor raises its single notification for status `0` and `>= 500` alone, so rendering those here too would report the same problem twice (AAP 0.7.4; Rule 1 clause 9 — nothing is logged). */
   readonly errorMessage = signal<string | null>(null);
 
-  /**
-   * The filter field's text as the toolbar published it: the toolbar owns the field, this screen owns what the text does, which is narrow the rows in hand. A signal because this view is zoneless and `OnPush`, so a plain read of the toolbar's form inside {@link visibleRows} would freeze the verdict.
-   */
+  /** The filter field's text as the toolbar published it: the toolbar owns the field, this screen owns what the text does, which is narrow the rows in hand. A signal because this view is zoneless and `OnPush`, so a plain read of the toolbar's form inside {@link visibleRows} would freeze the verdict. */
   private readonly filterText = signal('');
 
   /** The "Show Closed" flag, as the toolbar published it — the second display filter's own state. */
   private readonly showClosed = signal(false);
 
-  /**
-   * Whether the rows in hand are a find's answer rather than one page of the list — the difference that decides who pages them: the list read pages on the server (`offset`/`limit`), a find answers with the whole match and is paged in the view (Rule 1 clause 3).
-   */
+  /** Whether the rows in hand are a find's answer rather than one page of the list — the difference that decides who pages them: the list read pages on the server (`offset`/`limit`), a find answers with the whole match and is paged in the view (Rule 1 clause 3). */
   private readonly findAnswer = signal<boolean>(false);
 
-  /**
-   * The rows the table renders: the rows in hand with both display filters applied, in the order legacy rendered them — a `closed` row left out unless "Show Closed" is ticked (that one code only, as `app/views/clients/clients.html:65` hides exactly `clientStatusType.closed`), a row showing none of the filter text left out ({@link matchesDisplayFilter}), and the survivors ordered by name ascending as `| orderBy:'displayName':reverse` with `reverse` unset produces (`app/views/clients/clients.html:63`; Rule 1 clause 3). A rejected or withdrawn client stays on screen with the neutral `other` swatch, which is why the filter asks {@link isClosedClientStatus} about the raw code and not the row's colour key.
-   */
+  /** The rows the table renders: the rows in hand with both display filters applied, in the order legacy rendered them — a `closed` row left out unless "Show Closed" is ticked (that one code only, as `app/views/clients/clients.html:65` hides exactly `clientStatusType.closed`), a row showing none of the filter text left out ({@link matchesDisplayFilter}), and the survivors ordered by name ascending as `| orderBy:'displayName':reverse` with `reverse` unset produces (`app/views/clients/clients.html:63`; Rule 1 clause 3). A rejected or withdrawn client stays on screen with the neutral `other` swatch, which is why the filter asks {@link isClosedClientStatus} about the raw code and not the row's colour key. */
   readonly visibleRows = computed<readonly ClientListRow[]>(() => {
     const needle = this.filterText().trim().toLowerCase();
     const includeClosed = this.showClosed();
@@ -221,26 +194,18 @@ export class ClientListComponent {
     return visible.slice(start, start + this.pageLimit);
   });
 
-  /**
-   * Whether a completed read matched nothing — the state that renders the explicit empty state and no error. All three conditions matter: nothing may be in flight, the last read must not have failed, and no row may survive both display filters (AAP 0.7.4 "States every list and record screen must implement").
-   */
+  /** Whether a completed read matched nothing — the state that renders the explicit empty state and no error. All three conditions matter: nothing may be in flight, the last read must not have failed, and no row may survive both display filters (AAP 0.7.4 "States every list and record screen must implement"). */
   readonly isEmpty = computed<boolean>(
     () => !this.loading() && !this.failed() && this.visibleRows().length === 0,
   );
 
-  /**
-   * Rows per page: the legacy client list's own fifteen, as the family's `ClientListParams` records it — deliberately not the larger page a fresh screen might prefer, because the request the parity harness compares is the legacy request and a different `limit` would show up in every client-list workflow (Rule 1 clauses 2 and 3).
-   */
+  /** Rows per page: the legacy client list's own fifteen, as the family's `ClientListParams` records it — deliberately not the larger page a fresh screen might prefer, because the request the parity harness compares is the legacy request and a different `limit` would show up in every client-list workflow (Rule 1 clauses 2 and 3). */
   readonly pageLimit: number = 15;
 
-  /**
-   * The page the table is showing, 1-based — the pager's state and the `offset` the list read derives from it (`(page - 1) * 15`, exactly legacy's `offset: (page - 1) * clientsPerPage`). A signal because the pager renders it and this view is zoneless and `OnPush`.
-   */
+  /** The page the table is showing, 1-based — the pager's state and the `offset` the list read derives from it (`(page - 1) * 15`, exactly legacy's `offset: (page - 1) * clientsPerPage`). A signal because the pager renders it and this view is zoneless and `OnPush`. */
   readonly page = signal(1);
 
-  /**
-   * How many rows the last read matched across every page, as the envelope's `totalFilteredRecords` reports it — the only member that can say how many pages exist, which is why {@link ClientListPage} models it rather than flattening the envelope to its rows. After a find it is the answer's own length (legacy's `scope.totalClients = actualClients.length`); `0` after a failure.
-   */
+  /** How many rows the last read matched across every page, as the envelope's `totalFilteredRecords` reports it — the only member that can say how many pages exist, which is why {@link ClientListPage} models it rather than flattening the envelope to its rows. After a find it is the answer's own length (legacy's `scope.totalClients = actualClients.length`); `0` after a failure. */
   readonly totalRecords = signal(0);
 
   /** How many pages the last read's match spans — never fewer than one, so a single-page result is the first of one rather than an empty pager. */
@@ -248,9 +213,7 @@ export class ClientListComponent {
     Math.max(1, Math.ceil(this.totalRecords() / this.pageLimit)),
   );
 
-  /**
-   * The page numbers the pager renders: all of them for nine pages or fewer, otherwise a nine-page window centred on the page in view — `dir-pagination-controls`' own `max-size`, which keeps a tenant with thousands of clients from painting one link per page.
-   */
+  /** The page numbers the pager renders: all of them for nine pages or fewer, otherwise a nine-page window centred on the page in view — `dir-pagination-controls`' own `max-size`, which keeps a tenant with thousands of clients from painting one link per page. */
   readonly pageNumbers = computed<readonly number[]>(() => {
     const pageCount = this.pageCount();
     const size = Math.min(PAGE_NUMBER_WINDOW, pageCount);
@@ -267,23 +230,17 @@ export class ClientListComponent {
     this.load();
   }
 
-  /**
-   * Takes the filter field's text from the toolbar (AAP 0.2.3 row `FilterToolbar`): a display filter and nothing more, narrowing the rows already in hand without a request (Rule 1 clauses 2 and 3). `@param text` the field's text exactly as the toolbar published it; {@link visibleRows} normalises it.
-   */
+  /** Takes the filter field's text from the toolbar (AAP 0.2.3 row `FilterToolbar`): a display filter and nothing more, narrowing the rows already in hand without a request (Rule 1 clauses 2 and 3). `@param text` the field's text exactly as the toolbar published it; {@link visibleRows} normalises it. */
   protected onFilterChange(text: string): void {
     this.filterText.set(text);
   }
 
-  /**
-   * Takes the "Show Closed" flag from the toolbar (AAP 0.2.3 row `FilterToolbar`): the second display filter, hiding one status code and issuing no request (Rule 1 clause 3). `@param showClosed` whether closed clients are shown.
-   */
+  /** Takes the "Show Closed" flag from the toolbar (AAP 0.2.3 row `FilterToolbar`): the second display filter, hiding one status code and issuing no request (Rule 1 clause 3). `@param showClosed` whether closed clients are shown. */
   protected onShowClosedChange(showClosed: boolean): void {
     this.showClosed.set(showClosed);
   }
 
-  /**
-   * Runs the toolbar's find: the one place the find field reaches the server, driven by the toolbar's `(search)` output. Carrying text it runs as a search — `GET /search`, the call legacy makes for the same field; cleared, the list is re-read with no filter, restoring the first page, as the legacy controller does with an empty `searchText` (`ClientController.search()`). Exactly one request goes out per submit, and an empty field never sends an empty `query` (Rule 1 clauses 2 and 3). `@param text` the find field's text as the toolbar published it, trimmed here as legacy trimmed it.
-   */
+  /** Runs the toolbar's find: the one place the find field reaches the server, driven by the toolbar's `(search)` output. Carrying text it runs as a search — `GET /search`, the call legacy makes for the same field; cleared, the list is re-read with no filter, restoring the first page, as the legacy controller does with an empty `searchText` (`ClientController.search()`). Exactly one request goes out per submit, and an empty field never sends an empty `query` (Rule 1 clauses 2 and 3). `@param text` the find field's text as the toolbar published it, trimmed here as legacy trimmed it. */
   onFind(text: string): void {
     const query = text.trim();
 
@@ -322,9 +279,7 @@ export class ClientListComponent {
     this.load();
   }
 
-  /**
-   * Reads one page of `GET /clients` and replaces the rows it holds (AAP 0.7.3 row "Client list and edit"): the request carries `offset` — `(page - 1) * 15`, which is how legacy pages the same endpoint — and `limit` and nothing else, because the screen offers no sort affordance, the endpoint accepts no `searchText` and a list read carries no date payload (Rule 1 clause 2). The subscription is tied to the component's lifetime with `takeUntilDestroyed`, and `finalize` clears {@link loading} on either outcome (AAP 0.14.1).
-   */
+  /** Reads one page of `GET /clients` and replaces the rows it holds (AAP 0.7.3 row "Client list and edit"): the request carries `offset` — `(page - 1) * 15`, which is how legacy pages the same endpoint — and `limit` and nothing else, because the screen offers no sort affordance, the endpoint accepts no `searchText` and a list read carries no date payload (Rule 1 clause 2). The subscription is tied to the component's lifetime with `takeUntilDestroyed`, and `finalize` clears {@link loading} on either outcome (AAP 0.14.1). */
   private load(): void {
     this.loading.set(true);
     this.failed.set(false);
@@ -353,9 +308,7 @@ export class ClientListComponent {
       });
   }
 
-  /**
-   * Runs the find as a server search and replaces the rows with its answer (AAP 0.7.3 row "Shell: global search"; AAP 0.10.1 W3's search half; AAP 0.10.5 item 9). The requested scope is `clients`, which the service serialises as `resource=clients,clientIdentifiers`; text and flag are derived as `ClientController.search()` derives them — the surrounding double quotes removed, `exactMatch` set from whether that removal changed the text — so an unquoted find sends `exactMatch=false` rather than omitting it, because legacy's parameter distinguishes "false" from "absent" (`app/scripts/controllers/client/ClientController.js:44-62`; Rule 1 clause 2; AAP 0.7.2 `GlobalSearchParams`). The subscription follows {@link load}'s shape: bound to the component's lifetime, `loading` cleared by `finalize`, a failure turned into state by {@link onFailure}.
-   */
+  /** Runs the find as a server search and replaces the rows with its answer (AAP 0.7.3 row "Shell: global search"; AAP 0.10.1 W3's search half; AAP 0.10.5 item 9). The requested scope is `clients`, which the service serialises as `resource=clients,clientIdentifiers`; text and flag are derived as `ClientController.search()` derives them — the surrounding double quotes removed, `exactMatch` set from whether that removal changed the text — so an unquoted find sends `exactMatch=false` rather than omitting it, because legacy's parameter distinguishes "false" from "absent" (`app/scripts/controllers/client/ClientController.js:44-62`; Rule 1 clause 2; AAP 0.7.2 `GlobalSearchParams`). The subscription follows {@link load}'s shape: bound to the component's lifetime, `loading` cleared by `finalize`, a failure turned into state by {@link onFailure}. */
   private search(query: string): void {
     this.loading.set(true);
     this.failed.set(false);
@@ -385,9 +338,7 @@ export class ClientListComponent {
       });
   }
 
-  /**
-   * Records a failed read: the rows are cleared, the failure is flagged, and Fineract's own message is published for a 4xx only, because `core/http/fineract.interceptor.ts` has already raised the single notification a 5xx or a transport fault carries; nothing is logged, rethrown or notified from this file (AAP 0.7.4; Rule 1 clause 9). `@param error` the rejection the read produced, narrowed here because an observable's error channel is untyped.
-   */
+  /** Records a failed read: the rows are cleared, the failure is flagged, and Fineract's own message is published for a 4xx only, because `core/http/fineract.interceptor.ts` has already raised the single notification a 5xx or a transport fault carries; nothing is logged, rethrown or notified from this file (AAP 0.7.4; Rule 1 clause 9). `@param error` the rejection the read produced, narrowed here because an observable's error channel is untyped. */
   private onFailure(error: unknown): void {
     this.rows.set([]);
     this.failed.set(true);
@@ -404,9 +355,7 @@ export class ClientListComponent {
   }
 }
 
-  /**
-   * Whether a row shows any of the filter field's text in a cell the table prints. The field's own label fixes what it searches: `label.input.filterbynameaccno` reads "Filter display by name/client number/staff/office" (`app/global-translations/locale-en.json:726`), and legacy narrowed the whole row with `| filter:filterText` (`app/views/clients/clients.html:63`): name, client number, external id, office and staff, each compared case-insensitively against the needle the filter already lower-cased and trimmed, while the status cell prints no text at all (AAP 0.10.5 item 11). `@param row` the row under consideration; `@param needle` the filter text as the caller normalised it; `@returns` true when the row must stay on screen.
-   */
+  /** Whether a row shows any of the filter field's text in a cell the table prints. The field's own label fixes what it searches: `label.input.filterbynameaccno` reads "Filter display by name/client number/staff/office" (`app/global-translations/locale-en.json:726`), and legacy narrowed the whole row with `| filter:filterText` (`app/views/clients/clients.html:63`): name, client number, external id, office and staff, each compared case-insensitively against the needle the filter already lower-cased and trimmed, while the status cell prints no text at all (AAP 0.10.5 item 11). `@param row` the row under consideration; `@param needle` the filter text as the caller normalised it; `@returns` true when the row must stay on screen. */
 function matchesDisplayFilter(row: ClientListRow, needle: string): boolean {
   const cells: readonly string[] = [
     row.name,
@@ -419,9 +368,7 @@ function matchesDisplayFilter(row: ClientListRow, needle: string): boolean {
   return cells.some((cell) => cell.toLowerCase().includes(needle));
 }
 
-  /**
-   * Projects one `GET /clients` row onto the table's row view, reading the page payload's own names here and nowhere else: `displayName` is the name column, `accountNo` and `officeName` are carried as they arrived, and `externalId` and `staffName` become the empty string when the endpoint omits them rather than a stand-in the design never shows (Rule 1 clause 3). The key is the client's id; the status arrives as an object, so its code is carried as received — the "Show Closed" filter's input — and mapped once to the swatch's colour key. `@param client` one element of the page envelope's `pageItems`; `@returns` the row the table renders for it.
-   */
+  /** Projects one `GET /clients` row onto the table's row view, reading the page payload's own names here and nowhere else: `displayName` is the name column, `accountNo` and `officeName` are carried as they arrived, and `externalId` and `staffName` become the empty string when the endpoint omits them rather than a stand-in the design never shows (Rule 1 clause 3). The key is the client's id; the status arrives as an object, so its code is carried as received — the "Show Closed" filter's input — and mapped once to the swatch's colour key. `@param client` one element of the page envelope's `pageItems`; `@returns` the row the table renders for it. */
 function toPageRow(client: Client): ClientListRow {
   return {
     key: `client:${client.id}`,
@@ -436,9 +383,7 @@ function toPageRow(client: Client): ClientListRow {
   };
 }
 
-  /**
-   * Projects the search answer onto the table's row view, dropping the rows this screen does not render. `@param results` the rows `GET /search` answered with, in the server's order; `@returns` the rows the table renders, in the same order.
-   */
+  /** Projects the search answer onto the table's row view, dropping the rows this screen does not render. `@param results` the rows `GET /search` answered with, in the server's order; `@returns` the rows the table renders, in the same order. */
 function toSearchRows(results: readonly SearchResult[]): readonly ClientListRow[] {
   const rows: ClientListRow[] = [];
 
@@ -453,9 +398,7 @@ function toSearchRows(results: readonly SearchResult[]): readonly ClientListRow[
   return rows;
 }
 
-  /**
-   * Projects one search result onto the table's row view, by the discriminator the result carries. A `CLIENT` row names the client in `entityName`, its account in `entityAccountNo`, its external id in `entityExternalId` and its office in `parentName`, and its `entityId` opens the record — the five values the legacy controller copies from the same result. A `CLIENTIDENTIFIER` row is a client found by one of its identifiers: `parentName` is its name and `parentId` its id. The status comes from `entityStatus`, the `{id, code, value}` object legacy reads; a result carrying none leaves the code empty, which "Show Closed" treats as unclosed rather than hiding the row on a status it never had. `@returns` the row to render, or `null` for a result this screen does not render — a `LOAN` row the union admits but the `clients` scope never asks for, or a discriminator the server adds beyond the union.
-   */
+  /** Projects one search result onto the table's row view, by the discriminator the result carries. A `CLIENT` row names the client in `entityName`, its account in `entityAccountNo`, its external id in `entityExternalId` and its office in `parentName`, and its `entityId` opens the record — the five values the legacy controller copies from the same result. A `CLIENTIDENTIFIER` row is a client found by one of its identifiers: `parentName` is its name and `parentId` its id. The status comes from `entityStatus`, the `{id, code, value}` object legacy reads; a result carrying none leaves the code empty, which "Show Closed" treats as unclosed rather than hiding the row on a status it never had. `@returns` the row to render, or `null` for a result this screen does not render — a `LOAN` row the union admits but the `clients` scope never asks for, or a discriminator the server adds beyond the union. */
 function toSearchRow(result: SearchResult): ClientListRow | null {
   switch (result.entityType) {
     case 'CLIENT':

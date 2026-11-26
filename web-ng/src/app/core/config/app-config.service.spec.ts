@@ -416,6 +416,27 @@ describe('AppConfigService', () => {
     });
   });
 
+  describe('reported configuration error text', () => {
+    /** Every rejection `load()` can raise, as the transport answer that produces it: the three read failures `configReadError` composes and the two rejections `parseAppConfig` raises. Each one is shown verbatim to any visitor through `main.ts`'s `renderBootstrapFailure`, so the text itself is the disclosure surface. */
+    const rejectedConfigurations: readonly (readonly [string, FetchAnswer])[] = [
+      ['a read that reached no server', { kind: 'unreachable' }],
+      ['a non-OK response', { kind: 'status', status: 404, statusText: 'Not Found' }],
+      ['a body that is not JSON', { kind: 'not-json' }],
+      ['a body that is not a JSON object', { kind: 'served', body: [SERVED_CONFIG] }],
+      ['a body carrying an invalid value', { kind: 'served', body: servedRecord({ locale: '   ' }) }],
+    ];
+
+    it.each(rejectedConfigurations)('names the served URL rather than the project source path for %s', async (_case, answer) => {
+      const harness = createHarness('', '', answer);
+
+      const error = await rejectionOf(harness.service.load());
+
+      // An operator acts on the URL the browser fetches; the configuration file's place in the project is not part of the served application and must never be rendered to a visitor.
+      expect(error.message).toContain(CONFIG_URL);
+      expect(error.message).not.toContain('web-ng/src');
+    });
+  });
+
   describe('activeLocale', () => {
     it('throws before load() when no translate service can report a selected language', () => {
       const harness = createHarness();

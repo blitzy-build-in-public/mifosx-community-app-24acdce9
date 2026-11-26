@@ -1,22 +1,15 @@
 <!--
-  The login screen at `#/login` (AAP 0.7.1 `auth`; AAP 0.7.4 "Login"; AAP 0.2.1 Step 1; Figma flow "Sign in and open a client record" step 1), the entry point of workflow W1. A white page with NO
-  application chrome: this route is not wrapped by the signed-in shell, so nothing from `core/layout` renders here, and the application's single notification host is `app.component.html`, so a
-  login-time API failure surfaces in the `.alert.alert-danger` region below, this screen's only error surface.
+  The login screen at `#/login` (AAP 0.7.1 `auth`; AAP 0.7.4 "Login"; AAP 0.2.1 Step 1; Figma flow "Sign in and open a client record" step 1), the entry point of workflow W1. A white page with NO application chrome: this route is not wrapped by the signed-in shell, so nothing from `core/layout` renders here, and the application's single notification host is `app.component.html`, so a login-time API failure surfaces in the `.alert.alert-danger` region below, this screen's only error surface.
 
-  Every visual value comes from the global Bootstrap 3 layer compiled in `web-ng/src/styles.scss`, so this file carries no stylesheet, no `style` attribute, no colour and no pixel: `.container`,
-  `.row`, `.col-sm-4` and `.col-sm-offset-4` are the page and the centred form column the design measures, `hr` the 1px hairline and `.alert.alert-danger` the failure banner (Rule 1 clause 6).
+  Every visual value comes from the global Bootstrap 3 layer compiled in `web-ng/src/styles.scss`, so this file carries no stylesheet, no `style` attribute, no colour and no pixel: `.container`, `.row`, `.col-sm-4` and `.col-sm-offset-4` are the page and the centred form column the design measures, `hr` the 1px hairline and `.alert.alert-danger` the failure banner (Rule 1 clause 6).
 
-  The two regions of the component inventory (AAP 0.2.3) are the components it names: the language row is the shared `LanguageSwitcherComponent`, and the form is `LoginFormComponent`, which owns the
-  typed reactive form and the legacy ids the parity harness addresses (`uid`, `pwd`, `form.form`, `login-button`; `web-ng/e2e/pages/legacy/login.page.ts`). This file keeps the page around them. The
-  legacy page's own `margin-top: 10vh` offset (`app/index.html:30`) is the product's `.login-page` class in `web-ng/src/styles.scss`.
+  The two regions of the component inventory (AAP 0.2.3) are the components it names: the language row is the shared `LanguageSwitcherComponent`, and the form is `LoginFormComponent`, which owns the typed reactive form and the legacy ids the parity harness addresses (`uid`, `pwd`, `form.form`, `login-button`; `web-ng/e2e/pages/legacy/login.page.ts`). This file keeps the page around them. The legacy page's own `margin-top: 10vh` offset (`app/index.html:30`) is the product's `.login-page` class in `web-ng/src/styles.scss`.
 -->
 <div class="container login-page">
   <!--
-    BLITZY [A11Y]: the screen's skip link, and its first focusable element, so a keyboard user reaches the form without tabbing the language select and the hero first.
-    Bootstrap 3.4.3's own `sr-only` and `sr-only-focusable` classes hide it until it takes focus, so nothing on the page moves (Rule 1 clause 6).
+    BLITZY [A11Y]: the screen's skip link, and its first focusable element, so a keyboard user reaches the form without tabbing the language select and the hero first. Bootstrap 3.4.3's own `sr-only` and `sr-only-focusable` classes hide it until it takes focus, so nothing on the page moves (Rule 1 clause 6).
 
-    BLITZY [I18N]: the wording is an English literal because no shipped legacy bundle carries a key for a skip link. `skipToMain` cancels the fragment navigation before moving focus, because this
-    application routes on the hash (`withHashLocation`, Rule 1 clause 5) and an un-cancelled `#main-content` would be read as a route.
+    BLITZY [I18N]: the wording is an English literal because no shipped legacy bundle carries a key for a skip link. `skipToMain` cancels the fragment navigation before moving focus, because this application routes on the hash (`withHashLocation`, Rule 1 clause 5) and an un-cancelled `#main-content` would be read as a route.
   -->
   <a class="sr-only sr-only-focusable" href="#main-content" (click)="skipToMain($event)">Skip to content</a>
 
@@ -24,17 +17,9 @@
     <div class="col-xs-12">
       <!-- The screen's content landmark: the skip link's target (`id`), focusable only programmatically (`tabindex="-1"`) and named for a screen reader's landmark list (`aria-label`). -->
       <main id="main-content" tabindex="-1" aria-label="Main content">
-        <!--
-          BLITZY [A11Y]: the screen's own title, painted for assistive technology and not on screen (Bootstrap 3.4.3's `sr-only`), so the page carries exactly one `h1` and its outline starts at
-          level 1 — the three footer column headings are the `h2`s beneath it. The caption is the sign-in button's own legacy key, so it is a real bundle entry.
-        -->
+        <!-- BLITZY [A11Y]: the screen's own title, painted for assistive technology and not on screen (Bootstrap 3.4.3's `sr-only`), so the page carries exactly one `h1` and its outline starts at level 1 — the three footer column headings are the `h2`s beneath it. The caption is the sign-in button's own legacy key, so it is a real bundle entry. -->
         <h1 class="sr-only">{{ 'label.button.signin' | translate }}</h1>
-        <!--
-          The language switcher, right-aligned as the design shows it: the shared `LanguageSwitcherComponent` the navbar also renders (AAP 0.2.3 `LanguageSwitcher`), so the two rows cannot drift. It
-          keeps legacy's own "Change language:" key and the `langSelect` id the parity page objects drive, owns the switch in place — no page reload and no navigation (AAP 0.7.4) — and reports both
-          outcomes: a switch that took effect withdraws the message a failed one left, and a bundle that could not be loaded fills this screen's error region. The host carries the `text-right`
-          alignment the inline row carried; the row's own colour, size and select height stay in `web-ng/src/styles.scss` (Rule 1 clause 6).
-        -->
+        <!-- The language switcher, right-aligned as the design shows it: the shared `LanguageSwitcherComponent` the navbar also renders (AAP 0.2.3 `LanguageSwitcher`), so the two rows cannot drift. It keeps legacy's own "Change language:" key and the `langSelect` id the parity page objects drive, owns the switch in place — no page reload and no navigation (AAP 0.7.4) — and reports both outcomes: a switch that took effect withdraws the message a failed one left, and a bundle that could not be loaded fills this screen's error region. The host carries the `text-right` alignment the inline row carried; the row's own colour, size and select height stay in `web-ng/src/styles.scss` (Rule 1 clause 6). -->
         <app-language-switcher
           class="text-right"
           [langs]="langs"
@@ -45,12 +30,7 @@
           (langChangeFailed)="onLangChangeFailed()"
         />
 
-        <!--
-          The brand lockup, centred on the form column. The image is served in place from the legacy `app/images` tree through the `angular.json` assets mapping and is never copied, re-created in CSS
-          or replaced by an icon (Rule 1 clause 6; AAP 0.2.4); `alt` comes from the legacy bundle's own product name. `.login-hero` governs the rendered width — legacy pinned the lockup to 80% of the
-          form column with an inline `width:80%; margin:auto` (`app/index.html:80`), and that rule lives in `web-ng/src/styles.scss` as a class — while `.center-block` supplies the centring and
-          `.img-responsive` keeps the height proportional.
-        -->
+        <!-- The brand lockup, centred on the form column. The image is served in place from the legacy `app/images` tree through the `angular.json` assets mapping and is never copied, re-created in CSS or replaced by an icon (Rule 1 clause 6; AAP 0.2.4); `alt` comes from the legacy bundle's own product name. `.login-hero` governs the rendered width — legacy pinned the lockup to 80% of the form column with an inline `width:80%; margin:auto` (`app/index.html:80`), and that rule lives in `web-ng/src/styles.scss` as a class — while `.center-block` supplies the centring and `.img-responsive` keeps the height proportional. -->
         <div class="row">
           <div class="col-sm-4 col-sm-offset-4 text-center">
             <img
@@ -65,17 +45,12 @@
 
         <div class="row">
           <div class="col-sm-4 col-sm-offset-4">
-            <!-- Fineract's own failure text, rendered verbatim and directly above the form: no `translate` pipe, no prefix, no capitalisation and no truncation, so the message the user reads is the
-              message the backend returned (AAP 0.7.4; AAP 0.14.1 "errors are values"); `role="alert"` announces it without moving focus, and the typed username survives because the component
-              clears only the password. -->
+            <!-- Fineract's own failure text, rendered verbatim and directly above the form: no `translate` pipe, no prefix, no capitalisation and no truncation, so the message the user reads is the message the backend returned (AAP 0.7.4; AAP 0.14.1 "errors are values"); `role="alert"` announces it without moving focus, and the typed username survives because the component clears only the password. -->
             @if (error(); as message) {
               <div class="alert alert-danger" role="alert">{{ message }}</div>
             }
 
-            <!-- The form itself, the `LoginForm` row of the component inventory (AAP 0.2.3): its ids, names, classes, placeholders and labels are the legacy screen's own (`uid`, `pwd`,
-              `login-button`), so the parity page objects drive the same controls on both applications, and it reports the typed pair through its `(submit)` output. `[busy]="guard.busy()"` is
-              the whole duplicate-submission guard: the request belongs to this screen, which owns `AuthService` and the guard, so the form disables its button while `POST /authentication` is
-              in flight and one click sends one request (AAP 0.14.1); the error region above stays outside the form, because a refused exchange replaces no field. -->
+            <!-- The form itself, the `LoginForm` row of the component inventory (AAP 0.2.3): its ids, names, classes, placeholders and labels are the legacy screen's own (`uid`, `pwd`, `login-button`), so the parity page objects drive the same controls on both applications, and it reports the typed pair through its `(submit)` output. `[busy]="guard.busy()"` is the whole duplicate-submission guard: the request belongs to this screen, which owns `AuthService` and the guard, so the form disables its button while `POST /authentication` is in flight and one click sends one request (AAP 0.14.1); the error region above stays outside the form, because a refused exchange replaces no field. -->
             <app-login-form [busy]="guard.busy()" (submit)="onSubmit($event)" />
           </div>
         </div>
@@ -84,15 +59,7 @@
       <footer class="login-footer">
         <hr />
 
-        <!--
-          The footer's three link columns, one heading and three links each. Every string is a key the shipped legacy bundles already carry. Each heading is an `<h2>`, one level under the screen's
-          invisible `<h1>`, because legacy's `<h5>` in the same three places (`app/index.html:202,216,233`) would leave the outline skipping from 1 to 5; the element carries the level and
-          `.footer-heading` in `web-ng/src/styles.scss` carries the design's h5 box, so no pixel moves. Each heading takes Bootstrap 3's `.text-uppercase` because legacy renders the same three keys
-          through `| translate | uppercase` (Rule 1 clause 3). Every destination is legacy's own (`app/index.html:199-243`, read-only) rather than an inert hash-only href, because a focusable control
-          that navigates nowhere is the broken affordance AAP 0.10.5 item 8 rules out; eight of the nine carry a `target` in legacy and open a new context — `target="_blank"` with
-          `rel="noopener noreferrer"` here — while the ninth, `developerzone`, carries none (`app/index.html:209`) and stays in the current tab. The `<footer>`'s `login-footer` class is the scope of
-          the `.login-footer a` wrap rule in `web-ng/src/styles.scss`, so a label with no break opportunity breaks inside its column on a narrow viewport.
-        -->
+        <!-- The footer's three link columns, one heading and three links each. Every string is a key the shipped legacy bundles already carry. Each heading is an `<h2>`, one level under the screen's invisible `<h1>`, because legacy's `<h5>` in the same three places (`app/index.html:202,216,233`) would leave the outline skipping from 1 to 5; the element carries the level and `.footer-heading` in `web-ng/src/styles.scss` carries the design's h5 box, so no pixel moves. Each heading takes Bootstrap 3's `.text-uppercase` because legacy renders the same three keys through `| translate | uppercase` (Rule 1 clause 3). Every destination is legacy's own (`app/index.html:199-243`, read-only) rather than an inert hash-only href, because a focusable control that navigates nowhere is the broken affordance AAP 0.10.5 item 8 rules out; eight of the nine carry a `target` in legacy and open a new context — `target="_blank"` with `rel="noopener noreferrer"` here — while the ninth, `developerzone`, carries none (`app/index.html:209`) and stays in the current tab. The `<footer>`'s `login-footer` class is the scope of the `.login-footer a` wrap rule in `web-ng/src/styles.scss`, so a label with no break opportunity breaks inside its column on a narrow viewport. -->
         <div class="row">
           <div class="col-xs-4 text-center">
             <ul class="list-unstyled">
@@ -191,12 +158,9 @@
         <hr />
 
         <!--
-          The centred closing paragraph, at the width the design gives it, with its three inline links carrying legacy's own destinations (`app/scripts/controllers/main/MainController.js:220-222`),
-          which open in the current tab as legacy's do.
+          The centred closing paragraph, at the width the design gives it, with its three inline links carrying legacy's own destinations (`app/scripts/controllers/main/MainController.js:220-222`), which open in the current tab as legacy's do.
 
-          BLITZY [I18N]: this is the one string on the screen that is not translated, because the legacy application never translated it either — it is hard-coded English HTML in
-          `app/scripts/controllers/main/MainController.js:220-222` — and no shipped bundle carries a key for it, while adding a key would mean editing a locale file (forbidden: Rule 1 clauses 1 and
-          6). Keeping the legacy wording verbatim is what matches the legacy screen (Rule 1 clause 3).
+          BLITZY [I18N]: this is the one string on the screen that is not translated, because the legacy application never translated it either — it is hard-coded English HTML in `app/scripts/controllers/main/MainController.js:220-222` — and no shipped bundle carries a key for it, while adding a key would mean editing a locale file (forbidden: Rule 1 clauses 1 and 6). Keeping the legacy wording verbatim is what matches the legacy screen (Rule 1 clause 3).
         -->
         <div class="row">
           <div class="col-sm-6 col-sm-offset-3 text-center">

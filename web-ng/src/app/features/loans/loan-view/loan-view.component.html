@@ -1,44 +1,17 @@
 <!--
-  The individual-loan record — `#/viewloanaccount/:id`, the one record path the loan route tree mounts (AAP 0.8.2; AAP 0.7.4's `#/viewloanaccount/:id` row; AAP 0.7.1 Features row `loans`,
-  which places `LoanScheduleComponent` and `LoanTransactionsComponent` inside `LoanViewComponent`). Everything on the page comes from the one read the component makes —
-  `GET /loans/{id}?associations=all` through `LoanService.get(id)` (AAP 0.7.3 row "W6 repayment") — so no section requests anything of its own and no Fineract path, host, tenant or credential is
-  named in this file (Rule 1 clauses 2 and 9). The card itself — the `.panel` surface with its shadow and no border stroke, worn with the `loan-view` id the page objects address — is the shared
-  `div[appPanelCard]` (AAP 0.2.3 row `PanelCard`), given no title because the record heads itself inside the card body rather than in a `.panel-heading` band, and every other visual value is a
-  global Bootstrap 3 class of `web-ng/src/styles.scss`, so this file carries no style element, no inline style, no colour and no pixel (Rule 1 clause 6; AAP 0.4.4 decision 4).
+  The individual-loan record — `#/viewloanaccount/:id`, the one record path the loan route tree mounts (AAP 0.8.2; AAP 0.7.4's `#/viewloanaccount/:id` row; AAP 0.7.1 Features row `loans`, which places `LoanScheduleComponent` and `LoanTransactionsComponent` inside `LoanViewComponent`). Everything on the page comes from the one read the component makes — `GET /loans/{id}?associations=all` through `LoanService.get(id)` (AAP 0.7.3 row "W6 repayment") — so no section requests anything of its own and no Fineract path, host, tenant or credential is named in this file (Rule 1 clauses 2 and 9). The card itself — the `.panel` surface with its shadow and no border stroke, worn with the `loan-view` id the page objects address — is the shared `div[appPanelCard]` (AAP 0.2.3 row `PanelCard`), given no title because the record heads itself inside the card body rather than in a `.panel-heading` band, and every other visual value is a global Bootstrap 3 class of `web-ng/src/styles.scss`, so this file carries no style element, no inline style, no colour and no pixel (Rule 1 clause 6; AAP 0.4.4 decision 4).
 
-  Four states, one at a time (AAP 0.7.4): `loading()` paints nothing, the design carrying no spinner, skeleton or placeholder; `notFound()` — a route with no id or Fineract's 404 — replaces the
-  record with the one message `loan-repayment.component.html` renders for the same case; a 4xx other than 404 renders `clientError()`, Fineract's own text verbatim and un-piped, the record still
-  beneath it when the response carried one (AAP 0.4.4 decision 6); the loaded record paints head, summary, tabs and the active section. A 5xx or transport failure paints neither the alert nor a
-  not-found message, the interceptor having raised exactly one notification (AAP 0.4.2; AAP 0.14.1 "errors are values").
+  Four states, one at a time (AAP 0.7.4): `loading()` paints nothing, the design carrying no spinner, skeleton or placeholder; `notFound()` — a route with no id or Fineract's 404 — replaces the record with the one message `loan-repayment.component.html` renders for the same case; a 4xx other than 404 renders `clientError()`, Fineract's own text verbatim and un-piped, the record still beneath it when the response carried one (AAP 0.4.4 decision 6); the loaded record paints head, summary, tabs and the active section. A 5xx or transport failure paints neither the alert nor a not-found message, the interceptor having raised exactly one notification (AAP 0.4.2; AAP 0.14.1 "errors are values").
 
-  The status indicator is `app-status-swatch` in its record geometry — a colour and nothing else, no status word, label, title or tooltip, so the migration adds nothing legacy did not paint
-  (AAP 0.10.5 item 11; Rule 1 clause 3) — and the name beside it is the loan product's, as `viewloanaccountdetails.html` heads itself with `{{loandetails.loanProductName}}(#{{loandetails.accountNo}})`.
-  The three metadata runs are the account number, the client and the principal applied for; a member the payload omits renders its label and nothing after it (`?? ''`, never "undefined", a dash
-  or "N/A"), and spaces are written `{{ ' ' }}` because the compiler deletes a whitespace-only text node and the runs would render glued together — the technique `record-header.component.html` documents.
+  The status indicator is `app-status-swatch` in its record geometry — a colour and nothing else, no status word, label, title or tooltip, so the migration adds nothing legacy did not paint (AAP 0.10.5 item 11; Rule 1 clause 3) — and the name beside it is the loan product's, as `viewloanaccountdetails.html` heads itself with `{{loandetails.loanProductName}}(#{{loandetails.accountNo}})`. The three metadata runs are the account number, the client and the principal applied for; a member the payload omits renders its label and nothing after it (`?? ''`, never "undefined", a dash or "N/A"), and spaces are written `{{ ' ' }}` because the compiler deletes a whitespace-only text node and the runs would render glued together — the technique `record-header.component.html` documents.
 
-  The summary prints AAP 0.7.2's `LoanSummary` five figures — total, outstanding, principal, interest and fee balances — the two loan-wide ones from the schedule's `totalRepaymentExpected` and
-  `totalOutstanding` and the three balances from the sums of its periods' outstanding members, with the payload's own `summary` object unmodelled and unread; a figure the payload does not report
-  renders an EMPTY cell, never a zero, symbol, "Not Available" or dash (Rule 1 clause 3). Captions are the legacy bundles' own wording — `label.heading.total`, `label.heading.outstanding`,
-  `label.heading.principal.outstanding`, `label.heading.interest.outstanding` and `label.heading.fees`, no bundle declaring `label.heading.fees.outstanding` — and every key is present in
-  `app/global-translations/locale-*.json`, so no caption reaches the user as a humanised key (Rule 1 clause 6; AAP 0.10.2).
+  The summary prints AAP 0.7.2's `LoanSummary` five figures — total, outstanding, principal, interest and fee balances — the two loan-wide ones from the schedule's `totalRepaymentExpected` and `totalOutstanding` and the three balances from the sums of its periods' outstanding members, with the payload's own `summary` object unmodelled and unread; a figure the payload does not report renders an EMPTY cell, never a zero, symbol, "Not Available" or dash (Rule 1 clause 3). Captions are the legacy bundles' own wording — `label.heading.total`, `label.heading.outstanding`, `label.heading.principal.outstanding`, `label.heading.interest.outstanding` and `label.heading.fees`, no bundle declaring `label.heading.fees.outstanding` — and every key is present in `app/global-translations/locale-*.json`, so no caption reaches the user as a humanised key (Rule 1 clause 6; AAP 0.10.2).
 
-  The tabs are the shared `app-tab-strip` (AAP 0.2.3 row `TabStrip`): exactly three — the repayment schedule, the transactions and the charges, the sections AAP 0.7.4's row names after the
-  summary — each rendered by the committed read-only component that owns its table (`app-loan-schedule`, `app-loan-transactions`, `app-loan-charges`), with no column, sort control or pager added
-  beyond those components (Rule 1 clause 3); the charge tab renders the record's own `charges` rows and the explicit empty state for a loan carrying none (AAP 0.7.4).
+  The tabs are the shared `app-tab-strip` (AAP 0.2.3 row `TabStrip`): exactly three — the repayment schedule, the transactions and the charges, the sections AAP 0.7.4's row names after the summary — each rendered by the committed read-only component that owns its table (`app-loan-schedule`, `app-loan-transactions`, `app-loan-charges`), with no column, sort control or pager added beyond those components (Rule 1 clause 3); the charge tab renders the record's own `charges` rows and the explicit empty state for a loan carrying none (AAP 0.7.4).
 
-  The action entry points come from the component's `LOAN_ACTIONS` table, the transcription of the legacy record's per-status button list: add-charge, approve, modify and reject on a submitted
-  application; add-charge, disburse and undo approval on an approved loan; add-charge, make repayment and undo disbursal on an active loan; none in any other state (Rule 1 clause 3). Add-charge
-  appears in all three because legacy carries it on the button row of a submitted or active loan and in the approved status's `options` list that `viewloanaccountdetails.html` renders as its "More"
-  dropdown (`ViewLoanDetailsController.js`), which this record shows as one joined group. Each link is a `routerLink` over the six routes `loans.routes.ts` declares and is gated by
-  `HasPermissionDirective` on its row's own Fineract code, so a user holding exactly the codes the legacy record asks for sees exactly its links: `LOAN_ACTION_PERMISSIONS` for the six action
-  segments and `LOAN_CHARGE_PERMISSION` for the charge form are the declarations `loans.routes.ts` reads as each route's `data.permission`, so the directive and the `permissionGuard` ask one
-  question (AAP 0.1.1; AAP 0.4.2; AAP 0.14.1), and the group is omitted, never rendered empty, for a state with no action.
+  The action entry points come from the component's `LOAN_ACTIONS` table, the transcription of the legacy record's per-status button list: add-charge, approve, modify and reject on a submitted application; add-charge, disburse and undo approval on an approved loan; add-charge, make repayment and undo disbursal on an active loan; none in any other state (Rule 1 clause 3). Add-charge appears in all three because legacy carries it on the button row of a submitted or active loan and in the approved status's `options` list that `viewloanaccountdetails.html` renders as its "More" dropdown (`ViewLoanDetailsController.js`), which this record shows as one joined group. Each link is a `routerLink` over the six routes `loans.routes.ts` declares and is gated by `HasPermissionDirective` on its row's own Fineract code, so a user holding exactly the codes the legacy record asks for sees exactly its links: `LOAN_ACTION_PERMISSIONS` for the six action segments and `LOAN_CHARGE_PERMISSION` for the charge form are the declarations `loans.routes.ts` reads as each route's `data.permission`, so the directive and the `permissionGuard` ask one question (AAP 0.1.1; AAP 0.4.2; AAP 0.14.1), and the group is omitted, never rendered empty, for a state with no action.
 
-  The block resolves once the record's one read has answered and hands the sections the payload's own slices (`record.repaymentSchedule ?? null`, `record.transactions ?? []` and the `charges`
-  member), so none of the three components requests anything. The ids are hooks addressed from outside the template — `loan-view`, `loan-view-header`, `loan-view-error`,
-  `loan-view-not-found`, `loan-summary` (also the block the component's spec reads), `loan-actions` and the three section ids — and the end-to-end page objects address each, so dropping one
-  silently breaks a selector. The three sections are tabs of one record page rather than blocks stacked at once: the arrangement `app-tab-strip` with `activeTab`, `showSchedule` and
-  `showTransactions` defines, and each section carries its id only while its own tab is active.
+  The block resolves once the record's one read has answered and hands the sections the payload's own slices (`record.repaymentSchedule ?? null`, `record.transactions ?? []` and the `charges` member), so none of the three components requests anything. The ids are hooks addressed from outside the template — `loan-view`, `loan-view-header`, `loan-view-error`, `loan-view-not-found`, `loan-summary` (also the block the component's spec reads), `loan-actions` and the three section ids — and the end-to-end page objects address each, so dropping one silently breaks a selector. The three sections are tabs of one record page rather than blocks stacked at once: the arrangement `app-tab-strip` with `activeTab`, `showSchedule` and `showTransactions` defines, and each section carries its id only while its own tab is active.
 -->
 <div class="container-fluid">
   <div class="row">
@@ -72,12 +45,7 @@
 
               <hr />
 
-              <!--
-                The joined primary-button group: right-aligned, one link per step the loan's own state allows, each gated on the Fineract code its `LOAN_ACTIONS` row carries, and no group at all
-                for a state the legacy record offers no action in. The group is floated, so it is wrapped in Bootstrap 3's own `.clearfix` — the job the legacy record's full-width `col-sm-12`
-                column does for the same group (`viewloanaccountdetails.html:70-71`): a float takes no height in the flow. Without the wrapper the rule below and the summary block start underneath
-                the group instead of after it, and the rule collapses once the group wraps (Rule 1 clauses 3 and 6).
-              -->
+              <!-- The joined primary-button group: right-aligned, one link per step the loan's own state allows, each gated on the Fineract code its `LOAN_ACTIONS` row carries, and no group at all for a state the legacy record offers no action in. The group is floated, so it is wrapped in Bootstrap 3's own `.clearfix` — the job the legacy record's full-width `col-sm-12` column does for the same group (`viewloanaccountdetails.html:70-71`): a float takes no height in the flow. Without the wrapper the rule below and the summary block start underneath the group instead of after it, and the rule collapses once the group wraps (Rule 1 clauses 3 and 6). -->
               @if (actions().length > 0) {
                 <div class="clearfix">
                   <div class="pull-right btn-group" id="loan-actions">
@@ -95,18 +63,7 @@
 
               <hr />
 
-              <!--
-                The summary figures, in a half-width column so a label and its value stay a readable
-                distance apart. Each row is label-then-value; an omitted figure leaves its value
-                column empty rather than printing a zero the payload never carried. Every figure is
-                rendered through the one money formatter with the loan's own currency, which is where
-                the legacy record states the currency for this loan
-                (`app/views/loans/viewloanaccountdetails.html:125`), at the `number` filter's digits
-                (Rule 1 clause 3). Legacy prints that balance heading as `$ 5,200` and its charge
-                amounts as `$25` (`:854`), so one shared formatter cannot reproduce both spacings: it
-                keeps the charge table's no-space form here, and this comment is the record of the
-                one-space heading it departs from.
-              -->
+              <!-- The summary figures, in a half-width column so a label and its value stay a readable distance apart. Each row is label-then-value; an omitted figure leaves its value column empty rather than printing a zero the payload never carried. Every figure is rendered through the one money formatter with the loan's own currency, which is where the legacy record states the currency for this loan (`app/views/loans/viewloanaccountdetails.html:125`), at the `number` filter's digits (Rule 1 clause 3). Legacy prints that balance heading as `$ 5,200` and its charge amounts as `$25` (`:854`), so one shared formatter cannot reproduce both spacings: it keeps the charge table's no-space form here, and this comment is the record of the one-space heading it departs from. -->
               <div class="row">
                 <div class="col-md-6" id="loan-summary">
                   @for (row of summaryRows(); track row.labelKey) {
@@ -123,14 +80,9 @@
               </div>
 
               <!--
-                The three tabs and the section the active one shows. `app-tab-strip` reports the
-                chosen id and the component decides which section that id selects, so an id this
-                record does not serve cannot leave the record showing nothing.
+                The three tabs and the section the active one shows. `app-tab-strip` reports the chosen id and the component decides which section that id selects, so an id this record does not serve cannot leave the record showing nothing.
 
-                The section on screen is the panel of the active tab: `role="tabpanel"` with its
-                `aria-labelledby` naming that tab's element through `tabDomId`, the same id the strip
-                put on it, so assistive technology reads the section as the active tab's panel rather
-                than as loose content beside the strip (AAP 0.2.3 row `TabStrip`).
+                The section on screen is the panel of the active tab: `role="tabpanel"` with its `aria-labelledby` naming that tab's element through `tabDomId`, the same id the strip put on it, so assistive technology reads the section as the active tab's panel rather than as loose content beside the strip (AAP 0.2.3 row `TabStrip`).
               -->
               <app-tab-strip [tabs]="tabs()" [activeId]="activeTab()" (tabChange)="activateTab($event)" />
 

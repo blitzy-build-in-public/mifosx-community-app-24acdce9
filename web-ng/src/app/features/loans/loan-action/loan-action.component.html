@@ -1,27 +1,13 @@
 <!--
-  The loan lifecycle action screen — the route `#/loanaccount/:id/:action`, five actions on one route plus the not-found outcome (AAP 0.7.1 `LoanActionComponent`; AAP 0.8.2 `loans.routes.ts`). One
-  card per screen (AAP 0.7.4): the shared `div[appPanelCard]` with the mode's own title in its `.panel-heading`/`.panel-title` band (AAP 0.2.3 row `PanelCard`), so a card change is made there and
-  not here, and every other visual value is a global Bootstrap 3 class compiled by `web-ng/src/styles.scss` — `.panel-body`/`.panel-footer`, `.form-horizontal`/`.form-group`/
-  `.control-label`/`.col-md-*`, `.form-control`, `.has-error`/`.help-block`, `.alert.alert-danger` and `.btn.btn-primary`/`.btn.btn-default` (Rule 1 clause 6).
+  The loan lifecycle action screen — the route `#/loanaccount/:id/:action`, five actions on one route plus the not-found outcome (AAP 0.7.1 `LoanActionComponent`; AAP 0.8.2 `loans.routes.ts`). One card per screen (AAP 0.7.4): the shared `div[appPanelCard]` with the mode's own title in its `.panel-heading`/`.panel-title` band (AAP 0.2.3 row `PanelCard`), so a card change is made there and not here, and every other visual value is a global Bootstrap 3 class compiled by `web-ng/src/styles.scss` — `.panel-body`/`.panel-footer`, `.form-horizontal`/`.form-group`/ `.control-label`/`.col-md-*`, `.form-control`, `.has-error`/`.help-block`, `.alert.alert-danger` and `.btn.btn-primary`/`.btn.btn-default` (Rule 1 clause 6).
 
-  **The modes.** `approve`, `reject`, `disburse`, `undoapproval` and `undodisbursal` are drawn here, one form each with its own error region and footer; `repayment` is delegated whole to
-  `app-loan-repayment`, which draws its own card, heading, error region and submit (workflow W6), because nesting one `.panel` inside another would double the shadow and padding no legacy action
-  screen shows (Rule 1 clauses 3 and 6). Any other `:action`, a route carrying no loan id and a 404 from a mode's own seed read render the not-found message and post nothing.
+  **The modes.** `approve`, `reject`, `disburse`, `undoapproval` and `undodisbursal` are drawn here, one form each with its own error region and footer; `repayment` is delegated whole to `app-loan-repayment`, which draws its own card, heading, error region and submit (workflow W6), because nesting one `.panel` inside another would double the shadow and padding no legacy action screen shows (Rule 1 clauses 3 and 6). Any other `:action`, a route carrying no loan id and a 404 from a mode's own seed read render the not-found message and post nothing.
 
-  **The ids the parity harness addresses.** Every control carries an `id` equal to its `formControlName`, so `e2e/pages/*/loans.page.ts` fills the same field on both applications:
-  `approvedOnDate`, `approvedLoanAmount`, `rejectedOnDate`, `actualDisbursementDate`, `transactionAmount` and `note`. The approved amount is `approvedLoanAmount` and not the plan's
-  `approvedPrincipal` because the fork rejects that parameter (HTTP 400, "The parameter approvedPrincipal is not supported") while it documents and the legacy action controller posts
-  `approvedLoanAmount` — the departure `loan.models.ts` records for the whole feature, carried here so the control is named after the member it posts (Rule 1 clause 2); the note is `note`
-  because that is the legacy textarea's own id (`app/views/loans/loanaccountactions.html:260`), unique because each mode renders one form.
+  **The ids the parity harness addresses.** Every control carries an `id` equal to its `formControlName`, so `e2e/pages/*/loans.page.ts` fills the same field on both applications: `approvedOnDate`, `approvedLoanAmount`, `rejectedOnDate`, `actualDisbursementDate`, `transactionAmount` and `note`. The approved amount is `approvedLoanAmount` and not the plan's `approvedPrincipal` because the fork rejects that parameter (HTTP 400, "The parameter approvedPrincipal is not supported") while it documents and the legacy action controller posts `approvedLoanAmount` — the departure `loan.models.ts` records for the whole feature, carried here so the control is named after the member it posts (Rule 1 clause 2); the note is `note` because that is the legacy textarea's own id (`app/views/loans/loanaccountactions.html:260`), unique because each mode renders one form.
 
-  **What is deliberately absent**, the legacy action screens having none of it and the migration reproducing behaviour rather than improving it (Rule 1 clause 3): no native `required` attribute on
-  any control — the browser would block a submission Fineract alone decides, so `required` reaches assistive technology as `aria-required` and the component's validators stay the only rule; no
-  confirmation dialog and no success toast; no `min`, `max` or business `step` on either amount, the product's range being enforced on the server and its message what the user reads (AAP 0.4.4
-  decision 6); and no payment-type picker on the disbursement form, whose body carries no such member. The form is not withheld while a mode's seed read is in flight, legacy showing the same empty
-  controls and filling them as its template answers.
+  **What is deliberately absent**, the legacy action screens having none of it and the migration reproducing behaviour rather than improving it (Rule 1 clause 3): no native `required` attribute on any control — the browser would block a submission Fineract alone decides, so `required` reaches assistive technology as `aria-required` and the component's validators stay the only rule; no confirmation dialog and no success toast; no `min`, `max` or business `step` on either amount, the product's range being enforced on the server and its message what the user reads (AAP 0.4.4 decision 6); and no payment-type picker on the disbursement form, whose body carries no such member. The form is not withheld while a mode's seed read is in flight, legacy showing the same empty controls and filling them as its template answers.
 
-  **Wording.** Every caption is a shipped legacy `label.*` key resolved by `TranslatePipe`, the mode-dependent heading and primary label coming from the component's single copy table; the one
-  string rendered untranslated is Fineract's own failure message, because workflow W7 compares it with the server's `errors[].defaultUserMessage` character for character (AAP 0.4.4 decision 6).
+  **Wording.** Every caption is a shipped legacy `label.*` key resolved by `TranslatePipe`, the mode-dependent heading and primary label coming from the component's single copy table; the one string rendered untranslated is Fineract's own failure message, because workflow W7 compares it with the server's `errors[].defaultUserMessage` character for character (AAP 0.4.4 decision 6).
 -->
 <div class="container-fluid">
   <div class="row">
@@ -30,26 +16,12 @@
         <!-- The child is the whole screen for this mode: it draws its own card and runs its own read, so this template contributes neither a card nor a heading around it (see the header comment). -->
         <app-loan-repayment [loanId]="id()" />
       } @else if (notFound()) {
-        <!--
-          An `:action` outside the five served here and the repayment mode, a route whose `:id` is
-          absent or blank, or a 404 from the mode's own seed read: `shared/record-not-found` replaces
-          the form, so the shell around it stays usable and no control can post against the loan
-          (AAP 0.7.4 state rules). It is the one not-found presentation every record screen renders,
-          so the product has one not-found message and not two.
-        -->
+        <!-- An `:action` outside the five served here and the repayment mode, a route whose `:id` is absent or blank, or a 404 from the mode's own seed read: `shared/record-not-found` replaces the form, so the shell around it stays usable and no control can post against the loan (AAP 0.7.4 state rules). It is the one not-found presentation every record screen renders, so the product has one not-found message and not two. -->
         <app-record-not-found />
       } @else {
         <!-- The card's title is the screen's own title, so the band's heading is an `h1` and the page carries exactly one; `.panel-title` keeps the design's 18px/700 box, so no pixel moves. -->
         <div appPanelCard [title]="headingKey() | translate" titleTag="h1">
-          <!--
-            Fineract's own failure text, verbatim and unmoved by any prefix or capitalisation: a refused
-            action posts back the server's `defaultUserMessage`, and the form below keeps every entered
-            value so the refusal can be corrected in place (AAP 0.7.4). It is its own `.panel-body` above
-            the form and outside the mode switch, so every mode carries the one message and the message
-            is never duplicated. `role="alert"` announces it without a focus change. A 5xx or a transport
-            failure leaves `error()` `null`, because the interceptor has already raised its one
-            notification, so a failure produces one message and not two.
-          -->
+          <!-- Fineract's own failure text, verbatim and unmoved by any prefix or capitalisation: a refused action posts back the server's `defaultUserMessage`, and the form below keeps every entered value so the refusal can be corrected in place (AAP 0.7.4). It is its own `.panel-body` above the form and outside the mode switch, so every mode carries the one message and the message is never duplicated. `role="alert"` announces it without a focus change. A 5xx or a transport failure leaves `error()` `null`, because the interceptor has already raised its one notification, so a failure produces one message and not two. -->
           @if (error(); as failure) {
             <div class="panel-body">
               <div class="alert alert-danger" role="alert">{{ failure.message }}</div>
@@ -61,13 +33,7 @@
               <!-- `POST /loans/{id}?command=approve`: the approval date the command requires and the approved amount the screen collects, seeded by the component from the loan's approval template. The amount is required-only — no range, no step derived from a business rule — so the server alone decides what it accepts (Rule 1 clause 3). -->
               <form class="form-horizontal" [formGroup]="approveForm" (ngSubmit)="submit()" novalidate>
                 <div class="panel-body">
-                  <!--
-                    The date field renders its own `.form-group`, `.control-label` and
-                    `input[type=date]` — the native control that replaces the forbidden jQuery
-                    datepicker (AAP 0.10.5 item 1) — and `inputId` is the id its input and label
-                    share, which is how the harness addresses `#approvedOnDate` on both applications.
-                    `[required]` marks the label for assistive technology and adds no validator.
-                  -->
+                  <!-- The date field renders its own `.form-group`, `.control-label` and `input[type=date]` — the native control that replaces the forbidden jQuery datepicker (AAP 0.10.5 item 1) — and `inputId` is the id its input and label share, which is how the harness addresses `#approvedOnDate` on both applications. `[required]` marks the label for assistive technology and adds no validator. -->
                   <app-date-field
                     inputId="approvedOnDate"
                     [control]="approveForm.controls.approvedOnDate"
@@ -244,15 +210,7 @@
             }
 
             @case ('undodisbursal') {
-              <!--
-                `POST /loans/{id}?command=undodisbursal`: legacy's undo-disbursal mode sets neither
-                `showDelete` nor `showwaiveforspecicficduedate` (`LoanAccountActionsController.js`), so
-                its branch renders no field and no caption — only the cancel and save controls — and the
-                command takes an empty body. This view therefore renders nothing above those two
-                controls and states nothing legacy does not (Rule 1 clause 3; AAP 0.7.4). There is no
-                form to submit, which is why the primary control is a button that calls the same guarded
-                submit.
-              -->
+              <!-- `POST /loans/{id}?command=undodisbursal`: legacy's undo-disbursal mode sets neither `showDelete` nor `showwaiveforspecicficduedate` (`LoanAccountActionsController.js`), so its branch renders no field and no caption — only the cancel and save controls — and the command takes an empty body. This view therefore renders nothing above those two controls and states nothing legacy does not (Rule 1 clause 3; AAP 0.7.4). There is no form to submit, which is why the primary control is a button that calls the same guarded submit. -->
               <div class="panel-footer text-right">
                 <a class="btn btn-default" [routerLink]="['/viewloanaccount', id()]">{{
                   cancelKey | translate

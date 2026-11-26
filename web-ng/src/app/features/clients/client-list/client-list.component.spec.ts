@@ -30,20 +30,9 @@ import type { SearchResult } from '../../../core/api/search.service';
 import { FilterToolbarComponent } from './filter-toolbar/filter-toolbar.component';
 
 /**
- * Behaviour of the clients list at `#/clients` — the post-authentication landing screen, step 2 of the design flow "Sign in and open a client record", and the entry point of workflow W2 (its "Create Client"
- * control) and W3 (a row opened onto the record) (AAP 0.7.1 Features row `clients`; AAP 0.7.4 "Clients list (`#/clients`)", Figma node `1:3`; AAP 0.11.1; Rule 1 clause 8). It pins the traffic the screen
- * produces, the state it holds and the few properties only the markup can express, because those are the parts a rewrite would silently change: one `GET /clients` on construction carrying `offset=0`,
- * `limit=15` and no `searchText`, the set the legacy `getAllClients({offset, limit})` sends (Rule 1 clauses 2 and 3; AAP 0.7.3 row "Client list and edit"); the envelope's `pageItems` becoming the rows
- * held, in display-name order as AngularJS 1.7.9's default comparator orders them (`app/views/clients/clients.html:63`); the two display filters costing no request; a 4xx rendering Fineract's own message
- * while a 5xx leaves it empty and only flags the failure (AAP 0.7.4; workflow W7); the find running `GET /search` with `query`, `resource` and the `exactMatch` flag legacy derives from the surrounding
- * double quotes (`app/scripts/controllers/client/ClientController.js:44-62`; Rule 1 clause 2; AAP 0.7.2 `GlobalSearchParams`); and the "Create Client" gate following `CREATE_CLIENT`, hidden rather than
- * removed when it is absent.
+ * Behaviour of the clients list at `#/clients` — the post-authentication landing screen, step 2 of the design flow "Sign in and open a client record", and the entry point of workflow W2 (its "Create Client" control) and W3 (a row opened onto the record) (AAP 0.7.1 Features row `clients`; AAP 0.7.4 "Clients list (`#/clients`)", Figma node `1:3`; AAP 0.11.1; Rule 1 clause 8). It pins the traffic the screen produces, the state it holds and the few properties only the markup can express, because those are the parts a rewrite would silently change: one `GET /clients` on construction carrying `offset=0`, `limit=15` and no `searchText`, the set the legacy `getAllClients({offset, limit})` sends (Rule 1 clauses 2 and 3; AAP 0.7.3 row "Client list and edit"); the envelope's `pageItems` becoming the rows held, in display-name order as AngularJS 1.7.9's default comparator orders them (`app/views/clients/clients.html:63`); the two display filters costing no request; a 4xx rendering Fineract's own message while a 5xx leaves it empty and only flags the failure (AAP 0.7.4; workflow W7); the find running `GET /search` with `query`, `resource` and the `exactMatch` flag legacy derives from the surrounding double quotes (`app/scripts/controllers/client/ClientController.js:44-62`; Rule 1 clause 2; AAP 0.7.2 `GlobalSearchParams`); and the "Create Client" gate following `CREATE_CLIENT`, hidden rather than removed when it is absent.
  *
- * **Two levels of assertion**: the traffic on `HttpTestingController` and the state on the component's own signals, then the markup only where a property exists in the DOM alone (the text-free status
- * cell, the row that is itself the link, the gate that hides rather than removes, the empty state, the pager's links); wording that only restates a translated caption is not asserted, so re-keying the
- * bundles cannot break this file. **Providers**: the configuration from a stubbed `fetch`, the ngx-translate stack, `PermissionsService` and `NotificationService` stubs — the interceptor owns the single
- * notification a 5xx raises, so a stub proves the screen raises none of its own — `provideRouter([])` for the links, and `core/http`'s own error mapping so the rejection the component narrows is the type
- * it narrows in the application (AAP 0.4.2).
+ * **Two levels of assertion**: the traffic on `HttpTestingController` and the state on the component's own signals, then the markup only where a property exists in the DOM alone (the text-free status cell, the row that is itself the link, the gate that hides rather than removes, the empty state, the pager's links); wording that only restates a translated caption is not asserted, so re-keying the bundles cannot break this file. **Providers**: the configuration from a stubbed `fetch`, the ngx-translate stack, `PermissionsService` and `NotificationService` stubs — the interceptor owns the single notification a 5xx raises, so a stub proves the screen raises none of its own — `provideRouter([])` for the links, and `core/http`'s own error mapping so the rejection the component narrows is the type it narrows in the application (AAP 0.4.2).
  */
 
 /** The configuration the stubbed transport serves: the application's own documented default shape. */
@@ -97,31 +86,17 @@ const JOSE = 'José Luis Núñez';
 const NADIA = 'Nadia Weber';
 const OMAR = 'Omar Haddad';
 
-/**
- * Two names that first differ where one is upper-case and the other is not, so a case-sensitive comparison and legacy's
- * lower-cased one disagree about which leads: on UTF-16 code units `'QA20 …'` sorts before `'Qa008 …'` (`'A'` is 0x41,
- * `'a'` is 0x61), while lower-cased `'qa008 …'` sorts before `'qa20 …'`. Both spellings are invented for this suite.
- */
+/** Two names that first differ where one is upper-case and the other is not, so a case-sensitive comparison and legacy's lower-cased one disagree about which leads: on UTF-16 code units `'QA20 …'` sorts before `'Qa008 …'` (`'A'` is 0x41, `'a'` is 0x61), while lower-cased `'qa008 …'` sorts before `'qa20 …'`. Both spellings are invented for this suite. */
 const QA20_ROW = 'QA20 ProbeEdited';
 const QA008_ROW = 'Qa008 Client';
 
 /** The message a refused list read answers with. A 4xx is the one status this screen renders itself. */
 const REFUSED_MESSAGE = 'The client list could not be read for this office.';
 
-/**
- * The status label every fixture carries in its payload. The design paints a colour swatch with no word beside it
- * (AAP 0.10.5 item 11), so a value a test would notice if it leaked into the markup is exactly what the fixture stores.
- */
+/** The status label every fixture carries in its payload. The design paints a colour swatch with no word beside it (AAP 0.10.5 item 11), so a value a test would notice if it leaked into the markup is exactly what the fixture stores. */
 const SERVER_STATUS_LABEL = 'the server label, never rendered';
 
-/**
- * A client row as `GET /clients` returns it: the five members the model requires, with the name and the status code a case is about. The first three names are the
- * project's own fixed seed fixtures (AAP 0.10.1); the rejected and withdrawn rows and the two case-ordering rows carry names invented for this suite. Every row here is
- * a stub payload value: nothing in this file stores, sends or prints tenant state. @param id the client id, also rendered as the zero-padded account number. @param
- * displayName the name the list prints and the filter compares. @param statusCode the Fineract status code, e.g. `'clientStatusType.closed'`. @param officeName the
- * office the client is filed under; the seeded office unless a case needs a second one, which is what makes the office half of the display filter observable. @param
- * staffName the loan officer's name, absent unless a case is about the staff half of it.
- */
+/** A client row as `GET /clients` returns it: the five members the model requires, with the name and the status code a case is about. The first three names are the project's own fixed seed fixtures (AAP 0.10.1); the rejected and withdrawn rows and the two case-ordering rows carry names invented for this suite. Every row here is a stub payload value: nothing in this file stores, sends or prints tenant state. @param id the client id, also rendered as the zero-padded account number. @param displayName the name the list prints and the filter compares. @param statusCode the Fineract status code, e.g. `'clientStatusType.closed'`. @param officeName the office the client is filed under; the seeded office unless a case needs a second one, which is what makes the office half of the display filter observable. @param staffName the loan officer's name, absent unless a case is about the staff half of it. */
 function clientRow(
   id: number,
   displayName: string,
@@ -168,19 +143,13 @@ const FIRST_PAGE = {
   pageItems: [ACTIVE_CLIENT, CLOSED_CLIENT, PENDING_CLIENT],
 } as const;
 
-/**
- * A page carrying one client of each terminal state beside an active and a pending one, listed in the ascending
- * display-name order legacy renders. Only which rows the "Show Closed" checkbox hides is asserted from it.
- */
+/** A page carrying one client of each terminal state beside an active and a pending one, listed in the ascending display-name order legacy renders. Only which rows the "Show Closed" checkbox hides is asserted from it. */
 const MIXED_STATUS_PAGE = {
   totalFilteredRecords: 5,
   pageItems: [ACTIVE_CLIENT, CLOSED_CLIENT, PENDING_CLIENT, REJECTED_CLIENT, WITHDRAWN_CLIENT],
 } as const;
 
-/**
- * A match larger than one page, as `GET /clients` answers it: 31 rows at fifteen per page is three pages, the smallest shape
- * in which the pager has something to do. Only the counts and the single row per page matter here.
- */
+/** A match larger than one page, as `GET /clients` answers it: 31 rows at fifteen per page is three pages, the smallest shape in which the pager has something to do. Only the counts and the single row per page matter here. */
 const LARGE_MATCH_FIRST_PAGE = {
   totalFilteredRecords: 31,
   pageItems: [ACTIVE_CLIENT],
@@ -214,12 +183,7 @@ const CREATE_CLIENT_CODE = 'CREATE_CLIENT';
 /** The permission codes the stubbed gate answers `true` for. Reset before every case and set by the one case that needs the gate open, so the rest of the suite renders the toolbar as a user without the permission sees it. */
 let grantedCodes: readonly string[] = [];
 
-/**
- * The half of `PermissionsService` the toolbar's permission gate reads. Typed against the real class with `Pick`, so the
- * stub cannot drift from the two questions the directive asks, and it needs no session: the screen's traffic does not depend
- * on a permission. The answers are read from {@link grantedCodes} when the directive's effect runs rather than being fixed at
- * construction, which is what lets one case render the gate shut and another render it open with the same registration.
- */
+/** The half of `PermissionsService` the toolbar's permission gate reads. Typed against the real class with `Pick`, so the stub cannot drift from the two questions the directive asks, and it needs no session: the screen's traffic does not depend on a permission. The answers are read from {@link grantedCodes} when the directive's effect runs rather than being fixed at construction, which is what lets one case render the gate shut and another render it open with the same registration. */
 class PermissionsStub implements Pick<PermissionsService, 'can' | 'has'> {
   /** Membership only; no case here asks a negated code through this member. */
   can(key: string): boolean {
@@ -232,11 +196,7 @@ class PermissionsStub implements Pick<PermissionsService, 'can' | 'has'> {
   }
 }
 
-/**
- * Stand-in for the application's notification surface. `core/http/fineract.interceptor.ts` is the one place that raises a failure notification (AAP 0.7.4), so this stub exists to prove the screen never raises
- * a second one of its own. `satisfies` rather than a `Pick` annotation, so the shape is still checked against the real class while `mockClear` and the call history stay visible to the cases that read them.
- *
- */
+/** Stand-in for the application's notification surface. `core/http/fineract.interceptor.ts` is the one place that raises a failure notification (AAP 0.7.4), so this stub exists to prove the screen never raises a second one of its own. `satisfies` rather than a `Pick` annotation, so the shape is still checked against the real class while `mockClear` and the call history stay visible to the cases that read them. */
 const notificationStub = {
   show: vi.fn<(kind: NotificationKind, message: string) => void>(),
   clear: vi.fn<() => void>(),
@@ -259,11 +219,7 @@ describe('ClientListComponent', () => {
     initialRead = pending[0];
   }
 
-  /**
-   * The fixture's host element. `ComponentFixture.nativeElement` and `DebugElement.nativeElement` are typed loosely by the
-   * framework, so every cast to `HTMLElement` in this suite is the same DOM boundary, written `as HTMLElement` where it is used
-   * and explained here once (Rule 1 clause 4).
-   */
+  /** The fixture's host element. `ComponentFixture.nativeElement` and `DebugElement.nativeElement` are typed loosely by the framework, so every cast to `HTMLElement` in this suite is the same DOM boundary, written `as HTMLElement` where it is used and explained here once (Rule 1 clause 4). */
   function host(): HTMLElement {
     return fixture.nativeElement as HTMLElement;
   }
@@ -300,10 +256,7 @@ describe('ClientListComponent', () => {
     }
   }
 
-  /**
-   * Types a find into the field and submits the toolbar's form, which is the one path the find
-   * reaches the server by: the toolbar publishes the field's text and the screen acts on it.
-   */
+  /** Types a find into the field and submits the toolbar's form, which is the one path the find reaches the server by: the toolbar publishes the field's text and the screen acts on it. */
   function submitFind(text: string): void {
     const input = toolbarControl<HTMLInputElement>('#find');
     input.value = text;
@@ -318,11 +271,7 @@ describe('ClientListComponent', () => {
     form.dispatchEvent(new Event('submit'));
   }
 
-  /**
-   * The extracted toolbar's own form. AAP 0.2.3's `FilterToolbar` row owns the three controls, so an assertion about a control's own state — rather than about what the DOM shows — reads it from the component;
-   * `DebugElement.componentInstance` is typed loosely by the framework, so this cast is the third documented boundary in this suite.
-   *
-   */
+  /** The extracted toolbar's own form. AAP 0.2.3's `FilterToolbar` row owns the three controls, so an assertion about a control's own state — rather than about what the DOM shows — reads it from the component; `DebugElement.componentInstance` is typed loosely by the framework, so this cast is the third documented boundary in this suite. */
   function toolbarForm(): FilterToolbarComponent['form'] {
     const toolbar = fixture.debugElement.query(By.directive(FilterToolbarComponent));
 
@@ -333,10 +282,7 @@ describe('ClientListComponent', () => {
     return (toolbar.componentInstance as FilterToolbarComponent).form;
   }
 
-  /**
-   * The pager's page links as rendered. The pager paints only for a match larger than one page, so
-   * nothing but the pager cases observes it.
-   */
+  /** The pager's page links as rendered. The pager paints only for a match larger than one page, so nothing but the pager cases observes it. */
   function pageLinks(): readonly HTMLAnchorElement[] {
     return Array.from(host().querySelectorAll<HTMLAnchorElement>('.pagination li a'));
   }
@@ -370,8 +316,7 @@ describe('ClientListComponent', () => {
         { provide: PermissionsService, useValue: new PermissionsStub() },
         // The screen must never notify: the interceptor owns the single failure notification, so a stub at the token is what makes "the screen raised none" an assertion rather than a guess.
         { provide: NotificationService, useValue: notificationStub },
-        // The screen links rows and the "Create Client" control through `RouterLink`, so the router has to exist for the template to render at all; an empty route
-        // table is enough because no case navigates (the same provider the search-results spec uses).
+        // The screen links rows and the "Create Client" control through `RouterLink`, so the router has to exist for the template to render at all; an empty route table is enough because no case navigates (the same provider the search-results spec uses).
         provideRouter([]),
       ],
     });
@@ -379,8 +324,7 @@ describe('ClientListComponent', () => {
     await TestBed.inject(AppConfigService).load();
 
     const translate = TestBed.inject(TranslateService);
-    // No key is served here: the only rendered strings this suite asserts are the card title, which the template hardcodes, and the fixture data itself, so the stack
-    // is registered only because the component imports the translate pipe.
+    // No key is served here: the only rendered strings this suite asserts are the card title, which the template hardcodes, and the fixture data itself, so the stack is registered only because the component imports the translate pipe.
     translate.setTranslation('en', {}, true);
     translate.use('en');
 
@@ -396,8 +340,7 @@ describe('ClientListComponent', () => {
     mount();
 
     expect(initialRead.request.method).toBe('GET');
-    // Exactly the two parameters the legacy list sends: no `searchText`, no `orderBy`, no `sortOrder`, because the in-scope screen offers no sort and its find goes
-    // through its own path (Rule 1 clauses 2 and 3).
+    // Exactly the two parameters the legacy list sends: no `searchText`, no `orderBy`, no `sortOrder`, because the in-scope screen offers no sort and its find goes through its own path (Rule 1 clauses 2 and 3).
     expect(initialRead.request.params.keys()).toEqual(['offset', 'limit']);
     expect(initialRead.request.params.get('offset')).toBe(FIRST_PAGE_OFFSET);
     expect(initialRead.request.params.get('limit')).toBe(PAGE_LIMIT);
@@ -413,8 +356,7 @@ describe('ClientListComponent', () => {
     expect(component.loading()).toBe(true);
     expect(component.rows()).toEqual([]);
 
-    // The endpoint answers with the paged envelope, not a bare array: its `pageItems` become the rows the screen holds, in the order the server listed them. The order
-    // the table renders is legacy's own and is asserted by the case below.
+    // The endpoint answers with the paged envelope, not a bare array: its `pageItems` become the rows the screen holds, in the order the server listed them. The order the table renders is legacy's own and is asserted by the case below.
     initialRead.flush(FIRST_PAGE);
 
     expect(component.loading()).toBe(false);
@@ -491,8 +433,7 @@ describe('ClientListComponent', () => {
     const rows = fixture.debugElement.queryAll(By.css('tbody tr'));
     expect(rows.length).toBeGreaterThan(0);
 
-    // The row itself is the link, exactly as legacy's per-cell `routeTo(client.id)` was, and the design paints no link styling, chevron or button of its own (Figma screen `1:3`; AAP 0.7.4). `RouterLink`
-    // exposes its destination through a write-only setter, so the destination is observed the way a user produces it: the row's own click, on the router the link asks.
+    // The row itself is the link, exactly as legacy's per-cell `routeTo(client.id)` was, and the design paints no link styling, chevron or button of its own (Figma screen `1:3`; AAP 0.7.4). `RouterLink` exposes its destination through a write-only setter, so the destination is observed the way a user produces it: the row's own click, on the router the link asks.
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
     (rows[0].nativeElement as HTMLElement).click();
 
@@ -544,9 +485,7 @@ describe('ClientListComponent', () => {
 
     setShowClosed(true);
 
-    // `| orderBy:'displayName':reverse` with `reverse` unset sorts by display name ascending before
-    // the row paints, so the table shows the page in that order and not the server's
-    // (`app/views/clients/clients.html:63`; Rule 1 clause 3).
+    // `| orderBy:'displayName':reverse` with `reverse` unset sorts by display name ascending before the row paints, so the table shows the page in that order and not the server's (`app/views/clients/clients.html:63`; Rule 1 clause 3).
     expect(component.visibleRows().map((row) => row.name)).toEqual([ADA, JOSE, MARCUS]);
 
     expect(httpMock.match(isClientListRead)).toHaveLength(0);
@@ -555,8 +494,7 @@ describe('ClientListComponent', () => {
   it('orders the rows case-insensitively, the way legacy’s comparator does, not by code unit', () => {
     mount();
 
-    // A page the server listed so the two candidate comparisons disagree: a raw code-unit comparison puts 'QA20 ProbeEdited' first, while legacy's orderBy lower-cases
-    // both names before it compares them, which puts 'Qa008 Client' first. The third row already holds its place under either rule.
+    // A page the server listed so the two candidate comparisons disagree: a raw code-unit comparison puts 'QA20 ProbeEdited' first, while legacy's orderBy lower-cases both names before it compares them, which puts 'Qa008 Client' first. The third row already holds its place under either rule.
     initialRead.flush({
       totalFilteredRecords: 3,
       pageItems: [QA20_CLIENT, QA008_CLIENT, ACTIVE_CLIENT],
@@ -565,11 +503,7 @@ describe('ClientListComponent', () => {
     // Held as they arrived, in the order the server sent them (Rule 1 clause 3).
     expect(component.rows().map((row) => row.name)).toEqual([QA20_ROW, QA008_ROW, ADA]);
 
-    // Rendered in legacy's order: both names lower-cased, then compared with `<`/`>` and never by
-    // locale collation, so the mixed-case name leads its upper-case sibling exactly as
-    // `| orderBy:'displayName':reverse` with `reverse` unset paints it
-    // (`app/views/clients/clients.html:63`; AngularJS 1.7.9 `orderBy`'s default comparator; Rule 1
-    // clause 3).
+    // Rendered in legacy's order: both names lower-cased, then compared with `<`/`>` and never by locale collation, so the mixed-case name leads its upper-case sibling exactly as `| orderBy:'displayName':reverse` with `reverse` unset paints it (`app/views/clients/clients.html:63`; AngularJS 1.7.9 `orderBy`'s default comparator; Rule 1 clause 3).
     expect(component.visibleRows().map((row) => row.name)).toEqual([ADA, QA008_ROW, QA20_ROW]);
 
     expect(httpMock.match(isClientListRead)).toHaveLength(0);
@@ -612,10 +546,7 @@ describe('ClientListComponent', () => {
 
     initialRead.flush(MIXED_STATUS_PAGE);
 
-    // The field's own label is "Filter display by name/client number/staff/office"
-    // (`label.input.filterbynameaccno`, app/global-translations/locale-en.json:726), and legacy
-    // narrowed the whole row (`| filter:filterText`, app/views/clients/clients.html:63), so every one
-    // of those columns is searched rather than the name alone.
+    // The field's own label is "Filter display by name/client number/staff/office" (`label.input.filterbynameaccno`, app/global-translations/locale-en.json:726), and legacy narrowed the whole row (`| filter:filterText`, app/views/clients/clients.html:63), so every one of those columns is searched rather than the name alone.
     setFilter('000000007');
     expect(component.visibleRows().map((row) => row.name)).toEqual([OMAR]);
 
@@ -639,11 +570,7 @@ describe('ClientListComponent', () => {
 
     initialRead.flush(MIXED_STATUS_PAGE);
 
-    // The checkbox tests one code, as the legacy template does
-    // (`client.status.code != 'clientStatusType.closed' || showClosed`), so a rejected or withdrawn
-    // client stays visible while it is unticked — painted the swatch's neutral `other`, one colour of
-    // its own, so the state the checkbox hides is tellable apart from the two it keeps
-    // (`app/views/clients/clients.html:65`; AAP 0.2.3; Rule 1 clause 3).
+    // The checkbox tests one code, as the legacy template does (`client.status.code != 'clientStatusType.closed' || showClosed`), so a rejected or withdrawn client stays visible while it is unticked — painted the swatch's neutral `other`, one colour of its own, so the state the checkbox hides is tellable apart from the two it keeps (`app/views/clients/clients.html:65`; AAP 0.2.3; Rule 1 clause 3).
     expect(component.visibleRows().map((row) => row.name)).toEqual([ADA, JOSE, NADIA, OMAR]);
     expect(component.visibleRows().map((row) => row.statusKey)).toEqual([
       'active',
@@ -712,8 +639,7 @@ describe('ClientListComponent', () => {
 
     initialRead.flush(FIRST_PAGE);
 
-    // Legacy removes a quote at either end and flags an exact match when that removal changed the text, so a quoted name searches for the name itself rather than for
-    // the quote characters (`ClientController.search()`, ClientController.js:44-62).
+    // Legacy removes a quote at either end and flags an exact match when that removal changed the text, so a quoted name searches for the name itself rather than for the quote characters (`ClientController.search()`, ClientController.js:44-62).
     submitFind(`"${ADA}"`);
 
     const findReads = httpMock.match(isFindRead);
@@ -737,8 +663,7 @@ describe('ClientListComponent', () => {
 
     initialRead.flush(FIRST_PAGE);
 
-    // The field's own leading and trailing space is trimmed before the find runs, as the empty-submit check requires; nothing else about the text changes, so no quote was stripped and the flag is false — sent
-    // rather than omitted, because legacy distinguishes "false" from "absent" (Rule 1 clause 2; AAP 0.7.2 `GlobalSearchParams`).
+    // The field's own leading and trailing space is trimmed before the find runs, as the empty-submit check requires; nothing else about the text changes, so no quote was stripped and the flag is false — sent rather than omitted, because legacy distinguishes "false" from "absent" (Rule 1 clause 2; AAP 0.7.2 `GlobalSearchParams`).
     submitFind(`  ${JOSE}  `);
 
     const findReads = httpMock.match(isFindRead);
@@ -766,9 +691,7 @@ describe('ClientListComponent', () => {
 
     initialRead.flush(FIRST_PAGE);
 
-    // The find is this screen's own control, and the legacy client list answers it on the same screen: `ClientController.search()` repaints `scope.clients` from the
-    // search answer and never calls `location.path`, so `#/clients` stays the address the user is on. The `#/search/:query` screen is the navbar's global search's
-    // destination, reached from the navbar and not from this field (`app/scripts/controllers/client/ClientController.js:44-83`; Rule 1 clause 3).
+    // The find is this screen's own control, and the legacy client list answers it on the same screen: `ClientController.search()` repaints `scope.clients` from the search answer and never calls `location.path`, so `#/clients` stays the address the user is on. The `#/search/:query` screen is the navbar's global search's destination, reached from the navbar and not from this field (`app/scripts/controllers/client/ClientController.js:44-83`; Rule 1 clause 3).
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl');
     const navigateByCommands = vi.spyOn(TestBed.inject(Router), 'navigate');
 
@@ -925,9 +848,7 @@ describe('ClientListComponent', () => {
     expect(component.visibleRows()[0]?.name).toBe('Find 01');
     expect(pageLinks().map((link) => link.textContent?.trim())).toEqual(['1', '2', '3']);
 
-    // Page 2 of the same answer, clicked on the pager the screen painted. The answer is cut to its next fifteen rows in the view and the list read is never asked for,
-    // because a find's answer is paged here and not by the server — legacy's own split, where `getResultsPage` slices `actualClients` whenever `searchText` is set and
-    // only otherwise asks for a page (`app/scripts/controllers/client/ClientController.js:22-28`; Rule 1 clauses 2 and 3).
+    // Page 2 of the same answer, clicked on the pager the screen painted. The answer is cut to its next fifteen rows in the view and the list read is never asked for, because a find's answer is paged here and not by the server — legacy's own split, where `getResultsPage` slices `actualClients` whenever `searchText` is set and only otherwise asks for a page (`app/scripts/controllers/client/ClientController.js:22-28`; Rule 1 clauses 2 and 3).
     const secondPageClick = new MouseEvent('click', { cancelable: true });
     pageLinks()[1].dispatchEvent(secondPageClick);
 
@@ -956,8 +877,7 @@ describe('ClientListComponent', () => {
     expect(firstPageLinks.map((link) => link.hasAttribute('href'))).toEqual([false, false, false]);
     expect(firstPageLinks.map((link) => link.getAttribute('tabindex'))).toEqual(['0', '0', '0']);
 
-    // The page in view reaches assistive technology as well as the eye: the anchor for it carries `aria-current="page"` and every other link carries no `aria-current`
-    // at all, so a screen reader is not left to infer the page from the list item's class.
+    // The page in view reaches assistive technology as well as the eye: the anchor for it carries `aria-current="page"` and every other link carries no `aria-current` at all, so a screen reader is not left to infer the page from the list item's class.
     expect(firstPageLinks[0].getAttribute('aria-current')).toBe('page');
     expect(firstPageLinks[1].getAttribute('aria-current')).toBeNull();
     expect(firstPageLinks[2].getAttribute('aria-current')).toBeNull();
@@ -1001,8 +921,7 @@ describe('ClientListComponent', () => {
     enterRead[0].flush(LARGE_MATCH_SECOND_PAGE);
     fixture.detectChanges();
 
-    // Space is the other key an anchor answers to, and its own default — scrolling the screen — is suppressed. A held key repeats the keydown, and the repeat is the
-    // no-op the page in view already is, so the page still moves once and one read still goes out.
+    // Space is the other key an anchor answers to, and its own default — scrolling the screen — is suppressed. A held key repeats the keydown, and the repeat is the no-op the page in view already is, so the page still moves once and one read still goes out.
     const space = new KeyboardEvent('keydown', { key: ' ', cancelable: true });
     const thirdLink = pageLinks()[2];
 
@@ -1023,8 +942,7 @@ describe('ClientListComponent', () => {
 
     const pagers = host().querySelectorAll('nav[aria-label="Pagination"]');
 
-    // One named landmark around the pager, so a screen reader can tell this navigation from the
-    // breadcrumb's, with the page list as its content.
+    // One named landmark around the pager, so a screen reader can tell this navigation from the breadcrumb's, with the page list as its content.
     expect(pagers).toHaveLength(1);
     expect(pagers[0].querySelector('ul.pagination')).not.toBeNull();
     expect(pageLinks().map((link) => link.getAttribute('aria-current'))).toEqual([
@@ -1063,9 +981,7 @@ describe('ClientListComponent', () => {
     setFilter('nobody');
     fixture.detectChanges();
 
-    // A filter that matches nothing leaves the empty state alone on the card. The pager counts pages off the server's total, so keeping it painted would offer pages of
-    // a result set the table is no longer showing — the one place this screen departs from legacy, which leaves its `dir-pagination-controls` painted beneath an empty
-    // table (Rule 1 clause 3; AAP 0.7.4 "an empty result set shows the explicit empty state and no error").
+    // A filter that matches nothing leaves the empty state alone on the card. The pager counts pages off the server's total, so keeping it painted would offer pages of a result set the table is no longer showing — the one place this screen departs from legacy, which leaves its `dir-pagination-controls` painted beneath an empty table (Rule 1 clause 3; AAP 0.7.4 "an empty result set shows the explicit empty state and no error").
     expect(component.isEmpty()).toBe(true);
     expect(fixture.debugElement.queryAll(By.css('app-empty-state'))).toHaveLength(1);
     expect(pageLinks()).toEqual([]);
@@ -1082,11 +998,7 @@ describe('ClientListComponent', () => {
     expect(httpMock.match(isClientListRead)).toHaveLength(0);
   });
 
-  /**
-   * The QA report's own reproduction of F17, pinned at the DOM: a query that matches nothing shows the explicit empty state, and clearing the field brings the loaded page back row for row. The case
-   * above proves the empty state is painted; this one proves the screen comes back out of it without a reload (AAP 0.7.4 "an empty result set shows the explicit empty state and no error"; Rule 1
-   * clause 3, the filter a display filter and no request).
-   */
+  /** The QA report's own reproduction of F17, pinned at the DOM: a query that matches nothing shows the explicit empty state, and clearing the field brings the loaded page back row for row. The case above proves the empty state is painted; this one proves the screen comes back out of it without a reload (AAP 0.7.4 "an empty result set shows the explicit empty state and no error"; Rule 1 clause 3, the filter a display filter and no request). */
   it('restores the loaded page when a filter that matched nothing is cleared', () => {
     mount();
     initialRead.flush(FIRST_PAGE);
@@ -1125,10 +1037,7 @@ describe('ClientListComponent', () => {
     expect(httpMock.match(isClientListRead)).toHaveLength(0);
   });
 
-  /**
-   * The QA report's second symptom of F17: a positive query that matched one row left that one stale row on screen after the field was cleared. Every row of the loaded page returns instead
-   * (AAP 0.7.4 "an empty result set shows the explicit empty state and no error", the state a cleared query has to leave; Rule 1 clause 3).
-   */
+  /** The QA report's second symptom of F17: a positive query that matched one row left that one stale row on screen after the field was cleared. Every row of the loaded page returns instead (AAP 0.7.4 "an empty result set shows the explicit empty state and no error", the state a cleared query has to leave; Rule 1 clause 3). */
   it('restores every visible row when a positive filter is cleared', () => {
     mount();
     initialRead.flush(FIRST_PAGE);
@@ -1151,10 +1060,7 @@ describe('ClientListComponent', () => {
     expect(httpMock.match(isClientListRead)).toHaveLength(0);
   });
 
-  /**
-   * A blank or whitespace-only query is the absence of a filter: the needle is trimmed before it is compared, so the loaded page stays whole rather than being read as a search for a space (AAP 0.7.4
-   * "an empty result set shows the explicit empty state and no error"; Rule 1 clause 3).
-   */
+  /** A blank or whitespace-only query is the absence of a filter: the needle is trimmed before it is compared, so the loaded page stays whole rather than being read as a search for a space (AAP 0.7.4 "an empty result set shows the explicit empty state and no error"; Rule 1 clause 3). */
   it.each(['   ', '\t '])(
     'treats the blank query %j as no filter at all',
     (blank: string) => {

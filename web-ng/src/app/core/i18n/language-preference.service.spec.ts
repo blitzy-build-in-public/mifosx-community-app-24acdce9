@@ -16,7 +16,7 @@ import {
  * `:232-238` reads it back), and the proof that a full page load continues in the language the user picked (Rule 1 clause 3). It discharges AAP 0.11.1 (a unit spec beside every service), AAP 0.10.3 criterion 2
  * (the suite runs headless) and Rule 1 clause 8 (no spec without an `expect`). It pins the key as the exact string the legacy storage wrapper produces — its `'ls'` prefix with the period the wrapper appends,
  * derived in one place — a remembered code written in the legacy JSON shape and read back, `null` for nothing stored and for a value that is not JSON, a JSON value that is not an object or an object without a
- * usable `code`, a store the browser refuses neither throwing out of `read()` nor out of `remember()`, `restore()` applying the code through `TranslateService.use()` and doing nothing when nothing is
+ * usable `code`, `null` and no bundle load for a stored code the application offers no bundle for, a store the browser refuses neither throwing out of `read()` nor out of `remember()`, `restore()` applying the code through `TranslateService.use()` and doing nothing when nothing is
  * remembered, and a bundle that cannot be loaded leaving `restore()` silent so start-up never fails over a preference. The translate stack is a typed stand-in for the one member this service touches, so a case
  * can make one bundle load fail; no HTTP provider exists, because the service reaches no host itself (Rule 1 clause 5).
  *
@@ -27,6 +27,9 @@ const REMEMBERED_LANG = 'fr';
 
 /** A second offered code, used where a case needs to prove a write replaces an earlier one. */
 const OTHER_LANG = 'es';
+
+/** A code no start-up may hand to the bundle loader: outside `AVAILABLE_LANGS`, so the application serves no `global-translations/locale-<code>.json` for it, and path-shaped, which is the hand-edited entry value the validation has to stop before it becomes a request (Rule 1 clause 9). */
+const UNOFFERED_CODE = '../../x';
 
 /** The legacy wrapper's prefix, written out rather than read from the constant, so the exported value is asserted against the legacy source and not against itself (`app/scripts/modules/localstorage.js:4`). */
 const LEGACY_PREFIX_LITERAL = 'ls';
@@ -184,6 +187,16 @@ describe('LanguagePreferenceService', () => {
     expect(service.read()).toBe(OTHER_LANG);
   });
 
+  it.each(['zh_CN', 'my_MM'])('still remembers and reads back the offered mixed-case code %s', (offered: string) => {
+    // The codes whose case a looser test could lose: both are offered exactly as legacy spells them, so the entry validation must keep them and not fold their case.
+    const { service } = harnessFor();
+
+    service.remember(offered);
+
+    expect(window.localStorage.getItem(LEGACY_KEY_LITERAL)).toBe(JSON.stringify({ code: offered }));
+    expect(service.read()).toBe(offered);
+  });
+
   it('reads the code of the whole language object a legacy switch stores', () => {
     // What `angular.toJson(lang)` wrote on a legacy screen: the `Langs` entry, of which the restore reads only `code` (`MainController.js:232-238`).
     seedEntry(JSON.stringify({ name: 'Français', code: REMEMBERED_LANG }));
@@ -208,6 +221,7 @@ describe('LanguagePreferenceService', () => {
     ['an object with no code member', JSON.stringify({ name: 'Français' })],
     ['an object whose code is blank', JSON.stringify({ code: '   ' })],
     ['an object whose code is not a string', JSON.stringify({ code: 42 })],
+    ['an object whose code the application does not offer', JSON.stringify({ code: UNOFFERED_CODE })],
   ])('answers null for an entry that is %s', (_shape: string, stored: string) => {
     seedEntry(stored);
 
@@ -222,6 +236,29 @@ describe('LanguagePreferenceService', () => {
     service.remember('   ');
 
     expect(window.localStorage.getItem(LEGACY_KEY_LITERAL)).toBeNull();
+  });
+
+  it('writes nothing for a code the application offers no bundle for, so no later load can read one', () => {
+    window.localStorage.removeItem(languagePreferenceKey());
+
+    const { service } = harnessFor();
+
+    service.remember(UNOFFERED_CODE);
+
+    expect(window.localStorage.getItem(LEGACY_KEY_LITERAL)).toBeNull();
+    expect(service.read()).toBeNull();
+  });
+
+  it('requests no bundle at all for a stored code the application does not offer', () => {
+    // The security-relevant assertion: a hand-edited entry must never become a request for `global-translations/locale-../../x.json`, so `restore()` may not call `use()` even once.
+    seedEntry(JSON.stringify({ code: UNOFFERED_CODE }));
+    const translate = createTranslateStub();
+    const { service } = harnessFor(translate);
+
+    service.restore();
+
+    expect(translate.use).not.toHaveBeenCalled();
+    expect(translate.requested).toEqual([]);
   });
 
   it('absorbs a store that refuses to be read or written', () => {

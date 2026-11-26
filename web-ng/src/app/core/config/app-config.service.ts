@@ -38,12 +38,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** The rejection text for a configuration read that failed: it names the file to serve, the fix an operator has and the fact that no fallback host exists, so `fetchRawConfig` supplies only what actually broke. */
+/** What an operator can do about a served file whose contents are unusable, followed by the consequence of leaving it broken. Names the URL the browser fetches and never the project's source path, because `renderBootstrapFailure` puts this text in front of any visitor; both `parseAppConfig` rejections end with it, so the guidance cannot drift between them. */
+const CONFIG_FIX_GUIDANCE =
+  `Fix ${CONFIG_ASSET_URL} (in a container, set API_BASE_URL and TENANT_ID); the application will ` +
+  'not start with an incomplete configuration and will not substitute a default host.';
+
+/** The rejection text for a configuration read that failed: it names the served URL this layer requested, the detail that broke, the fix an operator has and the fact that no fallback host exists, so `fetchRawConfig` supplies only what actually broke. Only the relative path the browser resolves is named, never the file's place in the project, because the message is rendered into the page. */
 function configReadError(detail: string): string {
   return (
     `Cannot read the application's runtime configuration from ${CONFIG_ASSET_URL} (${detail}). ` +
     'The application needs that configuration before it can start and will not fall back to a default or ' +
-    'alternative Fineract host. Serve web-ng/src/assets/config.json — in a container the entrypoint writes it ' +
+    `alternative Fineract host. Serve ${CONFIG_ASSET_URL} — in a container the entrypoint writes it ` +
     'from API_BASE_URL and TENANT_ID — and reload.'
   );
 }
@@ -151,8 +156,7 @@ export class AppConfigService {
 
       throw new Error(
         `Invalid configuration in ${CONFIG_ASSET_URL}: the file must hold a JSON object with the keys ${required}. ` +
-          'Fix web-ng/src/assets/config.json (in a container, set API_BASE_URL and TENANT_ID); the application will ' +
-          'not start with an incomplete configuration and will not substitute a default host.',
+          CONFIG_FIX_GUIDANCE,
       );
     }
 
@@ -230,9 +234,7 @@ export class AppConfigService {
 
     if (problems.length > 0) {
       throw new Error(
-        `Invalid configuration in ${CONFIG_ASSET_URL}: ${problems.join('; ')}. ` +
-          'Fix web-ng/src/assets/config.json (in a container, set API_BASE_URL and TENANT_ID); the application will ' +
-          'not start with an incomplete configuration and will not substitute a default host.',
+        `Invalid configuration in ${CONFIG_ASSET_URL}: ${problems.join('; ')}. ` + CONFIG_FIX_GUIDANCE,
       );
     }
 

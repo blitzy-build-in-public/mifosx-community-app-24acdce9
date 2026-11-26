@@ -31,30 +31,21 @@ import { ClientSummaryComponent } from './client-summary/client-summary.componen
 import { ProfileCardComponent, type ProfileCardField } from './profile-card/profile-card.component';
 import { RecordHeaderComponent } from './record-header/record-header.component';
 
-/** The two tabs the client record renders: `General` and `Identities`, and nothing else (AAP 0.7.4 "Client view";
- * AAP 0.10.5 item 6 keeps Family Members, Documents, Notes and Credit Report off this record, each belonging to a
- * migration unit outside the scope). */
+/** The two tabs the client record renders: `General` and `Identities`, and nothing else (AAP 0.7.4 "Client view"; AAP 0.10.5 item 6 keeps Family Members, Documents, Notes and Credit Report off this record, each belonging to a migration unit outside the scope). */
 type ClientRecordTab = 'general' | 'identities';
 
-/**
- * The tab ids as a lookup, so a `tabChange` emission is validated against the union without a cast and without a second list that could drift from it. `satisfies Record<ClientRecordTab, true>` makes a tab missing here, or one the union no longer holds, a compile error; {@link isClientRecordTab} carries that proof into the type system.
- */
+/** The tab ids as a lookup, so a `tabChange` emission is validated against the union without a cast and without a second list that could drift from it. `satisfies Record<ClientRecordTab, true>` makes a tab missing here, or one the union no longer holds, a compile error; {@link isClientRecordTab} carries that proof into the type system. */
 const CLIENT_RECORD_TABS = {
   general: true,
   identities: true,
 } satisfies Record<ClientRecordTab, true>;
 
-/**
- * Whether a tab id the strip reported is one of the record's two tabs. `Object.hasOwn` rather than `in`, so a value such as `toString` or `constructor` is refused instead of passing on an inherited member of the prototype. @param value the id `TabStripComponent` emitted. @returns true when the value names a tab this record renders.
- */
+/** Whether a tab id the strip reported is one of the record's two tabs. `Object.hasOwn` rather than `in`, so a value such as `toString` or `constructor` is refused instead of passing on an inherited member of the prototype. @param value the id `TabStripComponent` emitted. @returns true when the value names a tab this record renders. */
 function isClientRecordTab(value: string): value is ClientRecordTab {
   return Object.hasOwn(CLIENT_RECORD_TABS, value);
 }
 
-/**
- * The `Performance History` rows the record's profile card renders, as the legacy bundle's label keys and in the order legacy's `app/views/clients/viewclient.html` paints them. One exported list, so a label corrected after a screen comparison is fixed in one place. `Client` deliberately does not model the `ClientSummary` members beside those labels (`loanCycle`, `lastLoanAmount`, `activeLoans`, `totalSavings`, `activeSavings`), because no in-scope workflow reads them, so every row renders its label beside an empty value rather than a number the API never sent (AAP 0.7.4; Rule 1 clauses 3 and 4).
- *
- */
+/** The `Performance History` rows the record's profile card renders, as the legacy bundle's label keys and in the order legacy's `app/views/clients/viewclient.html` paints them. One exported list, so a label corrected after a screen comparison is fixed in one place. `Client` deliberately does not model the `ClientSummary` members beside those labels (`loanCycle`, `lastLoanAmount`, `activeLoans`, `totalSavings`, `activeSavings`), because no in-scope workflow reads them, so every row renders its label beside an empty value rather than a number the API never sent (AAP 0.7.4; Rule 1 clauses 3 and 4). */
 export const CLIENT_HISTORY_LABEL_KEYS: readonly string[] = [
   'label.heading.numofloancycle',
   'label.lastloanamount',
@@ -103,10 +94,7 @@ export class ClientViewComponent {
   /** Completes the route subscription and cancels an outstanding record read should the screen be destroyed first. */
   private readonly destroyRef = inject(DestroyRef);
 
-  /**
-   * Which load is the current one, incremented by every run of {@link load}. The router reuses this component when the URL moves from one `#/viewclient/{id}` to another, so an in-place move starts a second read while the first can still answer last; a superseded run compares its own number with this one and writes nothing, so a late response can neither paint the earlier client under the later client's URL nor clear the newer run's loading state — the guard `loan-edit.component.ts` and `client-actions.component.ts` keep over their own load sequences.
-   *
-   */
+  /** Which load is the current one, incremented by every run of {@link load}. The router reuses this component when the URL moves from one `#/viewclient/{id}` to another, so an in-place move starts a second read while the first can still answer last; a superseded run compares its own number with this one and writes nothing, so a late response can neither paint the earlier client under the later client's URL nor clear the newer run's loading state — the guard `loan-edit.component.ts` and `client-actions.component.ts` keep over their own load sequences. */
   private loadSequence = 0;
 
   /** Supplies the two tab labels and the profile card's row labels as display text, because both blocks take plain strings rather than keys a `TranslatePipe` could re-resolve. */
@@ -115,10 +103,7 @@ export class ClientViewComponent {
   /** Supplies the locale the one date this component prints is rendered in — `activeLocale`, the language the switcher has selected (AAP 0.7.2 "Date handling"). */
   private readonly config = inject(AppConfigService);
 
-  /**
-   * The client id the URL currently names, as text: the `:id` of `#/viewclient/:id`, empty when the route carried none. Neither an empty id nor one that is not a Fineract identifier issues a read, because neither addresses a client. A signal fed by `route.paramMap`, never a `snapshot` read, so the id follows every emission and each reader — the read and every action href — sees the client the URL names now. Kept as the raw segment rather than parsed with `Number()`, because it is both the service's `number | string` parameter and the route parameter of every link this record renders (AAP 0.7.4).
-   *
-   */
+  /** The client id the URL currently names, as text: the `:id` of `#/viewclient/:id`, empty when the route carried none. Neither an empty id nor one that is not a Fineract identifier issues a read, because neither addresses a client. A signal fed by `route.paramMap`, never a `snapshot` read, so the id follows every emission and each reader — the read and every action href — sees the client the URL names now. Kept as the raw segment rather than parsed with `Number()`, because it is both the service's `number | string` parameter and the route parameter of every link this record renders (AAP 0.7.4). */
   readonly clientId = signal<string>('');
 
   /** Whether the record read is still outstanding. Starts `true` so no half-built record and no empty state can flash before the first response, and is cleared in `finalize`. */
@@ -130,20 +115,13 @@ export class ClientViewComponent {
   /** The failure the read ended in, or `null`; the template derives its error branches from this. */
   readonly error = signal<ApiError | null>(null);
 
-  /**
-   * Whether the id the URL names addresses no client at all — it is empty, or it is not a Fineract identifier ({@link isResourceId}); cleared by {@link reset} and set again by {@link load} on every route emission, so it always describes the current URL.
-   */
+  /** Whether the id the URL names addresses no client at all — it is empty, or it is not a Fineract identifier ({@link isResourceId}); cleared by {@link reset} and set again by {@link load} on every route emission, so it always describes the current URL. */
   private readonly missingId = signal(false);
 
-  /**
-   * Whether the record does not exist — the route named no client, or Fineract answered 404 — in which case the template renders the not-found message in place of the record (AAP 0.7.4).
-   */
+  /** Whether the record does not exist — the route named no client, or Fineract answered 404 — in which case the template renders the not-found message in place of the record (AAP 0.7.4). */
   readonly notFound = computed<boolean>(() => this.missingId() || this.error()?.status === 404);
 
-  /**
-   * The failure this screen renders itself: a 4xx other than 404, whose Fineract message the template shows verbatim with the shell left usable (AAP 0.7.4; workflow W7's rule). A 5xx or a transport failure (`status` 0) has already produced exactly one notification in the interceptor, so it answers `null` and the message is never shown twice; a 404 answers `null` because `notFound` owns that state.
-   *
-   */
+  /** The failure this screen renders itself: a 4xx other than 404, whose Fineract message the template shows verbatim with the shell left usable (AAP 0.7.4; workflow W7's rule). A 5xx or a transport failure (`status` 0) has already produced exactly one notification in the interceptor, so it answers `null` and the message is never shown twice; a 404 answers `null` because `notFound` owns that state. */
   readonly clientError = computed<ApiError | null>(() => {
     const failure = this.error();
 
@@ -154,19 +132,14 @@ export class ClientViewComponent {
     return failure.status === 404 ? null : failure;
   });
 
-  /**
-   * The record's own crumb: the client's office name and the design's separator — `Head Office /` for the record the design captured, the client's true office for every other. Derived from the loaded client because that is what makes it truthful: legacy's record template renders `{{client.officeName}}` in its own `.breadcrumb` (`app/views/clients/viewclient.html:2-5`), so the trail describes the client on screen rather than the route that got there. Empty until a record arrives, so a loading or failed read paints no crumb (AAP 0.7.4 "Client view").
-   *
-   */
+  /** The record's own crumb: the client's office name and the design's separator — `Head Office /` for the record the design captured, the client's true office for every other. Derived from the loaded client because that is what makes it truthful: legacy's record template renders `{{client.officeName}}` in its own `.breadcrumb` (`app/views/clients/viewclient.html:2-5`), so the trail describes the client on screen rather than the route that got there. Empty until a record arrives, so a loading or failed read paints no crumb (AAP 0.7.4 "Client view"). */
   readonly officeCrumb = computed<string>(() => {
     const office = this.client()?.officeName;
 
     return office === undefined || office.length === 0 ? '' : `${office} /`;
   });
 
-  /**
-   * The tabs the strip renders, in the design's order: `General` then `Identities`, labelled with the legacy bundle's own keys, the headings legacy's `viewclient.html` gives these two tabs (Rule 1 clause 6).
-   */
+  /** The tabs the strip renders, in the design's order: `General` then `Identities`, labelled with the legacy bundle's own keys, the headings legacy's `viewclient.html` gives these two tabs (Rule 1 clause 6). */
   readonly tabs = computed<readonly TabDescriptor[]>(() => {
     // Read so a language switch re-renders the two labels rather than leaving the first language's wording on screen; the constructor bumps the revision on both translate events.
     this.labelsRevision();
@@ -184,10 +157,7 @@ export class ClientViewComponent {
   /** The id the strip gives the tab whose own id is passed in, as the tab body's `aria-labelledby` uses it ({@link TabStripComponent}; AAP 0.2.3 row `TabStrip`). */
   protected readonly tabDomId = tabDomId;
 
-  /**
-   * The right-hand profile card's own rows: the client's fields, in the order the legacy record paints them, with a field the record leaves unset rendered as the empty string rather than a placeholder (AAP 0.7.4; Rule 1 clause 3). Five rows — client number, external id, office, staff and activation date — the card's values the API actually supplies. The activation date is read from `Client.activationDate`, the field `GET /clients/{id}` sends as a `FineractDate`, and formatted once here through the one display pattern in the active locale rather than in the template, because the card takes already-resolved strings (AAP 0.7.2 "Date handling"). A client still pending carries no activation date, so that row's value is empty as the design shows an unfilled row, and an unloaded record has no rows at all, so the card renders its heading and an empty body rather than claiming values.
-   *
-   */
+  /** The right-hand profile card's own rows: the client's fields, in the order the legacy record paints them, with a field the record leaves unset rendered as the empty string rather than a placeholder (AAP 0.7.4; Rule 1 clause 3). Five rows — client number, external id, office, staff and activation date — the card's values the API actually supplies. The activation date is read from `Client.activationDate`, the field `GET /clients/{id}` sends as a `FineractDate`, and formatted once here through the one display pattern in the active locale rather than in the template, because the card takes already-resolved strings (AAP 0.7.2 "Date handling"). A client still pending carries no activation date, so that row's value is empty as the design shows an unfilled row, and an unloaded record has no rows at all, so the card renders its heading and an empty body rather than claiming values. */
   readonly profileFields = computed<readonly ProfileCardField[]>(() => {
     const record = this.client();
 
@@ -223,10 +193,7 @@ export class ClientViewComponent {
     ];
   });
 
-  /**
-   * The rows under the card's `Performance History` sub-heading, in {@link CLIENT_HISTORY_LABEL_KEYS} order, each carrying an empty value because `Client` does not model the `ClientSummary` the values come from. The rows are still rendered: legacy's record paints the five labels whether or not the summary is present, and the design shows a card whose history rows carry no value, so omitting them would change what the screen shows rather than simplify it (AAP 0.7.4; Rule 1 clause 3).
-   *
-   */
+  /** The rows under the card's `Performance History` sub-heading, in {@link CLIENT_HISTORY_LABEL_KEYS} order, each carrying an empty value because `Client` does not model the `ClientSummary` the values come from. The rows are still rendered: legacy's record paints the five labels whether or not the summary is present, and the design shows a card whose history rows carry no value, so omitting them would change what the screen shows rather than simplify it (AAP 0.7.4; Rule 1 clause 3). */
   readonly historyFields = computed<readonly ProfileCardField[]>(() => {
     if (this.client() === null) {
       return [];
@@ -259,16 +226,10 @@ export class ClientViewComponent {
   /** Permission of the `Withdraw` entry point: legacy's own gate (`WITHDRAW_CLIENT`). */
   readonly withdrawPermission = CLIENT_ACTION_PERMISSIONS.withdraw;
 
-  /**
-   * Permission of the `Reactivate` entry point: legacy's own gate (`REACTIVATE_CLIENT`), which the fork issues as permission id 618 and which legacy's `Closed` status carries as the one button that state offers. Deliberately not `ACTIVATE_CLIENT`: a user holding only the activation code would then be shown a control the server refuses (Rule 1 clause 3; AAP 0.1.1).
-   *
-   */
+  /** Permission of the `Reactivate` entry point: legacy's own gate (`REACTIVATE_CLIENT`), which the fork issues as permission id 618 and which legacy's `Closed` status carries as the one button that state offers. Deliberately not `ACTIVATE_CLIENT`: a user holding only the activation code would then be shown a control the server refuses (Rule 1 clause 3; AAP 0.1.1). */
   readonly reactivatePermission = CLIENT_ACTION_PERMISSIONS.reactivate;
 
-  /**
-   * The lifecycle state of the loaded record, as the one normalisation the whole application shares flattens its Fineract status code: `pending`, `active`, `closed`, `rejected`, `withdraw`, `transferinprogress`, `transferonhold` or `invalid` for the codes the fork's `ClientStatus` enum declares, and the empty string while no record is loaded. Legacy keys its action list on exactly these states — `statusTypes` in `app/scripts/models/clientStatus.js` — so {@link actionButtons} reads this one value rather than testing each entry against a status of its own, and a code no case names falls through to the empty set instead of matching an entry by accident (Rule 1 clause 3). It is asked of the status code and never of the swatch's colour key, because that key deliberately separates `closed` from the two terminal states the clients list keeps on screen beside it, so the two have to be told apart here (AAP 0.2.3; AAP 0.14.1).
-   *
-   */
+  /** The lifecycle state of the loaded record, as the one normalisation the whole application shares flattens its Fineract status code: `pending`, `active`, `closed`, `rejected`, `withdraw`, `transferinprogress`, `transferonhold` or `invalid` for the codes the fork's `ClientStatus` enum declares, and the empty string while no record is loaded. Legacy keys its action list on exactly these states — `statusTypes` in `app/scripts/models/clientStatus.js` — so {@link actionButtons} reads this one value rather than testing each entry against a status of its own, and a code no case names falls through to the empty set instead of matching an entry by accident (Rule 1 clause 3). It is asked of the status code and never of the swatch's colour key, because that key deliberately separates `closed` from the two terminal states the clients list keeps on screen beside it, so the two have to be told apart here (AAP 0.2.3; AAP 0.14.1). */
   private readonly clientLifecycleState = computed<string>(() => {
     const record = this.client();
 
@@ -279,7 +240,6 @@ export class ClientViewComponent {
    * The record's action row, as the descriptors `ActionButtonGroupComponent` renders (AAP 0.2.3 row `ActionButtonGroup`; AAP 0.7.4 "Client view"): `Edit` and `Close` in the visible row with `Activate`, `Reject` and `Withdraw` in its `More` menu for a pending record; `Edit`, `New Loan` and `Close` in the row, and no menu entry, for an active one; and `Reactivate` alone, in the menu, for a closed one. The set follows the record's own state, because legacy builds it per state in `app/scripts/models/clientStatus.js` and an entry that state does not allow could only end in the server's refusal (Rule 1 clause 3; {@link clientLifecycleState}).
    *
    * Every field is the legacy record's own — the shipped bundle's label key, the Font Awesome 4 class the design shows, and the permission code the constants above name — so no key, glyph or code is spelled twice. Each `routerLink` is built from {@link clientId} rather than a snapshot, because the router reuses this component when the URL moves to another client: the new list tells the action group the row now belongs to another client, and it closes the `More` menu the previous record left open.
-   *
    */
   readonly actionButtons = computed<readonly ClientActionButton[]>(() => {
     const clientId = this.clientId();
@@ -349,20 +309,13 @@ export class ClientViewComponent {
     }
   });
 
-  /**
-   * Legacy key of the accounts section's heading. The section covers the client's loan and savings accounts together, and `label.heading.accountdetail` ("Account Detail") is the shipped bundle's own wording for exactly that pairing — no locale bundle defines an `ACCOUNTS` heading, so no key is invented for one (Rule 1 clause 6).
-   */
+  /** Legacy key of the accounts section's heading. The section covers the client's loan and savings accounts together, and `label.heading.accountdetail` ("Account Detail") is the shipped bundle's own wording for exactly that pairing — no locale bundle defines an `ACCOUNTS` heading, so no key is invented for one (Rule 1 clause 6). */
   readonly accountsHeadingKey = 'label.heading.accountdetail';
 
-  /**
-   * Counts the moments at which a label must be resolved again: a language switch and a bundle arriving. Both are read inside every label signal above, so a label resolved before its bundle had loaded is replaced by the real wording instead of staying at the fallback for the life of the screen.
-   */
+  /** Counts the moments at which a label must be resolved again: a language switch and a bundle arriving. Both are read inside every label signal above, so a label resolved before its bundle had loaded is replaced by the real wording instead of staying at the fallback for the life of the screen. */
   private readonly labelsRevision = signal(0);
 
-  /**
-   * Subscribes to the route's parameters, which is the screen's whole entry point. One subscription, never a `snapshot` read beside it: Angular reuses this component when the URL moves to another `#/viewclient/{id}`, so a value read once would leave the first client's record, profile card and action hrefs on screen for the second client's URL (`loan-edit.component.ts`, "one id, one load per navigation"; `client-actions.component.ts`, which handles the same reuse for the lifecycle screens).
-   *
-   */
+  /** Subscribes to the route's parameters, which is the screen's whole entry point. One subscription, never a `snapshot` read beside it: Angular reuses this component when the URL moves to another `#/viewclient/{id}`, so a value read once would leave the first client's record, profile card and action hrefs on screen for the second client's URL (`loan-edit.component.ts`, "one id, one load per navigation"; `client-actions.component.ts`, which handles the same reuse for the lifecycle screens). */
   constructor() {
     const refreshLabels = (): void => this.labelsRevision.update((revision) => revision + 1);
 
@@ -380,10 +333,7 @@ export class ClientViewComponent {
       });
   }
 
-  /**
-   * Reads the client the URL names and paints it. A route that names no client issues no request: `missingId` drives the not-found branch and `loading` is cleared here, because no subscription will finalise it. A route whose id is not a Fineract identifier — `#/viewclient/abc`, a truncated or hand-typed link — takes that same branch: it names no client either, so no read is issued and the not-found message replaces the record instead of the id reaching a path segment `ClientService.get` would have to refuse (AAP 0.7.4; Rule 1 clause 2). Every run takes the next {@link loadSequence} number and a run the route has since superseded writes nothing at all — not the record, not the failure, and not `loading`, which belongs to the run that replaced it. `takeUntilDestroyed` unsubscribes the read, so leaving the screen mid-flight cancels it rather than letting its answer land on a destroyed component.
-   *
-   */
+  /** Reads the client the URL names and paints it. A route that names no client issues no request: `missingId` drives the not-found branch and `loading` is cleared here, because no subscription will finalise it. A route whose id is not a Fineract identifier — `#/viewclient/abc`, a truncated or hand-typed link — takes that same branch: it names no client either, so no read is issued and the not-found message replaces the record instead of the id reaching a path segment `ClientService.get` would have to refuse (AAP 0.7.4; Rule 1 clause 2). Every run takes the next {@link loadSequence} number and a run the route has since superseded writes nothing at all — not the record, not the failure, and not `loading`, which belongs to the run that replaced it. `takeUntilDestroyed` unsubscribes the read, so leaving the screen mid-flight cancels it rather than letting its answer land on a destroyed component. */
   private load(): void {
     const load = ++this.loadSequence;
     const clientId = this.clientId();
@@ -429,9 +379,7 @@ export class ClientViewComponent {
       });
   }
 
-  /**
-   * Clears everything the previous client put on the screen, so a route emission for another client never shows the earlier client's record, failure or selected tab while the new read is outstanding; `loading` goes back to `true` for the same reason. The `More` menu is deliberately not part of this reset: `ActionButtonGroupComponent` owns its open state and closes it whenever the descriptor list it renders changes, which a new {@link clientId} makes it do.
-   */
+  /** Clears everything the previous client put on the screen, so a route emission for another client never shows the earlier client's record, failure or selected tab while the new read is outstanding; `loading` goes back to `true` for the same reason. The `More` menu is deliberately not part of this reset: `ActionButtonGroupComponent` owns its open state and closes it whenever the descriptor list it renders changes, which a new {@link clientId} makes it do. */
   private reset(): void {
     this.client.set(null);
     this.error.set(null);
@@ -440,19 +388,14 @@ export class ClientViewComponent {
     this.activeTabId.set('general');
   }
 
-  /**
-   * Shows the tab the strip reported, and only one this record renders: an id outside the union is ignored rather than written to the state a template branch reads.
-   * @param id the tab id `TabStripComponent` emitted.
-   */
+  /** Shows the tab the strip reported, and only one this record renders: an id outside the union is ignored rather than written to the state a template branch reads. @param id the tab id `TabStripComponent` emitted. */
   selectTab(id: string): void {
     if (isClientRecordTab(id)) {
       this.activeTabId.set(id);
     }
   }
 
-  /**
-   * The `ApiError` a failed read is reported as. The interceptor maps every `HttpErrorResponse` into an `ApiError` before rethrowing it, so the defensive branch is unreachable through the application and exists only so that a future failure shape degrades into the same type instead of escaping as an unhandled value: status `0` (the transport-failure status the mapper uses) carries no `clientError`, and the interceptor's notification is the message the user sees. @param cause whatever the read rejected with. @returns the failure as the one error type a component renders.
-   */
+  /** The `ApiError` a failed read is reported as. The interceptor maps every `HttpErrorResponse` into an `ApiError` before rethrowing it, so the defensive branch is unreachable through the application and exists only so that a future failure shape degrades into the same type instead of escaping as an unhandled value: status `0` (the transport-failure status the mapper uses) carries no `clientError`, and the interceptor's notification is the message the user sees. @param cause whatever the read rejected with. @returns the failure as the one error type a component renders. */
   private asApiError(cause: unknown): ApiError {
     if (cause instanceof ApiError) {
       return cause;

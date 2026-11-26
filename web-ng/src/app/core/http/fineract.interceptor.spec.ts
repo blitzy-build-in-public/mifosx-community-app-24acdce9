@@ -4,12 +4,20 @@ import {
   HttpParams,
   HttpRequest,
   HttpResponse,
+  provideHttpClient,
+  withInterceptors,
   type HttpEvent,
   type HttpHandlerFn,
 } from '@angular/common/http';
-import { Injector, runInInjectionContext, signal, type WritableSignal } from '@angular/core';
+import {
+  HttpTestingController,
+  provideHttpClientTesting,
+  type TestRequest,
+} from '@angular/common/http/testing';
+import { EnvironmentInjector, runInInjectionContext, signal, type WritableSignal } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
-import { firstValueFrom, of, throwError, type Observable } from 'rxjs';
+import { NEVER, firstValueFrom, of, throwError, type Observable } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SessionData } from '../auth/session.model';
@@ -34,6 +42,33 @@ const AUTHENTICATION_URL = 'api-root/authentication';
 
 /** The route a 401 interrupts, carried to the login screen as `returnUrl`. */
 const ATTEMPTED_URL = '/viewclient/2';
+
+/** A second protected URL of the same origin, so a burst of simultaneous failures is three distinct requests rather than three readings of one. */
+const LOANS_URL = 'api-root/loans';
+
+/** A request the application makes to its own origin rather than to Fineract: the translation bundle `TranslateHttpLoader` fetches while the application starts, which must travel with no credential (AAP 0.4.2, Rule 1 clause 9). */
+const BUNDLE_URL = 'global-translations/locale-en.json';
+
+/** A path that begins with the API origin's characters without sitting under it: a match that is not a segment boundary would send the credential here too. */
+const OUTSIDE_ORIGIN_URL = 'api-rootish/clients';
+
+/** The allowlisted `GET /users/{id}` the recovery re-validates a refused credential with (AAP 0.7.3 W1), composed the way the stubbed `apiUrl()` composes it. */
+const USERS_URL = 'api-root/users';
+
+/** The Fineract user id the fixture session carries, which is the `{id}` the re-validation reads. */
+const USER_ID = 7;
+
+/** The one re-validation read the mock backend answers, at the URL the inspected interceptor resolves. */
+const PROBE_URL = `${USERS_URL}/${USER_ID}`;
+
+/** How long the interceptor waits for an answer, in milliseconds: the bound a case advances a fake clock past to fail a request no server answered. */
+const REQUEST_TIMEOUT_MS = 30_000;
+
+/** The sentence a request that ran out of time is reported with, so a case pins the text a user reads rather than the operator's own words. */
+const TIMED_OUT_TEXT = 'The server did not answer in time. Try again in a moment.';
+
+/** The sentence shown once a refused credential has ended the session: what the user is told to do next, and nothing about the exchange (Rule 1 clause 9). */
+const SESSION_ENDED_TEXT = 'Your session has ended. Sign in again to continue.';
 
 /** Header names asserted by name, as the Fineract contract fixes them (AAP 0.4.3). */
 const TENANT_HEADER = 'Fineract-Platform-TenantId';
@@ -67,7 +102,11 @@ function configFixture(): AppConfig {
 
 /** The session in effect, in the legacy shape the interceptor reads its credential from. */
 function sessionFixture(): SessionData {
-  return { userId: 7, authenticationKey: KEY_PARTS.join(''), userPermissions: ['ALL_FUNCTIONS'] };
+  return {
+    userId: USER_ID,
+    authenticationKey: KEY_PARTS.join(''),
+    userPermissions: ['ALL_FUNCTIONS'],
+  };
 }
 
 /** Answers the request as Fineract would, echoing the request the interceptor handed on. */
@@ -83,29 +122,39 @@ interface Harness {
   readonly config: WritableSignal<AppConfig | null>;
   readonly session: WritableSignal<SessionData | null>;
   readonly clear: ReturnType<typeof vi.fn>;
-  readonly router: { url: string; navigate: ReturnType<typeof vi.fn> };
+  readonly router: { url: string; navigated: boolean; navigate: ReturnType<typeof vi.fn> };
   readonly notifications: NotificationService;
+  readonly server: HttpTestingController;
   readonly run: (
     request: HttpRequest<unknown>,
     handler?: HttpHandlerFn,
   ) => Observable<HttpEvent<unknown>>;
 }
 
-/** Builds the interceptor over the four collaborators it injects, all supplied as values. */
+/** Builds the interceptor over the collaborators it injects, four of them supplied as values and the fifth the application's own `HttpClient`, so the recovery's re-validation is a real request this same interceptor sees. */
 function harnessFor(): Harness {
   const config = signal<AppConfig | null>(configFixture());
   const session = signal<SessionData | null>(null);
   const clear = vi.fn((): void => session.set(null));
-  const router = { url: '/clients', navigate: vi.fn(() => Promise.resolve(true)) };
+  const router = {
+    url: '/clients',
+    // A route the application has already shown: the state a mid-session failure arrives in, and the one a case sets false to reproduce the start-up read.
+    navigated: true,
+    navigate: vi.fn(() => Promise.resolve(true)),
+  };
   const notifications = new NotificationService();
 
-  const injector = Injector.create({
+  TestBed.resetTestingModule();
+  TestBed.configureTestingModule({
     providers: [
+      // The application's own client with this interceptor in its chain: the re-validation then re-enters the interceptor under test, which is what makes its context mark a fact this spec can check rather than a stub's good behaviour.
+      provideHttpClient(withInterceptors([fineractInterceptor])),
+      provideHttpClientTesting(),
       {
         provide: AppConfigService,
         useValue: {
           changes: config.asReadonly(),
-          // The composition is the real service's job; this stand-in only has to answer for the one endpoint the interceptor names, exactly as `apiUrl()` would.
+          // The composition is the real service's job; this stand-in only has to answer for the endpoints the interceptor names, exactly as `apiUrl()` would.
           apiUrl: (path: string) => `${API_ROOT}/${path}`,
         },
       },
@@ -115,13 +164,21 @@ function harnessFor(): Harness {
     ],
   });
 
+  const injector = TestBed.inject(EnvironmentInjector);
+  const server = TestBed.inject(HttpTestingController);
+
   const run = (
     request: HttpRequest<unknown>,
     handler: HttpHandlerFn = echo,
   ): Observable<HttpEvent<unknown>> =>
     runInInjectionContext(injector, () => fineractInterceptor(request, handler));
 
-  return { config, session, clear, router, notifications, run };
+  return { config, session, clear, router, notifications, server, run };
+}
+
+/** The re-validation reads the mock backend has been asked for, so a case states how often the credential was re-validated rather than that some request was made. */
+function revalidations(server: HttpTestingController): TestRequest[] {
+  return server.match(PROBE_URL);
 }
 
 /** The request the handler received, read back off the body `echo` answered with. */
@@ -130,15 +187,14 @@ function sentRequest(response: HttpEvent<unknown>): HttpRequest<unknown> {
   return (response as HttpResponse<unknown>).body as HttpRequest<unknown>;
 }
 
-/** The value an observable failed with, so its identity and type can be asserted. */
-async function rejectionOf(observable: Observable<unknown>): Promise<unknown> {
-  try {
-    await firstValueFrom(observable);
-  } catch (error: unknown) {
-    return error;
-  }
-
-  throw new Error('the request was expected to fail, but the interceptor let it through');
+/** The value an observable failed with, so its identity and type can be asserted; the rejection handler is attached as a case calls this, which keeps a failure that arrives while a fake clock runs an observed one. */
+function rejectionOf(observable: Observable<unknown>): Promise<unknown> {
+  return firstValueFrom(observable).then(
+    () => {
+      throw new Error('the request was expected to fail, but the interceptor let it through');
+    },
+    (error: unknown) => error,
+  );
 }
 
 /** The text a refusing router rejects its navigation with; it is never what the user must be shown. */
@@ -229,6 +285,24 @@ describe('fineractInterceptor', () => {
     expect(sent.headers.has(AUTHORIZATION_HEADER)).toBe(false);
   });
 
+  it.each([
+    ['the translation bundle the application fetches from its own origin', BUNDLE_URL],
+    ["a path that only begins with the API origin's characters", OUTSIDE_ORIGIN_URL],
+  ])('sends neither header on %s', async (_label, url) => {
+    const { run, session } = harnessFor();
+    session.set(sessionFixture());
+    const request = new HttpRequest('GET', url);
+
+    const sent = sentRequest(await firstValueFrom(run(request)));
+
+    // The credential and the tenant datum belong to Fineract alone, so a request outside the configured API origin carries neither, however long the session has been in effect (AAP 0.4.2, Rule 1 clause 9).
+    expect(sent.headers.has(TENANT_HEADER)).toBe(false);
+    expect(sent.headers.has(AUTHORIZATION_HEADER)).toBe(false);
+    // ...and where a request goes is still the calling service's decision, not this layer's.
+    expect(sent.url).toBe(url);
+    expect(sent.url).toBe(request.url);
+  });
+
   it('passes a request through untouched while the configuration is still resolving', async () => {
     const { run, config } = harnessFor();
     config.set(null);
@@ -313,7 +387,7 @@ describe('fineractInterceptor', () => {
         ),
       );
 
-      // Angular's own text is what used to reach the screen, and it names the request's URL, so the assertions below fail if that text ever comes back (Rule 1 clause 3).
+      // The screen must show Fineract's own sentence, or the shared fallback when the server sent none, and never Angular's, whose text describes the transport and names the request URL (Rule 1 clause 3).
       expect(response.message).toContain(CLIENTS_URL);
 
       expect(error).toBeInstanceOf(ApiError);
@@ -345,6 +419,67 @@ describe('fineractInterceptor', () => {
 
     expect(error).toBeInstanceOf(ApiError);
     expect(notifications.messages()).toHaveLength(0);
+  });
+
+  it('fails a request no server answers once its bound elapses, and reports it once', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const { run, session, server, clear, router, notifications } = harnessFor();
+      session.set(sessionFixture());
+      router.url = ATTEMPTED_URL;
+      const unanswered: HttpHandlerFn = () => NEVER;
+      const failure = rejectionOf(run(new HttpRequest('GET', CLIENTS_URL), unanswered));
+
+      await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS - 1);
+      // A slow answer inside the bound is not a failure, so nothing is reported while the request is still waiting.
+      expect(notifications.messages()).toHaveLength(0);
+
+      await vi.advanceTimersByTimeAsync(1);
+      const error = await failure;
+
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).message).toBe(TIMED_OUT_TEXT);
+      // Status 0 is the transport-failure status `api-error.ts` documents, so the screen treats a server that never answered exactly like an unreachable one (AAP 0.7.2).
+      expect((error as ApiError).status).toBe(0);
+      expect(notifications.messages()).toHaveLength(1);
+      expect(notifications.messages()[0]?.kind).toBe('error');
+      expect(notifications.messages()[0]?.message).toBe(TIMED_OUT_TEXT);
+      // A request nobody answered is no credential refusal: nothing is re-validated and no session ends.
+      expect(revalidations(server)).toHaveLength(0);
+      expect(clear).not.toHaveBeenCalled();
+      expect(router.navigate).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('says nothing of its own when the re-validation is the request that runs out of time', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const { run, session, server, clear, router, notifications } = harnessFor();
+      session.set(sessionFixture());
+      router.url = ATTEMPTED_URL;
+      const failure = rejectionOf(run(new HttpRequest('GET', CLIENTS_URL), failing(0)));
+
+      // The recovery asks for the re-validation as the request fails, and that read is bounded like every other one.
+      expect(revalidations(server)).toHaveLength(1);
+
+      await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS + 1);
+      const error = await failure;
+
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).status).toBe(0);
+      // The re-validation's own bound is not the user's failure to read: the sentence on the screen is the session one, once (AAP 0.14.2).
+      expect(notifications.messages().map((notice) => notice.message)).not.toContain(TIMED_OUT_TEXT);
+      expect(notifications.messages()).toHaveLength(1);
+      expect(notifications.messages()[0]?.message).toBe(SESSION_ENDED_TEXT);
+      expect(clear).toHaveBeenCalledTimes(1);
+      expect(router.navigate).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('ends the session and returns to the login screen carrying the attempted route on a 401', async () => {
@@ -452,6 +587,193 @@ describe('fineractInterceptor', () => {
 
     expect(clear).toHaveBeenCalledTimes(1);
     expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  it('ends the session, returns to the login screen and says so when a status 0 failure is a refused credential', async () => {
+    const { run, session, server, clear, router, notifications } = harnessFor();
+    const fixture = sessionFixture();
+    session.set(fixture);
+    router.url = ATTEMPTED_URL;
+
+    const failure = rejectionOf(run(new HttpRequest('GET', CLIENTS_URL), failing(0)));
+    const probe = revalidations(server);
+
+    // The re-validation reads the allowlisted `GET /users/{id}` the restore already calls, with the credential this request carried (AAP 0.7.3 W1).
+    expect(probe).toHaveLength(1);
+    expect(probe[0]?.request.url).toBe(PROBE_URL);
+    expect(probe[0]?.request.headers.get(AUTHORIZATION_HEADER)).toBe(
+      `Basic ${fixture.authenticationKey}`,
+    );
+
+    // A refused key reaches the browser as status 0 rather than 401, so the read's failure is the answer, not its status.
+    probe[0]?.error(new ProgressEvent('error'));
+    const error = await failure;
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(0);
+    expect(clear).toHaveBeenCalledTimes(1);
+    expect(session()).toBeNull();
+    expect(router.navigate).toHaveBeenCalledWith(['/login'], {
+      queryParams: { returnUrl: ATTEMPTED_URL },
+    });
+    expect(notifications.messages()).toHaveLength(1);
+    expect(notifications.messages()[0]?.kind).toBe('error');
+    expect(notifications.messages()[0]?.message).toBe(SESSION_ENDED_TEXT);
+    // The notice tells the user what to do next and carries nothing from the exchange (Rule 1 clause 9).
+    expect(notifications.messages()[0]?.message).not.toContain(fixture.authenticationKey);
+  });
+
+  it('keeps the session and reports the failure once when the credential still works', async () => {
+    const { run, session, server, clear, router, notifications } = harnessFor();
+    session.set(sessionFixture());
+    router.url = ATTEMPTED_URL;
+
+    const failure = rejectionOf(run(new HttpRequest('GET', CLIENTS_URL), failing(0)));
+    revalidations(server)[0]?.flush({ id: USER_ID, username: 'mifos' });
+    const error = await failure;
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(0);
+    // A key that still works is a transport fault: the session stands, nothing navigates, and the failure is the one thing said.
+    expect(clear).not.toHaveBeenCalled();
+    expect(session()).not.toBeNull();
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(notifications.messages()).toHaveLength(1);
+    expect(notifications.messages()[0]?.message).toBe(UNMAPPED_FAILURE_TEXT);
+  });
+
+  it('costs one re-validation, one session end and one return when three failures arrive together', async () => {
+    const { run, session, server, clear, router, notifications } = harnessFor();
+    session.set(sessionFixture());
+    router.url = ATTEMPTED_URL;
+
+    const failures = Promise.all([
+      rejectionOf(run(new HttpRequest('GET', CLIENTS_URL), failing(0))),
+      rejectionOf(run(new HttpRequest('GET', LOANS_URL), failing(0))),
+      rejectionOf(
+        run(
+          new HttpRequest('GET', CLIENTS_URL, { params: new HttpParams().set('offset', '15') }),
+          failing(0),
+        ),
+      ),
+    ]);
+
+    const probe = revalidations(server);
+    expect(probe).toHaveLength(1);
+    probe[0]?.error(new ProgressEvent('error'));
+    await failures;
+
+    expect(clear).toHaveBeenCalledTimes(1);
+    expect(router.navigate).toHaveBeenCalledTimes(1);
+    // One refusal reaching the screen three times is one thing to report, not three.
+    expect(notifications.messages()).toHaveLength(1);
+    expect(notifications.messages()[0]?.message).toBe(SESSION_ENDED_TEXT);
+  });
+
+  it('re-validates nothing when a status 0 failure carried no credential', async () => {
+    const { run, server, clear, router, notifications } = harnessFor();
+
+    const error = await rejectionOf(run(new HttpRequest('GET', CLIENTS_URL), failing(0)));
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(0);
+    expect(revalidations(server)).toHaveLength(0);
+    expect(clear).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(notifications.messages()).toHaveLength(1);
+    expect(notifications.messages()[0]?.message).toBe(UNMAPPED_FAILURE_TEXT);
+  });
+
+  it('reports the failure and re-validates nothing when the session ended while the request was in flight', async () => {
+    const { run, session, server, clear, router, notifications } = harnessFor();
+    session.set(sessionFixture());
+    router.url = ATTEMPTED_URL;
+    // The session is withdrawn as the request goes out — a sign-out, or another screen's 401 — so by the time this failure arrives there is nothing left to end.
+    const signedOutMeanwhile: HttpHandlerFn = () => {
+      session.set(null);
+      return throwError(() => new HttpErrorResponse({ status: 0 }));
+    };
+
+    const error = await rejectionOf(run(new HttpRequest('GET', CLIENTS_URL), signedOutMeanwhile));
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(0);
+    expect(revalidations(server)).toHaveLength(0);
+    expect(clear).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(notifications.messages()).toHaveLength(1);
+    expect(notifications.messages()[0]?.message).toBe(UNMAPPED_FAILURE_TEXT);
+  });
+
+  it('starts no second re-validation when the re-validation itself is refused', async () => {
+    const { run, session, server, clear, router, notifications } = harnessFor();
+    session.set(sessionFixture());
+    router.url = ATTEMPTED_URL;
+
+    const failure = rejectionOf(run(new HttpRequest('GET', CLIENTS_URL), failing(0)));
+    revalidations(server)[0]?.error(new ProgressEvent('error'));
+    await failure;
+
+    // The one read is the only read: its own failure re-entered this interceptor and started nothing, raised nothing and ended nothing by itself (AAP 0.14.1).
+    expect(revalidations(server)).toHaveLength(0);
+    expect(clear).toHaveBeenCalledTimes(1);
+    expect(router.navigate).toHaveBeenCalledTimes(1);
+    expect(notifications.messages()).toHaveLength(1);
+    expect(notifications.messages()[0]?.message).toBe(SESSION_ENDED_TEXT);
+  });
+
+  it('leaves the start-up read its own refusal handling, re-validating nothing before the first navigation', async () => {
+    const { run, session, server, clear, router, notifications } = harnessFor();
+    session.set(sessionFixture());
+    router.navigated = false;
+
+    const error = await rejectionOf(run(new HttpRequest('GET', CLIENTS_URL), failing(0)));
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(0);
+    expect(revalidations(server)).toHaveLength(0);
+    expect(clear).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(notifications.messages()).toHaveLength(1);
+    expect(notifications.messages()[0]?.message).toBe(UNMAPPED_FAILURE_TEXT);
+  });
+
+  it('reports a refused return to the login screen once when a refused credential ends the session', async () => {
+    const { run, session, server, router, notifications } = harnessFor();
+    session.set(sessionFixture());
+    router.url = ATTEMPTED_URL;
+    const navigation = refusedNavigation(new Error(NAVIGATION_FAILURE));
+    router.navigate.mockImplementation(() => navigation);
+
+    const failure = rejectionOf(run(new HttpRequest('GET', CLIENTS_URL), failing(0)));
+    revalidations(server)[0]?.error(new ProgressEvent('error'));
+    await failure;
+    await navigationSettled();
+
+    expect(navigation.rejectionHandlers).toBe(1);
+    // The return itself is what failed, so the sentence names the screen and the session-ended one is not added on top.
+    expect(notifications.messages()).toHaveLength(1);
+    expect(notifications.messages()[0]?.message).toBe(LOGIN_SCREEN_MESSAGE);
+    expect(notifications.messages()[0]?.message).not.toBe(SESSION_ENDED_TEXT);
+  });
+
+  it('reports the failure once and returns nowhere when a refused credential reaches the login screen', async () => {
+    const { run, session, server, clear, router, notifications } = harnessFor();
+    // The session a sign-in has just written, refused by the restore that follows it: the user is on the login screen the whole time.
+    session.set(sessionFixture());
+    router.url = '/login';
+
+    const failure = rejectionOf(run(new HttpRequest('GET', CLIENTS_URL), failing(0)));
+    revalidations(server)[0]?.error(new ProgressEvent('error'));
+    const error = await failure;
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(clear).toHaveBeenCalledTimes(1);
+    expect(session()).toBeNull();
+    expect(router.navigate).not.toHaveBeenCalled();
+    // A return would land where the user already is, so the failure's own sentence is the one thing said rather than a second one about a session that never reached a screen (AAP 0.7.4, AAP 0.14.2).
+    expect(notifications.messages()).toHaveLength(1);
+    expect(notifications.messages()[0]?.message).toBe(UNMAPPED_FAILURE_TEXT);
   });
 
   it('rethrows an error that is not an HTTP response unchanged', async () => {

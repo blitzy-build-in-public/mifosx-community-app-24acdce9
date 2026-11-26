@@ -120,30 +120,25 @@ describe('parity-report line budget', () => {
 
     expect(markdown).toContain('## Line budget');
     expect(markdown).toContain('Ceiling: 60,000 generated lines');
+    expect(markdown).toContain('planning target of about 50,000');
     expect(markdown).toContain('58,643 generated lines across 245 tracked files');
     expect(markdown).toContain('git ls-files | grep -v package-lock.json | xargs wc -l');
     expect(markdown).toContain('inside the ceiling by 1,357 lines');
-    expect(markdown).toContain('88,418 lines at `4a13dc7`, the commit the prose trim follows');
-    expect(markdown).toContain('58,799 at `c05766d`');
-    expect(markdown).toContain('the tree crossed AAP 0.9.3\'s 60,000-line ceiling while the workflow screens landed');
-    expect(markdown).toContain('four fix sets landed after the cut and added 714 net lines');
-    expect(markdown).toContain('taking the tree from 59,487 to 60,201 and over AAP 0.9.3\'s ceiling again');
-    // The third trim: the ten fix sets that landed after the second cut, the crossing they caused and the fixed order's exhaustion.
-    expect(markdown).toContain('ten fix sets landed at this checkpoint and added 2,636 net lines across 91 files');
-    expect(markdown).toContain('taking the tree from 59,784 to 62,420 and over AAP 0.9.3\'s ceiling again');
-    // The fourth trim: the ar-shell-a11y landing merged over the reconciler's repair, the crossing it caused and the fixed order's exhaustion.
-    expect(markdown).toContain('the ar-shell-a11y landing was merged over the reconciler\'s size-ceiling repair and added 665 net lines');
-    expect(markdown).toContain('the skip link, the heading-level remap, the named landmarks and table captions');
-    expect(markdown).toContain('taking the tree from 59,818 to 60,483 and over AAP 0.9.3\'s ceiling again');
-    // The fifth trim: the batch of landed work merged over the tree the fourth trim left, the crossing it caused and the fixed order's exhaustion.
-    expect(markdown).toContain('a batch of landed work was merged over the tree the fourth trim left at 59,877 and added 242 net lines');
-    expect(markdown).toContain('the narrow-viewport navbar flexbox layer with its shared link-wrap rule');
-    expect(markdown).toContain('taking the tree from 59,877 to 60,119 and over AAP 0.9.3\'s ceiling again');
-    // The sixth trim: the clients list filter regression suite merged over the tree the fifth trim left, the crossing it caused and the fixed order's exhaustion.
-    expect(markdown).toContain('the clients list display filter\'s regression suite was merged over the tree the fifth trim left at 59,961 and added 92 net lines');
-    expect(markdown).toContain('the three cases that pin that filter\'s recovery from an empty match');
-    expect(markdown).toContain('taking the tree from 59,961 to 60,053 and over AAP 0.9.3\'s ceiling again');
-    expect(markdown).toContain('every `BLITZY [A11Y]` rule-override note with the Rule clause and QA finding it names');
+    // The revised totals: the two commits either side of the first prose trim, the six later measurements and the delivered total.
+    expect(markdown).toContain('88,418 at `4a13dc7`, the tree before the prose trim');
+    expect(markdown).toContain('58,799 at `c05766d`, the tree the trim left');
+    expect(markdown).toContain('then 60,201, 62,420, 60,483, 60,119, 60,053 and 60,635 at the six later measurements');
+    expect(markdown).toContain('rises of 714, 2,636, 665, 242, 92 and 865 net lines');
+    // The one trim every crossing was answered by, and the code-line guarantee it rests on.
+    expect(markdown).toContain('every crossing named above was answered by the same comment-only prose trim');
+    expect(markdown).toContain('the last two of the trims packing the blocks the earlier ones had left onto one line each');
+    expect(markdown).toContain('model field (AAP 0.14.2)');
+    expect(markdown).toContain('every `BLITZY [A11Y]` rule-override note with the Rule clause and finding it names');
+    expect(markdown).toContain('No code line changed');
+    // The scope cut: its reason, the saving it makes, the total restoring it would measure, and the Must scope kept.
+    expect(markdown).toContain('the tree crossed AAP 0.9.3\'s 60,000-line ceiling at 88,418 lines before the prose trim');
+    expect(markdown).toContain('drop Stretch');
+    expect(markdown).toContain('the 17 cut files carry 5,214 lines');
     expect(markdown).toContain('the delivered tree plus them measures 63,857');
     expect(markdown).toContain('no Must scope was dropped');
     expect(markdown).toContain('1,479 lines against AAP 0.9.3\'s share of about 600');
