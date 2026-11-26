@@ -154,6 +154,20 @@ describe('AppConfigService', () => {
       expect(harness.service.changes()).toEqual(config);
       expect(harness.service.config).toEqual(config);
     });
+
+    it('publishes the base the served file named, which ?baseApiUrl= cannot change', async () => {
+      const harness = createHarness('?baseApiUrl=https://parity.example:9443');
+
+      // Before the read there is no served base at all, so no stored credential can be judged against one (AAP 0.4.4 decision 5).
+      expect(harness.service.servedApiBaseUrl()).toBeNull();
+
+      const config = await harness.service.load();
+
+      // The override is authoritative for what this page calls, and the served base stays the one value no page URL reaches — the base a session with no recorded origin may be presented to (Rule 1 clause 9).
+      expect(config.apiBaseUrl).toBe('https://parity.example:9443');
+      expect(harness.service.servedApiBaseUrl()).toBe(SERVED_CONFIG.apiBaseUrl);
+      expect(harness.service.servedApiBaseUrl()).not.toBe(config.apiBaseUrl);
+    });
   });
 
   describe('override precedence', () => {

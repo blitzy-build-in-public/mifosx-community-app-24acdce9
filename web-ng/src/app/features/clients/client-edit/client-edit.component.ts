@@ -91,8 +91,7 @@ function recordFields(payload: ClientTemplate): ClientRecordFields {
 /** The edit body as this screen builds it: the fields the form owns, with `dateFormat` and `locale` left out because `ClientService.update` replaces both at the API boundary (Rule 1 clause 2). */
 type ClientEditFields = Omit<ClientEditRequest, 'dateFormat' | 'locale'>;
 
-/** The pair {@link toEditRequest} merges back to satisfy the model: the one format a date-bearing Fineract payload may carry, read from the configuration's own declaration instead of retyped here, and an empty locale. Neither value reaches the
- * wire — `editWire` writes both from the resolved configuration and the active language at the API boundary (AAP 0.7.2 `AppConfig`; Rule 1 clause 2). */
+/** The pair {@link toEditRequest} merges back to satisfy the model: the one format a date-bearing Fineract payload may carry, read from the configuration's own declaration instead of retyped here, and an empty locale. Neither value reaches the wire — `editWire` writes both from the resolved configuration and the active language at the API boundary (AAP 0.7.2 `AppConfig`; Rule 1 clause 2). */
 const EDIT_DATE_WIRE = { dateFormat: FINERACT_DATE_FORMAT, locale: '' } as const;
 
 /** Adds or removes the required rule on one control: the legacy edit form's required set depends on the record's legal form and status, and no other rule is ever attached because Fineract decides what is acceptable (Rule 1 clause 3). */
@@ -165,8 +164,7 @@ export class ClientEditComponent {
   /** The loan officer the record carried when the form was seeded, or `null` when it carried none: {@link editRequest} posts `null` only for an assignment the operator cleared, so an officer this tenant's narrowed staff list omits is still posted back untouched (Rule 1 clause 3). */
   private seededStaffId: number | null = null;
 
-  /** The form: the record's office as a disabled select, its loan officer, the two name sets, the external id, the mobile number and an active record's activation date. Every editable control starts without a validator, since the required set
-   * depends on the record (AAP 0.7.2 `ClientEditRequest`; Rule 1 clause 3). */
+  /** The form: the record's office as a disabled select, its loan officer, the two name sets, the external id, the mobile number and an active record's activation date. Every editable control starts without a validator, since the required set depends on the record (AAP 0.7.2 `ClientEditRequest`; Rule 1 clause 3). */
   readonly form = new FormGroup({
     // Display only, exactly legacy's `disabled="disabled"` office select: the update endpoint refuses an officeId, which legacy never posts either, so the value is shown and never sent.
     officeId: new FormControl<SelectValue | null>({ value: null, disabled: true }),
@@ -247,9 +245,7 @@ export class ClientEditComponent {
     });
   }
 
-  /** The `staffId` member the edit body carries, in the three states the control can be in: a chosen option posts its id — including the record's own, which the seed holds even when the narrowed staff list does not offer it, so an untouched save
-   * posts the officer back unchanged; the prompt with an officer seeded over it posts `null`, which is how the fork unassigns one (`ignoreIfNull().longGreaterThanZero()`); and the prompt on a record that had none posts nothing at all, because
-   * legacy's `formData` carries an `undefined` `staffId` that JSON drops (Rule 1 clause 3). `officeId` is never built here: the endpoint refuses it. */
+  /** The `staffId` member the edit body carries, in the three states the control can be in: a chosen option posts its id — including the record's own, which the seed holds even when the narrowed staff list does not offer it, so an untouched save posts the officer back unchanged; the prompt with an officer seeded over it posts `null`, which is how the fork unassigns one (`ignoreIfNull().longGreaterThanZero()`); and the prompt on a record that had none posts nothing at all, because legacy's `formData` carries an `undefined` `staffId` that JSON drops (Rule 1 clause 3). `officeId` is never built here: the endpoint refuses it. */
   private staffMember(chosen: SelectValue | null): Pick<ClientEditRequest, 'staffId'> {
     if (typeof chosen === 'number') {
       return { staffId: chosen };
@@ -349,9 +345,7 @@ export class ClientEditComponent {
     setRequired(this.form.controls.activationDate, this.isActive());
   }
 
-  /** Reports a failed seed read or save in the region above the form, once. `screenFailure` answers Fineract's own `defaultUserMessage` verbatim for a 4xx — the text W7 compares — and `null` for a 5xx or status-0 failure, which
-   * `fineract.interceptor` has already raised as the single notification, so no failure is reported twice (AAP 0.7.4 "States every list and record screen must implement"; AAP 0.14.2). A rejection that is neither — a navigation the router refuses
-   * after a successful save — is read through `toDisplayableFailure`, so no `catch` here swallows an error silently (AAP 0.14.1 "errors are values"; AAP 0.14.2). */
+  /** Reports a failed seed read or save in the region above the form, once. `screenFailure` answers Fineract's own `defaultUserMessage` verbatim for a 4xx — the text W7 compares — and `null` for a 5xx or status-0 failure, which `fineract.interceptor` has already raised as the single notification, so no failure is reported twice (AAP 0.7.4 "States every list and record screen must implement"; AAP 0.14.2). A rejection that is neither — a navigation the router refuses after a successful save — is read through `toDisplayableFailure`, so no `catch` here swallows an error silently (AAP 0.14.1 "errors are values"; AAP 0.14.2). */
   private reportFailure(failure: unknown): void {
     if (failure instanceof ApiError || failure instanceof HttpErrorResponse) {
       this.error.set(screenFailure(failure)?.message ?? null);

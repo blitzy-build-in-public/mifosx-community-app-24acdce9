@@ -8,13 +8,10 @@ import { createTranslatedLabels, type TranslatedLabel } from './translated-label
 
 /** Behaviour of the resolver the client list and the loan record share: the text it answers for a key, and its re-resolution on the two events that change it — a language switch and a bundle arriving. */
 
-/** One in-memory bundle: the legacy flat dotted key to its text in that language. */
 type Bundle = Readonly<Record<string, string>>;
 
-/** The English bundle the cases start from, with two keys so a per-key case has a second one. */
 const ENGLISH: Bundle = { 'label.input.product': 'Product', 'label.input.submittedon': 'Submitted on', };
 
-/** The French bundle a language switch must land. */
 const FRENCH: Bundle = { 'label.input.product': 'Produit', 'label.input.submittedon': 'Soumis le', };
 
 /** The part of `TranslateService` the resolver touches, and nothing more. */

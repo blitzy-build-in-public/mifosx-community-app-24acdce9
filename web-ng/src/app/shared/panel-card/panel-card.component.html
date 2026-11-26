@@ -1,16 +1,7 @@
-<!--
-  The card's own markup: the optional heading band, then everything the caller projected. AAP 0.2.3 row `PanelCard` fixes the two pieces this file produces — the surface is the host's own
-  `.panel` class, which `web-ng/src/styles.scss` paints white with radius 0 and `shadow-card`, and the band is the `div.panel-heading > hN.panel-title` chain Bootstrap 3 styles, carrying the title
-  the caller already translated at the heading level `titleTag` names, with the global `.panel > .panel-heading` rule giving it the white band and the optional 1px #E5E5E5 rule, which is why the
-  band is a direct child of the host and not wrapped in anything (Rule 1 clause 6, AAP 0.5.2, AAP 0.5.3). No band is rendered when there is no title: a heading element without text would paint that
-  rule above an empty band. A caller whose heading is not a plain string — the search results screen echoes the searched query beside the title — leaves `title` unset and projects its own
-  `.panel-heading`, which lands here as an ordinary child of the host and paints identically.
+<!-- The card's own markup: the optional heading band, then everything the caller projected. AAP 0.2.3 row `PanelCard` fixes the two pieces this file produces — the surface is the host's own `.panel` class, which `web-ng/src/styles.scss` paints white with radius 0 and `shadow-card`, and the band is the `div.panel-heading > hN.panel-title` chain Bootstrap 3 styles, carrying the title the caller already translated at the heading level `titleTag` names, with the global `.panel > .panel-heading` rule giving it the white band and the optional 1px #E5E5E5 rule, which is why the band is a direct child of the host and not wrapped in anything (Rule 1 clause 6, AAP 0.5.2, AAP 0.5.3). No band is rendered
+  when there is no title: a heading element without text would paint that rule above an empty band. A caller whose heading is not a plain string — the search results screen echoes the searched query beside the title — leaves `title` unset and projects its own `.panel-heading`, which lands here as an ordinary child of the host and paints identically.
 
-  `<ng-content />` comes last and is the only other node, so a caller may project one or several `.panel-body` blocks and a `.panel-footer` in the order it wrote them: the loan action card renders
-  seven bodies inside one card, and the repayment card two plus a footer. The band's heading is the level `titleTag` names — `h1` where the card title is the page's own title, `h2` on the record's
-  profile card, `h3` by default — and all four levels wear Bootstrap's `.panel-title`, whose size, weight and margins the global layer fixes, so the level is the document outline's
-  and never the design's (Rule 1 clause 6).
--->
+  `<ng-content />` comes last and is the only other node, so a caller may project one or several `.panel-body` blocks and a `.panel-footer` in the order it wrote them: the loan action card renders seven bodies inside one card, and the repayment card two plus a footer. The band's heading is the level `titleTag` names — `h1` where the card title is the page's own title, `h2` on the record's profile card, `h3` by default — and all four levels wear Bootstrap's `.panel-title`, whose size, weight and margins the global layer fixes, so the level is the document outline's and never the design's (Rule 1 clause 6). -->
 @if (title(); as heading) {
   <div class="panel-heading">
     @switch (titleTag()) {

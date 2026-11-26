@@ -31,7 +31,6 @@ class AuthStub implements Pick<AuthService, 'isAuthenticated'> {
   /** The error the read should raise instead of answering, or `null` while it answers. */
   private failure: Error | null = null;
 
-  /** Whether a session is in effect, as the guard's only input. */
   readonly isAuthenticated = vi.fn((): boolean => {
     if (this.failure !== null) {
       throw this.failure;
@@ -39,7 +38,6 @@ class AuthStub implements Pick<AuthService, 'isAuthenticated'> {
     return this.signedIn;
   });
 
-  /** Puts a session in effect, the state a login produces. */
   signIn(): void {
     this.signedIn = true;
   }
@@ -49,16 +47,13 @@ class AuthStub implements Pick<AuthService, 'isAuthenticated'> {
     this.failure = error;
   }
 
-  /** Lets the session read answer again, the state after a transient failure has passed. */
   stopFailing(): void {
     this.failure = null;
   }
 }
 
-/** The guard's synchronous answer: let the navigation through, or replace it with the login tree. */
 type GuardAnswer = boolean | UrlTree;
 
-/** The router state the guard is handed for an attempt at `url`. */
 function stateFor(url: string): RouterStateSnapshot {
   return { url } as RouterStateSnapshot;
 }

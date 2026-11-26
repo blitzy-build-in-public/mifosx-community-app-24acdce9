@@ -39,7 +39,6 @@ const LOAN_RECORD_ROUTE = /#\/viewloanaccount\/(\d+)$/;
 /** The colour class an active status indicator carries, in either application's spelling: the baseline paints `statusactive` and this one `status-active`, and neither paints a status word at all (AAP 0.10.5 item 11), so the comparison is made on the class both applications paint, never on text. */
 const ACTIVE_STATUS_CLASS = /status[-_]?active/i;
 
-/** One captured request body as its field map — the shape `capture/network-capture.ts` records a JSON object in, with keys canonicalised and every generated id already a role token. */
 type FormFields = { [field: string]: NormalizedValue };
 
 /** Whether a normalised payload is a field map rather than an array or a scalar (Rule 1 clause 4). */
@@ -70,7 +69,6 @@ function callsTo(
   );
 }
 
-/** The figure a page object reported for an amount, as a number, or `null` when the cell carried none. */
 function figureOf(value: string | number | null): number | null {
   if (value === null) {
     return null;

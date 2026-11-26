@@ -1,4 +1,4 @@
-/** The application's single HTTP interceptor (AAP 0.4.2, AAP 0.7.1, AAP 0.14.1; Rule 1 clause 5): it owns the two headers a Fineract call carries — `Fineract-Platform-TenantId` and `Authorization: Basic <key>` — sends them only to the configured API origin, leaves every URL a service composed untouched, bounds each request, maps every failure into `ApiError`, ends the session and returns to the login screen carrying the attempted route on a 401 or a confirmed credential refusal, and raises one notification for a 5xx, a transport failure or a timeout (AAP 0.7.4, AAP 0.10.5). */
+/** The application's single HTTP interceptor (AAP 0.4.2, AAP 0.7.1, AAP 0.14.1; Rule 1 clause 5): it owns the two headers a Fineract call carries — `Fineract-Platform-TenantId` and `Authorization: Basic <key>` — sends them only to the configured API origin, presents the credential only to the origin it was issued against (Rule 1 clause 9), leaves every URL a service composed untouched, bounds each request, maps every failure into `ApiError`, ends the session and returns to the login screen carrying the attempted route on a 401 or a confirmed credential refusal, and raises one notification for a 5xx, a transport failure or a timeout (AAP 0.7.4, AAP 0.10.5). The tenant stays configuration and is attached wherever this page's base points (AAP 0.10.4), while the stored key is withheld from any other origin — the one deliberate departure from legacy in this file, which re-attaches the stored key to whatever base the page URL names (Rule 1 clause 3). */
 import {
   HttpClient,
   HttpContext,
@@ -20,6 +20,7 @@ import {
 } from 'rxjs';
 
 import type { SessionData } from '../auth/session.model';
+import { apiOriginOf } from '../auth/session-origin';
 import { SessionService } from '../auth/session.service';
 import { AppConfigService } from '../config/app-config.service';
 import { NotificationService } from '../notifications/notification.service';
@@ -63,7 +64,7 @@ interface RecoveryDependencies {
   readonly notifications: NotificationService;
 }
 
-/** Attaches the tenant and Basic authorization headers to a Fineract call, bounds it, maps its failure into `ApiError`, ends the session and returns to the login screen with the attempted route on a 401 or a confirmed refusal, and raises one notification for a 5xx, a transport failure or a timeout. Nothing loose is left unmodelled here: the error `catchError` receives is `unknown` narrowed by a guard, and so is the body the re-validation reads, so the file holds no `any` (AAP 0.14.1, Rule 1 clause 4). */
+/** Attaches the tenant header to a Fineract call, the Basic authorization header only where the call's origin is the one the stored session was issued against, bounds it, maps its failure into `ApiError`, ends the session and returns to the login screen with the attempted route on a 401 or a confirmed refusal, and raises one notification for a 5xx, a transport failure or a timeout. Nothing loose is left unmodelled here: the error `catchError` receives is `unknown` narrowed by a guard, and so is the body the re-validation reads, so the file holds no `any` (AAP 0.14.1, Rule 1 clause 4). */
 export const fineractInterceptor: HttpInterceptorFn = (req, next) => {
   const config = inject(AppConfigService);
   const http = inject(HttpClient);
@@ -77,14 +78,18 @@ export const fineractInterceptor: HttpInterceptorFn = (req, next) => {
     return next(req);
   }
 
-  // The origin every service composes its URL from, closed with a `/` so the match ends on a segment boundary: a translation bundle at the application's own origin, and a path that merely begins with the same characters, are both outside the API (AAP 0.4.2, Rule 1 clause 9).
+  // The base every service composes its URL from, closed with a `/` so the match ends on a segment boundary: a translation bundle at the application's own origin, and a path that merely begins with the same characters, are both outside the API (AAP 0.4.2, Rule 1 clause 9).
   const apiOrigin = `${resolved.apiBaseUrl.replace(/\/+$/, '')}/`;
   const isApiRequest = req.url.startsWith(apiOrigin);
   const isAuthenticationRequest = req.url === config.apiUrl(AUTHENTICATION_ENDPOINT);
   const isRevalidationRequest = req.context.get(SESSION_REVALIDATION);
 
-  // The credential belongs to Fineract alone, so a request to any other origin carries neither header, and the exchange that asks for the credential carries none either (AAP 0.4.2, Rule 1 clause 9).
-  const current = isApiRequest && !isAuthenticationRequest ? session.session() : null;
+  // The credential belongs to Fineract alone, so a request to any other origin carries neither header, and the exchange that asks for the credential carries none either (AAP 0.4.2, Rule 1 clause 9). It is presented only where the request's own origin is the origin the stored session was issued against, so a page reached with a `?baseApiUrl=` naming another host still talks to that host — it is what the page URL resolved — and does so with the tenant header alone, never with the key (AAP 0.4.4 decision 5, AAP 0.10.4).
+  const boundOrigin = session.credentialOrigin();
+  const current =
+    isApiRequest && !isAuthenticationRequest && boundOrigin !== null && apiOriginOf(req.url) === boundOrigin
+      ? session.session()
+      : null;
 
   let headers = req.headers;
 
@@ -121,7 +126,10 @@ export const fineractInterceptor: HttpInterceptorFn = (req, next) => {
 
       if (cause.status === 401) {
         if (!isAuthenticationRequest) {
-          session.clear();
+          // Only a request that actually carried the credential can refuse it: when the key was withheld the stored session belongs to another origin, so it stays where the legacy screens may still be using it, while the user is returned to the login screen all the same (Rule 1 clause 9).
+          if (current !== null) {
+            session.clear();
+          }
           void returnToLogin(router, notifications);
         }
       } else if (cause.status === 0 && current !== null && router.navigated) {

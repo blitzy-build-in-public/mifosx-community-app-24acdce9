@@ -14,7 +14,6 @@ function utcDay(year: number, month: number, day: number): Date {
   return new Date(Date.UTC(year, month - 1, day));
 }
 const RUN_DATE = utcDay(2026, 11, 24);
-/** The `status` object Fineract attaches to a client, a loan and a savings account alike. */
 function status(value: string): { id: number; code: string; value: string } {
   return { id: 300, code: `statusType.${value.toLowerCase()}`, value };
 }

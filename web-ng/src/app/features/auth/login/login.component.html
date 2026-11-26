@@ -34,8 +34,7 @@
         <hr />
 
         <div class="row">
-          <!-- The form column carries the design's 396px form: `.login-form-column` in `web-ng/src/styles.scss` sizes it to the form plus the grid's own
-            15px paddings and centres it on the page, and below the `sm` breakpoint it keeps the grid's full width. -->
+          <!-- The form column carries the design's 396px form: `.login-form-column` in `web-ng/src/styles.scss` sizes it to the form plus the grid's own 15px paddings and centres it on the page, and below the `sm` breakpoint it keeps the grid's full width. -->
           <div class="col-sm-4 col-sm-offset-4 login-form-column">
             <!-- Fineract's own failure text, rendered verbatim and directly above the form: no `translate` pipe, no prefix, no capitalisation and no truncation, so the message the user reads is the message the backend returned (AAP 0.7.4; AAP 0.14.1 "errors are values"); `role="alert"` announces it without moving focus, and the typed username survives because the component clears only the password. -->
             @if (error(); as message) {

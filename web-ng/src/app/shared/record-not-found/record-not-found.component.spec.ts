@@ -32,7 +32,6 @@ describe('RecordNotFoundComponent', () => {
   // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps every assertion below type-checked (Rule 1 clause 4).
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
 
-  /** The one element the component renders. */
   const alert = (): HTMLElement => {
     const element = host().querySelector<HTMLElement>('.alert.alert-danger');
     if (element === null) {

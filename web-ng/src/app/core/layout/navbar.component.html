@@ -10,8 +10,7 @@
       </a>
     </div>
 
-    <!-- `.navbar-collapse` without `.collapse`: Bootstrap 3 hides a collapsed navigation only while it also carries
-         `.collapse`, and no hamburger is rendered to expand one; the flex row it becomes is `.navbar-collapse` in web-ng/src/styles.scss. -->
+    <!-- `.navbar-collapse` without `.collapse`: Bootstrap 3 hides a collapsed navigation only while it also carries `.collapse`, and no hamburger is rendered to expand one; the flex row it becomes is `.navbar-collapse` in web-ng/src/styles.scss. -->
     <div class="navbar-collapse">
       <ul class="nav navbar-nav" id="main-menu-left">
         <!-- The single in-scope destination. `hasPermission` hides the item rather than removing it when the signed-in user lacks the code, which is what the legacy `has-permission` directive did; the code itself (`READ_CLIENT`) is declared on the component and is the one the clients route group carries in its `data.permission`, so the menu item and the route guard cannot disagree (AAP 0.14.1). Navigation goes through `routerLink` — never a hash `href` — so the router owns the URL (Rule 1 clause 5). -->
@@ -22,12 +21,10 @@
         </li>
       </ul>
 
-      <!-- Authored first of the three right-hand groups: the field and its scope select precede the language switcher and the user menu in source order, which is the order Tab visits them (AAP 0.7.4)
-           — seeded with `searchScope`, it emits the trimmed query and the selected scope and issues no request of its own (AAP 0.2.3 `GlobalSearch` `query`/`scope`/`(search)`). -->
+      <!-- Authored first of the three right-hand groups: the field and its scope select precede the language switcher and the user menu in source order, which is the order Tab visits them (AAP 0.7.4) — seeded with `searchScope`, it emits the trimmed query and the selected scope and issues no request of its own (AAP 0.2.3 `GlobalSearch` `query`/`scope`/`(search)`). -->
       <app-global-search [scope]="searchScope()" (search)="onSearch($event)" />
 
-      <!-- Second of the three: the shared `LanguageSwitcherComponent`, given the application's `AVAILABLE_LANGS`, the language in force and legacy's own label, and reporting both outcomes through `(langChange)` and `(langChangeFailed)`,
-           because it owns the switch itself — one `TranslateService.use()`, no page reload (AAP 0.2.3 `LanguageSwitcher` `langs`/`current`, AAP 0.7.4, AAP 0.10.5 item 14). -->
+      <!-- Second of the three: the shared `LanguageSwitcherComponent`, given the application's `AVAILABLE_LANGS`, the language in force and legacy's own label, and reporting both outcomes through `(langChange)` and `(langChangeFailed)`, because it owns the switch itself — one `TranslateService.use()`, no page reload (AAP 0.2.3 `LanguageSwitcher` `langs`/`current`, AAP 0.7.4, AAP 0.10.5 item 14). -->
       <app-language-switcher
         class="navbar-form navbar-right"
         [langs]="langs"
@@ -38,8 +35,7 @@
         (langChangeFailed)="onLangChangeFailed()"
       />
 
-      <!-- Authored last, so it is the row's right-most group on screen and in the Tab order, and the one group the global stylesheet keeps Bootstrap's `-15px` `.navbar-right` margin on
-           (AAP 0.2.3 `Navbar` `userName`/`(signOut)`, AAP 0.7.4; web-ng/src/styles.scss, `.navbar-collapse`). -->
+      <!-- Authored last, so it is the row's right-most group on screen and in the Tab order, and the one group the global stylesheet keeps Bootstrap's `-15px` `.navbar-right` margin on (AAP 0.2.3 `Navbar` `userName`/`(signOut)`, AAP 0.7.4; web-ng/src/styles.scss, `.navbar-collapse`). -->
       <ul class="nav navbar-nav navbar-right" id="main-menu-right">
         <li #userMenu class="dropdown" [class.open]="userMenuOpen()" (keydown.escape)="closeUserMenu()">
           <!-- The label is the authenticated account name from `GET /users/{id}` — `mifos` after a login as `mifos` — which is the value legacy prints from `currentSession.user.name` in this same place, or the name the signed-in shell handed in when it supplied one; it is the only session-derived value this component displays (Rule 1 clause 9). An anchor rather than a native button because `.navbar-nav > li > a` is the Bootstrap rule that paints the design's brand-blue label (AAP 0.2.2 `color-brand-blue`); `role="button"` plus `tabindex` and the Enter/Space handlers give it the button's keyboard behaviour without that colour being lost, and legacy's own toggle is an anchor of the same shape. -->

@@ -51,7 +51,6 @@ describe('TabStripComponent', () => {
     );
   }
 
-  /** The tab showing `label`, or a named failure when the strip rendered none with it. */
   function tabLink(fixture: ComponentFixture<TabStripComponent>, label: string): HTMLAnchorElement {
     const link = tabLinks(fixture).find((candidate) => candidate.textContent?.trim() === label);
 

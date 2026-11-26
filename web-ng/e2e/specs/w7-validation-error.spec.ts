@@ -35,9 +35,7 @@ const SUBMIT_TIMEOUT_MS = 30_000;
 const BANNER_TIMEOUT_MS = 15_000;
 
 interface ServerErrorEnvelope {
-  /** The message the application renders: the first field-level `defaultUserMessage`, else its top-level one. */
   readonly rendered: string;
-  /** The non-empty `errors[].defaultUserMessage` entries, in the server's order. */
   readonly fieldMessages: readonly string[];
 }
 

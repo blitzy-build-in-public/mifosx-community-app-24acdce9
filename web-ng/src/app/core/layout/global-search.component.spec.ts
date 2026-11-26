@@ -7,13 +7,9 @@ import {
   type GlobalSearchSubmission,
 } from './global-search.component';
 
-/** Behaviour of the navbar's global search control — the `GlobalSearch` row of the component inventory (AAP 0.2.3) and part of the clients list screen of the "Sign in and open a client record" flow (Figma node `1:3`, file `DKm5TBFbXypfqyx4xUdhBw`).
- * It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with at least one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`, nothing boilerplate). It proves the contract its parent depends
- * on: one trimmed query, the scope the user selected and legacy's exact-match flag derived from the quotes legacy stripped on submit; nothing reported when there is nothing to search for; never a search while the user is still typing; and no text
- * the user typed changed. It also proves the inventory's props (AAP 0.2.3 `GlobalSearch`: `query: string, scope, (search)`): the two inputs seed the field and the selector, typing is not written back into them, and a host that changes one re-seeds
- * the control. The translate stack is provided because the placeholder, the field's accessible name and the scope labels resolve through `TranslatePipe`, and `provideTranslateService()` installs the no-op loader so no bundle is requested. There is
- * deliberately no HTTP provider: the component injects no service at all, so reaching Fineract from it would fail with NG0201 instead of silently passing (Rule 1 clause 5). The scope selector's accessible name is the control's own literal "Search
- * scope", not the clients list's `label.button.filter` key, so it needs no bundle entry. */
+/** Behaviour of the navbar's global search control — the `GlobalSearch` row of the component inventory (AAP 0.2.3) and part of the clients list screen of the "Sign in and open a client record" flow (Figma node `1:3`, file `DKm5TBFbXypfqyx4xUdhBw`). It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with at least one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`, nothing boilerplate). It proves the contract its parent depends on: one trimmed query, the scope the user selected and legacy's exact-match flag derived from the quotes legacy stripped on submit; nothing reported when there is nothing to search for; never a search while
+ * the user is still typing; and no text the user typed changed. It also proves the inventory's props (AAP 0.2.3 `GlobalSearch`: `query: string, scope, (search)`): the two inputs seed the field and the selector, typing is not written back into them, and a host that changes one re-seeds the control. The translate stack is provided because the placeholder, the field's accessible name and the scope labels resolve through `TranslatePipe`, and `provideTranslateService()` installs the no-op loader so no bundle is requested. There is deliberately no HTTP provider: the component injects no service at all, so reaching Fineract from it would fail with NG0201 instead of silently passing (Rule 1 clause 5).
+ * The scope selector's accessible name is the control's own literal "Search scope", not the clients list's `label.button.filter` key, so it needs no bundle entry. */
 
 /** Legacy key of the field's placeholder, and the text this spec serves for it. */
 const PLACEHOLDER_KEY = 'label.searchorpress';
@@ -23,8 +19,7 @@ const PLACEHOLDER_TEXT = 'Click or press alt+x to Search';
 const FIELD_LABEL_KEY = 'label.heading.search';
 const FIELD_LABEL_TEXT = 'Search';
 
-/** The selector's accessible name. It is the control's own literal — the scope selector chooses what the search covers — rather than a translation key: no shipped bundle carries a key for the control itself
- * (the shipped scope keys name the individual options), so a key written here would raise a missing-translation warning on every render. A literal cannot reach the user or the developer console unresolved. */
+/** The selector's accessible name. It is the control's own literal — the scope selector chooses what the search covers — rather than a translation key: no shipped bundle carries a key for the control itself (the shipped scope keys name the individual options), so a key written here would raise a missing-translation warning on every render. A literal cannot reach the user or the developer console unresolved. */
 const SCOPE_LABEL_TEXT = 'Search scope';
 
 /** The three scopes, in the order the selector renders them: its value, its legacy label key, and the label this spec serves for that key. */
@@ -38,16 +33,14 @@ const SCOPES: readonly { readonly scope: string; readonly key: string; readonly 
   { scope: 'loans', key: 'label.input.adhoc.search.loans', label: 'Loans from the spec bundle' },
 ];
 
-/** Stand-in for the shipped bundles: one distinct value per key, so an assertion can tell which key produced which text and can never pass on a raw dotted key. Test input only — it adds no locale file and reproduces no shipped translation text
- * (Rule 1 clause 6). */
+/** Stand-in for the shipped bundles: one distinct value per key, so an assertion can tell which key produced which text and can never pass on a raw dotted key. Test input only — it adds no locale file and reproduces no shipped translation text (Rule 1 clause 6). */
 const SPEC_BUNDLE: Record<string, string> = {
   [PLACEHOLDER_KEY]: PLACEHOLDER_TEXT,
   [FIELD_LABEL_KEY]: FIELD_LABEL_TEXT,
   ...Object.fromEntries(SCOPES.map(({ key, label }) => [key, label])),
 };
 
-/** The inputs whose surrounding quotes legacy strips before searching, with what it then searched for. `app/scripts/controllers/main/MainController.js:208-217` removes one leading and one trailing double quote — either on its own as well as both —
- * and sets `exactMatch` when that removal changed the text, so each row is one arm of that single derivation. */
+/** The inputs whose surrounding quotes legacy strips before searching, with what it then searched for. `app/scripts/controllers/main/MainController.js:208-217` removes one leading and one trailing double quote — either on its own as well as both — and sets `exactMatch` when that removal changed the text, so each row is one arm of that single derivation. */
 const QUOTED_INPUTS: readonly {
   readonly label: string;
   readonly typed: string;
@@ -62,13 +55,11 @@ describe('GlobalSearchComponent', () => {
   let fixture: ComponentFixture<GlobalSearchComponent>;
   let component: GlobalSearchComponent;
 
-  /** Every payload the control has emitted, in emission order. */
   let emitted: GlobalSearchSubmission[];
 
   // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps every assertion below type-checked and confines the boundary cast to this line (Rule 1 clause 4).
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
 
-  /** The text field, which is the only `<input>` the control renders. */
   const field = (): HTMLInputElement => {
     const input = host().querySelector('input');
     if (input === null) {
@@ -168,8 +159,7 @@ describe('GlobalSearchComponent', () => {
   });
 
   it('names the selector for the search scope it chooses, not for the client list filter', () => {
-    // The selector narrows a search, so it is named for the scope it chooses rather than for the client list's own "Filter", which named the wrong control. The name now says what the control does, and it is a literal because no shipped bundle
-    // carries a key for the scope control itself — the shipped scope keys name the individual options — while a key invented here would raise a missing-translation warning on every render.
+    // The selector narrows a search, so it is named for the scope it chooses rather than for the client list's own "Filter", which named the wrong control. The name now says what the control does, and it is a literal because no shipped bundle carries a key for the scope control itself — the shipped scope keys name the individual options — while a key invented here would raise a missing-translation warning on every render.
     expect(selector().getAttribute('aria-label')).toBe(SCOPE_LABEL_TEXT);
     expect(selector().getAttribute('aria-label')).not.toBe('Filter');
     expect(SCOPE_LABEL_TEXT).toBe('Search scope');

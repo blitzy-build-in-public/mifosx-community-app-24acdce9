@@ -77,10 +77,9 @@ export class DataTableComponent<TRow> {
     return link === null ? null : link(row);
   }
 
-  /** Opens a row from the keyboard: Enter or Space on the focused row activates the row's own click, so the keyboard reaches exactly the destination, the request and the error handling a pointer reaches — one navigation per key press, and no second
-   * routing path to keep in agreement with `RouterLink` (Rule 1 clause 5, hash routing through the router). Space's default is cancelled once the row is known to open something, because that default scrolls the page behind the row; Enter has no
-   * default action on a table row. A row with no destination ({@link rowLink} `null`) is left entirely alone: nothing navigates and not even the key's default is touched. @param row The row the key was pressed on. @param event The row's key event,
-   * whose default is cancelled when it is Space and whose current target is the row element the activation is dispatched on. */
+  /** Opens a row from the keyboard: Enter or Space on the focused row activates the row's own click, so the keyboard reaches exactly the destination, the request and the error handling a pointer reaches — one navigation per key press, and no second routing path to keep in agreement with `RouterLink` (Rule 1 clause 5, hash routing through the router). Space's default is cancelled once the row is known to open something, because that default scrolls the page behind the row; Enter has no default action on a table row. A row with no destination ({@link rowLink} `null`) is left entirely alone: nothing navigates and not even the key's default is touched.
+   * @param row The row the key was pressed on.
+   * @param event The row's key event, whose default is cancelled when it is Space and whose current target is the row element the activation is dispatched on. */
   protected activateRow(row: TRow, event: Event): void {
     if (!(event instanceof KeyboardEvent) || this.rowTarget(row) === null) {
       return;

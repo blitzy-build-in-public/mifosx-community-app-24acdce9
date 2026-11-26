@@ -5,6 +5,7 @@ import { catchError, firstValueFrom, throwError, type Observable } from 'rxjs';
 import { AppConfigService } from '../config/app-config.service';
 import { ApiError, toDisplayableFailure } from '../http/api-error';
 import type { AuthResponse, SessionData, SessionUserResponse } from './session.model';
+import type { ApiBaseUrls } from './session-origin';
 import { SessionService, type SessionUserReader } from './session.service';
 
 /** The body of `POST /authentication`, the only credential exchange this application performs (legacy `app/scripts/services/AuthenticationService.js:123`): two members and no others, so the request the parity comparison reads is unchanged (Rule 1 clauses 2 and 3). */
@@ -82,11 +83,10 @@ export class AuthService {
   /** The account name the navigation bar labels its user menu with — `username` from `GET /users/{id}` — or `null` before a restore has resolved one. */
   readonly username: Signal<string | null> = this.sessions.username;
 
-  /**
-   * Authenticates with Fineract and puts the resulting session into effect: `POST /authentication`, the checked answer written as the legacy entry, then the restore that issues `GET /users/{id}`; an answer that cannot describe a session rejects before anything is kept (AAP 0.7.1 `login`, AAP 0.10.1 W1).
+  /** Authenticates with Fineract and puts the resulting session into effect: `POST /authentication`, the checked answer written as the legacy entry, then the restore that issues `GET /users/{id}`; an answer that cannot describe a session rejects before anything is kept (AAP 0.7.1 `login`, AAP 0.10.1 W1).
    *
-   * A restore that leaves no session in effect rejects the login with the failure that caused it — the `ApiError` the interceptor built from the failed `GET /users/{id}`, or {@link NO_SESSION_AFTER_SIGN_IN} when nothing failed — so a correct password never ends in an unexplained return to the login form once `authGuard` reads the withdrawn session. The 4xx the interceptor deliberately leaves silent is the case this closes (AAP 0.14.2 "Error handling"); a 5xx or transport fault reaches the caller as the same `ApiError` its one notification already reported. The written entry stands or falls with that restore (AAP 0.4.2): status 401 removes it, and so does status 0 — the form a cross-origin 401 arrives in when the browser cannot read the answer, which a genuine transport fault is indistinguishable from — while every other failure leaves it where the interceptor's 401 branch can act on it.
-   */
+   * A restore that leaves no session in effect rejects the login with the failure that caused it — the `ApiError` the interceptor built from the failed `GET /users/{id}`, or {@link NO_SESSION_AFTER_SIGN_IN} when nothing failed — so a correct password never ends in an unexplained return to the login form once `authGuard` reads the withdrawn session. The 4xx the interceptor deliberately leaves silent is the case this closes (AAP 0.14.2 "Error handling"); a 5xx or transport fault reaches the caller as the same `ApiError` its one notification already reported. The written entry stands or falls with that restore (AAP 0.4.2): status 401 removes it, and so does status 0 — the form a cross-origin 401
+   * arrives in when the browser cannot read the answer, which a genuine transport fault is indistinguishable from — while every other failure leaves it where the interceptor's 401 branch can act on it. */
   async login(username: string, password: string): Promise<void> {
     const request: AuthenticationRequest = { username, password };
 
@@ -100,10 +100,10 @@ export class AuthService {
       throw new ApiError(MALFORMED_AUTHENTICATION_RESPONSE, 200);
     }
 
-    this.sessions.write(session);
+    // The credential is bound to the base the exchange itself was made against, so only that origin may be presented with it later (AAP 0.4.4 decision 5, Rule 1 clause 9).
+    this.sessions.write(session, this.config.config.apiBaseUrl);
 
-    // The cause of this call's own projection read is kept local to it, never in instance state, so two logins in flight cannot read each other's failure. The reader rethrows it unchanged, which leaves `SessionService.restore()`'s `Promise<boolean>`
-    // contract alone: it still resolves `false`, and it removes the written entry for a refused credential (status 401, or the status 0 a cross-origin 401 arrives as) while every other failure leaves that entry in place.
+    // The cause of this call's own projection read is kept local to it, never in instance state, so two logins in flight cannot read each other's failure. The reader rethrows it unchanged, which leaves `SessionService.restore()`'s `Promise<boolean>` contract alone: it still resolves `false`, and it removes the written entry for a refused credential (status 401, or the status 0 a cross-origin 401 arrives as) while every other failure leaves that entry in place.
     const captured: { cause?: unknown } = {};
 
     const readProjection: SessionUserReader = (userId: number) =>
@@ -114,22 +114,27 @@ export class AuthService {
         }),
       );
 
-    if (await this.sessions.restore(readProjection)) {
+    if (await this.sessions.restore(this.credentialBases(), readProjection)) {
       return;
     }
 
-    // No session is in effect, so the login did not happen: resolving would navigate a screen an empty session then sends straight back here with nothing said — what a silent 4xx made indistinguishable from a refused credential
-    // (AAP 0.14.2 "Error handling": every HTTP call path ends in a rendered message). The status the failure arrived with is kept, so a 4xx is painted inline by the screen and a 5xx or transport fault is left to the interceptor's one notification.
-    // The no-cause case carries status 200 like the malformed-answer refusal above, the marker this codebase uses for a locally raised error that no HTTP answer explains. This is a deliberate difference from legacy, which shows the user nothing on
-    // this path (Rule 1 clause 3): AAP 0.14.2 requires a rendered failure, and the sign-in form's one error region is where it is rendered.
+    // No session is in effect, so the login did not happen: resolving would navigate a screen an empty session then sends straight back here with nothing said — what a silent 4xx made indistinguishable from a refused credential (AAP 0.14.2 "Error handling": every HTTP call path ends in a rendered message). The status the failure arrived with is kept, so a 4xx is painted inline by the screen and a 5xx or transport fault is left to the interceptor's one notification. The no-cause case carries status 200 like the malformed-answer refusal above, the marker this codebase uses for a locally raised error that no HTTP answer explains. This is a deliberate difference from legacy, which shows the user
+    // nothing on this path (Rule 1 clause 3): AAP 0.14.2 requires a rendered failure, and the sign-in form's one error region is where it is rendered.
     throw 'cause' in captured
       ? toDisplayableFailure(captured.cause)
       : new ApiError(NO_SESSION_AFTER_SIGN_IN, 200);
   }
 
-  /** Resumes the session a stored legacy entry describes by re-reading `GET /users/{id}`, called once from the app initializer before the first navigation (AAP 0.3.4 claim 9; AAP 0.7.1 `restore`); a failed projection resolves `false` rather than rejecting, leaving the gate closed. */
+  /** Resumes the session a stored legacy entry describes by re-reading `GET /users/{id}`, called once from the app initializer before the first navigation (AAP 0.3.4 claim 9; AAP 0.7.1 `restore`); a failed projection resolves `false` rather than rejecting, leaving the gate closed, and so does a stored credential recorded against another API origin (AAP 0.4.4 decision 5). */
   async restore(): Promise<boolean> {
-    return this.sessions.restore(this.readUser);
+    return this.sessions.restore(this.credentialBases(), this.readUser);
+  }
+
+  /** The two API bases `SessionService.restore()` judges a stored credential against: the base this page resolved, which every request is composed from, and the base the served `assets/config.json` named, which no page URL can change and is therefore the only one an entry with no recorded origin may be held to (AAP 0.4.4 decision 5, Rule 1 clause 9). The resolved base stands in when the served one was never published, which only a configuration that did not load can produce. */
+  private credentialBases(): ApiBaseUrls {
+    const resolved = this.config.config.apiBaseUrl;
+
+    return { resolved, served: this.config.servedApiBaseUrl() ?? resolved };
   }
 
   /** Ends the session: the stored entry, the signals and the permission list go through `SessionService`, and the `Authorization` header disappears with them; no HTTP call and no navigation (AAP 0.7.1 `logout`). */

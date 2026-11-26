@@ -1,28 +1,4 @@
-<!--
-  The edit-client screen (`#/editclient/:id`): the client's own name and contact fields and, for an active client, its activation date, above the cancel and save controls (AAP 0.7.3 row "Client list
-  and edit"; AAP 0.7.4 screens; AAP 0.8.2 feature route `editclient/:id`). Every visual value comes from the global Bootstrap 3 layer `web-ng/src/styles.scss` compiles, so this file carries no style,
-  no colour and no pixel: `.container-fluid` and `.row`/`.col-md-*` are the page and its grid, the card and its heading band come from `app-panel-card` (AAP 0.2.3 row `PanelCard`), `.panel-body` its
-  13px body, `.form-group`/`.control-label` the field layout, `.form-control` the legacy fixed-height input, `.btn.btn-primary` the brand fill, `.btn.btn-default` the cancel control and
-  `.alert.alert-danger` the failure banner (Rule 1 clause 6; AAP 0.5.2), with `span.required` the legacy marker rule the global stylesheet carries.
-
-  Field ids and `name` attributes are the legacy form's own where the two screens share a field — `officeId`, `staffId`, `firstname`, `lastname`, `fullname`, `externalId`, `mobileNo`,
-  `activationDate`, `cancel`, `save` (`app/views/clients/editclient.html`) — so the parity harness addresses the same controls on both applications and a label's `for` points at the control it
-  names.
-
-  One name set renders at a time: an entity is named by `fullname` alone and a person by `firstname` and `lastname`, and the server rejects a body carrying both, so the branch keeps the posted set
-  and the rendered set one decision. The required markers are exactly the legacy form's — the person's two names, the entity's name and an active client's activation date — and no other control is
-  marked or validated, because Fineract alone decides what an entry may be (Rule 1 clause 3; AAP 0.4.4 decision 6).
-
-  Captions are the legacy bundle's own keys, translated here; the one untranslated string is Fineract's own failure message, rendered verbatim above the form (Rule 1 clause 9). The first row is
-  legacy's own: the record's office, rendered read-only exactly as the legacy `disabled` select shows it, because `PUT /clients/{id}` refuses an `officeId` and legacy never posts one either; and the
-  loan officer, whose id is posted as `staffId` because the fork declares it in `CLIENT_UPDATE_REQUEST_DATA_PARAMETERS` and validates it with `ignoreIfNull().longGreaterThanZero()`
-  (AAP 0.7.2 `ClientEditRequest`; Rule 1 clauses 2 and 3). The controls the legacy template also draws — account number, legal form, gender, client type, classification, date of birth,
-  incorporation details, submission date, middlename, isStaff — stay out because `ClientEditRequest` declares none of them, and rendering a control that cannot post would misrepresent what saving
-  does (AAP 0.7.2).
-
-  The Cancel href binds `clientId()`, the id the URL names now, because the router reuses this component when the URL moves from one `#/editclient/{id}` to another: the component resets and
-  re-reads on each route emission, so the link can never point at the record the screen has moved away from.
--->
+<!-- The edit-client screen (`#/editclient/:id`): the client's own name and contact fields and, for an active client, its activation date, above the cancel and save controls (AAP 0.7.3 row "Client list and edit"; AAP 0.7.4 screens; AAP 0.8.2 feature route `editclient/:id`). Every visual value comes from the global Bootstrap 3 layer `web-ng/src/styles.scss` compiles, so this file carries no style, no colour and no pixel: `.container-fluid` and `.row`/`.col-md-*` are the page and its grid, the card and its heading band come from `app-panel-card` (AAP 0.2.3 row `PanelCard`), `.panel-body` its 13px body, `.form-group`/`.control-label` the field layout, `.form-control` the legacy fixed-height input, `.btn.btn-primary` the brand fill, `.btn.btn-default` the cancel control and `.alert.alert-danger` the failure banner (Rule 1 clause 6; AAP 0.5.2), with `span.required` the legacy marker rule the global stylesheet carries. Field ids and `name` attributes are the legacy form's own where the two screens share a field — `officeId`, `staffId`, `firstname`, `lastname`, `fullname`, `externalId`, `mobileNo`, `activationDate`, `cancel`, `save` (`app/views/clients/editclient.html`) — so the parity harness addresses the same controls on both applications and a label's `for` points at the control it names. One name set renders at a time: an entity is named by `fullname` alone and a person by `firstname` and `lastname`, and the server rejects a body carrying both, so the branch keeps the posted set and the rendered set one decision. The required markers are exactly the legacy form's — the person's two names, the entity's name and an active client's activation date — and no other control is marked or validated, because Fineract alone decides what an entry may be (Rule 1 clause 3; AAP 0.4.4 decision 6). Captions are the legacy bundle's own keys, translated here; the one untranslated string is Fineract's own failure message, rendered verbatim above the form (Rule 1 clause 9). The first row is legacy's own: the record's office, rendered read-only exactly as the legacy `disabled` select shows it, because `PUT /clients/{id}` refuses an `officeId` and legacy never posts one either; and the loan officer, whose id is posted as `staffId` because the fork declares it in `CLIENT_UPDATE_REQUEST_DATA_PARAMETERS` and validates it with `ignoreIfNull().longGreaterThanZero()` (AAP 0.7.2 `ClientEditRequest`; Rule 1 clauses 2 and 3). The controls the legacy template also draws — account number, legal form, gender, client type, classification, date of birth, incorporation details, submission date, middlename, isStaff — stay out because `ClientEditRequest` declares none of them, and rendering a control that cannot post would misrepresent what saving does (AAP 0.7.2). The Cancel href binds `clientId()`, the id the URL names now, because the router reuses this component when the URL moves from one `#/editclient/{id}` to another: the component resets and re-reads on each route emission, so the link can never point at the record the screen has moved away from. -->
 <section class="container-fluid">
   <div class="row">
     <!-- The column holds the form's states, so it is the region a read in flight marks busy: assistive technology is told the record's own content is being replaced rather than that the whole page is busy (AAP 0.7.4 state rules; AAP 0.2.4 records that the design carries no loader). -->
@@ -45,14 +21,7 @@
             @if (ready()) {
               <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
                 <fieldset>
-                  <!--
-                    Legacy's own first row (`app/views/clients/editclient.html`): the office the record
-                    is filed under, shown but not offered, and the loan officer the update accepts as
-                    `staffId`. The office control is disabled in the component, exactly as the legacy
-                    select carries `disabled="disabled"`; both lists are the seed read's own options, in
-                    its order, and the officer's prompt is legacy's own caption, which returns the
-                    selection to empty so an assignment can be cleared.
-                  -->
+                  <!-- Legacy's own first row (`app/views/clients/editclient.html`): the office the record is filed under, shown but not offered, and the loan officer the update accepts as `staffId`. The office control is disabled in the component, exactly as the legacy select carries `disabled="disabled"`; both lists are the seed read's own options, in its order, and the officer's prompt is legacy's own caption, which returns the selection to empty so an assignment can be cleared. -->
                   <div class="row">
                     <div class="col-md-6">
                       <label class="control-label" for="officeId">
@@ -182,18 +151,7 @@
                   </div>
 
                   @if (isActive()) {
-                    <!--
-                      An active client carries an activation date, which the legacy form renders and
-                      marks required for that state; a pending client has none, and Fineract rejects
-                      an activation date sent with one. The native date input is the registered
-                      replacement for the legacy jQuery datepicker (AAP 0.10.5 item 1).
-
-                      The field owns its own `.form-group` and `.has-error`, so the message for its
-                      invalid state is projected into the slot it renders after the control: without
-                      it a cleared activation date would report itself by colour alone, and the form
-                      refuses to submit while it is empty. The wording is the same
-                      `label.requiredfield` string every other required control on this screen shows.
-                    -->
+                    <!-- An active client carries an activation date, which the legacy form renders and marks required for that state; a pending client has none, and Fineract rejects an activation date sent with one. The native date input is the registered replacement for the legacy jQuery datepicker (AAP 0.10.5 item 1). The field owns its own `.form-group` and `.has-error`, so the message for its invalid state is projected into the slot it renders after the control: without it a cleared activation date would report itself by colour alone, and the form refuses to submit while it is empty. The wording is the same `label.requiredfield` string every other required control on this screen shows. -->
                     <div class="row">
                       <div class="col-md-6">
                         <label class="control-label" for="activationDate">

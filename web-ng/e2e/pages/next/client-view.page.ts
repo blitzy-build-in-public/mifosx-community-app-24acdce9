@@ -11,9 +11,7 @@ export interface ClientHeaderView {
   readonly clientNumber: string;
   /** The external identifier, or `''` when the client has none — never a placeholder. */
   readonly externalId: string;
-  /** The assigned staff member's name, or `''` when no staff member is assigned. */
   readonly staff: string;
-  /** The indicator's colour class — `status-active`, `status-pending`, `status-closed`, `status-other`, or `''`. */
   readonly statusClass: string;
 }
 
@@ -21,7 +19,6 @@ export interface ClientHeaderView {
 export interface AccountRow {
   readonly accountNo: string;
   readonly product: string;
-  /** The row's indicator colour class, or `''` when the row paints none. */
   readonly statusClass: string;
   readonly balance: string;
   readonly cells: readonly string[];

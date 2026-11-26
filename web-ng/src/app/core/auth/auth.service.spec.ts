@@ -10,7 +10,7 @@ import { fineractInterceptor } from '../http/fineract.interceptor';
 import { AuthService, type AuthenticationRequest } from './auth.service';
 import { PermissionsService } from './permissions.service';
 import type { AuthResponse, SessionData, SessionUserResponse } from './session.model';
-import { SessionService, sessionStorageKey } from './session.service';
+import { SessionService, LEGACY_STORAGE_PREFIX, SESSION_ORIGIN_ENTRY, sessionStorageKey } from './session.service';
 
 /** Contract and behaviour spec for `AuthService`, the application's only credential exchange and the proof of workflow W1 (AAP 0.10.1: `POST /authentication`, then `GET /users/{id}`); a restore that leaves no session in effect rejects the login with the projection failure's own `ApiError`, so a failed post-login read is never an unexplained return to the login form (AAP 0.14.2). */
 
@@ -19,7 +19,6 @@ const API_BASE_URL = 'https://localhost:8443';
 const API_PATH = '/fineract-provider/api/v1';
 const API_ROOT = API_BASE_URL + API_PATH;
 
-/** The one separator the expected URLs are joined with, so expectations build URLs one way only. */
 const SEPARATOR = '/';
 
 /** `POST` target of the login (AAP 0.7.3 row "W1 login and logout": `AuthenticationService`). */
@@ -28,12 +27,10 @@ const AUTHENTICATION_URL = API_ROOT + SEPARATOR + 'authentication';
 /** Path segment of the restore's read (AAP 0.7.3 row "W1 login and logout": `userResource`). */
 const USERS_SEGMENT = 'users';
 
-/** The restore's read target for one user id: `GET /users/{id}` with the id as a path segment. */
 function usersUrl(userId: number | string): string {
   return [API_ROOT, USERS_SEGMENT, userId].join(SEPARATOR);
 }
 
-/** The authenticated user of every fixture: the id the restore reads and the name the menu shows. */
 const USER_ID = 42;
 const USERNAME = 'mifos';
 
@@ -43,7 +40,6 @@ const SECRET_PARTS = ['correct', 'horse', 'battery', 'staple'];
 /** The stand-in authentication key, joined from parts for the same reason as the password. */
 const KEY_PARTS = ['Zm9v', 'YmFy', 'OnNlY3JldA'];
 
-/** The permissions Fineract returns on the fixture login, and the ones the gate must then answer. */
 const GRANTED: readonly string[] = ['READ_CLIENT', 'CREATE_CLIENT'];
 
 /** The composed legacy storage key, `mifosX` + `sessionData`: the string a legacy screen reads (AAP 0.3.4 claim 9); the bare spelling is never written. */
@@ -55,14 +51,12 @@ function submittedPassword(): string {
   return SECRET_PARTS.join('-');
 }
 
-/** The `POST /authentication` answer the fixtures use, with the flags absent unless a test adds them. */
 function authResponse(overrides: Partial<AuthResponse> = {}): AuthResponse {
   return {
     userId: USER_ID, username: USERNAME, base64EncodedAuthenticationKey: KEY_PARTS.join(''), permissions: [...GRANTED],
     ...overrides, };
 }
 
-/** The `GET /users/{id}` as the restore reads it: the id and the account name, with no permission list. */
 function projection(): SessionUserResponse {
   return { id: USER_ID, username: USERNAME };
 }
@@ -91,9 +85,14 @@ function expectedSession(overrides: Partial<SessionData> = {}): SessionData {
     userId: USER_ID, authenticationKey: KEY_PARTS.join(''), userPermissions: [...GRANTED], ...overrides, };
 }
 
-/** The stub `apiUrl()`: the service owns no host, so the configuration supplies one (AAP 0.4.2, Rule 2). */
-const apiConfig: Pick<AppConfigService, 'apiUrl'> = {
+/** The stub configuration: the composition every URL is built from, the resolved configuration the login records its credential origin from, and the served base the restore judges a stored entry against (AAP 0.4.2, Rule 2, AAP 0.4.4 decision 5). */
+const apiConfig: Pick<AppConfigService, 'apiUrl' | 'config' | 'servedApiBaseUrl'> = {
   apiUrl: (path: string): string => `${API_ROOT}${SEPARATOR}${path}`,
+  // Read lazily, so the one configuration fixture this spec declares below answers here too and the resolved base has no second copy to drift from.
+  get config(): ResolvedConfig {
+    return resolvedConfig();
+  },
+  servedApiBaseUrl: signal<string | null>(API_BASE_URL).asReadonly(),
 };
 
 /** Matches one request by method and exact URL; the parameter set and headers are asserted separately. */
@@ -101,7 +100,6 @@ function byMethodAndUrl(method: 'GET' | 'POST', url: string) {
   return (request: HttpRequest<unknown>): boolean => request.method === method && request.url === url;
 }
 
-/** What one login's mock backend answers, and which requests it must receive. */
 interface LoginAnswers {
   /** The password the test submits; the assertion on the body compares this same value. */
   readonly password: string;
@@ -228,6 +226,20 @@ describe('AuthService', () => {
     expect(sessions.read()).toEqual(expectedSession());
     expect(window.localStorage.getItem(BARE_KEY)).toBeNull();
     expect(storedSession()).not.toBeNull();
+  });
+
+  it('records the resolved base\'s origin as the credential\'s origin, beside the session entry', async () => {
+    await loginThrough(httpMock, service, { password: submittedPassword() });
+
+    // The key is bound to the base the exchange itself was made against, in the sibling entry, so no page URL naming another origin can be presented with it (AAP 0.4.4 decision 5, Rule 1 clause 9).
+    expect(sessions.credentialOrigin()).toBe(API_BASE_URL);
+    expect(
+      window.localStorage.getItem(sessionStorageKey(LEGACY_STORAGE_PREFIX, SESSION_ORIGIN_ENTRY)),
+    ).toBe(API_BASE_URL);
+    // The session entry itself stays exactly the three legacy fields a legacy screen reads (AAP 0.7.2 row `SessionData`).
+    expect(Object.keys(storedSession() as SessionData)).toEqual([
+      'userId', 'authenticationKey', 'userPermissions',
+    ]);
   });
 
   it('keeps no copy of the submitted password', async () => {
@@ -423,7 +435,6 @@ const SERVER_MESSAGE = 'Invalid credentials';
 /** The resolved configuration's shape, taken from the accessor that publishes it rather than declared a second time here, so a member the interceptor starts reading fails the build in this spec as well. */
 type ResolvedConfig = AppConfigService['config'];
 
-/** The configuration the interceptor reads: the tenant it stamps on every request, and the API root. */
 function resolvedConfig(): ResolvedConfig {
   return {
     apiBaseUrl: API_BASE_URL,
@@ -443,13 +454,17 @@ const routerStub = {
   navigate: (): Promise<boolean> => Promise.resolve(true),
 };
 
-/** The `AppConfigService` surface the interceptor uses: the configuration signal it reads the tenant from, and the composition every service shares. */
-function interceptorConfig(): Pick<AppConfigService, 'apiUrl' | 'changes'> {
+/** The `AppConfigService` surface the interceptor and the login use: the configuration signal it reads the tenant from, the resolved configuration the credential origin is recorded from, the served base the restore is judged against, and the composition every service shares. */
+function interceptorConfig(): Pick<
+  AppConfigService, 'apiUrl' | 'changes' | 'config' | 'servedApiBaseUrl'
+> {
   const resolved = signal<ResolvedConfig | null>(resolvedConfig());
 
   return {
     changes: resolved.asReadonly(),
     apiUrl: (path: string): string => `${API_ROOT}${SEPARATOR}${path}`,
+    config: resolvedConfig(),
+    servedApiBaseUrl: signal<string | null>(API_BASE_URL).asReadonly(),
   };
 }
 

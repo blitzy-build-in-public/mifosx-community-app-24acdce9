@@ -23,16 +23,12 @@ const WARNING_SECONDS = 10;
 /** The legacy keepalive interval in minutes (`KEEPALIVE_INTERVAL = 15 * 60`). */
 const KEEPALIVE_MINUTES = 15;
 
-/** 1 800 000 ms — when `timeout$` must fire under the legacy durations. */
 const IDLE_DELAY_MS = IDLE_MINUTES * MS_PER_MINUTE;
 
-/** 1 790 000 ms — when `warning$` must fire: the idle duration less the warning. */
 const WARNING_DELAY_MS = IDLE_DELAY_MS - WARNING_SECONDS * MS_PER_SECOND;
 
-/** 900 000 ms — one keepalive heartbeat. */
 const KEEPALIVE_DELAY_MS = KEEPALIVE_MINUTES * MS_PER_MINUTE;
 
-/** 600 000 ms — the instant the `reset()` case re-arms the schedule from. */
 const TEN_MINUTES_MS = 10 * MS_PER_MINUTE;
 
 /** The `AppConfigService` surface `IdleService` reads. */

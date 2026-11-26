@@ -28,7 +28,6 @@ export interface ClientSnapshot {
   readonly displayName: string;
   /** Loans in `GET /clients/{id}/accounts`; `0` when the payload held no loan list. */
   readonly loanAccountCount: number;
-  /** Savings accounts in the same payload; `0` when it held none. */
   readonly savingsAccountCount: number;
   /** Identifiers in `GET /clients/{id}/identifiers`; `0` when the client has none. */
   readonly identifierCount: number;
@@ -80,7 +79,6 @@ export interface StateDiff {
 }
 /** Raised when a snapshot read answers with anything but a usable 2xx JSON body; it carries the resource path and HTTP status (`0` when no response arrived) and deliberately no body, header or credential (Rule 1 clause 9). */
 export class StateSnapshotError extends Error {
-  /** The resource the read asked for, e.g. `/loans/45?associations=all` — a path, never a host. */
   readonly endpoint: string;
   readonly status: number;
 

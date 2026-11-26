@@ -14,7 +14,7 @@ import {
   provideHttpClientTesting,
   type TestRequest,
 } from '@angular/common/http/testing';
-import { EnvironmentInjector, runInInjectionContext, signal, type WritableSignal } from '@angular/core';
+import { EnvironmentInjector, computed, runInInjectionContext, signal, type WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { NEVER, firstValueFrom, of, throwError, type Observable } from 'rxjs';
@@ -31,34 +31,35 @@ import { fineractInterceptor } from './fineract.interceptor';
 /** Tenant identifier the resolved configuration reports; the value is configuration, not a credential. */
 const TENANT = 'default';
 
+/** The API origin the stand-in configuration names: scheme, host and port, because the credential is presented only to the origin it was issued against and a relative stub would have no origin to compare (AAP 0.4.4 decision 5). */
+const API_ORIGIN = 'https://fineract.example:8443';
+
 /** Stand-in API root the stubbed `apiUrl()` prefixes, so this spec names no real endpoint. */
-const API_ROOT = 'api-root';
+const API_ROOT = `${API_ORIGIN}/api/v1`;
 
-/** Stand-in resource URL of an ordinary Fineract request. */
-const CLIENTS_URL = 'api-root/clients';
+const CLIENTS_URL = `${API_ROOT}/clients`;
 
-/** Stand-in URL of the authentication request, which the stubbed `apiUrl()` also composes. */
-const AUTHENTICATION_URL = 'api-root/authentication';
+const AUTHENTICATION_URL = `${API_ROOT}/authentication`;
 
-/** The route a 401 interrupts, carried to the login screen as `returnUrl`. */
+/** The origin a crafted page URL would name in place of the one the session was issued against: the F01 case, and a host this spec sends nothing to. */
+const OTHER_ORIGIN = 'https://other.example:4421';
+
 const ATTEMPTED_URL = '/viewclient/2';
 
 /** A second protected URL of the same origin, so a burst of simultaneous failures is three distinct requests rather than three readings of one. */
-const LOANS_URL = 'api-root/loans';
+const LOANS_URL = `${API_ROOT}/loans`;
 
 /** A request the application makes to its own origin rather than to Fineract: the translation bundle `TranslateHttpLoader` fetches while the application starts, which must travel with no credential (AAP 0.4.2, Rule 1 clause 9). */
 const BUNDLE_URL = 'global-translations/locale-en.json';
 
 /** A path that begins with the API origin's characters without sitting under it: a match that is not a segment boundary would send the credential here too. */
-const OUTSIDE_ORIGIN_URL = 'api-rootish/clients';
+const OUTSIDE_ORIGIN_URL = `${API_ROOT}ish/clients`;
 
 /** The allowlisted `GET /users/{id}` the recovery re-validates a refused credential with (AAP 0.7.3 W1), composed the way the stubbed `apiUrl()` composes it. */
-const USERS_URL = 'api-root/users';
+const USERS_URL = `${API_ROOT}/users`;
 
-/** The Fineract user id the fixture session carries, which is the `{id}` the re-validation reads. */
 const USER_ID = 7;
 
-/** The one re-validation read the mock backend answers, at the URL the inspected interceptor resolves. */
 const PROBE_URL = `${USERS_URL}/${USER_ID}`;
 
 /** How long the interceptor waits for an answer, in milliseconds: the bound a case advances a fake clock past to fail a request no server answered. */
@@ -83,10 +84,8 @@ const SERVER_MESSAGE = 'The maximum allowed principal is 10,000';
 /** The generic sentence Fineract puts in the envelope's top-level `defaultUserMessage` beside a validation failure's own field-level text; it must never displace that text (AAP 0.4.4 decision 6). */
 const GENERIC_MESSAGE = 'Validation errors exist.';
 
-/** The sentence `api-error.ts` shows for a failure whose body carries no message of its own. */
 const UNMAPPED_FAILURE_TEXT = 'The request could not be completed.';
 
-/** The resolved configuration the interceptor reads, with only the tenant exercised. */
 function configFixture(): AppConfig {
   return {
     apiBaseUrl: API_ROOT,
@@ -109,18 +108,17 @@ function sessionFixture(): SessionData {
   };
 }
 
-/** Answers the request as Fineract would, echoing the request the interceptor handed on. */
 const echo: HttpHandlerFn = (request) => of(new HttpResponse({ status: 200, body: request }));
 
-/** Fails the request with the status and body a Fineract error response carries. */
 function failing(status: number, body?: unknown): HttpHandlerFn {
   return () => throwError(() => new HttpErrorResponse({ status, error: body }));
 }
 
-/** The interceptor's collaborators, and the interceptor bound to them. */
 interface Harness {
   readonly config: WritableSignal<AppConfig | null>;
   readonly session: WritableSignal<SessionData | null>;
+  /** The origin the session's credential was issued against, which a case sets when the page resolved its base elsewhere (AAP 0.4.4 decision 5). */
+  readonly issuedAgainst: WritableSignal<string | null>;
   readonly clear: ReturnType<typeof vi.fn>;
   readonly router: { url: string; navigated: boolean; navigate: ReturnType<typeof vi.fn> };
   readonly notifications: NotificationService;
@@ -135,6 +133,9 @@ interface Harness {
 function harnessFor(): Harness {
   const config = signal<AppConfig | null>(configFixture());
   const session = signal<SessionData | null>(null);
+  // A credential and its origin stand or fall together: `SessionService` publishes the origin with the session and empties both on clear, so the double derives one from the other and defaults it to the origin these requests go to.
+  const issuedAgainst = signal<string | null>(API_ORIGIN);
+  const credentialOrigin = computed<string | null>(() => (session() === null ? null : issuedAgainst()));
   const clear = vi.fn((): void => session.set(null));
   const router = {
     url: '/clients',
@@ -158,7 +159,7 @@ function harnessFor(): Harness {
           apiUrl: (path: string) => `${API_ROOT}/${path}`,
         },
       },
-      { provide: SessionService, useValue: { session: session.asReadonly(), clear } },
+      { provide: SessionService, useValue: { session: session.asReadonly(), credentialOrigin, clear } },
       { provide: Router, useValue: router },
       { provide: NotificationService, useValue: notifications },
     ],
@@ -173,7 +174,7 @@ function harnessFor(): Harness {
   ): Observable<HttpEvent<unknown>> =>
     runInInjectionContext(injector, () => fineractInterceptor(request, handler));
 
-  return { config, session, clear, router, notifications, server, run };
+  return { config, session, issuedAgainst, clear, router, notifications, server, run };
 }
 
 /** The re-validation reads the mock backend has been asked for, so a case states how often the credential was re-validated rather than that some request was made. */
@@ -181,7 +182,6 @@ function revalidations(server: HttpTestingController): TestRequest[] {
   return server.match(PROBE_URL);
 }
 
-/** The request the handler received, read back off the body `echo` answered with. */
 function sentRequest(response: HttpEvent<unknown>): HttpRequest<unknown> {
   // The one cast in this spec: `echo` answers with the request itself as its body, which the response type states only as `unknown`.
   return (response as HttpResponse<unknown>).body as HttpRequest<unknown>;
@@ -205,7 +205,6 @@ const LOGIN_SCREEN_MESSAGE = 'The login screen did not open. Reload the page and
 
 /** The promise a refusing router rejects its navigation with, counting the rejection handlers the code under test attaches to it. */
 class RefusedNavigation extends Promise<boolean> {
-  /** How many rejection handlers have been attached to this navigation so far. */
   rejectionHandlers = 0;
 
   override catch<TResult = never>(
@@ -295,12 +294,28 @@ describe('fineractInterceptor', () => {
 
     const sent = sentRequest(await firstValueFrom(run(request)));
 
-    // The credential and the tenant datum belong to Fineract alone, so a request outside the configured API origin carries neither, however long the session has been in effect (AAP 0.4.2, Rule 1 clause 9).
+    // The credential and the tenant datum belong to Fineract alone, so a request outside the configured API carries neither, however long the session has been in effect (AAP 0.4.2, Rule 1 clause 9). The bundle is at the application's own origin and has no origin to match at all, while the second URL shares the API origin's scheme, host and port and is excluded by the segment boundary alone: the origin check would let it through on its own.
     expect(sent.headers.has(TENANT_HEADER)).toBe(false);
     expect(sent.headers.has(AUTHORIZATION_HEADER)).toBe(false);
     // ...and where a request goes is still the calling service's decision, not this layer's.
     expect(sent.url).toBe(url);
     expect(sent.url).toBe(request.url);
+  });
+
+  it('withholds the credential from a base the page URL named, and still sends the tenant', async () => {
+    const { run, session, issuedAgainst } = harnessFor();
+    const fixture = sessionFixture();
+    session.set(fixture);
+    // A crafted `?baseApiUrl=` link: this page resolved its base to another origin than the one the session was issued against, which is the case the finding demonstrated end to end (AAP 0.4.4 decision 5).
+    issuedAgainst.set(OTHER_ORIGIN);
+
+    const sent = sentRequest(await firstValueFrom(run(new HttpRequest('GET', CLIENTS_URL))));
+
+    expect(sent.headers.has(AUTHORIZATION_HEADER)).toBe(false);
+    // The tenant is configuration rather than session material, so the login exchange and every call must still reach whatever base the page named (AAP 0.10.4).
+    expect(sent.headers.get(TENANT_HEADER)).toBe(TENANT);
+    // The request itself is untouched: the page still talks to the base it resolved, just without the key (AAP 0.4.2).
+    expect(sent.url).toBe(CLIENTS_URL);
   });
 
   it('passes a request through untouched while the configuration is still resolving', async () => {
@@ -580,13 +595,35 @@ describe('fineractInterceptor', () => {
   });
 
   it('does not re-navigate while the login screen is showing', async () => {
-    const { run, clear, router } = harnessFor();
+    const { run, session, clear, router } = harnessFor();
+    // The session a sign-in has just written, refused by the read that follows it: the user is on the login screen the whole time.
+    session.set(sessionFixture());
     router.url = '/login';
 
     await rejectionOf(run(new HttpRequest('GET', CLIENTS_URL), failing(401)));
 
     expect(clear).toHaveBeenCalledTimes(1);
     expect(router.navigate).not.toHaveBeenCalled();
+  });
+
+  it('ends nothing when a 401 answers a request that carried no credential', async () => {
+    const { run, session, issuedAgainst, clear, router } = harnessFor();
+    session.set(sessionFixture());
+    // The key was withheld because the page resolved another origin, so the 401 is about a request that never presented the stored session (AAP 0.4.4 decision 5).
+    issuedAgainst.set(OTHER_ORIGIN);
+    router.url = ATTEMPTED_URL;
+
+    const error = await rejectionOf(run(new HttpRequest('GET', CLIENTS_URL), failing(401)));
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(401);
+    // The stored session belongs to the origin it was issued against, so it survives a refusal it never took part in (Rule 1 clause 9)...
+    expect(clear).not.toHaveBeenCalled();
+    expect(session()).not.toBeNull();
+    // ...while the user is still taken back to the login screen, which is where anyone without a credential for this base has to sign in again.
+    expect(router.navigate).toHaveBeenCalledWith(['/login'], {
+      queryParams: { returnUrl: ATTEMPTED_URL },
+    });
   });
 
   it('ends the session, returns to the login screen and says so when a status 0 failure is a refused credential', async () => {

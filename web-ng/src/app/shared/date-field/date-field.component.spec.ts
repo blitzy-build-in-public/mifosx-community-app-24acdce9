@@ -6,7 +6,6 @@ import { DateFieldComponent } from './date-field.component';
 
 /** Behavioural spec for `DateFieldComponent`, the native control that replaces the legacy jQuery datepicker (AAP 0.2.3 component inventory row `DateField`; AAP 0.5.4 gaps inventory row "Date picker"; AAP 0.10.5 item 1) (Rule 1 clause 3, AAP 0.4.4, Rule 1 clause 4). */
 
-/** The root form group, or a named failure when the template rendered none. */
 function formGroupOf(fixture: ComponentFixture<DateFieldComponent>): HTMLElement {
   const element: unknown = fixture.nativeElement.querySelector('.form-group');
   if (!(element instanceof HTMLElement)) {
@@ -15,7 +14,6 @@ function formGroupOf(fixture: ComponentFixture<DateFieldComponent>): HTMLElement
   return element;
 }
 
-/** The native date control, or a named failure when the template rendered none. */
 function dateInputOf(fixture: ComponentFixture<DateFieldComponent>): HTMLInputElement {
   const element: unknown = fixture.nativeElement.querySelector('input[type="date"]');
   if (!(element instanceof HTMLInputElement)) {
@@ -24,7 +22,6 @@ function dateInputOf(fixture: ComponentFixture<DateFieldComponent>): HTMLInputEl
   return element;
 }
 
-/** The label, or a named failure when the template rendered none. */
 function labelOf(fixture: ComponentFixture<DateFieldComponent>): HTMLLabelElement {
   const element: unknown = fixture.nativeElement.querySelector('.control-label');
   if (!(element instanceof HTMLLabelElement)) {
@@ -33,7 +30,6 @@ function labelOf(fixture: ComponentFixture<DateFieldComponent>): HTMLLabelElemen
   return element;
 }
 
-/** The control's value, or a named failure when it is not the `Date` the accessor promises. */
 function dateValueOf(control: FormControl<Date | null>): Date {
   const value = control.value;
   if (!(value instanceof Date)) {
@@ -51,7 +47,6 @@ describe('DateFieldComponent', () => {
   let fixture: ComponentFixture<DateFieldComponent>;
   let control: FormControl<Date | null>;
 
-  /** The date input of the fixture each test starts with. */
   const dateInput = (): HTMLInputElement => dateInputOf(fixture);
 
   beforeEach(async () => {

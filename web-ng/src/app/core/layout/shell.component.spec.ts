@@ -19,13 +19,11 @@ import { ShellComponent } from './shell.component';
 
 /** Behavioural spec for `ShellComponent` — AAP 0.2.3's `AppShell` row, AAP 0.7.1's `ShellComponent` contract and AAP 0.8.2's "Shell and navigation", and the consumer that makes `IdleService` live: AAP 0.1.1's first (AAP 0.11.1, Rule 1 clause 8, AAP 0.10.5, AAP 0.7.4). */
 
-/** The Fineract user id every fixture in this suite names. */
 const USER_ID = 42;
 
 /** The account name `GET /users/{id}` resolves, which is what the navbar must fall back to. */
 const ACCOUNT_NAME = 'mifos';
 
-/** The account name a host supplies through the shell's `userName` input, distinct from the above. */
 const SUPPLIED_NAME = 'supplied-by-shell';
 
 /** Stand-in for the shipped bundles: one distinct value per key, so an assertion can tell which key produced which text and can never pass on a raw dotted key (Rule 1 clause 6). */
@@ -54,16 +52,13 @@ const SPEC_BUNDLE_FR: Record<string, string> = {
   'label.button.stay.signed.in': 'Rester connecté',
 };
 
-/** The language the suite starts on: the fallback bundle every other language is completed from. */
 const BASE_LANG = 'en';
 
 /** The language a switch activates; one the application's own list offers (AAP 0.7.4). */
 const SWITCHED_LANG = 'fr';
 
-/** The window in which one pointer event may re-arm the idle clock, as `ShellComponent` documents it. */
 const POINTER_THROTTLE_MS = 1_000;
 
-/** The instant the pointer-throttle cases start their fake clock at: the epoch, so any value works. */
 const START_OF_WINDOW = new Date(0);
 
 /** The value `AuthService.session()` reports while a session is in effect (Rule 1 clause 9, Rule 1 clause 4). */
@@ -71,13 +66,10 @@ const SESSION_EFFECTIVE = { userId: USER_ID } as unknown as SessionData;
 
 /** A matched route node as the shell walks it: the two members the breadcrumb derivation reads out of the router's snapshot tree, and nothing else. */
 interface RouteNode {
-  /** The route's static `data`, which may declare `breadcrumb`. */
   readonly data: Record<string, unknown>;
-  /** The route the walk continues into. */
   readonly firstChild: RouteNode | null;
 }
 
-/** Builds one route node, with the child it leads to when the test needs a nested trail. */
 function routeNode(data: Record<string, unknown>, firstChild: RouteNode | null = null): RouteNode {
   return { data, firstChild };
 }
@@ -102,7 +94,6 @@ class AuthStub implements Pick<AuthService, 'session' | 'logout'> {
     this.endSession();
   });
 
-  /** Puts a session into effect, as a login or a restore does. */
   signIn(): void {
     this.current.set(SESSION_EFFECTIVE);
   }
@@ -115,19 +106,14 @@ class AuthStub implements Pick<AuthService, 'session' | 'logout'> {
 
 /** The half of `IdleService` the shell drives, with spies for the three commands and subjects for the two emissions, so a test decides exactly when the warning and the timeout arrive. */
 class IdleStub implements Pick<IdleService, 'start' | 'stop' | 'reset' | 'warning$' | 'timeout$'> {
-  /** The warning the real clock emits `warningSeconds` before the idle duration elapses. */
   readonly warning$ = new Subject<void>();
 
-  /** The timeout the real clock emits when the idle duration has elapsed. */
   readonly timeout$ = new Subject<void>();
 
-  /** Arms the schedule. */
   readonly start = vi.fn((): void => undefined);
 
-  /** Clears it. */
   readonly stop = vi.fn((): void => undefined);
 
-  /** Re-arms it from now, on activity. */
   readonly reset = vi.fn((): void => undefined);
 }
 
@@ -158,7 +144,6 @@ describe('ShellComponent', () => {
   // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps the assertions below type-checked and confines the boundary to this line (Rule 1 clause 4).
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
 
-  /** The rendered element with the given selector, or a named failure when nothing matches it. */
   function find<T extends Element>(selector: string): T {
     const element: unknown = host().querySelector(selector);
     if (element === null) {
@@ -167,12 +152,10 @@ describe('ShellComponent', () => {
     return element as T;
   }
 
-  /** The account name the user menu currently shows. */
   function userMenuLabel(): string {
     return find<HTMLElement>('#user-dropdown').textContent?.trim() ?? '';
   }
 
-  /** The crumb labels the breadcrumb currently renders, in trail order. */
   function crumbLabels(): readonly string[] {
     return Array.from(
       host().querySelectorAll('app-breadcrumb li'),

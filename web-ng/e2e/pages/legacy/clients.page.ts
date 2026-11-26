@@ -170,7 +170,6 @@ interface OptionPair {
 
 interface RowSnapshot {
   readonly cells: readonly string[];
-  /** Every cell's status-swatch class attribute, in column order; `''` where a cell has none. */
   readonly swatchClasses: readonly string[];
 }
 

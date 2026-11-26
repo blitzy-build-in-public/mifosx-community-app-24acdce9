@@ -396,10 +396,7 @@ export interface ChargeTemplate {
   };
 }
 
-/* Request bodies.
- * `POST`/`PUT` bodies are assembled by the forms, so, unlike the response models above, they are not `readonly`: a screen builds one member at a time from its form values. One convention holds for every one of them, and it is the one AAP 0.7.2
- * "Date handling" sets: a request body holds the values the form holds — each date a `Date | null`, `dateFormat` and `locale` required — and `loan.service.ts` converts each date with `toFineractDate(date, locale)` and fills `dateFormat` from
- * `AppConfig` and `locale` from `AppConfigService.activeLocale` at the boundary. No model stores a formatted date, and a body that omitted `dateFormat` or `locale` would not compile. */
+/* Request bodies. `POST`/`PUT` bodies are assembled by the forms, so, unlike the response models above, they are not `readonly`: a screen builds one member at a time from its form values. One convention holds for every one of them, and it is the one AAP 0.7.2 "Date handling" sets: a request body holds the values the form holds — each date a `Date | null`, `dateFormat` and `locale` required — and `loan.service.ts` converts each date with `toFineractDate(date, locale)` and fills `dateFormat` from `AppConfig` and `locale` from `AppConfigService.activeLocale` at the boundary. No model stores a formatted date, and a body that omitted `dateFormat` or `locale` would not compile. */
 
 /** The body `POST /loans` submits, and the same body `POST /loans?command=calculateLoanSchedule` previews (AAP 0.7.3, "W4 loan application"). */
 export interface LoanApplicationRequest {
@@ -591,8 +588,7 @@ export type LoanChargeActionRequest =
       locale: string;
     };
 
-/* Partial projections. The two payloads below are not modelled in full: each endpoint returns more than is read, and only the members listed here are read. Declaring just those meets Rule 1 clause 4 without `any` and without inventing members the
- * run never observed. */
+/* Partial projections. The two payloads below are not modelled in full: each endpoint returns more than is read, and only the members listed here are read. Declaring just those meets Rule 1 clause 4 without `any` and without inventing members the run never observed. */
 
 /** A partial projection of `GET /loans/{id}/template?templateType=approval` — the approval form's seed (AAP 0.7.3, "W5 approve and disburse"). */
 export interface LoanActionTemplate {

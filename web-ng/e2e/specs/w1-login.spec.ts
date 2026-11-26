@@ -9,6 +9,9 @@ import { API_PATH, LOCALE, readCredentials } from '../seed/fixtures';
 const LEGACY_SESSION_PREFIX = 'mifosX';
 const SESSION_ENTRY_NAME = 'sessionData';
 
+/** The sibling entry this application writes the API origin of a credential under, beside the session and under the same legacy prefix, so a session issued against one backend is never presented to another (AAP 0.4.4 decision 5, Rule 1 clause 9). The legacy baseline writes no such entry. */
+const SESSION_ORIGIN_ENTRY_NAME = 'sessionOrigin';
+
 /** Where the hash settles after a successful login. `#/clients` in this application (AAP 0.10.5 item 3); the legacy baseline may also settle on `#/home`, because `MainController.js:175` ends its authentication-success handler by navigating to the dashboard. */
 const NEXT_LANDING_HASH = '#/clients';
 const LEGACY_LANDING_HASHES: readonly string[] = ['#/clients', '#/home'];
@@ -65,6 +68,15 @@ function isSessionEntry(entry: SessionEntrySummary): boolean {
   return (
     key.startsWith(LEGACY_SESSION_PREFIX.toLowerCase()) &&
     key.includes(SESSION_ENTRY_NAME.toLowerCase())
+  );
+}
+
+/** Whether a `localStorage` entry is the API origin this application records beside the session: the same legacy prefix and the origin entry's name (AAP 0.4.4 decision 5). */
+function isOriginEntry(entry: SessionEntrySummary): boolean {
+  const key = entry.key.toLowerCase();
+  return (
+    key.startsWith(LEGACY_SESSION_PREFIX.toLowerCase()) &&
+    key.includes(SESSION_ORIGIN_ENTRY_NAME.toLowerCase())
   );
 }
 
@@ -160,7 +172,7 @@ test.describe('W1 log in and log out', () => {
         expect(await pages.login.readSubmitState()).toBe('hidden');
       }
 
-      // 5. The legacy-shaped session (AAP 0.4.4 decision 3): exactly one entry, under the legacy prefix and name, carrying the three fields the unmigrated screens read (Rule 1 clause 9).
+      // 5. The legacy-shaped session (AAP 0.4.4 decision 3): exactly one session entry, under the legacy prefix and name, carrying the three fields the unmigrated screens read (Rule 1 clause 9). This application writes one more entry beside it — the API origin the credential was issued against — which carries no session field and is filtered out here, so the session entry itself keeps exactly the legacy shape an unmigrated screen reads (AAP 0.4.4 decision 5).
       const signedInEntries: readonly SessionEntrySummary[] = await pages.login.readSessionEntries();
       const sessionEntries = signedInEntries.filter(isSessionEntry);
       expect(sessionEntries).toHaveLength(1);
@@ -215,10 +227,12 @@ test.describe('W1 log in and log out', () => {
         expect(credentialBody[field]).toBe(MASKED);
       }
 
-      // 7. The sign-out (the last step of AAP 0.10.1 W1): the entry is gone from storage and the app is back on its login screen.
+      // 7. The sign-out (the last step of AAP 0.10.1 W1): the session entry and the origin record written beside it are both gone from storage, and the app is back on its login screen (AAP 0.4.2).
       await pages.login.signOut();
       const signedOutEntries: readonly SessionEntrySummary[] = await pages.login.readSessionEntries();
       expect(signedOutEntries.filter(isSessionEntry)).toHaveLength(0);
+      // The origin record goes with the session it belongs to, so a later page load has no origin left to judge a credential against (AAP 0.4.4 decision 5).
+      expect(signedOutEntries.filter(isOriginEntry)).toHaveLength(0);
 
       const loginHash = await pages.login.readCurrentHash();
       if (pages.uiProject === 'next') {

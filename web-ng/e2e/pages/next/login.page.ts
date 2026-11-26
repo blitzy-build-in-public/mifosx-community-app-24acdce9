@@ -5,23 +5,18 @@ import { FINERACT_URL, NEXT_URL, TENANT_ID } from '../../seed/fixtures';
 
 /** One `localStorage` entry, described by its key and by the presence and type of the three fields the session carries (AAP 0.3.4 claim 9) (Rule 1 clause 9). */
 export interface SessionEntrySummary {
-  /** The `localStorage` key exactly as the application wrote it. */
   readonly key: string;
-  /** Whether the stored value carries a `userId` field. */
   readonly hasUserId: boolean;
   /** `typeof` the stored `userId`: `'number'` or `'string'` when it holds one, `'missing'` when the field is undefined or null, and `'other'` for any other present type — a boolean, an array, an object. */
   readonly userIdType: 'number' | 'string' | 'missing' | 'other';
-  /** Whether the stored value carries an `authenticationKey` field. */
   readonly hasAuthenticationKey: boolean;
   readonly authenticationKeyIsNonEmptyString: boolean;
-  /** Whether the stored value carries a `userPermissions` field. */
   readonly hasUserPermissions: boolean;
   readonly userPermissionsIsArray: boolean;
 }
 
 /** One option of the login screen's language switcher (`LanguageSwitcher`, AAP 0.2.3; design node `1:5` shows the row "Change language:" plus its control). */
 export interface LanguageOptionSummary {
-  /** The language code the option submits — the code `selectLanguage()` takes. */
   readonly value: string;
   readonly label: string;
 }
@@ -247,12 +242,10 @@ export class LoginPage {
     return this.page.locator(CLIENT_LIST_SELECTOR).first();
   }
 
-  /** The signed-in navbar, which owns the user menu `signOut()` drives. */
   private navbar(): Locator {
     return this.page.locator('app-navbar').first();
   }
 
-  /** The language switcher, the screen's only `<select>`. */
   private languageSelect(): Locator {
     return this.root().locator(LANGUAGE_SELECT_SELECTOR).first();
   }

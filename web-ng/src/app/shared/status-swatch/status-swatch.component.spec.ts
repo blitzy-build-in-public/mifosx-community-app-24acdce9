@@ -25,7 +25,6 @@ function hostOf(fixture: ComponentFixture<StatusSwatchComponent>): HTMLElement {
   return fixture.nativeElement as HTMLElement;
 }
 
-/** The template's single span, or a named failure when the component rendered none. */
 function spanOf(host: HTMLElement): HTMLElement {
   const element: unknown = host.firstElementChild;
   if (!(element instanceof HTMLElement)) {
@@ -34,7 +33,6 @@ function spanOf(host: HTMLElement): HTMLElement {
   return element;
 }
 
-/** A freshly rendered component's span. */
 function swatchOf(status: StatusKey, variant?: StatusSwatchVariant): HTMLElement {
   return spanOf(hostOf(createSwatch(status, variant)));
 }

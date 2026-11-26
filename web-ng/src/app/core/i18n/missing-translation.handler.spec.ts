@@ -22,12 +22,11 @@ const LEGACY_EN_BUNDLE: Record<string, string> = {
   'label.input.username': 'Username',
 };
 
-/** Served path of the English bundle, written as a literal rather than composed from the loader constants on purpose: `angular.json` maps `app/global-translations` to `global-translations` and `index.html` declares `<base. */
+/** Served path of the English bundle, written as a literal rather than composed from the loader constants on purpose: `angular.json` maps `app/global-translations` to `global-translations` and `index.html` declares `<base href="/" />`, so the served path is exactly this one. */
 const LEGACY_EN_BUNDLE_URL = 'global-translations/locale-en.json';
 
 /** One legacy bundle read in place: the file it came from and its flat contents. */
 interface LegacyEnglishBundle {
-  /** Absolute path of the file the bundle was read from. */
   readonly path: string;
   /** That file's contents: flat, dotted keys mapped to their translations. */
   readonly bundle: Record<string, string>;
@@ -94,7 +93,6 @@ class TranslateProbeComponent {
   readonly key = input<string>('label.message.session.expiring');
 }
 
-/** The live i18n stack and the HTTP mock that serves its bundles. */
 interface TranslateHarness {
   readonly translate: TranslateService;
   readonly httpMock: HttpTestingController;
@@ -106,7 +104,6 @@ const APP_OWNED_COPY: readonly (readonly [key: string, text: string])[] = [
   ['label.button.stay.signed.in', 'Stay signed in'],
 ];
 
-/** Composes the production i18n providers with the HTTP testing backend. */
 function createHarness(): TranslateHarness {
   TestBed.configureTestingModule({
     providers: [provideTranslate(), provideHttpClient(), provideHttpClientTesting()],

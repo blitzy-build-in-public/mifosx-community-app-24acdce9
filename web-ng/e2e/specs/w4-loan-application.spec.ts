@@ -63,9 +63,7 @@ interface NamedClientRow {
   readonly name: string;
 }
 interface PrincipalBounds {
-  /** The control's declared `min`, or `null` when it declares none. */
   readonly min: string | null;
-  /** The control's declared `max`, or `null` when it declares none. */
   readonly max: string | null;
 }
 /** Narrows a captured body to an object: the documented boundary where the spec narrows a payload that crossed an HTTP boundary the harness does not model (Rule 1 clause 4). */

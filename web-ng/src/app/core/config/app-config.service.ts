@@ -61,8 +61,14 @@ export class AppConfigService {
 
   private readonly state = signal<AppConfig | null>(null);
 
+  /** The `apiBaseUrl` the served file itself named, or `null` until `load()` has read it. */
+  private readonly servedBase = signal<string | null>(null);
+
   /** The resolved configuration, or `null` until `load()` has published one. */
   readonly changes: Signal<AppConfig | null> = this.state.asReadonly();
+
+  /** The `apiBaseUrl` the served `assets/config.json` named, before the page URL's `?baseApiUrl=` override is applied, or `null` before `load()`: the only API base no page URL can change, which is why it is the one base a stored session with no recorded origin may be presented to (AAP 0.4.4 decision 5, Rule 1 clause 9 — see `credentialOriginFor`). The resolved base in `changes()` follows whatever `?baseApiUrl=` a link carries and is what every request is composed from. */
+  readonly servedApiBaseUrl: Signal<string | null> = this.servedBase.asReadonly();
 
   /** Resolves the translate service only when `activeLocale` is read, never during construction. */
   private readonly injector = inject(Injector);
@@ -76,10 +82,14 @@ export class AppConfigService {
     return translate?.currentLang() ?? this.requireConfig().locale;
   });
 
-  /** Fetches, validates, overrides and publishes the configuration. */
+  /** Fetches, validates, overrides and publishes the configuration, keeping the base the served file named before the page URL's override is applied (`servedApiBaseUrl`). */
   async load(): Promise<AppConfig> {
     const raw = await this.fetchRawConfig();
     const shipped = this.parseAppConfig(raw);
+
+    // Recorded before the override is even read, so the served base stays the one value no page URL can reach (AAP 0.4.4 decision 5).
+    this.servedBase.set(shipped.apiBaseUrl);
+
     const overrides = this.readQueryOverrides();
 
     const resolved: AppConfig = {

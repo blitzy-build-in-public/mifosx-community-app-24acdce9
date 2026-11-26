@@ -839,8 +839,7 @@ describe('LoanViewComponent', () => {
     expect(component.notFound()).toBe(false);
   });
 
-  /** The codes the record's action links are gated on, held against the routes those links open: the link that offers a command and the guard that admits the screen behind it must ask one code, or a user is offered an action they are then bounced
-   * from and refused one they may take (AAP 0.1.1, AAP 0.4.2, AAP 0.14.1). */
+  /** The codes the record's action links are gated on, held against the routes those links open: the link that offers a command and the guard that admits the screen behind it must ask one code, or a user is offered an action they are then bounced from and refused one they may take (AAP 0.1.1, AAP 0.4.2, AAP 0.14.1). */
   describe('the codes its action links are gated on', () => {
     /** Whether a value is a non-null object that is not an array — the shape a `{ param, codes }` permission declaration has, and the shape its `codes` map has (Rule 1 clause 4). */
     function isDeclarationObject(value: unknown): value is Record<string, unknown> {

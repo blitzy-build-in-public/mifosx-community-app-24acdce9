@@ -82,8 +82,7 @@ interface ClientServiceStub {
   readonly template: Mock<ClientService['template']>;
   readonly create: Mock<ClientService['create']>;
 }
-/** `Router` as this screen and its cancel link use it: the two navigation entry points, each replaced by a spy so no case performs a navigation and every command list and target the screen sends is observable. `navigate` is the component's own
- * call on a successful create; `navigateByUrl` is what `RouterLink` asks for when the cancel anchor is activated. */
+/** `Router` as this screen and its cancel link use it: the two navigation entry points, each replaced by a spy so no case performs a navigation and every command list and target the screen sends is observable. `navigate` is the component's own call on a successful create; `navigateByUrl` is what `RouterLink` asks for when the cancel anchor is activated. */
 interface RouterStub {
   readonly navigate: Mock<Router['navigate']>;
   readonly navigateByUrl: Mock<Router['navigateByUrl']>;
@@ -145,8 +144,7 @@ describe('ClientCreateComponent', () => {
         // The application runs zoneless (Angular 22's default), so the fixture is told the same and every async case settles with `whenStable()` rather than with a zone (Rule 1 clause 5).
         provideZonelessChangeDetection(),
         { provide: ClientService, useValue: clients },
-        // The cancel control is a `RouterLink`, which resolves its target through the real router's `createUrlTree`, so the router has to exist for the template to
-        // render at all; its two navigation entry points are replaced by the spies below, so no case navigates anywhere.
+        // The cancel control is a `RouterLink`, which resolves its target through the real router's `createUrlTree`, so the router has to exist for the template to render at all; its two navigation entry points are replaced by the spies below, so no case navigates anywhere.
         provideRouter([]),
         provideTranslateService(),
       ],

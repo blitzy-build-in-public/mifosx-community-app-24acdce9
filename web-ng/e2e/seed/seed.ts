@@ -48,13 +48,11 @@ export interface SeedClientActionReasons {
 }
 
 export interface SeedClientActionGate {
-  /** Registered datatable name, e.g. `client_action_check`. */
   readonly datatableName: string;
   /** Entity the table hangs off — `m_client`. */
   readonly apptableName: string;
   /** Status the check is registered for: `600`, CLOSE. */
   readonly checkStatus: number;
-  /** Id Fineract assigned the entity-datatable check. */
   readonly checkId: number;
 }
 
@@ -156,7 +154,6 @@ interface CodeValueCreateBody {
   readonly name: string;
   /** `true`, because an inactive value is not offered by the action templates this fixture serves. */
   readonly isActive: boolean;
-  /** Place in the code's value list: `1`, the seed creating one value per code. */
   readonly position: number;
 }
 
@@ -189,10 +186,8 @@ interface EntityDatatableCheckCreateBody {
 
 /** A `POST` Fineract refused. Carries the failing resource path, the status and Fineract's own `errors[].defaultUserMessage` texts, which are what the operator needs to correct the payload; it never carries the credential the refused request was sent with (Rule 1 clause 9). */
 class SeedRequestError extends Error {
-  /** Resource path below the API path, e.g. `/loanproducts`. */
   readonly path: string;
   readonly status: number;
-  /** Fineract's validation messages, empty when it answered without any. */
   readonly validationMessages: readonly string[];
 
   constructor(path: string, status: number, validationMessages: readonly string[]) {

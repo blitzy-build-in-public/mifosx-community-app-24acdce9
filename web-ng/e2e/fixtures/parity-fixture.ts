@@ -66,13 +66,9 @@ export type RunWorkflow = (workflowId: WorkflowId, body: WorkflowBody) => Promis
 /** Per-test paths and facts the fixtures share: the capture names itself at setup, `runWorkflow` writes the artefacts and the record, and the capture's teardown fills in the path it wrote when the body never got that far. */
 export interface EvidenceSink {
   captureLabel?: string;
-  /** Workflow id `runWorkflow` was called with in this test. */
   workflow?: WorkflowId;
-  /** Absolute path of the normalised capture `capture/network-capture.ts` wrote. */
   capturePath?: string;
-  /** Absolute path of the end state `capture/state-snapshot.ts` wrote, when one was captured. */
   statePath?: string;
-  /** Absolute path of the record `report/parity-report.ts` wrote. */
   recordPath?: string;
 }
 

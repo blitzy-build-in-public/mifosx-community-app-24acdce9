@@ -6,12 +6,9 @@ import { FINERACT_URL, NEXT_URL, TENANT_ID } from '../../seed/fixtures.js';
 /** One row of the client list, as the report compares it (AAP 0.10.1 W3; AAP 0.2.1 step 2) (AAP 0.7.2, AAP 0.10.5). */
 export interface ClientRow {
   readonly name: string;
-  /** Client number column, e.g. `000000002`; a string, never a number. */
   readonly clientNumber: string;
   readonly office: string;
-  /** Staff column — the loan officer's name; `''` for a client with no officer assigned. */
   readonly staff: string;
-  /** The row's status colour: `status-active`, `status-pending`, `status-closed`, `status-other`, or `''`. */
   readonly statusClass: string;
   readonly cells: readonly string[];
 }
@@ -23,7 +20,6 @@ export interface StatusSwatchView {
 }
 
 export interface NotificationView {
-  /** The notice's kind, from the accent class the component binds; `unknown` for an unclassed notice. */
   readonly kind: 'info' | 'success' | 'error' | 'unknown';
   /** Fineract's own message, verbatim: never translated, prefixed or truncated. */
   readonly text: string;
@@ -32,15 +28,12 @@ export interface NotificationView {
 /** One result of the global search (`#/search/:query`, AAP 0.7.3 "Shell: global search"). */
 export interface SearchResultRow {
   readonly name: string;
-  /** The account number the block prints after its `#`, or `''` when the block prints none. */
   readonly accountNo: string;
-  /** The line beneath the name, e.g. `Entity:Client | Office:Head Office`, or `''` when absent. */
   readonly secondaryText: string;
   /** The result's product, or `''`. No result line names a product in either application — a loan result's name is its product's name — so this answers `''` instead of inventing a value or repeating the name. */
   readonly product: string;
   /** The result's status colour class; always `''`, because a result carries no swatch. */
   readonly statusClass: string;
-  /** The hash path the block's link points at, e.g. `#/viewclient/2`; `null` when no link is shown. */
   readonly link: string | null;
 }
 
@@ -54,7 +47,6 @@ export interface SelectOptionView {
 
 /** The values {@link ClientsPage.fillClientForm} writes into the client form (Rule 1 clause 3). */
 export interface ClientFormValues {
-  /** Office to select by its id, e.g. `1`; the create form's own first field. */
   readonly officeId?: number | string;
   readonly staffId?: number | string;
   readonly firstname?: string;
@@ -1046,7 +1038,6 @@ export class ClientsPage {
 }
 
 interface OptionReading {
-  /** The option's DOM value, Angular's own prefix included when it is bound with `[ngValue]`. */
   readonly value: string;
   readonly label: string;
   readonly selected: boolean;

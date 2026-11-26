@@ -619,8 +619,7 @@ describe('ClientActionsComponent', () => {
     component.closeForm.controls.closureDate.setValue(CLOSURE_DATE);
     component.submit();
 
-    // The legacy template marks the reason required and `validateClose` declares the id `notNull().longGreaterThanZero`, so the prompt row is not a choice: no body
-    // that lacks a reason is posted, and the control is marked as touched so its field reports the missing one.
+    // The legacy template marks the reason required and `validateClose` declares the id `notNull().longGreaterThanZero`, so the prompt row is not a choice: no body that lacks a reason is posted, and the control is marked as touched so its field reports the missing one.
     expect(httpMock.match(isCommandPost)).toHaveLength(0);
     expect(component.closeForm.controls.closureReasonId.touched).toBe(true);
     expect(navigate).not.toHaveBeenCalled();
@@ -671,9 +670,7 @@ describe('ClientActionsComponent', () => {
     await settle();
   });
 
-  /* The permission gate on the submit control.
-   * The screen is the third end of one decision: the record gates its lifecycle entry on the command's own code, the `client/:id/:action` route declares that same code, and the button that posts the command asks for it here (AAP 0.1.1). Legacy
-   * gated exactly this button and rendered the rest of the form regardless, so the cases below assert the button alone (Rule 1 clause 3). */
+  /* The permission gate on the submit control. The screen is the third end of one decision: the record gates its lifecycle entry on the command's own code, the `client/:id/:action` route declares that same code, and the button that posts the command asks for it here (AAP 0.1.1). Legacy gated exactly this button and rendered the rest of the form regardless, so the cases below assert the button alone (Rule 1 clause 3). */
 
   it('hides the submit control from a user who does not hold the command’s code', async () => {
     await show('close', CLIENT_ID, []);
@@ -745,9 +742,7 @@ describe('ClientActionsComponent', () => {
     },
   );
 
-  /* The request sequence every command issues, and the body it carries.
-   * The cases above pin the states one command reaches; these pin what all five send, because the parity harness compares the ordered traffic rather than the screen, and because the three commands that take a reason, the one that activates and
-   * the one that reactivates post different bodies through the same form. */
+  /* The request sequence every command issues, and the body it carries. The cases above pin the states one command reaches; these pin what all five send, because the parity harness compares the ordered traffic rather than the screen, and because the three commands that take a reason, the one that activates and the one that reactivates post different bodies through the same form. */
 
   it.each(COMMANDS)(
     'issues the gate, then the %s command, once each and in that order',

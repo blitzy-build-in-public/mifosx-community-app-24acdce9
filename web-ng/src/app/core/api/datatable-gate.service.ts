@@ -170,7 +170,7 @@ function applicableTableNames(
   return tables;
 }
 
-/** The datatable gate every client lifecycle action passes through before it posts — `GET /entityDatatableChecks?limit=-1` filtered to the client entity and the action's status, then `GET (AAP 0.3.4, AAP 0.7.3, AAP 0.4.4). */
+/** The datatable gate every client lifecycle action passes through before it posts — `GET /entityDatatableChecks?limit=-1` filtered to the client entity and the action's status, then `GET /datatables/{table}/{clientId}?genericResultSet=true` for each table it names (AAP 0.3.4, AAP 0.7.3, AAP 0.4.4). */
 @Injectable({ providedIn: 'root' })
 export class DataTableGateService {
   private readonly http = inject(HttpClient);

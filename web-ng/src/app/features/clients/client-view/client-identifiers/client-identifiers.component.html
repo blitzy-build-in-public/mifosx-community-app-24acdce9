@@ -1,10 +1,5 @@
 <!-- `Identities` tab of the individual client record (`#/viewclient/:id`): the client's identity documents, read-only, in the design's four-column order (AAP 0.7.1 row `clients`, AAP 0.7.3 row "W3 search and view client"; AAP 0.7.4, Rule 1 clause 6, Rule 1 clause 3, AAP 0.10.5). -->
-<!--
-  The tab's four states, in the order a viewer meets them, wrapped in one plain element so that a read
-  in flight has a region to mark busy: the wrapper contributes no class, no style and no layout of its
-  own, and assistive technology is told the tab's own content is being replaced rather than that the
-  whole page is busy (AAP 0.7.4 state rules; AAP 0.2.4 records that the design carries no loader).
--->
+<!-- The tab's four states, in the order a viewer meets them, wrapped in one plain element so that a read in flight has a region to mark busy: the wrapper contributes no class, no style and no layout of its own, and assistive technology is told the tab's own content is being replaced rather than that the whole page is busy (AAP 0.7.4 state rules; AAP 0.2.4 records that the design carries no loader). -->
 <div [attr.aria-busy]="loading() ? 'true' : null">
   @if (loading()) {
   } @else if (failed()) {

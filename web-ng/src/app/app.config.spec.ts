@@ -7,7 +7,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { appConfig } from './app.config';
-import { SessionService } from './core/auth/session.service';
+import { SessionService, sessionStorageKey } from './core/auth/session.service';
 import { DEFAULT_APP_CONFIG, type AppConfig } from './core/config/app-config.model';
 import { AppConfigService } from './core/config/app-config.service';
 import { APP_CONFIG } from './core/config/app-config.token';
@@ -145,12 +145,15 @@ describe('appConfig', () => {
   it('resumes a stored legacy session through GET /users/{id} before the first navigation', async () => {
     configureApplication();
 
-    // The entry a previous visit left behind (AAP 0.3.4 claim 9: `mifosX` + `sessionData`, carrying the user id, the authentication key and the permission list).
-    TestBed.inject(SessionService).write({
-      userId: 2,
-      authenticationKey: SPEC_AUTHENTICATION_KEY,
-      userPermissions: ['READ_CLIENT'],
-    });
+    // The entry a previous visit left behind (AAP 0.3.4 claim 9: `mifosX` + `sessionData`, carrying the user id, the authentication key and the permission list), written straight to storage because that is what the legacy app and an earlier release leave: `write()` needs the resolved configuration this start-up is about to load. No origin entry accompanies it, which is the recordless case the served config.json answers for (AAP 0.4.4 decision 5).
+    window.localStorage.setItem(
+      sessionStorageKey(),
+      JSON.stringify({
+        userId: 2,
+        authenticationKey: SPEC_AUTHENTICATION_KEY,
+        userPermissions: ['READ_CLIENT'],
+      }),
+    );
 
     const startUp = runStartUp();
 

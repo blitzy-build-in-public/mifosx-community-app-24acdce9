@@ -6,13 +6,11 @@ import { FINERACT_URL, NEXT_URL, TENANT_ID } from '../../seed/fixtures.js';
 /** One label/value row of a record as the page renders it: the record's `#loan-summary` block prints a bold key and its figure side by side, and the same pair is what the legacy sibling's summary reader reports for the baseline it drives. */
 export interface LabelValue {
   readonly label: string;
-  /** The row's rendered value, trimmed; `''` when the row renders no value. */
   readonly value: string;
 }
 
 /** One row of the application form's repayment-schedule preview, as the server's calculation returned it and the component painted it (AAP 0.10.1, AAP 0.10.2). */
 export interface RepaymentPreviewRow {
-  /** Period number from the table's first column, `null` when the cell carries no number. */
   readonly period: number | null;
   readonly fromDate: string;
   readonly dueDate: string;
@@ -26,7 +24,6 @@ export interface RepaymentPreviewRow {
 
 /** The loan record's status indicator and its summary rows, as the page renders them (AAP 0.10.5, Rule 1 clause 3). */
 export interface LoanSummaryView {
-  /** One of `status-active`, `status-pending`, `status-closed`, `status-other`, or `''` if none is painted. */
   readonly statusClass: string;
   readonly fields: readonly LabelValue[];
 }
@@ -52,7 +49,6 @@ export interface LoanTransactionRow {
 
 /** What {@link LoansPage.fillApplication} types into the application form (AAP 0.7.2). */
 export interface LoanApplicationValues {
-  /** Product to apply on, by the id of one of the template's `productOptions`. */
   readonly productId?: number | string;
   /** Principal applied for, passed through exactly as supplied — W7 relies on that for 50,000. */
   readonly principal?: number | string;
@@ -60,9 +56,7 @@ export interface LoanApplicationValues {
   readonly numberOfRepayments?: number | string;
   readonly repaymentEvery?: number | string;
   readonly interestRatePerPeriod?: number | string;
-  /** Loan officer to attach, by the id of one of the template's `loanOfficerOptions`. */
   readonly loanOfficerId?: number | string;
-  /** Fund to attach, by the id of one of the template's `fundOptions`. */
   readonly fundId?: number | string;
   /** `yyyy-mm-dd`, always supplied by the caller from the run date — never computed here. */
   readonly expectedDisbursementDate?: string;
@@ -97,28 +91,20 @@ export type LoanAction =
   | 'undodisbursal'
   | 'repayment';
 
-/** Root element of the individual-loan application screen, `LoanNewComponent`. */
 const APPLICATION_ROOT = 'app-loan-new';
 
-/** Root element of the application's repayment-schedule preview, `RepaymentPreviewComponent`. */
 const PREVIEW_ROOT = 'app-repayment-preview';
 
-/** Root element of the loan edit screen, `LoanEditComponent`. */
 const EDIT_ROOT = 'app-loan-edit';
 
-/** Root element of the loan record, `LoanViewComponent`. */
 const VIEW_ROOT = 'app-loan-view';
 
-/** Root element of the record's repayment-schedule section, `LoanScheduleComponent`. */
 const SCHEDULE_ROOT = 'app-loan-schedule';
 
-/** Root element of the record's transactions section, `LoanTransactionsComponent`. */
 const TRANSACTIONS_ROOT = 'app-loan-transactions';
 
-/** Root element of the lifecycle action screen, `LoanActionComponent`. */
 const ACTION_ROOT = 'app-loan-action';
 
-/** Root element of the repayment form, `LoanRepaymentComponent`. */
 const REPAYMENT_ROOT = 'app-loan-repayment';
 
 const SCREENS: Readonly<Record<string, string>> = {
@@ -156,20 +142,17 @@ const TEMPLATE_BUSY_GRACE_MS = 2_000;
 
 interface RenderedOption {
   readonly index: number;
-  /** The value the application bound, with Angular's `${position}: ` prefix removed. */
   readonly value: string;
   readonly label: string;
 }
 
 interface TableGrid {
-  /** One entry per `<th>` of the header row, lower-cased with runs of non-alphanumerics collapsed. */
   readonly columns: readonly string[];
   readonly rows: readonly (readonly string[])[];
 }
 
 interface FieldSpec {
   readonly ids: readonly string[];
-  /** Pattern the control's `.control-label` carries, matched case-insensitively. */
   readonly label: string;
   readonly kind: 'date' | 'select' | 'text';
   readonly description: string;

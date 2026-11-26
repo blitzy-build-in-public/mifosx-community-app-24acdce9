@@ -1,23 +1,4 @@
-<!--
-  Individual loan application, `#/newclientloanaccount/:clientId` — workflow W4 (submit an application after previewing its repayment schedule) and the surface workflow W7 is proved on, a Fineract
-  validation error rendered verbatim (AAP 0.7.3 "W4 loan application" and "W7 validation error"; AAP 0.7.4 loan screens; AAP 0.10.1).
-
-  The card is the shared `div[appPanelCard]` component in its `.panel-default` variant with its `.panel-heading`/`.panel-title` title band (AAP 0.2.3 row `PanelCard`); every other visual value is a
-  global Bootstrap 3 class of `web-ng/src/styles.scss` — `.form-horizontal`/`.form-group`/`.control-label` the form layout, `.form-control` the 34px control, `.btn.btn-primary` the brand fill and
-  `.alert.alert-danger` the failure banner — so this file carries no style element, inline style, colour or pixel. `.form-horizontal` follows the one convention `styles.scss` states: a field's label
-  sits above its control at the control's left edge, so each label stays inside the column that holds its control, and the footer's actions end at the card's right edge at every width.
-  `span.required` is the legacy marker rule in `app/styles-dev/main/components/_content.scss`, consumed in place (Rule 1 clause 6; AAP 0.5.2, AAP 0.5.3). Field ids are the legacy form's own
-  (`app/views/loans/newloanaccount.html`): the id, the `formControlName` and the `[inputId]` a shared field receives are the same string, which is both the contract `web-ng/e2e/pages/next/loans.page.ts` drives and what makes each `<label for>` point at the control it names.
-
-  Captions and options are the legacy bundle's keys and the Fineract template's own lists: no label and no option is written into this file. Where this template renders the `<label>` of a field a
-  shared component owns (`app-select-field`, `app-date-field`), the component is given no `label` input, so the one visible label is the one above and no control is named twice; those two fields
-  report their own invalid state (`.has-error`, `aria-invalid`) from the control they hold, and the native inputs here carry the same `.has-error` and a `.help-block` of their own.
-
-  Two captions are taken from keys the shipped bundle actually holds: the card title is `label.heading.loanapplication` ("New Loan Application", the legacy breadcrumb's text) and the preview trigger
-  `label.heading.preview`. The not-found message comes from the shared `app-record-not-found`, whose two keys every record screen resolves, so a route with no client reads here exactly as it does on
-  the client record and edit screens (AAP 0.7.4). The bundle defines no key for a "new loan account" heading, and a key it lacks would reach the user as a humanised fragment, so the captions resolve
-  as real labels on every screen (Rule 1 clause 3 and clause 6).
--->
+<!-- Individual loan application, `#/newclientloanaccount/:clientId` — workflow W4 (submit an application after previewing its repayment schedule) and the surface workflow W7 is proved on, a Fineract validation error rendered verbatim (AAP 0.7.3 "W4 loan application" and "W7 validation error"; AAP 0.7.4 loan screens; AAP 0.10.1). The card is the shared `div[appPanelCard]` component in its `.panel-default` variant with its `.panel-heading`/`.panel-title` title band (AAP 0.2.3 row `PanelCard`); every other visual value is a global Bootstrap 3 class of `web-ng/src/styles.scss` — `.form-horizontal`/`.form-group`/`.control-label` the form layout, `.form-control` the 34px control, `.btn.btn-primary` the brand fill and `.alert.alert-danger` the failure banner — so this file carries no style element, inline style, colour or pixel. `.form-horizontal` follows the one convention `styles.scss` states: a field's label sits above its control at the control's left edge, so each label stays inside the column that holds its control, and the footer's actions end at the card's right edge at every width. `span.required` is the legacy marker rule in `app/styles-dev/main/components/_content.scss`, consumed in place (Rule 1 clause 6; AAP 0.5.2, AAP 0.5.3). Field ids are the legacy form's own (`app/views/loans/newloanaccount.html`): the id, the `formControlName` and the `[inputId]` a shared field receives are the same string, which is both the contract `web-ng/e2e/pages/next/loans.page.ts` drives and what makes each `<label for>` point at the control it names. Captions and options are the legacy bundle's keys and the Fineract template's own lists: no label and no option is written into this file. Where this template renders the `<label>` of a field a shared component owns (`app-select-field`, `app-date-field`), the component is given no `label` input, so the one visible label is the one above and no control is named twice; those two fields report their own invalid state (`.has-error`, `aria-invalid`) from the control they hold, and the native inputs here carry the same `.has-error` and a `.help-block` of their own. Two captions are taken from keys the shipped bundle actually holds: the card title is `label.heading.loanapplication` ("New Loan Application", the legacy breadcrumb's text) and the preview trigger `label.heading.preview`. The not-found message comes from the shared `app-record-not-found`, whose two keys every record screen resolves, so a route with no client reads here exactly as it does on the client record and edit screens (AAP 0.7.4). The bundle defines no key for a "new loan account" heading, and a key it lacks would reach the user as a humanised fragment, so the captions resolve as real labels on every screen (Rule 1 clause 3 and clause 6). -->
 @if (notFound()) {
   <!-- No client on the route: the message replaces the form, so no control is rendered and nothing is posted. -->
   <div appPanelCard variant="default">
@@ -34,18 +15,7 @@
         <div class="alert alert-danger" role="alert">{{ error() }}</div>
       }
 
-      <!--
-        The submission was accepted but its answer named no loan id, so there is no record to open:
-        the screen states that instead of returning quietly after a request that already created the
-        loan (AAP 0.14.2). It is this screen's own state, not a Fineract failure, so it stays out of
-        the verbatim server message above.
-
-        This is the one string on the screen with no translation key, because no
-        shipped legacy locale bundle carries one — the legacy controller navigated with `data.loanId`
-        unconditionally and had no such state to report — and adding a key would mean editing a
-        locale file (forbidden: Rule 1 clauses 1 and 6). The wording says what happened and what the
-        user can do, rather than showing a humanised key fragment.
-      -->
+      <!-- The submission was accepted but its answer named no loan id, so there is no record to open: the screen states that instead of returning quietly after a request that already created the loan (AAP 0.14.2). It is this screen's own state, not a Fineract failure, so it stays out of the verbatim server message above. This is the one string on the screen with no translation key, because no shipped legacy locale bundle carries one — the legacy controller navigated with `data.loanId` unconditionally and had no such state to report — and adding a key would mean editing a locale file (forbidden: Rule 1 clauses 1 and 6). The wording says what happened and what the user can do, rather than showing a humanised key fragment. -->
       @if (submittedWithoutId()) {
         <div class="alert alert-warning" role="alert">
           The application was submitted, but the server reported no loan identifier for it, so the
@@ -341,15 +311,7 @@
           </div>
         </div>
 
-        <!--
-          The charges the application applies: the rows the template preselected plus any the applicant
-          adds from the charges the template offers. Rendered only when there is a row or a charge to pick,
-          so a product with no applicable charge shows no empty section and no picker over an empty list.
-
-          A picked charge's amount is the server's figure (a flat charge costs its amount, a percentage
-          charge a share of the principal), which the component reads through the charge's own template
-          when the selection changes.
-        -->
+        <!-- The charges the application applies: the rows the template preselected plus any the applicant adds from the charges the template offers. Rendered only when there is a row or a charge to pick, so a product with no applicable charge shows no empty section and no picker over an empty list. A picked charge's amount is the server's figure (a flat charge costs its amount, a percentage charge a share of the principal), which the component reads through the charge's own template when the selection changes. -->
         @if (chargeOptions().length > 0 || chargeRows.length > 0) {
           <fieldset>
             <legend>{{ 'label.heading.charges' | translate }}</legend>
@@ -407,15 +369,7 @@
                     </div>
                   </div>
 
-                  <!--
-                    The due date exists for a charge that falls due on a specified date and for no other
-                    charge — the legacy `chargeTimeType.id == 2` test, which the class resolves in
-                    `isSpecifiedDueDate`, and the legacy template's own `label.input.duedate` field. Its
-                    control is the shared native date field, whose value is a `Date` the service formats on
-                    the way out, and it carries no validator because legacy marks none and Fineract reports
-                    a missing date itself (AAP 0.7.2 row `LoanChargeRequest`; AAP 0.10.5 item 1; Rule 1
-                    clause 3).
-                  -->
+                  <!-- The due date exists for a charge that falls due on a specified date and for no other charge — the legacy `chargeTimeType.id == 2` test, which the class resolves in `isSpecifiedDueDate`, and the legacy template's own `label.input.duedate` field. Its control is the shared native date field, whose value is a `Date` the service formats on the way out, and it carries no validator because legacy marks none and Fineract reports a missing date itself (AAP 0.7.2 row `LoanChargeRequest`; AAP 0.10.5 item 1; Rule 1 clause 3). -->
                   @if (isSpecifiedDueDate(row)) {
                     <div class="form-group">
                       <div class="col-md-9">

@@ -53,8 +53,7 @@ describe('BreadcrumbComponent', () => {
     expect(crumbs[0].classList.contains('active')).toBe(false);
     expect(crumbs[1].classList.contains('active')).toBe(true);
     expect(host().querySelector('ol.breadcrumb')).not.toBeNull();
-    // The trail is a navigation landmark named "Breadcrumb", with the list as its only child: the record screen's own treatment, extended to every screen the shell's breadcrumb serves. No crumb claims `aria-current` here, because the record marks
-    // its own trail.
+    // The trail is a navigation landmark named "Breadcrumb", with the list as its only child: the record screen's own treatment, extended to every screen the shell's breadcrumb serves. No crumb claims `aria-current` here, because the record marks its own trail.
     const nav = host().querySelector('nav');
 
     expect(nav?.getAttribute('aria-label')).toBe('Breadcrumb');

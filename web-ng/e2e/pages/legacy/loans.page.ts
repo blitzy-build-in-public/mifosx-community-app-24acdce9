@@ -25,7 +25,6 @@ export interface LoanApplicationValues {
 }
 
 export interface RepaymentPreviewRow {
-  /** Period column (`#`), the previewed period's sequence number. */
   period: string;
   /** From-date column; `''` because the legacy preview renders no period start date. */
   fromDate: string;
@@ -39,9 +38,7 @@ export interface RepaymentPreviewRow {
 }
 
 export interface LoanSummaryField {
-  /** The cell's label, `"<row> <column>"` such as `Principal Original`. */
   label: string;
-  /** The cell's rendered text, `''` when the record leaves the cell blank. */
   value: string;
 }
 

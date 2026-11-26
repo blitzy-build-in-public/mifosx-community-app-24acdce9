@@ -18,7 +18,7 @@ export interface FineractError {
   readonly defaultUserMessage?: string;
   /** Translation key the envelope's declared shape carries for the whole failure (AAP 0.7.2 row `FineractError`), deliberately not carried by `readFineractErrorBody`: every in-scope screen renders Fineract's own (Rule 1 clause 3). */
   readonly userMessageGlobalisationCode?: string;
-  /** Field-level failures in the server's order; the first carrying text becomes the message. */
+  /** Field-level failures in the server's order; the first one carrying text, written for the user, becomes the message (qaw007-F02). */
   errors?: FineractValidationError[];
 }
 
@@ -73,7 +73,34 @@ function readFineractErrorBody(value: unknown): FineractError | undefined {
 /** The text a failure becomes when no server message reached it (AAP 0.7.2). */
 const UNMAPPED_FAILURE = 'The request could not be completed.';
 
-/** Builds the displayable error from a failed response, choosing its message in this order and returning the first non-empty string unchanged: the first `errors[].defaultUserMessage` carrying text, in the server's order (AAP 0.4.4, Rule 1 clause 3). */
+/** The shapes a message takes when it is a database's, a driver's or a framework's own words rather than text written for the user, so that such a message is recognised instead of being rendered.
+ *
+ * An ordinary Fineract message is still surfaced verbatim, which is the behavioural inheritance AAP 0.4.4 decision 6 records for every `errors[].defaultUserMessage` and what AAP 0.7.4 renders above a form. A message carrying database or driver internals is not a message written for a user, and it is replaced by `UNMAPPED_FAILURE` — the sentence that keeps PostgreSQL's failure, the prepared statement that carried the request and the backend's framework class names out of the rendered error region without changing how an ordinary Fineract failure is shown. The fork's own exception mapping is out of this work's scope (AAP 0.9.2), so the application is where this is settled.
+ *
+ * Each pattern is deliberately narrow: an ordinary message that merely contains the word "error" or "where" in prose does not match, so nothing beyond the database's own words is ever replaced.
+ *
+ * Rule 1 clause 3 keeps legacy's error messages as they are, and this file departs from it for a database's, a driver's or a framework's own words alone: such text reports the server's internal failure, the statement that carried the request or a framework class inside the backend, and an error response must not carry any of those into the rendered region. */
+const BACKEND_INTERNAL_PATTERNS: readonly RegExp[] = [
+  /** PostgreSQL's own `ERROR:` line, which opens the server-side failure it reports — e.g. `Unknown data integrity issue with resource: ERROR: relation "m_client" does not exist`. */
+  /\bERROR:\s/,
+  /** A character-encoding failure of the database's, e.g. `invalid byte sequence for encoding "UTF8": 0x00`. */
+  /\binvalid byte sequence\b/i,
+  /** A prepared statement's parameter dump, e.g. `Where: unnamed portal parameter $7`. */
+  /\bunnamed portal parameter\b/i,
+  /** An SQLState the driver reports, e.g. `could not execute statement; SQLState [23505]`. */
+  /\bSQLState\b/,
+  /** A driver or framework class name, e.g. `org.springframework.dao.DataIntegrityViolationException` or `org.postgresql.util.…`. */
+  /\borg\.(?:postgresql|hibernate|springframework)\.[A-Za-z]/,
+  /** A driver exception type, e.g. `PSQLException: could not receive the response`. */
+  /\bPSQLException\b/,
+];
+
+/** Whether a message carries a database's, a driver's or a framework's own words rather than text written for the user (qaw007-F02, AAP 0.9.2). Answering `false` keeps an ordinary Fineract message in front of the user verbatim (AAP 0.4.4 decision 6, AAP 0.7.4). @param message one candidate message exactly as the server sent it. @returns `true` when the text matches any of {@link BACKEND_INTERNAL_PATTERNS}. */
+function carriesBackendInternals(message: string): boolean {
+  return BACKEND_INTERNAL_PATTERNS.some((pattern) => pattern.test(message));
+}
+
+/** Builds the displayable error from a failed response, choosing its message in this order and returning the first candidate that carries text and is written for the user: the first `errors[].defaultUserMessage` that is neither empty nor a database's or driver's own words, in the server's order, then the envelope's own `defaultUserMessage` under the same test, and `UNMAPPED_FAILURE` when neither qualifies (AAP 0.4.4 decision 6, AAP 0.7.4, AAP 0.9.2; qaw007-F02). The status and the field-level failures are carried exactly as received, so a screen still paints a 4xx inline and the guard against database internals changes nothing but the sentence (AAP 0.7.2, AAP 0.7.4). */
 export function toApiError(response: HttpErrorResponse): ApiError {
   const body = readFineractErrorBody(response.error);
   const validationErrors: readonly FineractValidationError[] = body?.errors ?? [];
@@ -81,7 +108,9 @@ export function toApiError(response: HttpErrorResponse): ApiError {
     ...validationErrors.map((failure) => failure.defaultUserMessage),
     body?.defaultUserMessage ?? '',
   ];
-  const message = candidates.find((candidate) => candidate !== '') ?? UNMAPPED_FAILURE;
+  const message =
+    candidates.find((candidate) => candidate !== '' && !carriesBackendInternals(candidate)) ??
+    UNMAPPED_FAILURE;
 
   return new ApiError(message, response.status, validationErrors);
 }

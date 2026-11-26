@@ -27,7 +27,6 @@ const CLOSE_LABEL_FR = 'Fermer la notification';
 /** The legacy key the close control is named through; the shipped bundles already carry it. */
 const CLOSE_LABEL_KEY = 'label.button.close';
 
-/** The language the suite starts on, and the one a switch activates. */
 const BASE_LANG = 'en';
 const OTHER_LANG = 'fr';
 
@@ -44,7 +43,6 @@ describe('NotificationComponent', () => {
   let translate: TranslateService;
   let host: HTMLElement;
 
-  /** The accessible name the close control of `notice` reports, or `''` when none is rendered. */
   function closeLabel(notice: HTMLElement): string {
     return notice.querySelector<HTMLButtonElement>('.close')?.getAttribute('aria-label') ?? '';
   }

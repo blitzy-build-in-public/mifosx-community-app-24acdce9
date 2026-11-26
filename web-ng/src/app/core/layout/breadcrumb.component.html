@@ -1,16 +1,7 @@
 @if (items().length > 0) {
-  <!--
-    The trail sits in a navigation landmark named "Breadcrumb", which is the treatment
-    the client record already gives its own trail (`client-view.component.html`) applied to every
-    screen. The wrapper adds no box of its own — `nav` is a plain block with no margin,
-    and `.breadcrumb` keeps the 2px padding, the 4px bottom margin and the 21px height the trail
-    paints — so no pixel moves and no behaviour changes.
+  <!-- The trail sits in a navigation landmark named "Breadcrumb", which is the treatment the client record already gives its own trail (`client-view.component.html`) applied to every screen. The wrapper adds no box of its own — `nav` is a plain block with no margin, and `.breadcrumb` keeps the 2px padding, the 4px bottom margin and the 21px height the trail paints — so no pixel moves and no behaviour changes.
 
-    It does depart from legacy, which renders the bare list with no landmark around it
-    (`app/views/clients/clients.html` opens with the list) and so from Rule 1 clause 3's reading of
-    that markup as the thing to reproduce: the checkpoint's accessibility checks require a named
-    navigation landmark on every screen, and this wrapper is what meets that requirement.
-  -->
+    It does depart from legacy, which renders the bare list with no landmark around it (`app/views/clients/clients.html` opens with the list) and so from Rule 1 clause 3's reading of that markup as the thing to reproduce: the checkpoint's accessibility checks require a named navigation landmark on every screen, and this wrapper is what meets that requirement. -->
   <nav aria-label="Breadcrumb">
     <ol class="breadcrumb">
       @for (item of items(); track $index) {

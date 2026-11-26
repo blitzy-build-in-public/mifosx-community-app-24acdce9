@@ -96,11 +96,7 @@ export interface LoanActionDefinition extends Omit<LoanActionLink, 'commands'> {
   readonly route: (id: string) => readonly string[];
 }
 
-/** The Fineract code each `loanaccount/:id/:action` command requires, keyed by the `:action` segment that names it.
- * This record is the one statement of those codes: `loans.routes.ts` declares it as that route's `data.permission` — `{ param: 'action', codes: LOAN_ACTION_PERMISSIONS }` — and every row of {@link LOAN_ACTIONS} opening the route is gated on the same
- * member, so `HasPermissionDirective` and the route's `permissionGuard` ask one question and a user holding `APPROVE_LOAN` both sees the Approve link and reaches the form it opens (AAP 0.1.1, AAP 0.4.2, AAP 0.14.1). The codes are the legacy record's
- * own (`ViewLoanDetailsController.js`) and the ones Fineract enforces for those commands, so nothing here is a difference from legacy (Rule 1 clause 3; AAP 0.10.5 registers none).
- * `satisfies Record<LoanCommand | 'repayment', string>` makes a command the route serves without a code here a compile error, and a code added for a command the route does not serve one too. */
+/** The Fineract code each `loanaccount/:id/:action` command requires, keyed by the `:action` segment that names it. This record is the one statement of those codes: `loans.routes.ts` declares it as that route's `data.permission` — `{ param: 'action', codes: LOAN_ACTION_PERMISSIONS }` — and every row of {@link LOAN_ACTIONS} opening the route is gated on the same member, so `HasPermissionDirective` and the route's `permissionGuard` ask one question and a user holding `APPROVE_LOAN` both sees the Approve link and reaches the form it opens (AAP 0.1.1, AAP 0.4.2, AAP 0.14.1). The codes are the legacy record's own (`ViewLoanDetailsController.js`) and the ones Fineract enforces for those commands, so nothing here is a difference from legacy (Rule 1 clause 3; AAP 0.10.5 registers none). `satisfies Record<LoanCommand | 'repayment', string>` makes a command the route serves without a code here a compile error, and a code added for a command the route does not serve one too. */
 export const LOAN_ACTION_PERMISSIONS = {
   approve: 'APPROVE_LOAN',
   reject: 'REJECT_LOAN',
@@ -110,8 +106,7 @@ export const LOAN_ACTION_PERMISSIONS = {
   repayment: 'REPAYMENT_LOAN',
 } satisfies Record<LoanCommand | 'repayment', string>;
 
-/** The Fineract code the add-charge form requires: `addloancharge/:id`'s `data.permission` in `loans.routes.ts` and the gate on the record's Add Loan Charge link, so the link and the screen it opens are one permission rather than two
- * (AAP 0.1.1, AAP 0.14.1). It is the legacy record's own code for that form (Rule 1 clause 3). */
+/** The Fineract code the add-charge form requires: `addloancharge/:id`'s `data.permission` in `loans.routes.ts` and the gate on the record's Add Loan Charge link, so the link and the screen it opens are one permission rather than two (AAP 0.1.1, AAP 0.14.1). It is the legacy record's own code for that form (Rule 1 clause 3). */
 export const LOAN_CHARGE_PERMISSION = 'CREATE_LOANCHARGE';
 
 /** The actions the legacy loan record offers, and the states it offers each one in, transcribed from `ViewLoanDetailsController.js`, whose `scope.buttons.singlebuttons` is built per loan status: submitted and pending (Rule 1 clause 3, AAP 0.7.4). Add-charge's provenance differs by state and does not narrow its `statuses`: legacy carries `button.addloancharge` in the button row (`singlebuttons`) for a submitted application and for an active loan, and in the `options` list for an approved loan, which `viewloanaccountdetails.html` renders as its "More" dropdown — this record shows both legacy lists as its one joined action group, so the row is offered in all three states exactly as the legacy record offers it. */

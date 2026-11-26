@@ -22,10 +22,8 @@ const READ_CLIENT = 'READ_CLIENT';
 /** The permission Fineract returns to a user who may do everything, spelled out rather than imported: the wildcard the legacy gate answers before it considers any other code (`app/scripts/controllers/main/MainController.js:104-127`; AAP 0.3.4 claim 12). */
 const ALL_FUNCTIONS = 'ALL_FUNCTIONS';
 
-/** The account name a restore resolves, which is what the user menu must show. */
 const ACCOUNT_NAME = 'mifos';
 
-/** The account name the signed-in shell hands in through the `userName` input, distinct from the above. */
 const SUPPLIED_NAME = 'supplied-by-shell';
 
 /** The text a refusing router rejects the sign-out navigation with; it is what the user must be shown. */
@@ -59,7 +57,6 @@ class AuthStub implements Pick<AuthService, 'username' | 'logout'> {
   /** The label's source, the same projection `SessionService.username` publishes. */
   readonly username: Signal<string | null> = this.account.asReadonly();
 
-  /** Records each logout, in the order the component performs it. */
   readonly logout = vi.fn((): void => {
     this.account.set(null);
   });
@@ -79,7 +76,6 @@ class PermissionsStub implements Pick<PermissionsService, 'has'> {
     return this.granted().includes(ALL_FUNCTIONS) || this.granted().includes(code);
   }
 
-  /** Replaces the granted list, as a login or a withdrawal does. */
   grant(codes: readonly string[]): void {
     this.granted.set(codes);
   }
@@ -92,16 +88,13 @@ describe('NavbarComponent', () => {
   let translate: TranslateService;
   let navigate: MockInstance;
 
-  /** Every language code the bar reported as switched, in emission order: its `(langChange)` output. */
   let reported: string[];
 
-  /** How many times the bar reported a completed sign-out: its `(signOut)` output. */
   let signOuts: number;
 
   // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps the assertions below type-checked and confines the boundary to this line (Rule 1 clause 4).
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
 
-  /** The rendered element with the given selector, or a named failure when nothing matches it. */
   function find<T extends Element>(selector: string): T {
     const element: unknown = host().querySelector(selector);
     if (element === null) {
@@ -118,10 +111,8 @@ describe('NavbarComponent', () => {
   /** The "Clients" destination's list item, which is the element the permission gate hides. */
   const clientsItem = (): HTMLElement => find<HTMLElement>('#main-menu-left li');
 
-  /** The user menu's trigger. */
   const userMenuTrigger = (): HTMLElement => find<HTMLElement>('#user-dropdown');
 
-  /** The language selector. */
   const languageSelector = (): HTMLSelectElement => find<HTMLSelectElement>('#navbar-language');
 
   beforeEach(() => {

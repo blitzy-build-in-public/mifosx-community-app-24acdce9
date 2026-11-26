@@ -125,7 +125,6 @@ export function parseAuthenticationKey(body: unknown, source = 'the authenticati
 }
 /** The fields of `GET /businessdate/BUSINESS_DATE` this harness reads: the business date as `[year, month, day]` with a 1-based month, beside a description and a type the harness ignores. */
 export interface BusinessDateResponse {
-  /** Human-readable description of the business date, as Fineract renders it. */
   readonly description: string;
   /** Business date type the endpoint answered for, e.g. `BUSINESS_DATE`. */
   readonly type: string;
@@ -400,14 +399,11 @@ export function formatDateOnly(date: Date): string {
 }
 /** The staff member the seed creates — the AAP 0.10.1 row "Staff: Parity Officer, loan officer, office 1 (Head Office)". The table gives one two-word value and Fineract's staff record keeps a first and a last name, so the pair below is that value split at its space — `Parity`, then `Officer` — rather than either name invented. */
 export interface StaffSeed {
-  /** Given name Fineract stores for the staff member. */
   readonly firstname: string;
-  /** Family name Fineract stores for the staff member. */
   readonly lastname: string;
   /** Name the client and loan screens display: Fineract composes the last name, a comma and a space, then the first name (`StaffWriteServiceImpl.createStaff`), so this seed's is `Officer, Parity` rather than the AAP table's `Parity Officer`, and the staff dropdowns label their options with it. */
   readonly displayName: string;
   readonly officeId: number;
-  /** Name of that office, as Fineract returns it. */
   readonly officeName: string;
   readonly isLoanOfficer: boolean;
 }
@@ -486,7 +482,6 @@ export const SEED_CLIENT_ACTION_REASONS = {
 } as const satisfies ClientActionReasonsSeed;
 /** The one column of {@link ClientActionGateSeed}'s datatable, as `POST /datatables` declares it. */
 export interface ClientActionGateColumnSeed {
-  /** Column name, as the gate's `columnHeaders` and the datatable row report it. */
   readonly name: string;
   /** Fineract column type. `String` is the free-text type the action's note is stored in. */
   readonly type: 'String';

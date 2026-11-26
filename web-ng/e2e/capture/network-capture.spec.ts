@@ -29,18 +29,15 @@ const outputDir: string = mkdtempSync(join(tmpdir(), 'web-ng-harness-capture-'))
 afterAll(() => {
   rmSync(outputDir, { recursive: true, force: true });
 });
-/** One event handler as the fake page stores it: the capture registers it through Playwright's typed API. */
 type PageHandler = (payload: unknown) => void;
 /** A stand-in for Playwright's `Page` carrying the three events `startCapture` subscribes to: a fake rather than a browser, because what this spec pins are properties of the recorder — whether an exchange is recorded and what its normalised record holds — not of a page. */
 class FakePage {
   private readonly handlers = new Map<string, Set<PageHandler>>();
-  /** Subscribes a handler, as `Page.on` does. */
   on(event: string, handler: PageHandler): void {
     const registered = this.handlers.get(event) ?? new Set<PageHandler>();
     registered.add(handler);
     this.handlers.set(event, registered);
   }
-  /** Unsubscribes a handler, as `Page.off` does; detaching twice is harmless, as on a real page. */
   off(event: string, handler: PageHandler): void {
     this.handlers.get(event)?.delete(handler);
   }
@@ -54,7 +51,6 @@ class FakePage {
     return this.handlers.get(event)?.size ?? 0;
   }
 }
-/** What the capture reads from a request: the subset of Playwright's `Request` it calls. */
 interface FakeRequestOptions {
   readonly url: string;
   /** HTTP method; `get` when unset. */
@@ -67,7 +63,6 @@ interface FakeRequestOptions {
 /** A stand-in for Playwright's `Request`: the identity `startCapture` keys its exchanges on. */
 class FakeRequest {
   constructor(private readonly options: FakeRequestOptions) {}
-  /** Resource type of the call, e.g. `fetch`, `xhr` or `document`. */
   resourceType(): string {
     return this.options.resourceType ?? 'fetch';
   }
@@ -80,7 +75,6 @@ class FakeRequest {
   method(): string {
     return this.options.method ?? 'get';
   }
-  /** Raw body text, or `null` when there is none. */
   postData(): string | null {
     return this.options.body ?? null;
   }

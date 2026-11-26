@@ -13,7 +13,6 @@ export interface ClientViewHeader {
   externalId: string;
   /** Assigned staff member's name, or `''` when no staff member is assigned. */
   staff: string;
-  /** Raw `class` attribute of the record's status dot, e.g. `fa fa-circle status-active`. */
   statusClass: string;
 }
 
@@ -28,10 +27,8 @@ export interface AccountRow {
 
 /** One row of the Identities tab's identifier table (AAP 0.10.1 W3, from `GET /clients/{id}/identifiers`). */
 export interface IdentifierRow {
-  /** Document type as rendered, e.g. `National Id`. */
   documentType: string;
   documentKey: string;
-  /** Raw `class` attribute of the status element, `''` when the rendered status carries no class. */
   statusClass: string;
 }
 

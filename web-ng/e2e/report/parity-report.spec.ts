@@ -124,14 +124,14 @@ describe('parity-report line budget', () => {
     expect(markdown).toContain('58,643 generated lines across 245 tracked files');
     expect(markdown).toContain('git ls-files | grep -v package-lock.json | xargs wc -l');
     expect(markdown).toContain('inside the ceiling by 1,357 lines');
-    // The revised totals: the two commits either side of the first prose trim, the seven later measurements and the delivered total.
+    // The revised totals: the two commits either side of the first prose trim, the eight later measurements and the delivered total.
     expect(markdown).toContain('88,418 at `4a13dc7`, the tree before the prose trim');
     expect(markdown).toContain('58,799 at `c05766d`, the tree the trim left');
-    expect(markdown).toContain('then 60,201, 62,420, 60,483, 60,119, 60,053, 60,635 and 60,259 at the seven later measurements');
-    expect(markdown).toContain('rises of 714, 2,636, 665, 242, 92, 865 and 268 net lines');
+    expect(markdown).toContain('then 60,201, 62,420, 60,483, 60,119, 60,053, 60,635, 60,259 and 60,397 at the eight later measurements');
+    expect(markdown).toContain('rises of 714, 2,636, 665, 242, 92, 865, 268 and 702 net lines');
     // The one trim every crossing was answered by, and the code-line guarantee it rests on.
     expect(markdown).toContain('every crossing named above was answered by the same comment-only prose trim');
-    expect(markdown).toContain('the last three of the trims packing the blocks the earlier ones had left onto one line each');
+    expect(markdown).toContain('the last four of the trims packing the blocks the earlier ones had left onto one line each');
     expect(markdown).toContain('model field (AAP 0.14.2)');
     expect(markdown).toContain('every rule-override note with the Rule clause and finding it names');
     expect(markdown).toContain('No code line changed');

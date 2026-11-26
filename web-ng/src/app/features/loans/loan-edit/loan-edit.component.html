@@ -1,35 +1,10 @@
-<!--
-  The edit-loan-application form (`#/editloanaccount/:id`): the persisted application, re-read from Fineract and posted back to the endpoint that saves it (AAP 0.7.3 row "Loan edit"; AAP 0.7.4
-  "Loan screens follow the same shell and card pattern … single-purpose forms rendered in the same card, each with a primary submit and a cancel that returns to the record"). The signed-in shell
-  belongs to `core/layout/shell.component.ts`, so this renders the content card only. The card is the shared `div[appPanelCard]` with its `.panel-heading`/`.panel-title` band (AAP 0.2.3 row
-  `PanelCard`), and every other visual value is a global Bootstrap 3 class of `web-ng/src/styles.scss` — `.container-fluid`, `.row`/`.col-md-*`, `.panel-body`, `.form-group`,
-  `.control-label`, `.form-control` at the legacy 34px control height, `.has-error`/`.help-block`, `.alert.alert-danger` and the two `.btn` footer actions (Rule 1 clause 6; AAP 0.5.2); no style,
-  colour or pixel value is written here.
-
-  Layout: the two-column `.row`/`.col-md-6` grid of the sibling create-client form rather than `form-horizontal`, because `app-date-field` and `app-select-field` each render their own
-  `.form-group` and Bootstrap's `.form-horizontal .form-group` is `make-row` — negative 15px side margins — so nesting those fields would push every date and select 15px past the inputs beside it.
-
-  `web-ng/src/styles.scss` clears that nested group so both families share one label-above convention, and every form's footer right-aligns its actions at any width; this
-  template keeps the grid it was built with.
-
-  Labels: this template owns the `<label class="control-label" for>` of every field, the shared components' included, because the legacy edit form marks each required field with
-  `<span class="required">*</span>` while the components' `[required]` input only reaches assistive technology; the `<label for>` is then the control's accessible name, so the shared fields take
-  no `label` input of their own (WCAG label in name), the composition the create-client form already uses.
-
-  Field ids are the control names — `#principal`, `#loanTermFrequency`, `#numberOfRepayments`, `#repaymentEvery`, `#interestRatePerPeriod`, `#submittedOnDate`,
-  `#expectedDisbursementDate`, `#loanOfficerId`, `#fundId` and the seven enumeration selects — because the parity page objects address the same controls by id on both front ends
-  (`e2e/pages/legacy/loans.page.ts`). Captions are shipped keys of the legacy bundles (`app/global-translations/locale-en.json`) — `label.heading.editloanapplication` and the
-  `label.input.*`/`label.select*` keys of each field, `label.requiredfield` and `label.button.save`/`cancel` — with the not-found sentence reusing `error.msg.resource.not.found`, the key
-  `features/not-found` renders, so no label text is written into this file and every one resolves in every locale (Rule 1 clause 6).
-
-  Error text is Fineract's own: `error()` carries the `ApiError` the shared `screenFailure` hands back for a 4xx, whose `message` is the server's `errors[].defaultUserMessage` rendered
-  verbatim — no prefix, no translation, no truncation — because workflow W7 compares the rendered text with the server's; a 5xx or transport failure is the interceptor's own one notification, so no
-  banner repeats it, and the form stays mounted with every entered value intact (AAP 0.7.4; AAP 0.14.1 "errors are values").
-
-  Deliberately absent: any `min`, `max` or `pattern` on an amount, since W7 depends on Fineract rejecting a 50,000 principal (Rule 1 clause 3); a product or client picker, because the component
-  echoes `productId` and `clientId` from the loaded record instead of offering them; and a charges editor, a confirmation step and a "submit for approval" action, which AAP 0.9.2 keeps out of
-  scope. No chart, image or Figma reference appears, the design covering the login, client-list and client-record screens only.
--->
+<!-- The edit-loan-application form (`#/editloanaccount/:id`): the persisted application, re-read from Fineract and posted back to the endpoint that saves it (AAP 0.7.3 row "Loan edit"; AAP 0.7.4 "Loan screens follow the same shell and card pattern … single-purpose forms rendered in the same card, each with a primary submit and a cancel that returns to the record"). The signed-in shell belongs to `core/layout/shell.component.ts`, so this renders the content card only. The card is the shared `div[appPanelCard]` with its `.panel-heading`/`.panel-title` band (AAP 0.2.3 row `PanelCard`), and every other visual value is a global Bootstrap 3 class of `web-ng/src/styles.scss` — `.container-fluid`, `.row`/`.col-md-*`, `.panel-body`, `.form-group`, `.control-label`, `.form-control` at the legacy 34px control height, `.has-error`/`.help-block`, `.alert.alert-danger` and the two `.btn` footer actions (Rule 1 clause 6; AAP 0.5.2); no style, colour or pixel value is written here.
+  Layout: the two-column `.row`/`.col-md-6` grid of the sibling create-client form rather than `form-horizontal`, because `app-date-field` and `app-select-field` each render their own `.form-group` and Bootstrap's `.form-horizontal .form-group` is `make-row` — negative 15px side margins — so nesting those fields would push every date and select 15px past the inputs beside it.
+  `web-ng/src/styles.scss` clears that nested group so both families share one label-above convention, and every form's footer right-aligns its actions at any width; this template keeps the grid it was built with.
+  Labels: this template owns the `<label class="control-label" for>` of every field, the shared components' included, because the legacy edit form marks each required field with `<span class="required">*</span>` while the components' `[required]` input only reaches assistive technology; the `<label for>` is then the control's accessible name, so the shared fields take no `label` input of their own (WCAG label in name), the composition the create-client form already uses.
+  Field ids are the control names — `#principal`, `#loanTermFrequency`, `#numberOfRepayments`, `#repaymentEvery`, `#interestRatePerPeriod`, `#submittedOnDate`, `#expectedDisbursementDate`, `#loanOfficerId`, `#fundId` and the seven enumeration selects — because the parity page objects address the same controls by id on both front ends (`e2e/pages/legacy/loans.page.ts`). Captions are shipped keys of the legacy bundles (`app/global-translations/locale-en.json`) — `label.heading.editloanapplication` and the `label.input.*`/`label.select*` keys of each field, `label.requiredfield` and `label.button.save`/`cancel` — with the not-found sentence reusing `error.msg.resource.not.found`, the key `features/not-found` renders, so no label text is written into this file and every one resolves in every locale (Rule 1 clause 6).
+  Error text is Fineract's own: `error()` carries the `ApiError` the shared `screenFailure` hands back for a 4xx, whose `message` is the server's `errors[].defaultUserMessage` rendered verbatim — no prefix, no translation, no truncation — because workflow W7 compares the rendered text with the server's; a 5xx or transport failure is the interceptor's own one notification, so no banner repeats it, and the form stays mounted with every entered value intact (AAP 0.7.4; AAP 0.14.1 "errors are values").
+  Deliberately absent: any `min`, `max` or `pattern` on an amount, since W7 depends on Fineract rejecting a 50,000 principal (Rule 1 clause 3); a product or client picker, because the component echoes `productId` and `clientId` from the loaded record instead of offering them; and a charges editor, a confirmation step and a "submit for approval" action, which AAP 0.9.2 keeps out of scope. No chart, image or Figma reference appears, the design covering the login, client-list and client-record screens only. -->
 
 @let principalInvalid = controls.principal.invalid && (controls.principal.touched || controls.principal.dirty);
 @let loanTermInvalid = controls.loanTermFrequency.invalid && (controls.loanTermFrequency.touched || controls.loanTermFrequency.dirty);
@@ -110,16 +85,7 @@
                   >
                     {{ 'label.heading.frequencyType' | translate }}<span class="required">*</span>
                   </label>
-                  <!--
-                    The options are Fineract's own list, rendered in the order the payload returned it
-                    (Rule 1 clause 3: dropdown sources are the template endpoint's). The picker renders
-                    whether or not a list arrived, so the field its control requires always stays on
-                    screen: the control keeps `Validators.required`, which is legacy's own required rule
-                    and nothing added on top of it (Rule 1 clause 3), and a hidden field would leave the
-                    form permanently invalid with nothing visible to correct. A payload that sent no
-                    list therefore renders the honest empty select, in the same seven places the
-                    enumeration pickers always occupy.
-                  -->
+                  <!-- The options are Fineract's own list, rendered in the order the payload returned it (Rule 1 clause 3: dropdown sources are the template endpoint's). The picker renders whether or not a list arrived, so the field its control requires always stays on screen: the control keeps `Validators.required`, which is legacy's own required rule and nothing added on top of it (Rule 1 clause 3), and a hidden field would leave the form permanently invalid with nothing visible to correct. A payload that sent no list therefore renders the honest empty select, in the same seven places the enumeration pickers always occupy. -->
                   <app-select-field
                     inputId="loanTermFrequencyType"
                     [control]="controls.loanTermFrequencyType"

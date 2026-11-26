@@ -13,7 +13,6 @@ const STUB_TENANT = 'default';
 type FailureMode = 'no-response' | 'refused';
 interface FailureCase {
   readonly mode: FailureMode;
-  /** Status the raised `StateSnapshotError` must carry: `0` when no response arrived at all. */
   readonly status: number;
   readonly label: string;
 }

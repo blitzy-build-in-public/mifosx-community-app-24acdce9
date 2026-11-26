@@ -3,7 +3,6 @@ import { ControlValueAccessor, FormControl, NG_VALUE_ACCESSOR, ReactiveFormsModu
 
 import { fromCalendarParts } from '../date-format.util';
 
-/** Source of the per-instance default for `DateFieldComponent.inputId`. */
 let nextDateFieldId = 0;
 
 /** Formats a control's `Date` as the `yyyy-MM-dd` string an `<input type="date">` reads and writes. */

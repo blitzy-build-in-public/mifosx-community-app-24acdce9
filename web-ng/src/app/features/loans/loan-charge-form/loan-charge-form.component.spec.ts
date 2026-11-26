@@ -506,8 +506,7 @@ describe('LoanChargeFormComponent', () => {
     component.form.controls.chargeId.setValue(DISBURSEMENT_CHARGE_ID);
     fixture.detectChanges();
 
-    // The control lives in the card's footer, outside the form it posts, so its `form` attribute is the only thing that makes it that form's submit control — the
-    // association a browser's implicit submission needs before Enter in one of the fields dispatches anything at all.
+    // The control lives in the card's footer, outside the form it posts, so its `form` attribute is the only thing that makes it that form's submit control — the association a browser's implicit submission needs before Enter in one of the fields dispatches anything at all.
     expect(host().querySelectorAll('form')).toHaveLength(1);
     const form: HTMLFormElement | null = saveButton()?.form ?? null;
     expect(form).toBe(host().querySelector('form'));

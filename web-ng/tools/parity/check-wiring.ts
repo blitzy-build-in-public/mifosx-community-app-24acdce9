@@ -15,7 +15,6 @@ const repoRoot: string = fileURLToPath(new URL('../../../', import.meta.url));
 const CHECK = 'check:wiring';
 const ROUTES_FILE = 'in-scope-routes.json';
 const SCOPE_FILE = 'scope-allowlist.json';
-/** Repo-relative path of one parity data file: the name every finding about a list carries. */
 const dataFile = (name: string): string => `web-ng/tools/parity/${name}`;
 const APP_ROOT = join(webNgRoot, 'src', 'app');
 const APP_ROOT_SHOWN = 'web-ng/src/app';
@@ -45,7 +44,6 @@ const WRITE_BOUNDARY = 'write-boundary';
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null;
 
-/** A string field of an object, or `null` when it is absent or holds another type. */
 const asString = (record: Record<string, unknown> | null, key: string): string | null => {
   const value = record === null ? undefined : record[key];
   return typeof value === 'string' ? value : null;
@@ -83,7 +81,6 @@ async function git(args: readonly string[]): Promise<string> {
   return stdout;
 }
 
-/** A data file and the text it was parsed from, so a finding about a row can name the row's own line. */
 interface LoadedData { document: Record<string, unknown>; text: string }
 
 async function loadData(name: string, rule: string, violations: Violation[]): Promise<LoadedData | null> {
@@ -266,7 +263,6 @@ function commentFree(file: string, text: string): string {
   return text;
 }
 
-/** 1-based line of an offset, so a finding names the line the literal is written on. */
 const lineAt = (text: string, offset: number): number => text.slice(0, offset).split('\n').length;
 
 interface ScannedFile { shown: string; text: string }

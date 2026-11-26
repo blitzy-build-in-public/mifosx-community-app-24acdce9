@@ -10,11 +10,8 @@ import {
 } from '../../core/i18n/language-preference.service';
 import { LanguageSwitcherComponent } from './language-switcher.component';
 
-/** Behaviour of the language switcher — the `LanguageSwitcher` row of the component inventory (AAP 0.2.3), the login screen's row (Figma node `1:5`) and the navbar's (node `1:3`). It discharges AAP 0.11.1 (a unit spec beside every component), AAP
- * 0.14.1 ("each screen lands with at least one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`). It pins the caller's label and id with every offered language in the application's order, the language actually in force, one
- * `TranslateService.use()` per change reported only once the switch took effect, a bundle that cannot load reported rather than swallowed with the select written back to the language in force (AAP 0.14.2), a blank selection switching and reporting
- * nothing, no colour or dimension of its own (AAP 0.2.3, Rule 1 clause 6), and the choice remembered in the legacy `ls.Language` entry as the switch is made (`app/scripts/controllers/main/MainController.js:343-345`; Rule 1 clause 3). The translate
- * stack is a typed stand-in for the four members this component and `TranslatePipe` touch, so a case can make one load fail; no HTTP provider exists, because the component reaches no host itself (Rule 1 clause 5). */
+/** Behaviour of the language switcher — the `LanguageSwitcher` row of the component inventory (AAP 0.2.3), the login screen's row (Figma node `1:5`) and the navbar's (node `1:3`). It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with at least one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`). It pins the caller's label and id with every offered language in the application's order, the language actually in force, one `TranslateService.use()` per change reported only once the switch took effect, a bundle that cannot load reported rather than swallowed with the select written back to the language in force (AAP 0.14.2), a blank
+ * selection switching and reporting nothing, no colour or dimension of its own (AAP 0.2.3, Rule 1 clause 6), and the choice remembered in the legacy `ls.Language` entry as the switch is made (`app/scripts/controllers/main/MainController.js:343-345`; Rule 1 clause 3). The translate stack is a typed stand-in for the four members this component and `TranslatePipe` touch, so a case can make one load fail; no HTTP provider exists, because the component reaches no host itself (Rule 1 clause 5). */
 
 /** The offered languages, standing in for `AVAILABLE_LANGS`. */
 const LANGS: readonly string[] = ['en', 'fr', 'es'];
@@ -34,15 +31,13 @@ const LOGIN_LABEL_KEY = 'label.input.changelanguage';
 /** The login screen's select id, legacy's `langSelect`. */
 const LOGIN_SELECT_ID = 'langSelect';
 
-/** Stand-in for the shipped bundles: one distinct value per key, so an assertion can tell which key produced which text and can never pass on a raw dotted key. Test input only — it adds no locale file and reproduces no shipped translation text
- * (Rule 1 clause 6). */
+/** Stand-in for the shipped bundles: one distinct value per key, so an assertion can tell which key produced which text and can never pass on a raw dotted key. Test input only — it adds no locale file and reproduces no shipped translation text (Rule 1 clause 6). */
 const TRANSLATIONS: Readonly<Record<string, string>> = {
   [NAVBAR_LABEL_KEY]: 'Language',
   [LOGIN_LABEL_KEY]: 'Change language:',
 };
 
-/** The ngx-translate surface this component and `TranslatePipe` use: - `currentLang` — ngx-translate 18 declares it a `Signal<Language | null>`, `null` until a bundle is applied; a successful `use` moves it and a failing one leaves it where it was.
- * - `use` — the load a change performs; subscribing to what it returns is what really switches. - `translate` — the member `TranslatePipe.transform` resolves the label key through. */
+/** The ngx-translate surface this component and `TranslatePipe` use: - `currentLang` — ngx-translate 18 declares it a `Signal<Language | null>`, `null` until a bundle is applied; a successful `use` moves it and a failing one leaves it where it was. - `use` — the load a change performs; subscribing to what it returns is what really switches. - `translate` — the member `TranslatePipe.transform` resolves the label key through. */
 interface TranslateStub {
   readonly currentLang: Signal<string | null>;
 

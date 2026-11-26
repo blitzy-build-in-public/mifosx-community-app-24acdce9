@@ -5,16 +5,12 @@ import { FINERACT_URL, LEGACY_URL, TENANT_ID } from '../../seed/fixtures';
 
 /** One `localStorage` entry, described by its key and by the presence and type of the three fields the legacy session carries (AAP 0.3.4 claim 9) (Rule 1 clause 9). */
 export interface SessionEntrySummary {
-  /** The `localStorage` key exactly as the application wrote it. */
   key: string;
-  /** Whether the stored value carries a `userId` field. */
   hasUserId: boolean;
   /** `typeof` the stored `userId`, with `'missing'` for an absent or null field. */
   userIdType: 'number' | 'string' | 'missing' | 'other';
-  /** Whether the stored value carries an `authenticationKey` field. */
   hasAuthenticationKey: boolean;
   authenticationKeyIsNonEmptyString: boolean;
-  /** Whether the stored value carries a `userPermissions` field. */
   hasUserPermissions: boolean;
   userPermissionsIsArray: boolean;
 }

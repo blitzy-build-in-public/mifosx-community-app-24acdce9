@@ -31,7 +31,6 @@ function renderedSelect(fixture: ComponentFixture<SelectFieldComponent>): HTMLSe
   return select;
 }
 
-/** Reads the enclosing `.form-group`, the element that carries the Bootstrap validation state. */
 function renderedGroup(fixture: ComponentFixture<SelectFieldComponent>): HTMLElement {
   const group = (fixture.nativeElement as HTMLElement).querySelector('div.form-group');
 
@@ -70,7 +69,6 @@ function chooseOption(select: HTMLSelectElement, name: string): void {
   select.dispatchEvent(new Event('change'));
 }
 
-/** Label of the option the `<select>` currently shows, or `undefined` when none is selected. */
 function selectedText(select: HTMLSelectElement): string | undefined {
   return select.options[select.selectedIndex]?.textContent?.trim();
 }
@@ -85,7 +83,6 @@ describe('SelectFieldComponent', () => {
     TestBed.resetTestingModule();
   });
 
-  /** Renders the field with the inputs every caller supplies, then applies the overrides. */
   function createField(control: FormControl<SelectValue | null>, inputs: FieldInputs = {}, ): ComponentFixture<SelectFieldComponent> {
     const fixture = TestBed.createComponent(SelectFieldComponent);
 

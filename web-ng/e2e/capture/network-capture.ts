@@ -86,9 +86,7 @@ export interface NormalizedExchange {
   readonly hasTenantHeader: boolean;
   /** Whether the credential header was present. Its value is never recorded (Rule 1 clause 9). */
   readonly hasAuthorizationHeader: boolean;
-  /** Masked, canonicalised request body; `null` when the request carried none. */
   readonly requestBody: NormalizedValue | null;
-  /** Masked, canonicalised response body; `null` when no JSON body arrived. */
   readonly responseBody: NormalizedValue | null;
 }
 /** The tokens one capture's generated ids were mapped to: the real id as a string to the role token it became, e.g. `'123' -> '{clientId}'` (AAP 0.10.2, ids compared by role). */
@@ -96,7 +94,6 @@ export interface RoleMap {
   readonly [realId: string]: string;
 }
 export interface NormalizedCapture {
-  /** Playwright project the capture came from: `legacy` or `next`, `null` when unset. */
   readonly project: string | null;
   /** Workflow id the capture covers, e.g. `W2` or `CHAIN`, `null` when unset. */
   readonly workflow: string | null;
@@ -149,7 +146,6 @@ export function isStaticAssetUrl(url: string): boolean {
 }
 class RoleRegistry {
   private readonly tokens = new Map<string, string>();
-  /** Role to the number of distinct ids it has been given, which yields the `_2`, `_3` suffixes. */
   private readonly counts = new Map<string, number>();
   private readonly order: { readonly realId: string; readonly token: string }[] = [];
   token(role: string, realId: string): string {
