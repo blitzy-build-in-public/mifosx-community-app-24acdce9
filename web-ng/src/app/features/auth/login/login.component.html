@@ -22,11 +22,11 @@
   `web-ng/e2e/pages/legacy/login.page.ts`). What this file keeps is the page around them — the lockup,
   the error region, the footer and the column they sit in.
 
-  One gap in the global layer is visible here and is reported rather than patched locally: the legacy
-  page's `margin-top: 10vh` page offset has no global class, and no invented class or inline value is
-  introduced for it.
+  The legacy page's own `margin-top: 10vh` offset (`app/index.html:30`) is the product's `.login-page`
+  class in `web-ng/src/styles.scss`, named on this file's outer `.container`, so the page starts where
+  the legacy login screen starts and no inline value is introduced for it.
 -->
-<div class="container">
+<div class="container login-page">
   <div class="row">
     <div class="col-xs-12">
       <main>
@@ -110,33 +110,49 @@
         <!--
           The footer's three link columns, one heading and three links each, as the design shows them.
           Every string is a key the shipped legacy bundles already carry, so no label is written into
-          this file and none reaches the user as a raw key. Each heading takes Bootstrap 3's own
+          this file and none reaches the user as a raw key. Each heading is an `<h2>`: the screen
+          renders no `<h1>`–`<h4>`, and legacy's `<h5>` in the same three places
+          (`app/index.html:202,216,233`) would start the page's outline at level 5. The element carries
+          the level; `.footer-heading` in `web-ng/src/styles.scss` carries the design's h5 box, so the
+          rendered size and spacing do not move. Each heading also takes Bootstrap 3's own
           `.text-uppercase` utility because legacy renders the same three keys through
-          `| translate | uppercase` (`app/index.html:202,216,233`), and the transform has to follow the
-          active bundle rather than a literal (Rule 1 clause 3).
+          `| translate | uppercase`, and the transform has to follow the active bundle rather than a
+          literal (Rule 1 clause 3).
 
-          No destination is invented: the link targets behind these columns and this paragraph belong
-          to modules outside this migration's scope (product documentation, community forums,
-          contribution pages), so each renders the inert `href="#"` that `$event.preventDefault()`
-          keeps from navigating — under hash routing a bare `#` would otherwise leave `#/login` for
-          the root fragment. Nothing here is wired to the router.
+          Every destination is legacy's own, so each link goes where the legacy footer sends it
+          (`app/index.html:199-243`, read-only) instead of rendering an inert hash-only href: a
+          focusable control that navigates nowhere is the broken affordance AAP 0.10.5 item 8 rules
+          out, and AAP 0.10.5 registers no difference for these destinations, so they are reproduced
+          (Rule 1 clause 3). Eight of the nine column links carry a `target` in legacy and open a new
+          browsing context — `target="_blank"` here, with `rel="noopener noreferrer"` so the opened
+          page holds no handle on this one. The ninth, `developerzone`, carries no `target` in legacy
+          (`app/index.html:209`), so it stays a plain link in the current tab. Nothing here is wired
+          to the router: every href is a real destination outside the application.
         -->
         <div class="row">
           <div class="col-xs-4 text-center">
             <ul class="list-unstyled">
-              <li><h5 class="text-uppercase">{{ 'label.heading.resources' | translate }}</h5></li>
+              <li><h2 class="text-uppercase footer-heading">{{ 'label.heading.resources' | translate }}</h2></li>
               <li>
-                <a href="#" (click)="$event.preventDefault()">
+                <a
+                  href="https://mifosforge.jira.com/wiki/display/MIFOS/User+Manual"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   {{ 'label.anchor.usermanual' | translate }}
                 </a>
               </li>
               <li>
-                <a href="#" (click)="$event.preventDefault()">
+                <a
+                  href="https://mifosforge.jira.com/wiki/pages/viewpage.action?pageId=14712842"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   {{ 'label.anchor.functionalspec' | translate }}
                 </a>
               </li>
               <li>
-                <a href="#" (click)="$event.preventDefault()">
+                <a href="https://mifosforge.jira.com/wiki/display/MDZ/Welcome+in+the+Zone">
                   {{ 'label.anchor.developerzone' | translate }}
                 </a>
               </li>
@@ -144,19 +160,31 @@
           </div>
           <div class="col-xs-4 text-center">
             <ul class="list-unstyled">
-              <li><h5 class="text-uppercase">{{ 'label.heading.community' | translate }}</h5></li>
+              <li><h2 class="text-uppercase footer-heading">{{ 'label.heading.community' | translate }}</h2></li>
               <li>
-                <a href="#" (click)="$event.preventDefault()">
+                <a
+                  href="https://groups.google.com/forum/#!forum/mifosusers"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   {{ 'label.anchor.usersgroup' | translate }}
                 </a>
               </li>
               <li>
-                <a href="#" (click)="$event.preventDefault()">
+                <a
+                  href="https://groups.google.com/forum/#!forum/mifosdeveloper"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   {{ 'label.anchor.developergroup' | translate }}
                 </a>
               </li>
               <li>
-                <a href="#" (click)="$event.preventDefault()">
+                <a
+                  href="http://mifos.org/community/communications/mifos-irc"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   {{ 'label.anchor.irc' | translate }}
                 </a>
               </li>
@@ -164,19 +192,31 @@
           </div>
           <div class="col-xs-4 text-center">
             <ul class="list-unstyled">
-              <li><h5 class="text-uppercase">{{ 'label.heading.contribute' | translate }}</h5></li>
+              <li><h2 class="text-uppercase footer-heading">{{ 'label.heading.contribute' | translate }}</h2></li>
               <li>
-                <a href="#" (click)="$event.preventDefault()">
+                <a
+                  href="https://mifosforge.jira.com/wiki/display/MDZ/Key+Design+Principles/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   {{ 'label.anchor.keydesignprinciples' | translate }}
                 </a>
               </li>
               <li>
-                <a href="#" (click)="$event.preventDefault()">
+                <a
+                  href="http://sourceforge.net/projects/mifos/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   {{ 'label.anchor.workingwithcode' | translate }}
                 </a>
               </li>
               <li>
-                <a href="#" (click)="$event.preventDefault()">
+                <a
+                  href="http://mifos.org/donate/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   {{ 'label.anchor.donate' | translate }}
                 </a>
               </li>
@@ -188,7 +228,8 @@
 
         <!--
           The centred closing paragraph, at the width the design gives it, with its three inline
-          links rendered inert for the same reason as the columns above.
+          links carrying legacy's own destinations (`app/scripts/controllers/main/MainController.js:220-222`),
+          which open in the current tab exactly as legacy's do.
 
           BLITZY [I18N]: this is the one string on the screen that is not translated, because the
           legacy application never translated it either — it is hard-coded English HTML in
@@ -202,14 +243,14 @@
           <div class="col-sm-6 col-sm-offset-3 text-center">
             <p class="text-muted">
               Mifos X is designed by the
-              <a href="#" (click)="$event.preventDefault()">Mifos Initiative</a>.
-              <a href="#" (click)="$event.preventDefault()">A global community</a>
+              <a href="http://www.openmf.org/">Mifos Initiative</a>.
+              <a href="http://mifos.org/resources/community/">A global community</a>
               that aims to speed the elimination of poverty by enabling Organizations to more
               effectively and efficiently deliver responsible financial services to the world’s poor
               and unbanked.
               <br />
               Sounds interesting?
-              <a href="#" (click)="$event.preventDefault()">Get involved!</a>
+              <a href="http://mifos.org/take-action/volunteer/">Get involved!</a>
             </p>
           </div>
         </div>

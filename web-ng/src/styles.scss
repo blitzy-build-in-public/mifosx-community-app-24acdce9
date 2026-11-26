@@ -363,6 +363,30 @@ span.required {
   width: 71.6%; // 257.7px (283.5 / 1.1) inside the design's 360px form column
 }
 
+// ----------------------------------------------------------------------------- Login page offset: legacy's own `margin-top: 10vh` on the login container (app/index.html:30). -----------------------------------------------------------------------------
+
+.login-page {
+  margin-top: 10vh; // legacy app/index.html:30 — the login page's own offset
+}
+
+// ----------------------------------------------------------------------------- Login footer headings.
+//
+// The footer's three column headings are `<h2>` elements: they are the only headings the login screen
+// renders, so at the `<h5>` legacy uses in the same three places [app/index.html:202,216,233] the
+// page's outline began at level 5 and told a screen-reader user nothing about the page. The level
+// belongs to the element; the visible size is the design's and stays on this class, which reproduces
+// Bootstrap 3's own h5 box from its variables ($font-size-h5, $headings-font-weight,
+// $headings-line-height and the h4–h6 `$line-height-computed / 2` margins) so no pixel moves.
+// -----------------------------------------------------------------------------
+
+.footer-heading {
+  font-size: $font-size-h5; // the h5 size (14px), not the h2 size (30px) the element carries
+  font-weight: $headings-font-weight;
+  line-height: $headings-line-height; // Bootstrap's 1.1 for every heading
+  margin-top: $line-height-computed * 0.5; // the h4–h6 margin: half the 20px computed line height
+  margin-bottom: $line-height-computed * 0.5;
+}
+
 // ----------------------------------------------------------------------------- Navbar (_navbar.scss, _layout.scss) -----------------------------------------------------------------------------
 
 // AAP 0.2.1 fixes the layout rule "a fixed top navbar above a scrolling content column", and legacy

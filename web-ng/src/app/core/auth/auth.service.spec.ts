@@ -12,7 +12,7 @@ import { PermissionsService } from './permissions.service';
 import type { AuthResponse, SessionData, SessionUserResponse } from './session.model';
 import { SessionService, sessionStorageKey } from './session.service';
 
-/** Contract and behaviour spec for `AuthService`, the application's only credential exchange and the proof of workflow W1 (AAP 0.10.1: `POST /authentication`, then `GET /users/{id}`). */
+/** Contract and behaviour spec for `AuthService`, the application's only credential exchange and the proof of workflow W1 (AAP 0.10.1: `POST /authentication`, then `GET /users/{id}`); a restore that leaves no session in effect rejects the login with the projection failure's own `ApiError`, so a failed post-login read is never an unexplained return to the login form (AAP 0.14.2). */
 
 /** The served API host and root, written out exactly as `web-ng/src/assets/config.json` ships them. */
 const API_BASE_URL = 'https://localhost:8443';
@@ -255,24 +255,47 @@ describe('AuthService', () => {
     expect(permissions.can('DELETE_CLIENT')).toBe(false);
   });
 
-  it('keeps the login successful when the user projection cannot be read', async () => {
-    // The prompt's restore-false path: the entry is written, the projection read fails, and the login resolves rather than reporting a credential rejection that never happened.
-    await loginThrough(httpMock, service, {
-      password: submittedPassword(),
-      users: (request: TestRequest) => request.flush(
-        { defaultUserMessage: 'Not permitted' },
-        { status: 403, statusText: 'Forbidden' },
-      ),
-    });
+  it.each([
+    { status: 403, message: 'Not permitted' },
+    { status: 500, message: 'Server error' },
+  ])(
+    'rejects the login with the user projection failure for a $status answer',
+    async ({ status, message }: { status: number; message: string }) => {
+      // The post-login read is the login's own last step, so a failure there is a failed sign-in: the
+      // entry stays written, no session is in effect, and the caller is told why instead of navigating
+      // into a guard that sends the user straight back to this form with nothing said. The 403 is the
+      // status the interceptor deliberately leaves silent; the 500 arrives on top of its one
+      // notification, and both reject the same way (AAP 0.14.2).
+      const login = service.login(USERNAME, submittedPassword());
 
-    expect(storedSession()).toEqual(expectedSession());
-    expect(sessions.read()).toEqual(expectedSession());
-    expect(service.isAuthenticated()).toBe(false);
-    expect(service.user()).toBeNull();
-    expect(service.permissions()).toEqual([]);
-    expect(service.username()).toBeNull();
-    expect(permissions.can('READ_CLIENT')).toBe(false);
-  });
+      httpMock.expectOne(byMethodAndUrl('POST', AUTHENTICATION_URL)).flush(authResponse());
+      await Promise.resolve();
+
+      httpMock.expectOne(byMethodAndUrl('GET', usersUrl(USER_ID))).flush(
+        { defaultUserMessage: message },
+        { status, statusText: String(status) },
+      );
+
+      const failure = await rejectionOf(login);
+
+      assertApiError(failure);
+      // The server's own text, character for character, and the status it arrived with, so the screen
+      // paints a failed projection read the way it paints a refused credential (AAP 0.4.4 decision 6).
+      expect(failure.message).toBe(message);
+      expect(failure.status).toBe(status);
+
+      // The entry is still where a 401 can act on it, and the gate is closed (AAP 0.1.1, AAP 0.14.2).
+      expect(storedSession()).toEqual(expectedSession());
+      expect(sessions.read()).toEqual(expectedSession());
+      expect(service.isAuthenticated()).toBe(false);
+      expect(service.user()).toBeNull();
+      expect(service.permissions()).toEqual([]);
+      expect(service.username()).toBeNull();
+      expect(permissions.can('READ_CLIENT')).toBe(false);
+      // Exactly one projection read: the rejection adds no request and no retry (Rule 1 clause 2).
+      httpMock.expectNone(byMethodAndUrl('GET', usersUrl(USER_ID)));
+    },
+  );
 
   it('surfaces the authentication failure unchanged and writes no session', async () => {
     const login = service.login(USERNAME, submittedPassword());

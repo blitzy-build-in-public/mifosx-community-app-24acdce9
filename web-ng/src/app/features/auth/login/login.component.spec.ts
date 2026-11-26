@@ -658,6 +658,56 @@ describe('LoginComponent', () => {
       expect(loginForm().form.controls.password.value).toBe('');
     },
   );
+
+  it('sends every footer and legal link to the destination legacy carries', () => {
+    // Legacy's own destinations, in the footer's DOM order: the nine column links and the three inline
+    // legal links. An inert `href="#"` with a cancelled click was the dead affordance AAP 0.10.5 item 8
+    // argues against, and AAP 0.10.5 registers no difference for these destinations (Rule 1 clause 3).
+    const anchors = Array.from(host().querySelectorAll<HTMLAnchorElement>('footer a'));
+
+    expect(anchors.map((anchor) => anchor.getAttribute('href'))).toEqual([
+      'https://mifosforge.jira.com/wiki/display/MIFOS/User+Manual',
+      'https://mifosforge.jira.com/wiki/pages/viewpage.action?pageId=14712842',
+      'https://mifosforge.jira.com/wiki/display/MDZ/Welcome+in+the+Zone',
+      'https://groups.google.com/forum/#!forum/mifosusers',
+      'https://groups.google.com/forum/#!forum/mifosdeveloper',
+      'http://mifos.org/community/communications/mifos-irc',
+      'https://mifosforge.jira.com/wiki/display/MDZ/Key+Design+Principles/',
+      'http://sourceforge.net/projects/mifos/',
+      'http://mifos.org/donate/',
+      'http://www.openmf.org/',
+      'http://mifos.org/resources/community/',
+      'http://mifos.org/take-action/volunteer/',
+    ]);
+    expect(anchors.filter((anchor) => anchor.getAttribute('href') === '#')).toHaveLength(0);
+
+    // The eight column links legacy opens in another browsing context, and only those.
+    const newContext = anchors.filter((anchor) => anchor.getAttribute('target') === '_blank');
+
+    expect(newContext).toHaveLength(8);
+    expect(newContext.every((anchor) => anchor.getAttribute('rel') === 'noopener noreferrer')).toBe(true);
+  });
+
+  it('starts the heading outline at level 2 and keeps the design size on the class', () => {
+    const headings = Array.from(host().querySelectorAll<HTMLElement>('h1,h2,h3,h4,h5,h6'));
+
+    // `<h5>` was the only heading level on the screen, so the outline began at level 5; the level is
+    // now the element's and the design's size is the class's, which `styles.scss` maps to Bootstrap's
+    // own h5 box (AAP 0.2.3; Rule 1 clause 6).
+    expect(headings.map((heading) => heading.tagName)).toEqual(['H2', 'H2', 'H2']);
+    expect(headings.map((heading) => heading.textContent?.trim())).toEqual([
+      TRANSLATIONS['label.heading.resources'],
+      TRANSLATIONS['label.heading.community'],
+      TRANSLATIONS['label.heading.contribute'],
+    ]);
+
+    for (const heading of headings) {
+      expect(heading.classList.contains('text-uppercase')).toBe(true);
+      expect(heading.classList.contains('footer-heading')).toBe(true);
+    }
+
+    expect(host().querySelector('h5')).toBeNull();
+  });
 });
 
 afterEach(() => {

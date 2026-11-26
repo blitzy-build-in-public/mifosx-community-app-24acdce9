@@ -1,9 +1,9 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, type Signal } from '@angular/core';
-import { firstValueFrom, type Observable } from 'rxjs';
+import { catchError, firstValueFrom, throwError, type Observable } from 'rxjs';
 
 import { AppConfigService } from '../config/app-config.service';
-import { ApiError } from '../http/api-error';
+import { ApiError, toDisplayableFailure } from '../http/api-error';
 import type { AuthResponse, SessionData, SessionUserResponse } from './session.model';
 import { SessionService, type SessionUserReader } from './session.service';
 
@@ -22,6 +22,10 @@ const NO_PERMISSIONS: readonly string[] = Object.freeze([]);
 const MALFORMED_AUTHENTICATION_RESPONSE =
   'The authentication response did not carry a user id, an authentication key and a permission list, ' +
   'so no session was created.';
+
+/** The message a sign-in that leaves no session in effect is refused with when no failed request explains it: it names the missing session and repeats no submitted value, so no account name, password or authentication key can reach a screen, a log or a capture through it (Rule 1 clause 9, AAP 0.10.4). */
+const NO_SESSION_AFTER_SIGN_IN =
+  'The sign-in was accepted but no session is in effect, so the user was not signed in.';
 
 /** Narrows the `POST /authentication` answer into the session this application stores, or `null` when a member it needs is not of the right shape — the documented wire boundary of Rule 1 clause 4, and why no request can carry `Authorization: Basic undefined` (AAP 0.7.2 row `AuthResponse`). */
 function toSession(value: unknown): SessionData | null {
@@ -78,7 +82,11 @@ export class AuthService {
   /** The account name the navigation bar labels its user menu with — `username` from `GET /users/{id}` — or `null` before a restore has resolved one. */
   readonly username: Signal<string | null> = this.sessions.username;
 
-  /** Authenticates with Fineract and puts the resulting session into effect: `POST /authentication`, the checked answer written as the legacy entry, then the restore that issues `GET /users/{id}`; an answer that cannot describe a session rejects before anything is kept (AAP 0.7.1 `login`, AAP 0.10.1 W1). */
+  /**
+   * Authenticates with Fineract and puts the resulting session into effect: `POST /authentication`, the checked answer written as the legacy entry, then the restore that issues `GET /users/{id}`; an answer that cannot describe a session rejects before anything is kept (AAP 0.7.1 `login`, AAP 0.10.1 W1).
+   *
+   * A restore that leaves no session in effect rejects the login with the failure that caused it — the `ApiError` the interceptor built from the failed `GET /users/{id}`, or {@link NO_SESSION_AFTER_SIGN_IN} when nothing failed — so a correct password never ends in an unexplained return to the login form once `authGuard` reads the withdrawn session. The 4xx the interceptor deliberately leaves silent is the case this closes (AAP 0.14.2 "Error handling"); a 5xx or transport fault reaches the caller as the same `ApiError` its one notification already reported. The written entry stays in either case: the 401 that ends such a session for good is the interceptor's decision, not this method's.
+   */
   async login(username: string, password: string): Promise<void> {
     const request: AuthenticationRequest = { username, password };
 
@@ -95,8 +103,38 @@ export class AuthService {
 
     this.sessions.write(session);
 
-    // The entry exists from here on even if the restore fails, so its result is deliberately not tested: a 401, not a failed login, is what ends such a session.
-    await this.sessions.restore(this.readUser);
+    // The cause of this call's own projection read is kept local to it, never in instance state, so two
+    // logins in flight cannot read each other's failure. The reader rethrows it unchanged, which leaves
+    // `SessionService.restore()`'s `Promise<boolean>` contract alone: it still resolves `false` and still
+    // leaves the written entry where a 401 can act on it.
+    const captured: { cause?: unknown } = {};
+
+    const readProjection: SessionUserReader = (userId: number) =>
+      this.readUser(userId).pipe(
+        catchError((cause: unknown) => {
+          captured.cause = cause;
+          return throwError(() => cause);
+        }),
+      );
+
+    if (await this.sessions.restore(readProjection)) {
+      return;
+    }
+
+    // No session is in effect, so the login did not happen: resolving would navigate a screen an empty
+    // session then sends straight back here with nothing said — what a silent 4xx made indistinguishable
+    // from a refused credential (AAP 0.14.2 "Error handling": every HTTP call path ends in a rendered
+    // message). The status the failure arrived with is kept, so a 4xx is painted inline by the screen
+    // and a 5xx or transport fault is left to the interceptor's one notification. The no-cause case
+    // carries status 200 like the malformed-answer refusal above, the marker this codebase uses for a
+    // locally raised error that no HTTP answer explains.
+    //
+    // This is a deliberate difference from legacy, which shows the user nothing on this path (Rule 1
+    // clause 3): AAP 0.14.2 requires a rendered failure, and the sign-in form's one error region is
+    // where it is rendered.
+    throw 'cause' in captured
+      ? toDisplayableFailure(captured.cause)
+      : new ApiError(NO_SESSION_AFTER_SIGN_IN, 200);
   }
 
   /** Resumes the session a stored legacy entry describes by re-reading `GET /users/{id}`, called once from the app initializer before the first navigation (AAP 0.3.4 claim 9; AAP 0.7.1 `restore`); a failed projection resolves `false` rather than rejecting, leaving the gate closed. */

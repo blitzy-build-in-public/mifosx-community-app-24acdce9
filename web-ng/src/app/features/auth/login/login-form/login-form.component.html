@@ -71,9 +71,16 @@
   >
     <label class="form-label" for="pwd">{{ 'label.input.password' | translate }}</label>
     <!--
-      `type="password"` and the legacy screen's own `autocomplete="new-password"`: the value is
-      masked on screen and never echoed, logged or captured (Rule 1 clause 9). This template owns no
-      second copy of the credential, so nothing here can leak it.
+      `type="password"` masks the value on screen, and the field is neither echoed nor logged nor
+      captured (Rule 1 clause 9); this template owns no second copy of the credential, so nothing here
+      can leak the value.
+
+      BLITZY [A11Y]: `autocomplete="new-password"` is the legacy screen's own token, written on the
+      same input at `app/index.html:107-108`, and it stays for parity under Rule 1 clause 3 — legacy
+      behaviour is matched rather than improved, and AAP 0.10.5 registers no difference here. The token
+      is the *new credential* hint, not the sign-in hint a form like this one would use, so a password
+      manager treats the field as a credential being created: it withholds the saved Fineract password
+      and the user retypes it on every sign-in.
     -->
     <input
       id="pwd"
