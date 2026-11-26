@@ -298,22 +298,14 @@
 
             @case ('undodisbursal') {
               <!--
-                `POST /loans/{id}?command=undodisbursal`: a confirm view with no control at all, because
-                the command takes an empty body and legacy's undo-disbursal screen shows no field. The
-                sentence is legacy's own confirm wording (`label.areyousure`, the key its confirm actions
-                render before a destructive submit) and it comes from `app-empty-state`, which draws
-                exactly the centred muted text of the surrounding card and so introduces no new visual
-                language. Legacy's own undo-disbursal branch renders no such line, so this caption is the
-                one deliberate addition here: it states the action being confirmed, carries no control,
-                no field and no new copy, and it is kept because the action screen's specification asks
-                the control-free modes to state the confirmed action (Rule 1 clause 3, departure
-                recorded). There is no form to submit, which is why the primary control is a button that
-                calls the same guarded submit.
+                `POST /loans/{id}?command=undodisbursal`: legacy's undo-disbursal mode sets neither
+                `showDelete` nor `showwaiveforspecicficduedate` (`LoanAccountActionsController.js`), so
+                its branch renders no field and no caption — only the cancel and save controls — and the
+                command takes an empty body. This view therefore renders nothing above those two
+                controls and states nothing legacy does not (Rule 1 clause 3; AAP 0.7.4). There is no
+                form to submit, which is why the primary control is a button that calls the same guarded
+                submit.
               -->
-              <div class="panel-body">
-                <app-empty-state [message]="'label.areyousure' | translate" />
-              </div>
-
               <div class="panel-footer">
                 <a class="btn btn-default" [routerLink]="['/viewloanaccount', id()]">{{
                   cancelKey | translate

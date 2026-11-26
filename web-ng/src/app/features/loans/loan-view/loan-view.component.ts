@@ -6,17 +6,17 @@ import {
   computed,
   inject,
   signal,
-  type Signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink, type ParamMap } from '@angular/router';
-import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { TranslatePipe } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
 import { ApiError } from '../../../core/http/api-error';
 import { HasPermissionDirective } from '../../../shared/has-permission.directive';
 import { PanelCardComponent } from '../../../shared/panel-card/panel-card.component';
 import type { StatusKey } from '../../../shared/status-key.util';
 import { StatusSwatchComponent } from '../../../shared/status-swatch/status-swatch.component';
+import { createTranslatedLabels } from '../../../shared/translated-label.util';
 import {
   TabStripComponent,
   type TabDescriptor,
@@ -97,7 +97,7 @@ export interface LoanActionDefinition extends Omit<LoanActionLink, 'commands'> {
   readonly route: (id: string) => readonly string[];
 }
 
-/** The actions the legacy loan record offers, and the states it offers each one in, transcribed from `ViewLoanDetailsController.js`, whose `scope.buttons.singlebuttons` is built per loan status: submitted and pending (Rule 1 clause 3, AAP 0.7.4). */
+/** The actions the legacy loan record offers, and the states it offers each one in, transcribed from `ViewLoanDetailsController.js`, whose `scope.buttons.singlebuttons` is built per loan status: submitted and pending (Rule 1 clause 3, AAP 0.7.4). Add-charge's provenance differs by state and does not narrow its `statuses`: legacy carries `button.addloancharge` in the button row (`singlebuttons`) for a submitted application and for an active loan, and in the `options` list for an approved loan, which `viewloanaccountdetails.html` renders as its "More" dropdown — this record shows both legacy lists as its one joined action group, so the row is offered in all three states exactly as the legacy record offers it. */
 export const LOAN_ACTIONS: readonly LoanActionDefinition[] = [
   {
     id: 'loan-action-addcharge',
@@ -182,8 +182,6 @@ export class LoanViewComponent {
   private readonly route = inject(ActivatedRoute);
   /** Ties the single outstanding read to this component's lifetime, so leaving cancels it. */
   private readonly destroyRef = inject(DestroyRef);
-  /** The one owner of the active language, used only to resolve the two tab captions: the tab strip takes plain display text rather than keys, so those two strings cannot go through `TranslatePipe`. */
-  private readonly translate = inject(TranslateService);
   /** The loan id from the route, as text — the `:id` of `#/viewloanaccount/:id`, empty when the route carried none, which is the only case in which the read is not issued; a signal rather than a snapshot value because the router reuses this component when the URL moves from one record to another. */
   readonly loanId = signal('');
   /** Which read is the current one, incremented by every run of {@link LoanViewComponent.load}: the router reuses this component across records, so a superseded run compares its own number after each await and returns instead of writing, and a late response can neither paint the earlier loan under the later loan's URL nor clear the loading state of the run that replaced it. */
@@ -198,14 +196,14 @@ export class LoanViewComponent {
   readonly error = signal<ApiError | null>(null);
   /** Whether the route carried no loan id at all; set by the load of the emission that named none. */
   private readonly missingId = signal(false);
-  /** Counts the moments at which a tab caption must be resolved again — a language switch and a bundle arriving — and is read inside every caption signal, so a caption resolved before its bundle had loaded is replaced by the real legacy wording instead of staying at the fallback for the life of the screen. */
-  private readonly labelsRevision = signal(0);
+  /** Resolves the record's tab captions through the one shared label helper, `shared/translated-label.util.ts`, so the `Translation → string` boundary and the language-change and bundle-arrival subscriptions that re-resolve a caption exist once in the application rather than once per screen; this record needs it because `TabStripComponent` takes plain display text rather than keys `TranslatePipe` could re-resolve, so the three tab captions are the only labels on the page that cannot go through the pipe (Rule 1 clauses 3 and 4; AAP 0.14.1). Declared before the caption fields because field initializers run in declaration order. */
+  private readonly labels = createTranslatedLabels();
   /** Already-translated caption of the repayment-schedule tab (legacy `label.heading.repaymentschedule`). */
-  private readonly scheduleTabLabel = this.translated('label.heading.repaymentschedule');
+  private readonly scheduleTabLabel = this.labels('label.heading.repaymentschedule');
   /** Already-translated caption of the transactions tab (legacy `label.heading.transactions`). */
-  private readonly transactionsTabLabel = this.translated('label.heading.transactions');
+  private readonly transactionsTabLabel = this.labels('label.heading.transactions');
   /** Already-translated caption of the charges tab (legacy `label.heading.charges`). */
-  private readonly chargesTabLabel = this.translated('label.heading.charges');
+  private readonly chargesTabLabel = this.labels('label.heading.charges');
   /** Whether the record does not exist — the route named no id, or Fineract answered 404 — in which case the template renders the not-found message in place of the record (AAP 0.7.4). */
   readonly notFound = computed<boolean>(() => this.missingId() || this.error()?.status === 404);
   /** The failure this screen must render itself: a 4xx other than 404, whose Fineract message is shown verbatim with the screen still usable (AAP 0.7.4). The discriminator is deliberate: a 5xx or a transport failure (`status` 0) has already produced exactly one notification in the interceptor, so it answers `null` here and the message is never shown twice, and a 404 answers `null` because `notFound` owns that state. */
@@ -275,9 +273,6 @@ export class LoanViewComponent {
   /** Whether the charges section is the one on screen. */
   readonly showCharges = computed<boolean>(() => this.activeTab() === CHARGES_TAB);
   constructor() {
-    const refreshLabels = (): void => this.labelsRevision.update((revision) => revision + 1);
-    this.translate.onLangChange.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(refreshLabels);
-    this.translate.onTranslationChange.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(refreshLabels);
     // One subscription, never a `snapshot` read beside it: the router reuses this component when the URL moves from one record to another, and a single read would leave the first loan's record, figures and action links on screen under the second loan's URL. Each emission therefore resets the screen and re-runs the read for the loan the URL now names, the way `loan-edit` and `client-actions` handle the same reuse.
     this.route.paramMap
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -336,15 +331,6 @@ export class LoanViewComponent {
     if (id === SCHEDULE_TAB || id === TRANSACTIONS_TAB || id === CHARGES_TAB) {
       this.activeTab.set(id);
     }
-  }
-  /** Builds one caption signal from a legacy translation key, resolved with `instant()` because `TabStripComponent` takes its labels as plain display text rather than as keys `TranslatePipe` could re-resolve; `instant()` (Rule 1 clause 6). */
-  private translated(key: string): Signal<string> {
-    return computed((): string => {
-      this.labelsRevision();
-      this.translate.currentLang();
-      // `TranslateService.instant` is typed `Translation`, which ngx-translate declares as `StrictTranslation | any` because a bundle may hold a nested object. Every caption this screen reads is a flat string in the legacy bundles, so the value is narrowed to `string` here once, at the one boundary where the library's type stops being exact (Rule 1 clause 4).
-      return this.translate.instant(key) as string;
-    });
   }
   /** The `ApiError` a failed read is reported as: the interceptor maps every `HttpErrorResponse` into an `ApiError` before rethrowing it, so the defensive branch is unreachable through the application and exists only so a. */
   private asApiError(cause: unknown): ApiError {

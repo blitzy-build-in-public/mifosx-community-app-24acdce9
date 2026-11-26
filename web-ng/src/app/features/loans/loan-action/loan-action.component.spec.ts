@@ -67,7 +67,6 @@ const TRANSLATIONS: Readonly<Record<string, string>> = {
   'label.button.cancel': 'Cancel',
   'label.heading.notavailable': 'Not Available',
   'error.msg.resource.not.found': 'The requested resource is not available.',
-  'label.areyousure': 'Are you sure?',
 };
 const APPROVAL_TEMPLATE: LoanActionTemplate = {
   approvalDate: [2026, 11, 24],
@@ -550,7 +549,9 @@ describe('LoanActionComponent', () => {
     httpMock.expectNone(() => true);
     fixture.detectChanges();
     expect(host().querySelector('h3.panel-title')?.textContent?.trim()).toBe('Undo Disburse Loan Account');
-    expect(host().querySelector('app-empty-state')?.textContent?.trim()).toBe('Are you sure?');
+    expect(host().querySelector('app-empty-state')).toBeNull();
+    expect(host().querySelector('.panel-body')).toBeNull();
+    expect(host().textContent ?? '').not.toContain('Are you sure');
     expect(host().querySelector('form')).toBeNull();
     expect(host().querySelector('.panel-footer button.btn-primary')?.textContent?.trim()).toBe(
       'Undo Disbursal',

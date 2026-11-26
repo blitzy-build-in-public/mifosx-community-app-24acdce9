@@ -19,7 +19,7 @@
   `.container-fluid` is the page container, `.row`/`.col-md-*` the grid, `.panel-body` the card's 13px
   body, `.record-title` the record's 24px/700 heading, `.value-key` the bold key column of the
   record's label/value rows,
-  `.text-small` the product's 12px secondary text, `.table` (inside the two section components) the
+  `.text-small` the product's 12px secondary text, `.table` (inside the three section components) the
   header band and row rules, `.nav-tabs` the strip, `.btn.btn-primary` the brand fill with its white
   label inside `.btn-group`'s joined group, `.alert.alert-danger` the failure banner and `hr` the
   hairline rule the stylesheet owns.
@@ -83,11 +83,16 @@
   of the legacy record's per-status button list, so only the steps the loan's own state offers appear:
   add-charge, approve, modify and reject on a submitted application; add-charge, disburse and undo
   approval on an approved loan; add-charge, make repayment and undo disbursal on an active loan; none
-  on a loan in any other state (Rule 1 clause 3). Each link is a `routerLink` to the screen that
-  serves it — the six `loanaccount/:id/:action` segments, the charge form and the edit form, the seven
-  paths `loans.routes.ts` declares — and is gated by `HasPermissionDirective` on that row's own
-  Fineract code, so a user holding exactly the codes the legacy record asks for sees exactly the links
-  it showed. The captions are the legacy record's own button keys, the codes a link and the screen it
+  on a loan in any other state (Rule 1 clause 3). Add-charge's provenance differs by state and is why
+  it appears in all three: legacy's button row carries it on a submitted application and on an active
+  loan, while for an approved loan `ViewLoanDetailsController.js` carries it in that status's `options`
+  list, which `viewloanaccountdetails.html` renders as its "More" dropdown — this record shows both
+  legacy lists as the one joined group. Each link is a `routerLink` to the screen that serves it — the
+  eight paths its eight rows open (six `loanaccount/:id/:action` segments, the charge form's path and
+  the edit form's) over the six routes `loans.routes.ts` declares, those six segments being matches of
+  the one parameterised route — and is gated by `HasPermissionDirective` on that row's own Fineract
+  code, so a user holding exactly the codes the legacy record asks for sees exactly the links it
+  showed. The captions are the legacy record's own button keys, the codes a link and the screen it
   reaches come from one table, and the group is omitted entirely for a state with no action rather
   than rendered empty.
 
