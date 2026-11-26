@@ -88,7 +88,7 @@ const STATUS_SWATCH = 'app-status-swatch';
 
 const EMPTY_STATE = 'app-empty-state';
 
-// The four colour classes the status indicator paints — `status-active`, `status-pending`, `status-closed` and `status-other` — are the vocabulary `shared/status-swatch` binds (AAP 0.2.3 row `StatusSwatch`).
+// The six colour classes the status indicator paints — `status-active`, `status-pending`, `status-closed`, `status-rejected`, `status-withdrawn` and `status-other` — are the vocabulary `shared/status-swatch` binds (AAP 0.2.3 row `StatusSwatch`, AAP 0.5.4 row "Status indicator").
 
 const SCREEN_TIMEOUT_MS = 30_000;
 
@@ -138,6 +138,8 @@ function readRowsInPage(query: RowQuery): RowReading[] {
     'status-active',
     'status-pending',
     'status-closed',
+    'status-rejected',
+    'status-withdrawn',
     'status-other',
   ];
 
@@ -159,7 +161,7 @@ function readRowsInPage(query: RowQuery): RowReading[] {
 
     let statusClass = '';
     const indicator: Element | null = row.querySelector(
-      '.status-swatch, .status-active, .status-pending, .status-closed, .status-other',
+      '.status-swatch, .status-active, .status-pending, .status-closed, .status-rejected, .status-withdrawn, .status-other',
     );
 
     if (indicator !== null) {
@@ -259,6 +261,8 @@ function readSwatchesInPage(hostSelector: string): SwatchReading[] {
     'status-active',
     'status-pending',
     'status-closed',
+    'status-rejected',
+    'status-withdrawn',
     'status-other',
   ];
 

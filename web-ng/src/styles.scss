@@ -97,9 +97,13 @@ $mx-brand-border: #378CEB; // color-primary-border — $btn-primary-border
 $mx-tab-accent: #428BCA; // color-tab-accent — the active tab's 3px top bar
 $mx-status-active: #00CE02; // color-status-active
 $mx-status-pending: #FFA500; // color-status-pending
-// AAP 0.2.2 fixes a colour for the active and pending status keys only. These two carry the same neutrals the closed and other keys paint today, so a later change to a body-text token cannot silently repaint a status indicator.
+// AAP 0.2.2 fixes a colour for the active and pending status keys only. The four below give every other key a value of its own, so that no two keys paint the same pixels: the two neutrals these indicators have always carried, stated as their own literals so a later change to a body-text token cannot silently repaint one, and the two terminal states' hues.
 $mx-status-closed: #777777; // color-text-secondary's value — the closed key's neutral
 $mx-status-other: #999999; // color-placeholder's value — the other key's neutral
+$mx-status-rejected: $mx-danger; // the product's danger value, $brand-danger [_variables.scss:23] — a refused record's
+                                 // colour, and the same red the error notification beside it already carries
+$mx-status-withdrawn: #800080; // _content.scss's `.statusoverpaid` violet [:419] — the one hue the palette leaves free,
+                               // and the fill that keeps a withdrawn record off the rejected red and the closed grey
 
 // Metrics
 $mx-control-height: 34px; // space-control — .form-control height
@@ -636,7 +640,7 @@ app-profile-card .panel-body > .row > .col-xs-5 {
 
 // ----------------------------------------------------------------------------- Client status (AAP 0.2.4: CSS on the legacy status class, consumed by StatusSwatch) -----------------------------------------------------------------------------
 
-// Geometry and colour only: the design shows a colour and no word (AAP 0.10.5, Rule 1 clause 6). That makes colour the sole carrier of client status, and StatusSwatch's span is aria-hidden, so a screen reader learns nothing from it and under `forced-colors: active` every swatch paints the same. Telling the states apart without colour — a border weight, a glyph, a visually hidden label — changes the indicator the design specifies and so needs a designer's decision rather than a rule here.
+// Geometry and colour only: the design shows a colour and no word, so the fill is the whole of the indicator (AAP 0.10.5 item 11, Rule 1 clause 6). Each of the six keys therefore paints a colour of its own below, as legacy's own status classes did, so a rejected record, a withdrawn one and a closed one are three different fills rather than one shared grey; and `.status-swatch` opts out of the user agent's forced-colours substitution, without which every fill is replaced with the canvas colour and the Status column reads blank under `forced-colors: active` (AAP 0.5.4).
 
 .status-swatch {
   display: inline-block;
@@ -646,6 +650,8 @@ app-profile-card .panel-body > .row > .col-xs-5 {
   border-radius: 0;
   box-shadow: none;
   vertical-align: middle;
+  // Under `forced-colors: active` the UA replaces an author background with the canvas colour, which would paint every key the same and leave the Status column blank; this keeps the authored fill in that mode, the indicator carrying no other carrier.
+  forced-color-adjust: none;
 }
 
 .status-dot {
@@ -654,10 +660,12 @@ app-profile-card .panel-body > .row > .col-xs-5 {
   border-radius: 50%;
 }
 
-// The four keys StatusSwatch paints. AAP 0.2.2 fixes the active and pending colours; closed and other keep the neutrals they paint today, so a later change to a body-text token cannot silently repaint a status indicator.
+// The six keys StatusSwatch paints. AAP 0.2.2 fixes the active and pending colours; the other four take the values declared above, one hue each, so a later change to a body-text token cannot silently repaint a status indicator.
 .status-active { background-color: $mx-status-active; } // color-status-active
 .status-pending { background-color: $mx-status-pending; } // color-status-pending
 .status-closed { background-color: $mx-status-closed; } // the closed key's neutral, #777777
+.status-rejected { background-color: $mx-status-rejected; } // the rejected key's danger red
+.status-withdrawn { background-color: $mx-status-withdrawn; } // the withdrawn key's violet, #800080
 .status-other { background-color: $mx-status-other; } // the other key's neutral, #999999
 
 // ----------------------------------------------------------------------------- Alerts and notifications (_alerts.scss, _notifications.scss) -----------------------------------------------------------------------------

@@ -124,7 +124,7 @@ const CLOSED_CLIENT = clientRow(3, MARCUS, 'clientStatusType.closed');
 /** A client still awaiting activation: neither hidden nor filtered until a case says so. */
 const PENDING_CLIENT = clientRow(4, JOSE, 'clientStatusType.pending');
 
-/** A rejected client: painted the swatch's neutral `other`, and not the code the list hides. */
+/** A rejected client: painted the swatch's rejected hue, and not the code the list hides. */
 const REJECTED_CLIENT = clientRow(6, NADIA, 'clientStatusType.rejected');
 
 /** A withdrawn client: the other terminal state "Show Closed" leaves on screen. */
@@ -625,13 +625,13 @@ describe('ClientListComponent', () => {
 
     initialRead.flush(MIXED_STATUS_PAGE);
 
-    // The checkbox tests one code, as the legacy template does (`client.status.code != 'clientStatusType.closed' || showClosed`), so a rejected or withdrawn client stays visible while it is unticked — painted the swatch's neutral `other`, one colour of its own, so the state the checkbox hides is tellable apart from the two it keeps (`app/views/clients/clients.html:65`; AAP 0.2.3; Rule 1 clause 3).
+    // The checkbox tests one code, as the legacy template does (`client.status.code != 'clientStatusType.closed' || showClosed`), so a rejected or withdrawn client stays visible while it is unticked — each painted its own hue, never the `closed` grey and never the other's, so the state the checkbox hides is tellable apart from the two it keeps (`app/views/clients/clients.html:65`; AAP 0.2.3; AAP 0.5.4; Rule 1 clause 3).
     expect(component.visibleRows().map((row) => row.name)).toEqual([ADA, JOSE, NADIA, OMAR]);
     expect(component.visibleRows().map((row) => row.statusKey)).toEqual([
       'active',
       'pending',
-      'other',
-      'other',
+      'rejected',
+      'withdrawn',
     ]);
 
     setShowClosed(true);
@@ -644,13 +644,13 @@ describe('ClientListComponent', () => {
       OMAR,
     ]);
 
-    // And the row the checkbox was hiding is the only one painted `closed`, so the three terminal codes read apart from one another on screen (AAP 0.2.3).
+    // And the row the checkbox was hiding is the only one painted `closed`, while the two it kept keep the keys of their own states, so the three terminal codes read apart from one another on screen (AAP 0.2.3, AAP 0.5.4).
     expect(component.visibleRows().map((row) => row.statusKey)).toEqual([
       'active',
       'pending',
       'closed',
-      'other',
-      'other',
+      'rejected',
+      'withdrawn',
     ]);
 
     expect(httpMock.match(isClientListRead)).toHaveLength(0);

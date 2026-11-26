@@ -12,6 +12,8 @@ const STATUS_CASES: readonly (readonly [string, StatusKey])[] = [
   ['clientStatusType.active', 'active'],
   ['clientStatusType.pending', 'pending'],
   ['clientStatusType.closed', 'closed'],
+  ['clientStatusType.rejected', 'rejected'],
+  ['clientStatusType.withdraw', 'withdrawn'],
   ['clientStatusType.transfer.in.progress', 'other'],
 ];
 /** The codes the model does not recognise, including the empty code a malformed payload could carry. All of them must paint the neutral colour rather than claim a state (AAP 0.7.2 row `Client`). */

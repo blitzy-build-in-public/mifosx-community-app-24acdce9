@@ -7,7 +7,7 @@ import { StatusSwatchComponent, type StatusKey, type StatusSwatchVariant, } from
 
 /** The colour class each key paints, exactly as `web-ng/src/styles.scss` declares it. */
 const COLOUR_CLASSES: readonly (readonly [StatusKey, string])[] = [['active', 'status-active'], ['pending', 'status-pending'],
-  ['closed', 'status-closed'], ['other', 'status-other'], ];
+  ['closed', 'status-closed'], ['rejected', 'status-rejected'], ['withdrawn', 'status-withdrawn'], ['other', 'status-other'], ];
 
 /** Creates the component with its inputs bound before the first change detection: `status` is `input.required<StatusKey>()`, and `variant` is left untouched when a test means to observe the component's own default. */
 function createSwatch(status: StatusKey, variant?: StatusSwatchVariant, ): ComponentFixture<StatusSwatchComponent> {
@@ -80,6 +80,13 @@ describe('StatusSwatchComponent', () => {
       expect(element.classList.length).toBe(2);
       expect(classTokensOf(element)).toEqual(['status-swatch', colourClass].sort());
     }, );
+
+  it('gives every key a colour class of its own, so no two states of the record paint the same element shape', () => {
+    const classes = COLOUR_CLASSES.map(([, colourClass]) => colourClass);
+
+    expect(COLOUR_CLASSES.map(([status]) => status)).toHaveLength(6);
+    expect(new Set(classes).size).toBe(COLOUR_CLASSES.length);
+  });
 
   it('defaults to the list square, so the record dot class is absent unless asked for', () => {
     const element = swatchOf('active');

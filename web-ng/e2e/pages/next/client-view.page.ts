@@ -162,10 +162,10 @@ function describeLabels(labels: readonly string[]): string {
 /** Runs inside the page: the record header's title, its indicator colour and its inline metadata runs (AAP 0.10.5). */
 function readHeaderBlock(element: HTMLElement): HeaderReading {
   let statusClass = '';
-  const swatch = element.querySelector('.status-active, .status-pending, .status-closed, .status-other');
+  const swatch = element.querySelector('.status-active, .status-pending, .status-closed, .status-rejected, .status-withdrawn, .status-other');
   if (swatch !== null) {
     for (const token of (swatch.getAttribute('class') ?? '').split(/\s+/)) {
-      if (/^status-(?:active|pending|closed|other)$/.test(token)) {
+      if (/^status-(?:active|pending|closed|rejected|withdrawn|other)$/.test(token)) {
         statusClass = token;
         break;
       }
@@ -227,10 +227,10 @@ function readTableRowsInPage(element: HTMLElement): TableRowReading[] {
       continue;
     }
     let statusClass = '';
-    const swatch = row.querySelector('.status-active, .status-pending, .status-closed, .status-other');
+    const swatch = row.querySelector('.status-active, .status-pending, .status-closed, .status-rejected, .status-withdrawn, .status-other');
     if (swatch !== null) {
       for (const token of (swatch.getAttribute('class') ?? '').split(/\s+/)) {
-        if (/^status-(?:active|pending|closed|other)$/.test(token)) {
+        if (/^status-(?:active|pending|closed|rejected|withdrawn|other)$/.test(token)) {
           statusClass = token;
           break;
         }

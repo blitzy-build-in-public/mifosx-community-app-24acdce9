@@ -630,7 +630,7 @@ export function readSelectedId(value: unknown): number | null {
   return typeof id === 'number' && Number.isFinite(id) ? id : null;
 }
 
-/** Fineract's `LoanStatus` ids, mapped onto the indicator's four colours. */
+/** Fineract's `LoanStatus` ids, mapped onto the indicator's keys. */
 const STATUS_BY_ID: Readonly<Partial<Record<string, StatusKey>>> = {
   /** Submitted and pending approval, and approved: the loan is not disbursed yet. */
   '100': 'pending',
@@ -639,9 +639,9 @@ const STATUS_BY_ID: Readonly<Partial<Record<string, StatusKey>>> = {
   /** Active, i.e. disbursed. */
   '300': 'active',
 
-  /** Withdrawn by the client and rejected: terminal states that are not closed ones, so they paint `other`, as the shared mapping in `web-ng/src/app/shared/status-key.util.ts` paints the same two codes for the client's accounts tab (AAP 0.2.3). */
-  '400': 'other',
-  '500': 'other',
+  /** Withdrawn by the client and rejected: terminal states that are not closed ones, so each paints the key of its own state, as the shared mapping in `web-ng/src/app/shared/status-key.util.ts` paints the same two codes for the client's accounts tab (AAP 0.2.3, AAP 0.5.4). */
+  '400': 'withdrawn',
+  '500': 'rejected',
 
   /** Every closed form, including overpaid. */
   '600': 'closed',
@@ -650,13 +650,13 @@ const STATUS_BY_ID: Readonly<Partial<Record<string, StatusKey>>> = {
   '700': 'closed',
 };
 
-/** The same colours keyed by a `loanStatusType.*` message code, normalised by `normaliseStatusCode` from `web-ng/src/app/shared/status-key.util.ts` — the one normalisation all three families share: lower-cased, a leading `[a-z]+statustype.` prefix removed, and every non-alphanumeric character stripped, so `loanStatusType.closed.reschedule.outstanding.amount` keys `closedrescheduleoutstandingamount`. The withdrawn and rejected codes answer `other` here too, so a loan paints one colour on its record and on the client's accounts tab. */
+/** The same colours keyed by a `loanStatusType.*` message code, normalised by `normaliseStatusCode` from `web-ng/src/app/shared/status-key.util.ts` — the one normalisation all three families share: lower-cased, a leading `[a-z]+statustype.` prefix removed, and every non-alphanumeric character stripped, so `loanStatusType.closed.reschedule.outstanding.amount` keys `closedrescheduleoutstandingamount`. The withdrawn and rejected codes answer `withdrawn` and `rejected` here too, so a loan paints the same colour on its record as on the client's accounts tab. */
 const STATUS_BY_NAME: Readonly<Partial<Record<string, StatusKey>>> = {
   submittedandpendingapproval: 'pending',
   approved: 'pending',
   active: 'active',
-  withdrawnbyclient: 'other',
-  rejected: 'other',
+  withdrawnbyclient: 'withdrawn',
+  rejected: 'rejected',
   closedobligationsmet: 'closed',
   closedwrittenoff: 'closed',
   closedrescheduleoutstandingamount: 'closed',

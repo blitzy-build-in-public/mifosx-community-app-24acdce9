@@ -329,15 +329,15 @@ export function toClientStatusKey(code: string | undefined): StatusKey {
   return toStatusKey(code);
 }
 
-/** Whether a client status code is the `closed` one the list's "Show Closed" checkbox hides — legacy hides that code alone, so a rejected or withdrawn client still shows (Rule 1 clause 3). This is the checkbox's question and not the swatch's: {@link toClientStatusKey} paints those two states `other`, deliberately apart from the `closed` grey. */
+/** Whether a client status code is the `closed` one the list's "Show Closed" checkbox hides — legacy hides that code alone, so a rejected or withdrawn client still shows (Rule 1 clause 3). This is the checkbox's question and not the swatch's: {@link toClientStatusKey} paints those two states `rejected` and `withdrawn`, each in a hue of its own, so a record the checkbox keeps reads apart from the `closed` grey it hides. */
 export function isClosedClientStatus(code: string | undefined): boolean {
   return code !== undefined && normaliseStatusCode(code) === 'closed';
 }
 
-/** The client status codes that end a client's lifecycle: the closed state and the two the server records when an application is refused or withdrawn. Terminal is a different question from colour — {@link toClientStatusKey} paints the first `closed` and the other two `other`, so that the state "Show Closed" hides is distinguishable from the states it leaves on screen — and a different one again from that filter, which tests the closed code alone. */
+/** The client status codes that end a client's lifecycle: the closed state and the two the server records when an application is refused or withdrawn. Terminal is a different question from colour — {@link toClientStatusKey} paints the first `closed` and the other two `rejected` and `withdrawn`, so every terminal state keeps a colour the others do not — and a different one again from that filter, which tests the closed code alone. */
 const TERMINAL_CLIENT_STATUSES: ReadonlySet<string> = new Set<string>(['closed', 'rejected', 'withdraw']);
 
-/** Whether a client status code names a terminal state — closed, rejected or withdrawn — each of which legacy answers with a command of its own (`undoReject`, `undoWithdrawn`) that this build's action set does not keep, which is why the client view offers those records no entry rather than one the server would refuse (AAP 0.7.4; Rule 1 clause 3). Read from the code and never from the swatch's key: the key separates the closed state from the two it does not hide, so it cannot answer a lifecycle question (AAP 0.10.5 item 11). */
+/** Whether a client status code names a terminal state — closed, rejected or withdrawn — each of which legacy answers with a command of its own (`undoReject`, `undoWithdrawn`) that this build's action set does not keep, which is why the client view offers those records no entry rather than one the server would refuse (AAP 0.7.4; Rule 1 clause 3). Read from the code and never from the swatch's key: the key paints each terminal state in a colour of its own, but it also paints the two non-terminal transfer states and an unrecognised code `other`, so it cannot answer a lifecycle question (AAP 0.10.5 item 11, AAP 0.5.4). */
 export function isTerminalClientStatus(code: string | undefined): boolean {
   return code !== undefined && TERMINAL_CLIENT_STATUSES.has(normaliseStatusCode(code));
 }

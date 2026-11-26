@@ -17,8 +17,8 @@ const STATUS_CASES: readonly { readonly code: string; readonly key: StatusKey }[
   { code: 'clientStatusType.transfer.in.progress', key: 'other' },
   { code: 'clientStatusType.transfer.on.hold', key: 'other' },
   { code: 'clientStatusType.closed', key: 'closed' },
-  { code: 'clientStatusType.rejected', key: 'other' },
-  { code: 'clientStatusType.withdraw', key: 'other' },
+  { code: 'clientStatusType.rejected', key: 'rejected' },
+  { code: 'clientStatusType.withdraw', key: 'withdrawn' },
 ];
 
 describe('toClientStatusKey', () => {
@@ -40,7 +40,7 @@ describe('toClientStatusKey', () => {
 describe('isClosedClientStatus', () => {
   it('answers true for the closed code and false for every other state the client enum declares', () => {
     expect(isClosedClientStatus('clientStatusType.closed')).toBe(true);
-    // The two states the colour key paints `other` stay visible on the list (Rule 1 clause 3).
+    // The two states the colour key paints apart from the closed grey stay visible on the list (Rule 1 clause 3).
     expect(isClosedClientStatus('clientStatusType.rejected')).toBe(false);
     expect(isClosedClientStatus('clientStatusType.withdraw')).toBe(false);
     expect(isClosedClientStatus('clientStatusType.active')).toBe(false);
@@ -100,13 +100,13 @@ const ACCOUNT_STATUS_CASES: readonly { readonly code: string; readonly key: Stat
   { code: 'loanStatusType.closed.obligations.met', key: 'closed' },
   { code: 'loanStatusType.closed.written.off', key: 'closed' },
   { code: 'loanStatusType.closed.reschedule.outstanding.amount', key: 'closed' },
-  { code: 'loanStatusType.withdrawn.by.client', key: 'other' },
-  { code: 'loanStatusType.rejected', key: 'other' },
+  { code: 'loanStatusType.withdrawn.by.client', key: 'withdrawn' },
+  { code: 'loanStatusType.rejected', key: 'rejected' },
   { code: 'savingsAccountStatusType.closed', key: 'closed' },
   { code: 'savingsAccountStatusType.matured', key: 'closed' },
   { code: 'savingsAccountStatusType.pre.mature.closure', key: 'closed' },
-  { code: 'savingsAccountStatusType.withdrawn.by.applicant', key: 'other' },
-  { code: 'savingsAccountStatusType.rejected', key: 'other' },
+  { code: 'savingsAccountStatusType.withdrawn.by.applicant', key: 'withdrawn' },
+  { code: 'savingsAccountStatusType.rejected', key: 'rejected' },
   { code: 'loanStatusType.invalid', key: 'other' },
   { code: 'savingsAccountStatusType.invalid', key: 'other' },
   { code: 'loanStatusType.transfer.in.progress', key: 'other' },

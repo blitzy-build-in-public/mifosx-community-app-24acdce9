@@ -14,8 +14,8 @@ const STATUS_CASES: readonly {
   { id: 300, code: 'loanStatusType.active', key: 'active' },
   { id: 303, code: 'loanStatusType.transfer.in.progress', key: 'other' },
   { id: 304, code: 'loanStatusType.transfer.on.hold', key: 'other' },
-  { id: 400, code: 'loanStatusType.withdrawn.by.client', key: 'other' },
-  { id: 500, code: 'loanStatusType.rejected', key: 'other' },
+  { id: 400, code: 'loanStatusType.withdrawn.by.client', key: 'withdrawn' },
+  { id: 500, code: 'loanStatusType.rejected', key: 'rejected' },
   { id: 600, code: 'loanStatusType.closed.obligations.met', key: 'closed' },
   { id: 601, code: 'loanStatusType.closed.written.off', key: 'closed' },
   { id: 602, code: 'loanStatusType.closed.reschedule.outstanding.amount', key: 'closed' },
@@ -35,7 +35,7 @@ describe('toLoanStatusKey', () => {
   });
   it('accepts the id as text, and a code without its prefix', () => {
     expect(toLoanStatusKey('300')).toBe('active');
-    expect(toLoanStatusKey('rejected')).toBe('other');
+    expect(toLoanStatusKey('rejected')).toBe('rejected');
     expect(toLoanStatusKey('closed.reschedule.outstanding.amount')).toBe('closed');
   });
   it('never paints an id the enum does not declare', () => {
