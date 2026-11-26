@@ -97,7 +97,20 @@ export class SearchService {
     });
   }
 
-  /** Reads the search template: `GET /search/template`, with no parameters (AAP 0.7.3 row "Shell: global search", AAP 0.10.4's template-coverage gate) (Rule 1 clause 3, AAP 0.10.3, AAP 0.12, AAP 0.9.2). */
+  /**
+   * Reads the search template: `GET /search/template`, with no parameters (AAP 0.7.3 row "Shell: global search", AAP 0.10.4's
+   * template-coverage gate) (Rule 1 clause 3, AAP 0.12). No in-scope screen calls it yet: the endpoint's only consumer in the
+   * legacy application is the ad-hoc query search screen (`#/advsearch`), whose controller reads `globalSearchTemplateResource`
+   * (`app/scripts/controllers/main/AdHocQuerySearchController.js:16`, defined at `app/scripts/services/ResourceFactoryProvider.js:281`),
+   * and AAP 0.9.2 keeps that reporting screen on the legacy app, so the loan-product and office lists this answer carries fill no
+   * form here.
+   *
+   * The method stays, and is not dead code to be deleted: `GET /search/template` is the "Shell: global search" row's second
+   * endpoint (AAP 0.7.3), and `tools/parity/check-templates.ts` declares the expected
+   * `{ id: 'search-template', canonicalPath: '/search/template' }` row, satisfied only by a non-spec file under `src/app` that
+   * holds the `search/template` literal, so deleting this method fails `npm run check:templates` (AAP 0.10.3 criterion 6).
+   * `SearchTemplate` types this call's answer and nothing else.
+   */
   template(): Observable<SearchTemplate> {
     return defer(() => this.http.get<SearchTemplate>(this.config.apiUrl('search/template')));
   }

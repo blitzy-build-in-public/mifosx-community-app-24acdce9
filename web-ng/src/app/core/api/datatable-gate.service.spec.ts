@@ -49,8 +49,8 @@ const ACTION_STATUS: readonly (readonly [ClientActionName, ClientCheckStatus])[]
   ['reactivate', 'ACTIVATE'],
 ];
 
-/** Answers to `GET /entityDatatableChecks` the gate must not read as an empty gate, each named by what is wrong with it. */
-const UNREADABLE_ANSWERS: readonly (readonly [string, Readonly<Record<string, unknown>>])[] = [
+/** Answers to `GET /entityDatatableChecks` the gate must not read as an empty gate, each named by what is wrong with it. The answer is `unknown` because the endpoint's payload reaches the gate untyped, so an entry may be something other than an object at all and reaches the mock backend through the cast below (Rule 1 clause 4). */
+const UNREADABLE_ANSWERS: readonly (readonly [string, unknown])[] = [
   ['that carries no pageItems', { totalFilteredRecords: 0 }],
   ['whose pageItems is null', { totalFilteredRecords: 1, pageItems: null }],
   ['whose pageItems is a string', { totalFilteredRecords: 1, pageItems: FIRST_TABLE }],
@@ -96,6 +96,8 @@ const UNREADABLE_ANSWERS: readonly (readonly [string, Readonly<Record<string, un
       ],
     },
   ],
+  ['that is a JSON array rather than the page envelope', []],
+  ['that is a bare string rather than the page envelope', 'refused'],
 ];
 
 /** The stub `apiUrl()`: the gate owns no host, so the configuration supplies one (AAP 0.4.2, Rule 2). */
@@ -281,7 +283,7 @@ describe('DataTableGateService', () => {
         error: (failure: unknown) => failures.push(failure),
       });
 
-      httpMock.expectOne(isChecksRequest).flush(answer);
+      httpMock.expectOne(isChecksRequest).flush(answer as object);
 
       expect(emissions).toEqual([]);
       expect(failures).toHaveLength(1);

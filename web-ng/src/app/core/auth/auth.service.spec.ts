@@ -72,14 +72,18 @@ const MALFORMED_RESPONSE_MESSAGE =
   'The authentication response did not carry a user id, an authentication key and a permission list, ' +
   'so no session was created.';
 
-/** `POST /authentication` answers that cannot describe a session, each with the member it omits or mistypes. The response is a network boundary. */
-const MALFORMED_AUTHENTICATION_RESPONSES: Array<[string, Record<string, unknown>]> = [[
+/** `POST /authentication` answers that cannot describe a session, each with the member it omits or mistypes, or with the answer itself being something other than a session object. The answer is a network boundary, so it is `unknown` here and reaches the mock backend through the cast below rather than through a shape this file has already promised it has (Rule 1 clause 4). */
+const MALFORMED_AUTHENTICATION_RESPONSES: Array<[string, unknown]> = [[
     'a response that omits the permission list',
     { userId: USER_ID, username: USERNAME, base64EncodedAuthenticationKey: KEY_PARTS.join('') }, ], [
     'a response that omits the authentication key', { userId: USER_ID, username: USERNAME, permissions: [...GRANTED] },
   ], ['a response whose userId is a string', {
       userId: String(USER_ID), username: USERNAME, base64EncodedAuthenticationKey: KEY_PARTS.join(''),
-      permissions: [...GRANTED], }, ], ];
+      permissions: [...GRANTED], }, ], ['an answer that is a JSON array rather than the session object', []], [
+    'an answer that is a bare string', 'accepted',
+  ], ['a response whose permission list holds a value that is not a string', {
+      userId: USER_ID, username: USERNAME, base64EncodedAuthenticationKey: KEY_PARTS.join(''),
+      permissions: ['READ_CLIENT', 42], }, ], ];
 
 /** The session entry the fixture login must record, exactly the three legacy fields. */
 function expectedSession(overrides: Partial<SessionData> = {}): SessionData {
@@ -311,10 +315,10 @@ describe('AuthService', () => {
 
   it.each(MALFORMED_AUTHENTICATION_RESPONSES)(
     'stores no session for %s and rejects with the described ApiError',
-    async (_label: string, body: Record<string, unknown>) => {
+    async (_label: string, body: unknown) => {
       const login = service.login(USERNAME, submittedPassword());
 
-      httpMock.expectOne(byMethodAndUrl('POST', AUTHENTICATION_URL)).flush(body);
+      httpMock.expectOne(byMethodAndUrl('POST', AUTHENTICATION_URL)).flush(body as object);
 
       const failure = await rejectionOf(login);
 
@@ -325,6 +329,7 @@ describe('AuthService', () => {
 
       // Nothing reached storage, no session is in effect and the restore read is never issued, which is what keeps a partial entry and `Authorization: Basic undefined` out of the application.
       expect(window.localStorage.length).toBe(0);
+      expect(sessions.read()).toBeNull();
       expect(service.session()).toBeNull();
       expect(service.isAuthenticated()).toBe(false);
       expect(service.permissions()).toEqual([]);

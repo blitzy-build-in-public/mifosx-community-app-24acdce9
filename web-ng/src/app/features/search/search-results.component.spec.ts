@@ -46,6 +46,13 @@ const IDENTIFIER: SearchResult = {
   entityStatus: { id: 100, code: 'clientStatusType.pending', value: 'Pending' },
 };
 
+/** The name of a row `GET /search` sends for an entity family this control never asks for — a savings account or a group, which AAP 0.10.5 item 9 keeps outside the client, client-identifier and loan scopes the search offers — so its `entityType` is outside the three the model narrows to. That `entityType` is a plain string on the wire, so the row is typed `unknown` here and enters the answer through the cast below, which is the documented boundary of Rule 1 clause 4. */
+const UNMAPPED_ROW_NAME = 'Blitzy Savings Account';
+const UNMAPPED_ROW: unknown = {
+  entityType: 'SAVINGSACCOUNT', entityId: 15, entityName: UNMAPPED_ROW_NAME, entityAccountNo: '000000015',
+  parentId: 2, parentName: 'Ada Okafor',
+};
+
 const NO_DATA_TEXT = 'Nothing matched from the spec bundle';
 
 /** The legacy bundle's own truncation message, `label.search.query.matched.results.exceeds.max.length` (`app/global-translations/locale-en.json:678`), served here so the case below asserts that the screen renders that key. */
@@ -274,6 +281,25 @@ describe('SearchResultsComponent', () => {
     expect(host().querySelector('app-status-swatch')).toBeNull();
     expect(host().querySelector('.panel-title')).toBeNull();
     expect(host().querySelector('.panel-heading')).toBeNull();
+  });
+
+  it('drops a row whose entityType is outside the in-scope families and keeps the rows beside it', async () => {
+    answer = () => of<SearchResult[]>([CLIENT, UNMAPPED_ROW as SearchResult, LOAN]);
+    params.next(convertToParamMap({ query: 'Parity' }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // The search's three scopes ask Fineract for clients, client identifiers and loans only (`toResourceParam`), so a savings or group row an answer happens to carry belongs to a scope this control never requests and paints no block here (AAP 0.10.5 item 9).
+    expect(component.rows()).toHaveLength(2);
+    expect(blocks()).toHaveLength(2);
+    expect(component.rows().map((row) => row.name)).toEqual([CLIENT.entityName, LOAN.entityName]);
+    expect(blocks().map((block) => text(block))).toEqual([
+      expect.stringContaining('Ada Okafor'),
+      expect.stringContaining('Parity Loan'),
+    ]);
+    // The dropped row reaches no cell of any block the screen paints.
+    expect(text(host())).not.toContain(UNMAPPED_ROW_NAME);
   });
 
   it('opens the screen’s own page container around its card', () => {
