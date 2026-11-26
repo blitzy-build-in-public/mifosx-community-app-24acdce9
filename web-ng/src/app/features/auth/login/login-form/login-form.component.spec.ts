@@ -4,9 +4,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { LoginFormComponent, type LoginCredentials } from './login-form.component';
 
-/** Behaviour of the login form — the `LoginForm` row of the component inventory (AAP 0.2.3), the form region of the login screen (Figma node `1:5`; AAP 0.7.4 "Login"; AAP 0.10.1 W1). It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with at least one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`). It pins the legacy screen's own two controls and one primary submit — ids, names, classes and the masked credential field the parity page objects address, every caption through the translation stack; an empty form reporting nothing while marking both controls touched, legacy's only client-side rule (Rule 1 clause 3); a valid form reporting the pair typed, once, untrimmed (AAP 0.2.3's `(submit: {username, password})`); the button disabled while `busy`, which is the whole duplicate-submission guard (AAP 0.14.1); and a refused exchange clearing the credential control and nothing else. The translate stack is the no-op loader plus the captions this form resolves, so no bundle is requested; there is deliberately no HTTP provider, because the component injects no service beyond `FormBuilder` (Rule 1 clause 5). */
+/** Behaviour of the login form — the `LoginForm` row of the component inventory (AAP 0.2.3), the form region of the login screen (Figma node `1:5`; AAP 0.7.4 "Login"; AAP 0.10.1 W1). It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with at least one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`). It pins the legacy screen's own two controls and one primary submit — ids, names, classes and the masked credential field the parity page objects address, every caption through the translation stack; an empty form reporting nothing while marking both controls touched, legacy's only client-side rule (Rule 1 clause 3); a valid form reporting the pair typed, once, untrimmed (AAP 0.2.3's `(submit: {username, password})`); both placeholders in the active language lower-cased beside labels that keep the bundle's own capitalisation (AAP 0.7.4); the button disabled while `busy`, which is the whole duplicate-submission guard (AAP 0.14.1); and a refused exchange clearing the credential control and nothing else. The translate stack is the no-op loader plus the captions this form resolves, so no bundle is requested; there is deliberately no HTTP provider, because the component injects no service beyond `FormBuilder` (Rule 1 clause 5). */
 
-/** The account name the form is typed with; obviously a test value rather than a real login. */
 const ACCOUNT_NAME = 'spec.officer';
 
 /** The text typed into the credential control, named as text rather than as the secret it stands for so that no property named `password`, `pass`, `secret` or `authenticationKey` holds a literal — the shape `check:wiring` fails on (AAP 0.10.4 credential gate; Rule 1 clause 9). */
@@ -31,7 +30,6 @@ describe('LoginFormComponent', () => {
   let fixture: ComponentFixture<LoginFormComponent>;
   let component: LoginFormComponent;
 
-  /** Every credential pair the form reported, in emission order. */
   let emitted: LoginCredentials[];
 
   // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps every assertion below type-checked and confines the boundary to this line (Rule 1 clause 4).
@@ -123,6 +121,24 @@ describe('LoginFormComponent', () => {
     expect(loginButton().textContent?.trim()).toBe(TRANSLATIONS['label.button.signin']);
     expect(host().textContent).not.toContain('label.');
     expect(host().querySelectorAll('label')).toHaveLength(2);
+  });
+
+  it('renders both placeholders lower-cased while the labels keep the bundle’s own capitalisation', () => {
+    const account = accountField();
+    const credential = credentialField();
+
+    // AAP 0.7.4 prints the two placeholders as "username" and "password", and the legacy screen reached the same case by running the same bundle key through its own `| lowercase` filter (`app/index.html:101,109`): the placeholder is the key lower-cased, never a second copy of the label.
+    expect(account.getAttribute('placeholder')).toBe('username');
+    expect(credential.getAttribute('placeholder')).toBe('password');
+    expect(account.getAttribute('placeholder')).not.toBe(TRANSLATIONS['label.input.username']);
+
+    // The labels are untouched by that pipe, so the bundle's own capitalisation still reaches the screen beside each field.
+    expect(host().querySelector('label[for="uid"]')?.textContent?.trim()).toBe(
+      TRANSLATIONS['label.input.username'],
+    );
+    expect(host().querySelector('label[for="pwd"]')?.textContent?.trim()).toBe(
+      TRANSLATIONS[CREDENTIAL_LABEL_KEY],
+    );
   });
 
   it('reports nothing for an empty form and marks both controls touched', () => {

@@ -5,15 +5,10 @@ import { chooseOption, readChosenOptions } from './chosen';
 
 /** One row of the client list, as the report compares it (AAP 0.10.1 W3, AAP 0.2.1 Step 2) (AAP 0.10.5). */
 export interface ClientRow {
-  /** Name column — the client's display name (`{{client.displayName}}`). */
   readonly name: string;
-  /** Client number column — `{{client.accountNo}}`, e.g. `000000002`. */
   readonly clientNumber: string;
-  /** Office column — `{{client.officeName}}`. */
   readonly office: string;
-  /** Staff column — `{{client.staffName}}`; empty for an unassigned client. */
   readonly staff: string;
-  /** The status swatch's raw class attribute, e.g. `fa fa-stop statusactive`. */
   readonly statusClass: string;
 }
 
@@ -22,12 +17,9 @@ export interface StatusSwatchSummary {
   readonly className: string;
 }
 
-/** One row of the global search results (`#/search/:query`). */
 export interface SearchResultRow {
   readonly primaryText: string;
-  /** The line below it, e.g. `Entity:CLIENT | Office:Head Office`; `''` when absent. */
   readonly secondaryText: string;
-  /** The row's status swatch class; `''`, because the results list renders no swatch. */
   readonly statusClass: string;
 }
 
@@ -39,7 +31,6 @@ export interface SelectOptionSummary {
 /** The values {@link ClientsPage.fillClientForm} writes into the client form (Rule 1 clause 3). */
 export interface ClientFormValues {
   readonly officeName?: string;
-  /** Staff to select by its visible label, e.g. `Officer, Parity` — the name Fineract composes from a staff member's last and first names, which is what the dropdown shows; a loan officer is optional. */
   readonly staffName?: string;
   readonly firstName: string;
   readonly lastName: string;
@@ -48,7 +39,6 @@ export interface ClientFormValues {
   /** Submission date (`#submittedon`); sent as `dd MMMM yyyy`, the legacy datepicker's own format. */
   readonly submittedDate?: Date;
   readonly active?: boolean;
-  /** Activation date (`#activationDate`), rendered only once the active checkbox is ticked. */
   readonly activationDate?: Date;
 }
 
@@ -61,13 +51,10 @@ const SCREEN_ROOT = '.content-container';
 /** The card that holds the list. Legacy renders it as `div.card` with a `.toolbar` heading (clients.html:7-9); the new application renders the same card as a Bootstrap `.panel` (AAP 0.2.3 `PanelCard`, AAP 0.5.2). */
 const SCREEN_CARD = '.panel, .card';
 
-/** The list table — `table.table` (clients.html:51). */
 const LIST_TABLE = '.table';
 
-/** One list row — `table.table tbody tr` (clients.html:63-75). */
 const LIST_ROW = '.table tbody tr';
 
-/** One column heading — `table.table thead th` (clients.html:52-60). */
 const COLUMN_HEADER = '.table thead th';
 
 /** The status swatch inside a cell. Legacy paints it as `<i class="fa fa-stop {{client.status.code | StatusLookup}}">` (clients.html:70), where the filter answers `statusactive`, `statuspending`, `statusclosed` (AAP 0.2.3, AAP 0.10.5). */
@@ -95,16 +82,12 @@ const EMPTY_STATE = [
   '.card .text-center.text-muted',
 ].join(', ');
 
-/** The list toolbar's client-side filter box — `input[ng-model="filterText"]` inside the first `.col-md-4` of the toolbar form (clients.html:18-20). */
 const LIST_FILTER = 'input[ng-model="filterText"], input[data-ng-model="filterText"]';
 
-/** The toolbar's server-side "find" box — `input[data-ng-model="searchText"]` inside the `.input-group` beside the blue search button (clients.html:24-26). */
 const LIST_FIND = 'input[data-ng-model="searchText"], input[ng-model="searchText"]';
 
-/** The toolbar's blue search submission button — `button.btn.btn-primary` inside `.input-group-btn` (clients.html:28-30). */
 const LIST_SEARCH_BUTTON = '.input-group-btn button.btn.btn-primary, .input-group-btn .btn.btn-primary';
 
-/** The navbar global search field — `input#search` (views/_topnavbar.html:119). */
 const SEARCH_FIELD = [
   '#search',
   'input[data-ng-model="search.query"]',
@@ -119,10 +102,8 @@ const SEARCH_SCOPE_SELECT = '.navbar-form select, form.navbar-form select';
 const SEARCH_SCOPE_TOGGLE =
   '.navbar-form .input-group-btn.search-panel button, .navbar-form .input-group-btn button.btn';
 
-/** One scope entry of that dropdown: `li` elements produced by `ng-repeat="searchScope in searchScopes"` (views/_topnavbar.html:125-126). */
 const SEARCH_SCOPE_ITEMS = '.navbar-form .input-group-btn ul li';
 
-/** One global search result — `div.blockquoteresult` per `ng-repeat="result in searchResults"` (views/search/glresults.html:10-11). */
 const SEARCH_RESULT = '.blockquoteresult';
 
 /** Where a rendered message may live, most specific first; {@link ClientsPage.readNotifications} stops at the first candidate that renders something visible. - `.alert.alert-danger` — the `api-validate` block every in-scope form renders for a Fineract error (AAP 0.10.5). */
@@ -137,7 +118,6 @@ const NOTIFICATION_SOURCES = [
 /** Where a validation message may live, from the two selectors AAP 0.7.4 fixes (`.alert.alert-danger` and `.help-block` inside `.has-error`) plus legacy's own field-level markup, `<small class="error required">` (createclient.html:60). */
 const VALIDATION_ERROR_SOURCES = ['div.alert.alert-danger', '.has-error .help-block', 'small.error'];
 
-/** The create form's own failure region: the `api-validate` directive renders Fineract's message in a `div.alert.alert-danger` above the fields (createclient.html:15), so a refused office-template read is visible there and nowhere else. */
 const FORM_FAILURE = 'div.alert.alert-danger, api-validate .alert';
 
 const OPTIONAL_NAVIGATION_TIMEOUT_MS = 10_000;
@@ -147,7 +127,6 @@ const TEMPLATE_TIMEOUT_MS = 30_000;
 
 const OPTION_POLL_INTERVAL_MS = 100;
 
-/** How long a row the list already holds may take to become visible: the page in view is on screen when {@link ClientsPage.openClient} starts, so this covers a repaint and not a read. */
 const LIST_ROW_TIMEOUT_MS = 5_000;
 
 /** How long the toolbar's find may take to answer: its `GET /search` round trip replaces the rows, and the client it matched has to be visible before the record is opened. */
@@ -160,7 +139,6 @@ const SEARCH_PATH = '/search';
 const LIST_POLL_INTERVAL_MS = 100;
 const LIST_SETTLE_READINGS = 3;
 
-/** How long the table may take to repaint once the find has answered: the assignment it makes is a digest and not a request, so this bounds a render and never a round trip. */
 const LIST_REPAINT_TIMEOUT_MS = 5_000;
 
 interface OptionPair {
@@ -466,7 +444,6 @@ export class ClientsPage {
 
   /**
    * Clicks the toolbar's blue search button, which is what submits the "find" box (clients.html:24-31; AAP 0.2.3 `FilterToolbar`), and waits for the find's own answer before it returns (AAP 0.7.4 "search (server)", Rule 1 clause 8).
-   *
    * The wait is the whole point. Legacy empties only `scope.actualClients` when the find is submitted and assigns `scope.clients` — the collection the table renders — inside the `GET /search` callback (`ClientController.js:41,56,83`; `clients.html:64`), so the rows in view stay the previous page until that answer repaints them: a caller that read them at the click would assert on the `GET /clients?offset=0&limit=15` page it was already showing, and fail on any database holding more than one page. A blank find issues no search at all — the controller takes `scope.initPage()`'s list re-read instead (`ClientController.js:53-54,35`) — so no answer is awaited and the table's own repaint settles it.
    */
   async submitFilter(): Promise<void> {

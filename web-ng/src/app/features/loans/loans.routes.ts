@@ -64,7 +64,7 @@ export const LOANS_ROUTES: Routes = [
       breadcrumb: ['label.anchor.loans', 'label.heading.addloancharge'],
     },
   },
-  /** Pay or waive one charge of the loan the route's `id` names: `action` is `pay` or `waive`, `chargeId` is the loan charge's own id (AAP 0.7.3 row "Loan charges"). */
+  /** Pay or waive one charge of the loan the route's `id` names: `action` is legacy's own `paycharge` or `waivecharge` — the segments the record's own links emit and the ones a legacy URL or cutover redirect carries — with `pay` and `waive` also accepted as aliases, and `chargeId` is the loan charge's own id (AAP 0.7.3 row "Loan charges", AAP 0.8.2, AAP 0.1.1, Rule 1 clause 5). Legacy's third segment on this path, `editcharge`, has no screen here: editing a charge is outside the charge scope of AAP 0.9.1 group 3, so the charge form resolves it to not found and issues no request. */
   {
     path: 'loanaccountcharge/:id/:action/:chargeId',
     component: LoanChargeFormComponent,

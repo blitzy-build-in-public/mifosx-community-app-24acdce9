@@ -85,13 +85,9 @@ const DISBURSE_TEMPLATE: LoanTransactionTemplate = {
   loanId: 9,
 };
 interface AmountMode {
-  /** The `:action` segment that selects the mode. */
   readonly action: 'approve' | 'disburse';
-  /** The seed read the mode answers with. */
   readonly template: LoanActionTemplate | LoanTransactionTemplate;
-  /** The member of the posted body the control's value travels in. */
   readonly amountKey: 'approvedLoanAmount' | 'transactionAmount';
-  /** The control of the mounted screen that holds the amount. */
   readonly control: (screen: LoanActionComponent) => FormControl<number | null>;
 }
 const AMOUNT_MODES: readonly AmountMode[] = [

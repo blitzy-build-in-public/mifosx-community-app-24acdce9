@@ -8,13 +8,11 @@ import { LoanScheduleComponent } from './loan-schedule.component';
 
 /** Behavioural spec for the individual-loan record's repayment-schedule table (AAP 0.7.1 "`LoanViewComponent` with `LoanScheduleComponent`"; AAP 0.7.4) (Rule 1 clause 8, AAP 0.10.2, AAP 0.7.2, Rule 1 clause 3). */
 
-/** Language the spec serves its labels in. */
 const SPEC_LANG = 'en';
 
 /** Locale the two pipes format with, pinned so the assertions hold on any host. */
 const SPEC_LOCALE = 'en-US';
 
-/** The nine header keys `loan-schedule.component.html` translates, in render order. */
 const COLUMN_KEYS: readonly string[] = [
   'label.heading.no',
   'label.heading.fromdate',
@@ -27,7 +25,6 @@ const COLUMN_KEYS: readonly string[] = [
   'label.heading.outstanding',
 ];
 
-/** The label each header key resolves to in the in-memory bundle below. */
 const COLUMN_LABELS: Readonly<Record<string, string>> = {
   'label.heading.no': 'No.',
   'label.heading.fromdate': 'From Date',
@@ -40,10 +37,8 @@ const COLUMN_LABELS: Readonly<Record<string, string>> = {
   'label.heading.outstanding': 'Outstanding',
 };
 
-/** Legacy no-data label the template passes to the shared empty state. */
 const EMPTY_STATE_KEY = 'label.nodata';
 
-/** The message that key resolves to in the in-memory bundle. */
 const EMPTY_STATE_TEXT = 'No repayment schedule is available.';
 
 /** The in-memory bundle: every key the template uses, the table's own accessible name included, and nothing else, so a key the legacy bundle would not hold renders as itself and fails the assertion reading the label it feeds (AAP 0.10.2). */
@@ -104,7 +99,6 @@ function textOf(element: Element | null): string {
 }
 
 describe('LoanScheduleComponent', () => {
-  /** The fixture's host element, the root every query below starts from. */
   function hostOf(fixture: ComponentFixture<LoanScheduleComponent>): HTMLElement {
     // `ComponentFixture.nativeElement` is loosely typed by Angular; narrowing it once here keeps every element these helpers return an `HTMLElement` and confines the cast to one boundary (Rule 1 c. 4).
     return fixture.nativeElement as HTMLElement;
@@ -115,27 +109,22 @@ describe('LoanScheduleComponent', () => {
     return host.querySelector<HTMLTableElement>('table#loan-schedule');
   }
 
-  /** The shared empty state, or `null` when the table is rendered instead. */
   function emptyStateOf(host: HTMLElement): HTMLElement | null {
     return host.querySelector<HTMLElement>('app-empty-state#loan-schedule-empty');
   }
 
-  /** The table's header cells in render order. */
   function headerCells(host: HTMLElement): HTMLElement[] {
     return Array.from(host.querySelectorAll<HTMLElement>('table#loan-schedule thead tr th'));
   }
 
-  /** The table's body rows in render order. */
   function bodyRows(host: HTMLElement): HTMLElement[] {
     return Array.from(host.querySelectorAll<HTMLElement>('table#loan-schedule tbody tr'));
   }
 
-  /** One body row's cells in render order. */
   function cellsOf(row: HTMLElement): HTMLElement[] {
     return Array.from(row.querySelectorAll<HTMLElement>('td'));
   }
 
-  /** Every body row's cell texts: `[row][column]`, in render order. */
   function renderedRows(host: HTMLElement): string[][] {
     return bodyRows(host).map((row) => cellsOf(row).map((cell) => textOf(cell)));
   }

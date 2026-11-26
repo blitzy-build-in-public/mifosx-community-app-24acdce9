@@ -148,19 +148,13 @@
 
         <hr />
 
-        <!-- The centred closing paragraph, at the width the design gives it, with its three inline links carrying legacy's own destinations (`app/scripts/controllers/main/MainController.js:220-222`), which open in the current tab as legacy's do. This is the one string on the screen that is not translated, because the legacy application never translated it either — it is hard-coded English HTML in `app/scripts/controllers/main/MainController.js:220-222` — and no shipped bundle carries a key for it, while adding a key would mean editing a locale file (forbidden: Rule 1 clauses 1 and 6). Keeping the legacy wording verbatim is what matches the legacy screen (Rule 1 clause 3). -->
+        <!-- The centred closing paragraph, at the width the design gives it, with its three inline links carrying legacy's own destinations (`app/scripts/controllers/main/MainController.js:220-222`), which open in the current tab as legacy's do. Its six fragments are the application's own translation keys rather than the legacy bundles': legacy hard-coded this English HTML in `app/scripts/controllers/main/MainController.js:220-222`, and no shipped bundle carries a key for any fragment, while adding one would mean editing a locale file (forbidden: Rule 1 clauses 1 and 6). `core/i18n/app-translations.ts` answers the six keys through the missing-translation handler, so English keeps legacy's exact wording (Rule 1 clause 3) and French is carried by the application beside it; the three destinations are still legacy's own. The whitespace between a fragment and its neighbour is written on one line with it, because Angular drops a whitespace-only text run that contains a newline and the sentence would otherwise lose its words' separation. -->
         <div class="row">
           <div class="col-sm-6 col-sm-offset-3 text-center">
             <p class="text-muted">
-              Mifos X is designed by the
-              <a href="http://www.openmf.org/">Mifos Initiative</a>.
-              <a href="http://mifos.org/resources/community/">A global community</a>
-              that aims to speed the elimination of poverty by enabling Organizations to more
-              effectively and efficiently deliver responsible financial services to the world’s poor
-              and unbanked.
-              <br />
-              Sounds interesting?
-              <a href="http://mifos.org/take-action/volunteer/">Get involved!</a>
+              {{ 'label.text.mifosx.designedby' | translate }} <a href="http://www.openmf.org/">{{ 'label.anchor.mifosinitiative' | translate }}</a>.
+              <a href="http://mifos.org/resources/community/">{{ 'label.anchor.globalcommunity' | translate }}</a> {{ 'label.text.mifosx.community' | translate }} <br />
+              {{ 'label.text.mifosx.interesting' | translate }} <a href="http://mifos.org/take-action/volunteer/">{{ 'label.anchor.getinvolved' | translate }}</a>
             </p>
           </div>
         </div>

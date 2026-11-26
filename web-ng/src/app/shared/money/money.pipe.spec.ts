@@ -40,7 +40,6 @@ const BARE_CASES: readonly (readonly [number, string])[] = [
   [416.6666, '416.667'],
 ];
 
-/** The currency values that leave the figure bare: a caller passing none, an explicit `null`, a payload whose `displaySymbol` is an empty string, and a currency that carries only its code and precision. */
 const SYMBOLLESS_CURRENCIES: readonly (readonly [string, MoneyCurrency | null | undefined])[] = [
   ['no currency at all', undefined],
   ['a null currency', null],
@@ -48,7 +47,6 @@ const SYMBOLLESS_CURRENCIES: readonly (readonly [string, MoneyCurrency | null | 
   ['a currency carrying only a code and its precision', { code: 'USD', decimalPlaces: 2 }],
 ];
 
-/** The values that are not a figure, labelled for the test's own message: the two empty states the templates can hand the pipe, and the three numbers that are not finite, which `formatNumber` would otherwise print as `NaN` or `∞`. */
 const ABSENT_CASES: readonly (readonly [string, number | null | undefined])[] = [
   ['null', null],
   ['undefined', undefined],

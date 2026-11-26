@@ -64,7 +64,6 @@ const COMMAND_BY_MODE = {
 interface LoanActionCopy {
   /** Heading of the screen: the title the legacy loan action screen renders for this command, whose key `LoanAccountActionsController.js` assigns to `scope.title` for the same route segment. */
   readonly headingKey: string;
-  /** Label of the primary button, which submits the command. */
   readonly submitKey: string;
 }
 
@@ -139,7 +138,6 @@ function today(): Date {
 export class LoanActionComponent {
   /** The loans family's typed HTTP service: the only collaborator this screen calls Fineract through. */
   private readonly loans = inject(LoanService);
-  /** The route whose `:id` and `:action` segments name the loan and the action. */
   private readonly route = inject(ActivatedRoute);
   /** Navigation back to the record after a command lands; never `window.location`. */
   private readonly router = inject(Router);
@@ -153,7 +151,6 @@ export class LoanActionComponent {
   readonly command = signal<LoanCommand | null>(null);
   /** Whether the current mode's seed read is in flight, so the template withholds the form until it settles: raised for a mode that reads a template, lowered by that same run once the read settles, and lowered at once by a mode that issues no read at all, so the form is never withheld behind a run that no longer speaks for the screen. */
   readonly loading = signal(false);
-  /** The failure the template renders above the form, or `null` while the last call succeeded. */
   readonly error = signal<ApiError | null>(null);
   /** Whether the screen must render the not-found message — an unknown `:action`, a route without its `:id`, or a 404 from the mode's seed read; held apart from `error` because the template renders it in place of the form, where a Fineract validation failure is rendered above a form the user keeps editing (AAP 0.7.4). */
   readonly notFound = signal(false);

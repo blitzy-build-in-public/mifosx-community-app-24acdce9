@@ -11,15 +11,12 @@ import {
  * the user is still typing; and no text the user typed changed. It also proves the inventory's props (AAP 0.2.3 `GlobalSearch`: `query: string, scope, (search)`): the two inputs seed the field and the selector, typing is not written back into them, and a host that changes one re-seeds the control. The translate stack is provided because the placeholder, the field's accessible name and the scope labels resolve through `TranslatePipe`, and `provideTranslateService()` installs the no-op loader so no bundle is requested. There is deliberately no HTTP provider: the component injects no service at all, so reaching Fineract from it would fail with NG0201 instead of silently passing (Rule 1 clause 5).
  * The scope selector's accessible name is the control's own literal "Search scope", not the clients list's `label.button.filter` key, so it needs no bundle entry. */
 
-/** Legacy key of the field's placeholder, and the text this spec serves for it. */
 const PLACEHOLDER_KEY = 'label.searchorpress';
 const PLACEHOLDER_TEXT = 'Click or press alt+x to Search';
 
-/** Legacy key of the field's accessible name, and the text this spec serves for it. */
 const FIELD_LABEL_KEY = 'label.heading.search';
 const FIELD_LABEL_TEXT = 'Search';
 
-/** The selector's accessible name. It is the control's own literal — the scope selector chooses what the search covers — rather than a translation key: no shipped bundle carries a key for the control itself (the shipped scope keys name the individual options), so a key written here would raise a missing-translation warning on every render. A literal cannot reach the user or the developer console unresolved. */
 const SCOPE_LABEL_TEXT = 'Search scope';
 
 /** The three scopes, in the order the selector renders them: its value, its legacy label key, and the label this spec serves for that key. */

@@ -106,7 +106,6 @@ export class ClientListComponent {
   /** The legacy bundle's key for each of the table's six captions, resolved through `shared/translated-label.util.ts` so a language switch or a late-arriving bundle repaints them (`app/views/clients/clients.html:53-60`; Rule 1 clause 3). */
   private readonly label = createTranslatedLabels();
 
-  /** One signal per caption, in the legacy table's column order. */
   private readonly columnLabels = {
     name: this.label('label.heading.name'),
     clientNumber: this.label('label.heading.clientno'),
@@ -150,7 +149,6 @@ export class ClientListComponent {
   /** The filter field's text as the toolbar published it: the toolbar owns the field, this screen owns what the text does, which is narrow the rows in hand. A signal because this view is zoneless and `OnPush`, so a plain read of the toolbar's form inside {@link visibleRows} would freeze the verdict. */
   private readonly filterText = signal('');
 
-  /** The "Show Closed" flag, as the toolbar published it — the second display filter's own state. */
   private readonly showClosed = signal(false);
 
   /** Whether the rows in hand are a find's answer rather than one page of the list — the difference that decides who pages them: the list read pages on the server (`offset`/`limit`), a find answers with the whole match and is paged in the view (Rule 1 clause 3). */

@@ -36,26 +36,20 @@ const API_BASE_URL = 'https://localhost:8443';
 const API_PATH = '/fineract-provider/api/v1';
 const API_ROOT = API_BASE_URL + API_PATH;
 
-/** The one separator every expected URL is joined with, so expectation and request are built alike. */
 const SEPARATOR = '/';
 
-/** The active language these cases run in, and therefore the `locale` every body must carry. */
 const APP_LOCALE = 'en';
 
-/** The one payload format, spelled once; the service takes it from `AppConfig.dateFormat`. */
 const FINERACT_DATE_FORMAT = 'dd MMMM yyyy';
 
-/** The client the loan is opened for, the loan every case acts on, and the product it is written on. */
 const CLIENT_ID = 2;
 const LOAN_ID = 31;
 const LOAN_ID_TEXT = '31';
 const PRODUCT_ID = 1;
 
-/** The charge attached to the loan, and the different charge its own terms are read from. */
 const CHARGE_ID = 8;
 const PICKED_CHARGE_ID = 3;
 
-/** The two charges a loan already carries: the loan-charge ids the edit body re-posts, which are what keep each charge rather than re-creating it, and the charge definitions those rows apply. */
 const LOAN_CHARGE_ID = 12;
 const SECOND_LOAN_CHARGE_ID = 13;
 
@@ -63,11 +57,9 @@ const SECOND_LOAN_CHARGE_ID = 13;
 const SUBMITTED_DATE = new Date(2026, 10, 21);
 const DISBURSEMENT_DATE = new Date(2026, 10, 24);
 
-/** Those dates as every date-bearing payload must carry them: `dd MMMM yyyy` in the active locale. */
 const SUBMITTED_TEXT = '21 November 2026';
 const DISBURSEMENT_TEXT = '24 November 2026';
 
-/** The submission date in French, for the case that proves the payload follows the selected language. */
 const SUBMITTED_TEXT_FR = '21 novembre 2026';
 
 /** The URL the service must request for the given path segments: the API root the configuration supplies and the resource segments the service owns, joined with one separator. @param segments Resource segments, exactly as `loan.service.ts` names them. */
@@ -91,7 +83,6 @@ function bodyKeys(request: HttpRequest<unknown>): string[] {
   return typeof body === 'object' && body !== null ? Object.keys(body) : [];
 }
 
-/** The `AppConfigService` surface `LoanService` uses: the resolved configuration, the URL composition every service shares, and the live active locale. */
 type ConfigSurface = Pick<AppConfigService, 'config' | 'apiUrl' | 'activeLocale'>;
 
 /** Builds the stub from the two live members the cases below need to change: the `apiUrl` spy the host assertions read, and the active-locale signal the language case moves. */
@@ -123,7 +114,6 @@ const LOAN_TEMPLATE: LoanTemplate = {
   principal: 5000,
 };
 
-/** The same template once a product is chosen: the product-dependent defaults are seeded. */
 const PRODUCT_TEMPLATE: LoanTemplate = {
   ...LOAN_TEMPLATE,
   product: { id: PRODUCT_ID, name: 'Parity Loan' },
@@ -141,7 +131,6 @@ const CHARGE_TEMPLATE: ChargeTemplate = {
   currency: { code: 'USD', displaySymbol: 'US$', name: 'US Dollar' },
 };
 
-/** One row of a calculated schedule — the first period, which W6 repays in full. */
 const PERIOD: RepaymentPeriod = {
   period: 1,
   fromDate: '2026-11-24',
@@ -229,7 +218,6 @@ const LOAN_ACCOUNT: LoanAccount = {
   charges: LOAN_CHARGES,
 };
 
-/** The envelope every loan write answers with, carrying the ids a screen navigates by. */
 const ACTION_RESULT: LoanActionResult = {
   resourceId: LOAN_ID,
   changes: { status: 'Active' },
@@ -242,7 +230,6 @@ const APPROVAL_TEMPLATE: LoanActionTemplate = {
   approvalAmount: 5000,
 };
 
-/** The transaction template both the disbursement and the repayment form read. */
 const TRANSACTION_TEMPLATE: LoanTransactionTemplate = {
   paymentTypeOptions: [{ id: 1, name: 'Cash' }],
   date: '2026-11-24',
@@ -250,7 +237,6 @@ const TRANSACTION_TEMPLATE: LoanTransactionTemplate = {
   loanId: LOAN_ID,
 };
 
-/** The application the new-loan form posts: every member the model requires, both dates set, and the optional officer, fund and charge present so the whole body is pinned. */
 const APPLICATION: LoanApplicationRequest = {
   clientId: CLIENT_ID,
   productId: PRODUCT_ID,
@@ -276,7 +262,6 @@ const APPLICATION: LoanApplicationRequest = {
   locale: APP_LOCALE,
 };
 
-/** `APPLICATION` as it must reach the server: every date a string, plus the date-format pair. */
 const APPLICATION_WIRE: Readonly<Record<string, unknown>> = {
   clientId: CLIENT_ID,
   productId: PRODUCT_ID,
@@ -328,7 +313,6 @@ const UNDATED_APPLICATION: LoanApplicationRequest = {
   locale: APP_LOCALE,
 };
 
-/** `UNDATED_APPLICATION` as it must reach the server: no date, and no unset optional member. */
 const UNDATED_APPLICATION_WIRE: Readonly<Record<string, unknown>> = {
   clientId: CLIENT_ID,
   productId: PRODUCT_ID,
@@ -478,7 +462,6 @@ const CHARGE_ACTION_CASES: readonly {
   },
 ];
 
-/** A repayment as the repayment form holds it: the model without the format members the service fills. */
 const REPAYMENT: LoanRepaymentInput = {
   transactionDate: DISBURSEMENT_DATE,
   transactionAmount: 467,
@@ -486,7 +469,6 @@ const REPAYMENT: LoanRepaymentInput = {
   note: 'First period in full',
 };
 
-/** `REPAYMENT` as it must reach the server. */
 const REPAYMENT_WIRE: Readonly<Record<string, unknown>> = {
   transactionDate: DISBURSEMENT_TEXT,
   transactionAmount: 467,
@@ -496,7 +478,6 @@ const REPAYMENT_WIRE: Readonly<Record<string, unknown>> = {
   locale: APP_LOCALE,
 };
 
-/** A charge whose timing carries a specified due date, which the body must therefore post. */
 const CHARGED_WITH_DUE_DATE: LoanChargeRequest = {
   chargeId: PICKED_CHARGE_ID,
   amount: 25,
@@ -505,7 +486,6 @@ const CHARGED_WITH_DUE_DATE: LoanChargeRequest = {
   locale: APP_LOCALE,
 };
 
-/** `CHARGED_WITH_DUE_DATE` as it must reach the server. */
 const CHARGED_WITH_DUE_DATE_WIRE: Readonly<Record<string, unknown>> = {
   chargeId: PICKED_CHARGE_ID,
   amount: 25,
@@ -514,7 +494,6 @@ const CHARGED_WITH_DUE_DATE_WIRE: Readonly<Record<string, unknown>> = {
   locale: APP_LOCALE,
 };
 
-/** A disbursement-timed charge, which carries no due date and must post none. */
 const CHARGE_WITHOUT_DUE_DATE: LoanChargeRequest = {
   chargeId: PICKED_CHARGE_ID,
   amount: 25,
@@ -528,7 +507,6 @@ const REPOSTED_CHARGES: NonNullable<LoanApplicationRequest['charges']> = [
   { id: SECOND_LOAN_CHARGE_ID, chargeId: CHARGE_ID, amount: 40, dueDate: null },
 ];
 
-/** `REPOSTED_CHARGES` as it must reach the server: the dated row's date formatted, the other's absent. */
 const REPOSTED_CHARGES_WIRE: readonly Readonly<Record<string, unknown>>[] = [
   { id: LOAN_CHARGE_ID, chargeId: PICKED_CHARGE_ID, amount: 25, dueDate: DISBURSEMENT_TEXT },
   { id: SECOND_LOAN_CHARGE_ID, chargeId: CHARGE_ID, amount: 40 },

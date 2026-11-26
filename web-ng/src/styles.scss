@@ -51,7 +51,6 @@ $fa-font-path: "../node_modules/font-awesome/fonts";
 
 // ----------------------------------------------------------------------------- 4. The legacy Bootstrap 3 layer, reproduced inline -----------------------------------------------------------------------------
 
-// Typography
 $mx-font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; // $font-family-sans-serif
 $mx-font-size-base: 14px; // $font-size-base
 $mx-line-height-base: 1.42857143; // $line-height-base (20/14)
@@ -62,14 +61,12 @@ $mx-font-size-label: 12px; // text-label-caps
 $mx-font-size-card-title: 18px; // $font-size-h4
 $mx-font-size-record-title: 24px; // $font-size-h3
 
-// Text colours
 $mx-text-strong: #666F74; // color-text-strong — body copy
 $mx-text-secondary: #777777; // color-text-secondary — $gray-light
 $mx-text-black: #555555; // color-text-black — $gray
 $mx-text-placeholder: #999999; // color-placeholder — $input-color-placeholder
 $mx-text-select: #333333; // color-select-value — $gray-dark
 
-// Surfaces and rules
 $mx-surface: #FFFFFF; // color-surface — $body-bg
 $mx-app-bg: #EBEFF1; // color-app-bg — surface behind the signed-in cards
 $mx-table-head: #F5F5F5; // color-table-head — the legacy _content.scss override of $table-bg-accent
@@ -91,7 +88,6 @@ $mx-notice-accent: $mx-legacy-blue; // _notifications.scss `.new-notification` �
 $mx-danger: #d9534f; // $brand-danger as the legacy variables leave it [_variables.scss:23] — the
                      // required marker's colour [_content.scss:148] and the notification widget's error accent
 
-// Brand and status
 $mx-brand-blue: #5099ED; // color-brand-blue — $brand-primary #5099ED
 $mx-brand-border: #378CEB; // color-primary-border — $btn-primary-border
 $mx-tab-accent: #428BCA; // color-tab-accent — the active tab's 3px top bar
@@ -105,7 +101,6 @@ $mx-status-rejected: $mx-danger; // the product's danger value, $brand-danger [_
 $mx-status-withdrawn: #800080; // _content.scss's `.statusoverpaid` violet [:419] — the one hue the palette leaves free,
                                // and the fill that keeps a withdrawn record off the rejected red and the closed grey
 
-// Metrics
 $mx-control-height: 34px; // space-control — .form-control height
 $mx-nav-control-height: 30px; // space-nav-control — the navbar's search control
 $mx-navbar-height: 52px; // the bar's rendered height, measured in the browser: a 50px
@@ -229,9 +224,12 @@ hr.section-rule {
   }
 }
 
-// Column proportions of the clients list, and why they hold: the design's six widths, Name widest at 28.00% down to Staff at 8.50% (AAP 0.7.4 "Clients list"). `table-layout: fixed` makes the columns the declared proportion at every width instead of letting the longest value on the page decide, and it keeps the table inside its container rather than growing to its widest row.
+// Column proportions of the clients list, and why they hold: the design's six widths, Name widest at 28.00% down to Staff at 8.50% (AAP 0.7.4 "Clients list"). `table-layout: fixed` makes the columns the declared proportion at every width instead of letting the longest value on the page decide, and the minimum width below stops those proportions from being squeezed onto a phone: with none, the six columns shared the card's 313px at 375x812 — 26px to 88px each — and every caption broke mid-word ("St/at/us", "Offic/e"). The table is therefore not always narrower than its container: below the minimum width it keeps the width it needs and Bootstrap's own `.table-responsive` wrapper scrolls sideways over the rest, which is what the legacy natural-width `.table` did.
 .table.client-list {
   table-layout: fixed;
+
+  // 860px keeps every caption legible: the narrowest column, Staff at 8.5%, is 73px there — a 57px content box after Bootstrap's 8px cell padding — which holds the "Staff" caption on one line, and the five wider columns only gain room from that, so every caption sits on one line and `.table-responsive` scrolls the table instead of the columns compressing. The minimum holds at every width rather than only below 768px, so nothing about the table changes across that boundary.
+  min-width: 860px;
 
   // The six columns in the design's own order: Name 28.00%, Client No. 19.68%, External ID 17.51%, Status 10.46%, Office 15.85%, Staff 8.50% (AAP 0.7.4 "Clients list").
   > thead > tr > th:nth-child(1) { width: 28%; } // Name
@@ -243,6 +241,7 @@ hr.section-rule {
 }
 
 // The list's row affordance: the legacy row names it `class="pointer-main"` (`app/views/clients/clients.html:64`) and the partial paints cursor, blue fill and white text in `.pointer-main:hover` (`_content.scss:413-417`), which _content.scss nests under `.card` — the `.panel.panel-default` of AAP 0.5.2 the in-scope list renders. The scoped selector (0,3,0) also outranks Bootstrap's zebra rule (0,2,2), so an odd row's fill cannot paint over the hover fill.
+/* BLITZY [A11Y] — the hovered row keeps the design's white on #5099ED: measured in the browser the fill is rgb(80, 153, 237) and the cell ink rgb(255, 255, 255), 2.95:1, below WCAG AA's 4.5:1 for 14px text. The fill is the product's one brand blue — AAP 0.2.2's `color-brand-blue` #5099ED, which AAP 0.5.3 reconciles with the partial's `$brand-primary` literal — and the ink is the partial's own #fff, so legacy behaviour is matched here rather than improved (Rule 1 clause 3) and no deliberate difference from it is registered for this row: the contrast is recorded rather than corrected, and the fill and ink stay the design's. The status swatch inside the row keeps its own #00CE02 fill: it paints a background rather than inheriting this ink. */
 .panel .pointer-main:hover {
   cursor: pointer;
   background-color: $mx-legacy-blue; // _content.scss:413 .pointer-main:hover — the partial's #4f99ed
@@ -367,6 +366,13 @@ span.required {
   margin-bottom: 0;
 }
 
+// Bootstrap gives every `.form-control` a 0.15s `border-color`/`box-shadow` transition [_forms.scss:147], which is the only animation an in-scope screen reaches: with the preference below emulated in the browser, the four fields the clients screen renders — the navbar's search field and its scope select, the filter field and the find field — were the only elements in the whole application whose computed transition-duration stayed non-zero, and none carried an animation. A user who asks for reduced motion still gets the state change itself, the border moving to #BCE0FD under its glow, without the 0.15s travel towards it. At default settings the block matches nothing, so no rendered pixel and no behaviour moves.
+@media (prefers-reduced-motion: reduce) {
+  .form-control {
+    transition: none;
+  }
+}
+
 // ----------------------------------------------------------------------------- Login language switcher (AAP 0.2.3 `LanguageSwitcher`: "label 13px #666F74 + native select 24px tall") -----------------------------------------------------------------------------
 
 .language-switcher {
@@ -428,13 +434,13 @@ span.required {
   margin-inline: 0;
 }
 
-// Each footer link column is a Bootstrap `.col-xs-4` — 125px at a 375px viewport with 95px of content inside its gutter — and a translated label offering no break opportunity is wider than that box, so at 375x812 the CONTRIBUTE label ran to x=389.53 and `documentElement.scrollWidth` was 390 against an `innerWidth` of 375. Only a break opportunity removes that: the three columns are the design's, no link may be hidden and no label shortened, so the label wraps inside its column.  `anywhere` rather than `break-word`, and on `.login-footer`'s anchors alone: the labels are translated, so the rule has to hold for whatever text arrives rather than for the one that overflowed, and the class keeps the wrap off every other link.
+// A footer link label is translated, so this wrap has to hold for whatever text arrives rather than for the one label that overflowed — `anywhere` rather than `break-word`, and on `.login-footer`'s anchors alone, so the class keeps it off every other link. Nothing narrower than a full-width column is ever asked to hold a label: below `$screen-xs-max` the three columns stack (see the rule below), so this now engages only for a single word wider than that whole column, and above it a third of the row is wide enough for the longest label the bundles carry.
 .login-footer a {
   overflow-wrap: anywhere;
 }
 
-// Below the flow's narrowest in-scope width (375px) the three columns hold 77px of content each at 320, where an uppercase heading such as "CONTRIBUTE" is wider than its box and a link label has to break inside a word. The columns stack full width there, so every heading and label fits on its own line.
-@media (max-width: 359px) {
+// Each footer link column is a Bootstrap `.col-xs-4`, a third of the row: 115px at 375x812 with the column's 15px side padding, an 85px content box, while "Functional Specifications" renders 154.875px and "Specifications" alone about 86px — so a third of an xs row cannot hold a translated label, and the anchor broke inside the word ("Functional / Specification / s") in a 79x56 box. The columns therefore take the row's full width across the whole xs range, `$screen-xs-max` being both the boundary below which Bootstrap's grid gives a `.col-xs-4` a third of a narrow row and the variable the narrow-viewport layer at the end of this file already uses: 315px of content at 375x812, where no label can break inside a word. From 768px up each column keeps its third of the design's row, unchanged.
+@media (max-width: $screen-xs-max) {
   .login-footer .col-xs-4 {
     float: none;
     width: 100%;
@@ -576,10 +582,10 @@ app-navbar {
   }
 }
 
-// A tab that has focus keeps the design's treatment: the user agent's own ring (a 2px #101010 frame at offset -2) is drawn over the inner two pixels of the 3px accent bar and leaves one pixel of #428BCA showing. The application's focus token is drawn inside the tab instead, clear of the accent, so the accent stays 3px and the focus indicator is still plainly visible (WCAG 2.4.7).
+// A tab that has focus keeps the design's 3px accent bar whole and still carries a plainly visible indicator (WCAG 2.4.7). The accent bar is the top 3px of the tab's border box, and a negative `outline-offset` draws the ring inward over the band from `|offset| - width` to `|offset|` px inside that box — which is why the user agent's own frame, and an application ring at -3px, painted over the accent bar's inner two pixels and left one of #428BCA showing. At -6px the same 2px #378CEB ring occupies 4-6px inside the border box: the 3px #428BCA bar stays whole, a 1px gap follows it, and the ring then runs around the tab without ever crossing the label. The ring stays inset rather than moving outside the tab because below the 768px breakpoint the strip is its own horizontal scroller (`overflow-x: auto; overflow-y: hidden`, the narrow-viewport block at the end of this file) and would clip an outside ring at the card's edge. #378CEB is 3.3:1 against the white tab, clear of the 3:1 non-text contrast guidance.
 .nav-tabs > li > a:focus {
   outline: 2px solid $mx-brand-border;
-  outline-offset: -3px;
+  outline-offset: -6px;
 }
 
 // The strip's two decorative scroll chevrons (AAP 0.2.1 Step 3): the design's blue glyphs at the strip's ends, in the colour of the inactive tabs. They are painted rather than operated — the template marks them aria-hidden and gives them no control — and the strip itself scrolls at narrow widths, so neither is a dead button.
@@ -660,7 +666,6 @@ app-profile-card .panel-body > .row > .col-xs-5 {
   border-radius: 50%;
 }
 
-// The six keys StatusSwatch paints. AAP 0.2.2 fixes the active and pending colours; the other four take the values declared above, one hue each, so a later change to a body-text token cannot silently repaint a status indicator.
 .status-active { background-color: $mx-status-active; } // color-status-active
 .status-pending { background-color: $mx-status-pending; } // color-status-pending
 .status-closed { background-color: $mx-status-closed; } // the closed key's neutral, #777777
@@ -817,7 +822,7 @@ app-profile-card .panel-body > .row > .col-xs-5 {
     }
   }
 
-  // (d) The clients list's table. Its columns are fixed proportions (see `.table.client-list`), so at 375 the six of them share the card's width instead of pushing the table 157px past it and clipping the Status header mid-glyph. Bootstrap's own `.table-responsive > .table` rule sets `white-space: nowrap` below this breakpoint, which in a fixed-proportion table leaves every header wider than its column and spilling over its neighbour, so the cells wrap inside their own column — and a value with no break opportunity breaks there too rather than over the next cell.
+  // (d) The clients list's table. Its columns keep the design's fixed proportions and a minimum width (see `.table.client-list`), so below this breakpoint the table stands 860px wide inside a 313px wrapper at 375x812 and `.table-responsive` scrolls it, rather than the six columns compressing to share the card. Bootstrap's own `.table-responsive > .table` rule sets `white-space: nowrap` below this breakpoint, which in a fixed-proportion table leaves an over-long value spilling out of its column over the one beside it; the cells wrap at their own column boundary instead, and a single value with no break opportunity — a long external id, say — breaks inside its own column rather than crossing into its neighbour. At the minimum width the six captions sit on one line, so this is the last resort and not the normal case.
   .table-responsive > .table.client-list {
     > thead > tr > th,
     > tbody > tr > td {

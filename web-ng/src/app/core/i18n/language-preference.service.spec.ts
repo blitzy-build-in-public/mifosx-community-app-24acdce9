@@ -18,7 +18,6 @@ import {
 /** The language every fixture stores: one of the offered codes, deliberately not the configured `en`, so a value read back can only have come from the entry. */
 const REMEMBERED_LANG = 'fr';
 
-/** A second offered code, used where a case needs to prove a write replaces an earlier one. */
 const OTHER_LANG = 'es';
 
 /** A code no start-up may hand to the bundle loader: outside `AVAILABLE_LANGS`, so the application serves no `global-translations/locale-<code>.json` for it, and path-shaped, which is the hand-edited entry value the validation has to stop before it becomes a request (Rule 1 clause 9). */
@@ -30,14 +29,11 @@ const LEGACY_PREFIX_LITERAL = 'ls';
 /** The entry name legacy passes to `addToLocalStorage` at `MainController.js:344`, written out for the same reason. */
 const LEGACY_ENTRY_LITERAL = 'Language';
 
-/** The exact stored key: `prefix` with the period the wrapper appends, then the entry name. */
 const LEGACY_KEY_LITERAL = 'ls.Language';
 
-/** The ngx-translate surface this service uses: `use` is the load applying a language performs, and subscribing to what it returns is what really switches. */
 interface TranslateStub {
   readonly use: Mock<(code: string) => Observable<unknown>>;
 
-  /** The codes whose bundle was really subscribed to, in order: proof the observable actually ran. */
   readonly requested: readonly string[];
 
   /** Makes the next `use` answer on its error channel, the way a bundle that cannot load does. */
@@ -74,7 +70,6 @@ function createTranslateStub(): TranslateStub {
   };
 }
 
-/** The service, plus the translate stand-in it applies a remembered language through. */
 interface Harness {
   readonly service: LanguagePreferenceService;
   readonly translate: TranslateStub;
@@ -101,10 +96,8 @@ function seedEntry(value: string): void {
   window.localStorage.setItem(languagePreferenceKey(), value);
 }
 
-/** The page's own `localStorage`, captured before a case substitutes a store that refuses access. */
 let savedStore: Storage | null = null;
 
-/** The page's own property descriptor for `localStorage` where the property is `window`'s own accessor, so it can be put back exactly as jsdom defined it. */
 let savedDescriptor: PropertyDescriptor | null = null;
 
 /** Substitutes the page's `localStorage` for one case with the store a browser presents when it refuses access — a full quota, a read-only profile, storage blocked by the user — because the property is the only way to reach that state without a cast; `restoreStorage()` puts the real one back. */

@@ -8,10 +8,8 @@ import { SelectFieldComponent, type SelectOption, type SelectValue } from './sel
 /** Options in the shape a Fineract `template` endpoint returns them, with deliberately out-of-order ids: the spec proves the received order survives rendering and that the caller receives the option's id rather than its position in the list. */
 const OFFICES: readonly SelectOption[] = [{ id: 3, name: 'Head Office' }, { id: 1, name: 'Branch One' }, { id: 2, name: 'Branch Two' }, ];
 
-/** Two options a feature service can hand in with one id, because `shared/` cannot enforce uniqueness on a caller's `number | string` id: the rendered rows must stay one per entry, in order, and each option must still write its own id to the control. */
 const DUPLICATE_ID_OPTIONS: readonly SelectOption[] = [{ id: 7, name: 'Branch Seven' }, { id: 7, name: 'Branch Seven (archived)' }, ];
 
-/** The inputs a test overrides; every other input keeps the component's own default. */
 interface FieldInputs {
   readonly options?: readonly SelectOption[];
   readonly placeholder?: string;

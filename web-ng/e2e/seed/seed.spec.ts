@@ -6,13 +6,10 @@ import { describe, expect, it } from 'vitest';
 
 import { SEED_RESULT_ARTEFACT_PATH, discardResultArtefact } from './seed';
 
-/** The artefact's real path, resolved from this file's URL exactly as `seed.ts` resolves it. */
 const ARTEFACT_PATH: string = fileURLToPath(new URL('../.captures/seed.json', import.meta.url));
 
-/** The scratch file the stale marker goes to: this spec's own name inside the same git-ignored `.captures` directory, so the removal is exercised on a real path without overwriting — or deleting — the artefact a seed run. */
 const SCRATCH_PATH: string = fileURLToPath(new URL('../.captures/seed.spec.stale.json', import.meta.url));
 
-/** A previous run's artefact, shaped like the one a failed run leaves behind: a `runDate` and an id that no recreated database holds, so reading it after a failed run is exactly the hazard being pinned. */
 const STALE_ARTEFACT: string = `${JSON.stringify(
   {
     runDate: '2020-01-01',

@@ -117,7 +117,6 @@ describe('SearchResultsComponent', () => {
   const blocks = (): HTMLDivElement[] =>
     Array.from(host().querySelectorAll<HTMLDivElement>('#search-results .blockquoteresult'));
 
-  /** A block's rendered text with every run of whitespace — the `&nbsp;` entities among the separators included — collapsed to one space, so a case can name what a reader sees without depending on the markup's own line. */
   const text = (element: Element | null | undefined): string =>
     (element?.textContent ?? '').replace(/[\s\u00A0]+/g, ' ').trim();
 

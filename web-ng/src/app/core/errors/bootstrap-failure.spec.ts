@@ -4,18 +4,14 @@ import { renderBootstrapFailure } from './bootstrap-failure';
 
 /** Behaviour spec for `core/errors/bootstrap-failure.ts`, the one surface a failed bootstrap reaches a reader through (Rule 1 clause 8, AAP 0.14.2 "Test coverage"). */
 
-/** The sentence the block shows when the rejection carries no message of its own. */
 const FALLBACK_SENTENCE =
   'The application could not start and the browser console holds the details of the failure.';
 
-/** The heading the block carries, pinned for the same reason. */
 const FAILURE_HEADING = 'Mifos X cannot start';
 
-/** The diagnostic `AppConfigService.load()` rejects with when the served file lacks `apiBaseUrl`, quoted as the text the page has to carry. */
 const CONFIG_MESSAGE =
   "Invalid configuration in assets/config.json: 'apiBaseUrl' must be a non-empty string.";
 
-/** The message extraction, as one parameterized case: the label the case reports itself under, the rejection, and the text the page must then show. */
 const MESSAGE_CASES: readonly (readonly [label: string, rejection: unknown, expected: string])[] = [
   ['an Error carrying a message', new Error(CONFIG_MESSAGE), CONFIG_MESSAGE],
   ['a rejection that is a string', 'The configuration file could not be read.', 'The configuration file could not be read.'],
@@ -23,13 +19,10 @@ const MESSAGE_CASES: readonly (readonly [label: string, rejection: unknown, expe
   ['a rejection of an unexpected type', { reason: 'unknown' }, FALLBACK_SENTENCE],
 ];
 
-/** The page's `app-root` host, which is the element the block belongs in. */
 const appRoot = (): Element | null => document.querySelector('app-root');
 
-/** The rendered danger block, or null when nothing was rendered. */
 const dangerBlock = (): Element | null => document.querySelector('.alert-danger');
 
-/** The paragraph carrying the message, or null when nothing was rendered. */
 const messageParagraph = (): Element | null | undefined => dangerBlock()?.querySelector('p');
 
 /** The one surface a failed bootstrap reaches a reader through: the block `web-ng/src/main.ts` renders into the `app-root` host when `bootstrapApplication`'s promise rejects, so a deployment whose configuration cannot be resolved renders that block instead of a blank page. */

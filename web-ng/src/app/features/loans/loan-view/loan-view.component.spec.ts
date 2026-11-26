@@ -31,10 +31,8 @@ import { LOAN_ACTIONS, LoanViewComponent } from './loan-view.component';
 
 /** Behavioural spec for the individual-loan record — `#/viewloanaccount/:id`, the screen the loan route tree mounts for its one record path (AAP 0.7.1 Features row `loans`; AAP 0.7.4's `#/viewloanaccount/:id` row; AAP 0.8.2 "Feature routes, matching legacy paths exactly"; AAP 0.7.3 row "W6 repayment"; Rule 1 clause 3, AAP 0.4.2). */
 
-/** The loan every case opens, as the `:id` segment delivers it. */
 const LOAN_ID = '9';
 
-/** The second record the route is moved to in place — a second `#/viewloanaccount/{id}` the router serves with the same component instance, which is what makes the snapshot read a defect. */
 const SECOND_LOAN_ID = '12';
 
 /** The action links the fixture loan's state offers — it is an active loan (`loanStatusType.active`, 300) — in the order `LOAN_ACTIONS` lists them: the charge form, the repayment form and undo disbursal, which is exactly the set the legacy record shows for an active loan (`ViewLoanDetailsController.js`). */
@@ -44,10 +42,8 @@ const ACTION_PATHS: readonly string[] = [
   `/loanaccount/${LOAN_ID}/undodisbursal`,
 ];
 
-/** The captions those links render, keyed exactly as the shipped flat translation bundles key them. */
 const ACTION_CAPTIONS: readonly string[] = ['Add Loan Charge', 'Make Repayment', 'Undo Disbursal'];
 
-/** The summary block's captions, in render order: the loan-wide totals, then the three balances. */
 const SUMMARY_CAPTIONS: readonly string[] = [
   'Total',
   'Outstanding',
@@ -157,7 +153,6 @@ const SCHEDULE: RepaymentSchedule = {
   totalOutstanding: 5133.33,
 };
 
-/** The single disbursement the payload of the fixture loan carries. */
 const TRANSACTIONS: readonly LoanTransaction[] = [
   {
     id: 41,
@@ -210,7 +205,6 @@ const LOAN_CHARGES: readonly LoanCharge[] = [
   },
 ];
 
-/** The loan the record renders: every member the page reads — its charges included, because the one read carries them — with the server's own figures. */
 const LOAN: LoanAccount = {
   id: 9,
   accountNo: '000000145',
@@ -232,7 +226,6 @@ const LOAN: LoanAccount = {
 /** A loan whose payload carries no `charges` member at all, which is how the fork answers a loan that carries no charge: the record's charge tab then renders the explicit empty state rather than an empty table or an error (AAP 0.7.4). */
 const UNCHARGED_LOAN: LoanAccount = { ...LOAN, charges: undefined };
 
-/** The one charge the second route's loan carries: a row of its own, so a charge list left over from the first record is caught as surely as a figure left over from it. */
 const SECOND_LOAN_CHARGE: LoanCharge = {
   id: 31,
   chargeId: 4,
@@ -251,7 +244,6 @@ const SECOND_LOAN_CHARGE: LoanCharge = {
   dueDate: '2027-01-24',
 };
 
-/** The record the second route emission names: a loan whose every printed value — its charge list included — differs from {@link LOAN}, so a screen that kept the first record, its action links or its charges is caught. */
 const SECOND_LOAN: LoanAccount = {
   ...LOAN,
   id: 12,
@@ -313,7 +305,6 @@ const ACTIONS_BY_STATUS: readonly {
   },
 ];
 
-/** A loan whose schedule reports only part of what the summary block prints: no loan-wide totals at all, and one period carrying nothing but its principal balance. */
 const PARTIAL_LOAN: LoanAccount = {
   ...LOAN,
   repaymentSchedule: {
@@ -336,13 +327,11 @@ const PARTIAL_LOAN: LoanAccount = {
   },
 };
 
-/** The message a 404 answers with, quoted from Fineract's own `defaultUserMessage`. */
 const NOT_FOUND_MESSAGE = 'The requested resource is not available.';
 
 /** The not-found text the record renders, as the shipped legacy bundle words it. */
 const NOT_FOUND_TEXT: string = TRANSLATIONS['error.msg.resource.not.found'];
 
-/** The message a refused request answers with, compared character for character below. */
 const VALIDATION_MESSAGE = 'The loan cannot be disbursed because it has not been approved.';
 
 /** An observable a case settles by hand, so one route's answer can be held open while the URL moves to another record — the order in which a superseded read answers last. */
@@ -367,7 +356,6 @@ function deferredResponse<T>(): { readonly response: Observable<T>; resolve(valu
   };
 }
 
-/** The read this screen makes of its family's service, so a case can both answer it and assert how often, and with what, the component asked. */
 type LoanRead = (id: number | string) => Observable<LoanAccount>;
 
 /** The slice of `LoanService` this screen is given: the one read it makes (AAP 0.7.3, Rule 1 clause 2). */
@@ -403,12 +391,10 @@ describe('LoanViewComponent', () => {
   // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines the cast to one line and keeps the DOM assertions type-checked (Rule 1 clause 4).
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
 
-  /** The tab strip's anchors, in the order the record renders them. */
   function tabAnchors(): readonly HTMLAnchorElement[] {
     return Array.from(host().querySelectorAll<HTMLAnchorElement>('ul.nav-tabs > li > a'));
   }
 
-  /** The action group's links, in the order the record renders them. */
   function actionLinks(): readonly HTMLAnchorElement[] {
     return Array.from(host().querySelectorAll<HTMLAnchorElement>('.btn-group a'));
   }
@@ -428,7 +414,6 @@ describe('LoanViewComponent', () => {
     return Array.from(host().querySelectorAll<HTMLAnchorElement>('#loan-charges tbody a'));
   }
 
-  /** The charges tab's anchor, the record's third. */
   function openChargesTab(): void {
     tabAnchors()[2].click();
     fixture.detectChanges();
@@ -444,7 +429,6 @@ describe('LoanViewComponent', () => {
     );
   }
 
-  /** The route stub's parameter map for the `:id` segment a case is about. */
   function paramMapFor(id: string | null): ParamMap {
     const params: Record<string, string> = {};
 
@@ -724,8 +708,8 @@ describe('LoanViewComponent', () => {
 
     expect(chargeActionLinks().map((link) => link.getAttribute('href'))).toEqual(
       LOAN_CHARGES.flatMap((charge) => [
-        `/loanaccountcharge/${LOAN_ID}/pay/${charge.id}`,
-        `/loanaccountcharge/${LOAN_ID}/waive/${charge.id}`,
+        `/loanaccountcharge/${LOAN_ID}/paycharge/${charge.id}`,
+        `/loanaccountcharge/${LOAN_ID}/waivecharge/${charge.id}`,
       ]),
     );
     expect(chargeActionLinks().map((link) => link.textContent?.trim())).toEqual([
@@ -886,10 +870,8 @@ describe('LoanViewComponent', () => {
       return typeof code === 'string' ? code : null;
     }
 
-    /** The `loanaccount/:id/:action` route the router mounts — the screen the record's Approve link opens. */
     const ACTION_ROUTE: Route = routeFor(['/loanaccount', LOAN_ID, 'approve']);
 
-    /** The guard's answer: let the navigation through, or replace it with a redirect. */
     type GuardAnswer = ReturnType<CanActivateFn>;
 
     /** The snapshot `permissionGuard` is handed for `#/loanaccount/<id>/<action>`, built from the declaration the router mounts rather than from a copy of it. @param command the `:action` segment the URL carries. */

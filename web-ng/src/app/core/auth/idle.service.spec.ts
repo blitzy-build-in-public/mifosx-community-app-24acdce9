@@ -8,10 +8,8 @@ import { DEFAULT_APP_CONFIG, type AppConfig } from '../config/app-config.model';
 import { AppConfigService } from '../config/app-config.service';
 import { IdleService } from './idle.service';
 
-/** Milliseconds in a minute, restated here so the arithmetic below is independent of the service's own. */
 const MS_PER_MINUTE = 60_000;
 
-/** Milliseconds in a second: `warningSeconds` is the one duration that arrives in seconds. */
 const MS_PER_SECOND = 1_000;
 
 /** The legacy idle duration in minutes (`IDLE_DURATION = 30 * 60` in the legacy configuration). */
@@ -31,7 +29,6 @@ const KEEPALIVE_DELAY_MS = KEEPALIVE_MINUTES * MS_PER_MINUTE;
 
 const TEN_MINUTES_MS = 10 * MS_PER_MINUTE;
 
-/** The `AppConfigService` surface `IdleService` reads. */
 class StubAppConfigService implements Pick<AppConfigService, 'config' | 'apiUrl'> {
   constructor(private readonly resolved: AppConfig) {}
   get config(): AppConfig {
@@ -48,20 +45,17 @@ function configFor(overrides: Partial<AppConfig> = {}): AppConfig {
   return { ...DEFAULT_APP_CONFIG, ...overrides };
 }
 
-/** What the two subscriptions recorded: the fake-clock instants at which each emission arrived. */
 interface Emissions {
   readonly warnings: number[];
   readonly timeouts: number[];
 }
 
-/** One service instance under test, the fake-clock record of its emissions and its HTTP test client. */
 interface Harness {
   readonly service: IdleService;
   readonly httpMock: HttpTestingController;
   readonly emissions: Emissions;
 }
 
-/** Every subscription this file opened, so `afterEach` can unsubscribe from the never-completing subjects. */
 const openSubscriptions: Subscription[] = [];
 
 /** Builds the real `IdleService` with its one dependency replaced, plus the `HttpTestingController` every Fineract-facing service is surrounded by, so the no-request case has a client to inspect. */

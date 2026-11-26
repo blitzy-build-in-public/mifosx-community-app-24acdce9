@@ -10,21 +10,17 @@ import {
 
 /** Contract and behaviour spec for `DataTableGateService`, the gate every client lifecycle action passes through before it posts (AAP 0.3.4 claim 13; AAP 0.7.3 row "Client actions: datatable gate"; AAP 0.7.1 supporting-services row `DataTableGateService`). */
 
-/** The served API host and root, written out exactly as `web-ng/src/assets/config.json` ships them. */
 const API_BASE_URL = 'https://localhost:8443';
 const API_PATH = '/fineract-provider/api/v1';
 const API_ROOT = `${API_BASE_URL}${API_PATH}`;
 
-/** The one separator the expected URLs are joined with. Named because both the stub's composition and the expectations below join path segments, and one constant keeps the expected URL and the requested URL built the same. */
 const SEPARATOR = '/';
 
 /** The resource path of the gate's first call (AAP 0.7.3 row "Client actions: datatable gate"). */
 const ENTITY_CHECKS_PATH = 'entityDatatableChecks';
 
-/** The checks URL the service must request, composed from the serving configuration and the path. */
 const ENTITY_CHECKS_URL = API_ROOT + SEPARATOR + ENTITY_CHECKS_PATH;
 
-/** The client every case gates, and the two registered tables the fixtures' checks name. */
 const CLIENT_ID = 7;
 const FIRST_TABLE = 'client_extra_details';
 const SECOND_TABLE = 'client_family_members';
@@ -32,7 +28,6 @@ const SECOND_TABLE = 'client_family_members';
 /** A client id in the zero-padded form the legacy client list shows it in. */
 const LEADING_ZERO_CLIENT_ID = '000000002';
 
-/** The numeric ids of the check statuses these fixtures use, from Fineract's `StatusEnum`: `ACTIVATE` is 300, `WITHDRAWN` 400, `REJECTED` 500 and `CLOSE` 600. */
 const STATUS_IDS: Readonly<Record<ClientCheckStatus, number>> = {
   ACTIVATE: 300,
   CLOSE: 600,
@@ -40,7 +35,6 @@ const STATUS_IDS: Readonly<Record<ClientCheckStatus, number>> = {
   WITHDRAWN: 400,
 };
 
-/** The five in-scope actions paired with the status the checks must be filtered on. */
 const ACTION_STATUS: readonly (readonly [ClientActionName, ClientCheckStatus])[] = [
   ['activate', 'ACTIVATE'],
   ['close', 'CLOSE'],
@@ -114,10 +108,8 @@ const RESULT_SET: DataTableRowSet = {
   data: [{ row: [1, 'Parity Bank'] }],
 };
 
-/** A generic result set with no entry — the table exists and this client has no row in it. */
 const EMPTY_RESULT_SET: DataTableRowSet = { columnHeaders: [], data: [] };
 
-/** The URL of one datatable read, composed segment by segment. */
 function datatableUrl(table: string, clientId: number | string): string {
   return [API_ROOT, 'datatables', table, clientId].join(SEPARATOR);
 }

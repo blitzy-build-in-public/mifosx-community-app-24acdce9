@@ -15,10 +15,8 @@ import { LoanChargesComponent } from './loan-charges.component';
 
 /** Behavioural spec for the charges section of the individual-loan record — `app-loan-charges`, the `LoanChargesComponent` row of AAP 0.7.1's loans feature, rendered inside the record's charge tab (`#/viewloanaccount/:id`; AAP 0.7.4, AAP 0.7.2, AAP 0.7.3, AAP 0.11.1). */
 
-/** The loan every case is bound to, in the form the record binds it — `record.id`, a number. */
 const LOAN_ID = 7;
 
-/** The two forms the `loanId` input accepts: the numeric id the record passes and the string form a `:id` route parameter delivers. */
 const LOAN_ID_FORMS: readonly (number | string)[] = [LOAN_ID, String(LOAN_ID)];
 
 /** The one permission code this section is gated on: `UPDATE_LOAN`, the code the record passes down and the code `loans.routes.ts` guards `loanaccountcharge/:id/:action/:chargeId` with, so the directive and the guard (AAP 0.14.1). */
@@ -39,7 +37,6 @@ const TRANSLATIONS = {
   'label.nodata': 'No Data',
 };
 
-/** The keys of the seven column headings, in the template's order. */
 const HEADING_KEYS = [
   'label.heading.name',
   'label.heading.dueasof',
@@ -50,7 +47,6 @@ const HEADING_KEYS = [
   'label.heading.actions',
 ] as const satisfies readonly (keyof typeof TRANSLATIONS)[];
 
-/** The seven headings as the table must render them: the bundle's wording, never the key. */
 const HEADINGS: readonly string[] = HEADING_KEYS.map((key) => TRANSLATIONS[key]);
 
 /** The currency every fixture charge is denominated in, as `GET /loans/{id}?associations=all` reports it inside each `charges[]` entry: the table prints this symbol in front of each of the charge's figures, with no space between them (Rule 1 clause 3). */
@@ -64,15 +60,12 @@ const CURRENCY: LoanCurrency = {
 /** The date format the table uses, through the one pattern the application declares (AAP 0.7.2). */
 const DUE_DATE_PIPE = new DatePipe('en-US');
 
-/** Formats `date` exactly as the table's due-date cell does. */
 function asDueDate(date: Date): string | null {
   return DUE_DATE_PIPE.transform(date, DISPLAY_DATE_FORMAT);
 }
 
-/** The local-midnight `Date` a `[2026, 3, 14]` payload date parses to, written the same way. */
 const DUE_DATE = new Date(2026, 2, 14);
 
-/** Status values a charge's type members carry; the table renders neither, it only passes them by. */
 const SPECIFIED_DUE_DATE = { id: 2, value: 'Specified due date' };
 const DISBURSEMENT = { id: 1, value: 'Disbursement' };
 const FLAT = { id: 1, value: 'Flat' };
@@ -103,7 +96,6 @@ const CHARGE_DUE: LoanCharge = {
   dueDate: [2026, 3, 14],
 };
 
-/** The same charge settled: paid in full, which is why it is neither payable nor waivable. */
 const CHARGE_SETTLED: LoanCharge = {
   id: 12,
   chargeId: 6,
@@ -121,10 +113,8 @@ const CHARGE_SETTLED: LoanCharge = {
   chargeCalculationType: FLAT,
 };
 
-/** The same outstanding charge with a regular payment mode: Fineract's `isChargePayable()` answers false for it, because paying it means paying through an account transfer, so the record offers waive and withholds pay. */
 const CHARGE_NOT_PAYABLE: LoanCharge = { ...CHARGE_DUE, id: 13, chargePayable: false };
 
-/** The same charge waived: its charge is settled, so the record withholds both actions. */
 const CHARGE_WAIVED: LoanCharge = {
   ...CHARGE_DUE,
   id: 14,
@@ -141,10 +131,8 @@ const CHARGE_AT_DISBURSEMENT: LoanCharge = {
   chargeTimeType: DISBURSEMENT,
 };
 
-/** The two rows every table case renders, in the order the payload lists them. */
 const CHARGES: readonly LoanCharge[] = [CHARGE_DUE, CHARGE_SETTLED];
 
-/** The loan states in which the record offers neither charge action, by the fork's own `LoanStatus` ids — every state but `300` — plus the state a payload that reports no status leaves. */
 const NOT_ACTIVE_STATUSES: readonly (readonly [string, LoanStatus | null])[] = [
   [
     'submitted and pending approval',
@@ -214,28 +202,25 @@ describe('LoanChargesComponent', () => {
     return fixture;
   }
 
-  /** The rendered charge rows, in document order. */
   function renderedRows(): HTMLTableRowElement[] {
     return Array.from(host().querySelectorAll<HTMLTableRowElement>('#loan-charges tbody tr'));
   }
 
-  /** Every cell of `row` as trimmed text, in column order. */
   function cellsOf(row: HTMLTableRowElement): readonly string[] {
     return Array.from(row.cells).map((cell) => (cell.textContent ?? '').trim());
   }
 
-  /** The element carrying `id`, or `null` when the template rendered none. */
   function byId(id: string): HTMLElement | null {
     return host().querySelector<HTMLElement>(`#${id}`);
   }
 
-  /** The route a charge action names: `#/loanaccountcharge/:id/:action/:chargeId`, the path `loans.routes.ts` declares and `loan-charge-form.component.ts` serves (AAP 0.8.2). */
+  /** The route a charge action names: `#/loanaccountcharge/:id/:action/:chargeId`, the path `loans.routes.ts` declares and `loan-charge-form.component.ts` serves, with legacy's own `paycharge` and `waivecharge` segments for the two commands (AAP 0.8.2; Rule 1 clause 5). */
   function chargeUrl(
     loanId: number | string,
     action: 'pay' | 'waive',
     chargeId: number,
   ): string {
-    return `/loanaccountcharge/${loanId}/${action}/${chargeId}`;
+    return `/loanaccountcharge/${loanId}/${action === 'pay' ? 'paycharge' : 'waivecharge'}/${chargeId}`;
   }
 
   /** Whether the row's action link is hidden by the section's own eligibility rule — Bootstrap's global `.hidden` utility — rather than removed. */

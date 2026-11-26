@@ -30,20 +30,16 @@ const SCHEDULED_PERIODS = 12;
 const EXCHANGE_TIMEOUT_MS = 30_000;
 interface ExchangeMatch {
   readonly method: string;
-  /** Absolute path with the capture's role tokens, e.g. `/fineract-provider/api/v1/loans/{loanId}`. */
   readonly path: string;
   readonly query?: Readonly<Record<string, string>>;
 }
 interface PaymentTypeOption {
-  /** Fineract's id for the payment type: the value the endpoint takes as `paymentTypeId`. */
   readonly id: number;
-  /** Fineract's own name, which is the label the baseline's select shows and selects by. */
   readonly name: string;
 }
 type ScheduleLine = ScheduleRow | LoanScheduleRow;
 type TransactionLine = TransactionRow | LoanTransactionRow;
 interface LoanCandidate {
-  /** Loan id the record's route named — the id every later API read and page-object call uses. */
   readonly loanId: number;
   readonly accountNo: string;
   readonly before: LoanSnapshot;

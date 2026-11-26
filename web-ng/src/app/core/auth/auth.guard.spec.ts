@@ -12,16 +12,12 @@ import { AuthService } from './auth.service';
 /** The client record route an unauthenticated user most often tries to reach; legacy `#/viewclient/2`. */
 const CLIENT_VIEW_URL = '/viewclient/2';
 
-/** An attempted route that carries a query string of its own, which must survive inside `returnUrl`. */
 const SEARCH_URL = '/search/parity?scope=clients';
 
-/** Where the guard sends an unauthenticated navigation (the guard's own `LOGIN_PATH`). */
 const LOGIN_PATH = '/login';
 
-/** The query parameter the login screen reads the attempted route from (the guard's own `RETURN_URL_PARAMETER`). */
 const RETURN_URL_PARAMETER = 'returnUrl';
 
-/** The route the guard is handed. It is never read — the guard's parameter is `_route`. */
 const UNREAD_ROUTE = {} as ActivatedRouteSnapshot;
 
 /** The `AuthService` question the guard asks, with the answer under the test's control. `vi.fn` records each call. */

@@ -84,9 +84,7 @@ export class AuthService {
   readonly username: Signal<string | null> = this.sessions.username;
 
   /** Authenticates with Fineract and puts the resulting session into effect: `POST /authentication`, the checked answer written as the legacy entry, then the restore that issues `GET /users/{id}`; an answer that cannot describe a session rejects before anything is kept (AAP 0.7.1 `login`, AAP 0.10.1 W1).
-   *
-   * A restore that leaves no session in effect rejects the login with the failure that caused it — the `ApiError` the interceptor built from the failed `GET /users/{id}`, or {@link NO_SESSION_AFTER_SIGN_IN} when nothing failed — so a correct password never ends in an unexplained return to the login form once `authGuard` reads the withdrawn session. The 4xx the interceptor deliberately leaves silent is the case this closes (AAP 0.14.2 "Error handling"); a 5xx or transport fault reaches the caller as the same `ApiError` its one notification already reported. The written entry stands or falls with that restore (AAP 0.4.2): status 401 removes it, and so does status 0 — the form a cross-origin 401
-   * arrives in when the browser cannot read the answer, which a genuine transport fault is indistinguishable from — while every other failure leaves it where the interceptor's 401 branch can act on it. */
+   * A restore that leaves no session in effect rejects the login with the failure that caused it — the `ApiError` the interceptor built from the failed `GET /users/{id}`, or {@link NO_SESSION_AFTER_SIGN_IN} when nothing failed — so a correct password never ends in an unexplained return to the login form once `authGuard` reads the withdrawn session. The 4xx the interceptor deliberately leaves silent is the case this closes (AAP 0.14.2 "Error handling"); a 5xx or transport fault reaches the caller as the same `ApiError` its one notification already reported. The written entry stands or falls with that restore (AAP 0.4.2): status 401 removes it, and so does the status 0 a cross-origin 401 arrives in when the browser cannot read the answer, while a read this application's own request bound cut off is indeterminate rather than a refusal and leaves the written entry for the next start-up to re-validate (AAP 0.7.2, Rule 1 clause 3) — as does every other failure, which is what the interceptor's 401 branch then acts on. */
   async login(username: string, password: string): Promise<void> {
     const request: AuthenticationRequest = { username, password };
 
@@ -103,7 +101,7 @@ export class AuthService {
     // The credential is bound to the base the exchange itself was made against, so only that origin may be presented with it later (AAP 0.4.4 decision 5, Rule 1 clause 9).
     this.sessions.write(session, this.config.config.apiBaseUrl);
 
-    // The cause of this call's own projection read is kept local to it, never in instance state, so two logins in flight cannot read each other's failure. The reader rethrows it unchanged, which leaves `SessionService.restore()`'s `Promise<boolean>` contract alone: it still resolves `false`, and it removes the written entry for a refused credential (status 401, or the status 0 a cross-origin 401 arrives as) while every other failure leaves that entry in place.
+    // The cause of this call's own projection read is kept local to it, never in instance state, so two logins in flight cannot read each other's failure. The reader rethrows it unchanged, which leaves `SessionService.restore()`'s `Promise<boolean>` contract alone: it still resolves `false`, and it removes the written entry for a refused credential (status 401, or the status 0 a cross-origin 401 arrives as) while every other failure — the read this application's own request bound cut off included — leaves that entry in place for the next start-up to re-validate.
     const captured: { cause?: unknown } = {};
 
     const readProjection: SessionUserReader = (userId: number) =>

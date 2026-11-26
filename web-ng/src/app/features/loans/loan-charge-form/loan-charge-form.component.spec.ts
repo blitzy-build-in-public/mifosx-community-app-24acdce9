@@ -276,8 +276,26 @@ describe('LoanChargeFormComponent', () => {
     expect(component.loading()).toBe(false);
     expect(chargeSelect()).toBeNull();
   });
+  it.each<[string, 'pay' | 'waive']>([
+    ['paycharge', 'pay'],
+    ['waivecharge', 'waive'],
+  ])(
+    'serves legacy’s %s segment as the %s screen its alias runs',
+    async (segment, mode) => {
+      await show(LOAN_ID, segment, CHARGE_ID);
+      // Legacy's own segments — the record's links and any legacy URL or cutover redirect carry them (`app/scripts/routes.js:166`; `app/views/loans/viewloanaccountdetails.html:866,869`) — select the operation the `pay` and `waive` aliases above select, down to the command the screen posts (AAP 0.8.2; Rule 1 clause 5).
+      expect(component.mode()).toBe(mode);
+      expect(component.buildActionRequest().command).toBe(mode);
+      expect(component.notFound()).toBe(false);
+      expect(component.loading()).toBe(false);
+      expect(chargeSelect()).toBeNull();
+      expect(loan.chargeTemplateFor).not.toHaveBeenCalled();
+      expect(loan.chargeAction).not.toHaveBeenCalled();
+    },
+  );
   it.each<[string, string | null, string | null, string | null]>([
     ['an action this application does not serve', LOAN_ID, 'nonsense', CHARGE_ID],
+    ['legacy’s edit-charge segment, a screen this application does not serve', LOAN_ID, 'editcharge', CHARGE_ID],
     ['a route that names no loan', null, null, null],
   ])(
     'renders the not-found message and sends nothing for %s',

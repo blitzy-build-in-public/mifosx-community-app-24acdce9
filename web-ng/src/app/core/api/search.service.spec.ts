@@ -9,19 +9,16 @@ import {
 
 /** Contract spec for `SearchService`: the one place the application composes the Fineract search URLs and turns a selected scope into the `resource` parameter (Rule 1 clause 8; AAP 0.7.3 row "Shell: global search"; AAP 0.7.1). */
 
-/** The served API host and root, written as `web-ng/src/assets/config.json` ships them. */
 const API_BASE_URL = 'https://localhost:8443';
 const API_PATH = '/fineract-provider/api/v1';
 const API_ROOT = API_BASE_URL + API_PATH;
 
-/** The one separator every expected URL is joined with, so expectation and request are built alike. */
 const SEPARATOR = '/';
 
 /** The two paths the service owns, named once so the spy assertions and the URLs agree (AAP 0.7.3). */
 const SEARCH_PATH = 'search';
 const TEMPLATE_PATH = 'search/template';
 
-/** The text the cases search for: a client's name. */
 const QUERY = 'Ada Okafor';
 
 /** The URL the service must request for the given path segments: the API root the configuration supplies and the resource segments the service owns. */
@@ -48,7 +45,6 @@ const SCOPE_CASES: readonly {
 }[] = [{ scope: 'clients', resource: 'clients,clientIdentifiers' }, { scope: 'loans', resource: 'loans' },
   { scope: 'all', resource: 'clients,clientIdentifiers,loans' }, ];
 
-/** The three states of the optional `exactMatch` flag, whose branches differ only in the input and in what the URL must then carry. */
 const EXACT_MATCH_CASES: readonly {
   readonly label: string;
   readonly exactMatch: boolean | undefined;
@@ -62,7 +58,6 @@ const CLIENT_ROW: SearchResult = {
   entityType: 'CLIENT', entityId: 2, entityName: 'Ada Okafor', entityAccountNo: '000000002', entityExternalId: 'CL-002',
   entityStatus: { id: 300, code: 'clientStatusType.active', value: 'Active' }, };
 
-/** A loan row, which names the client that owns it through `parentId`/`parentName`. */
 const LOAN_ROW: SearchResult = {
   entityType: 'LOAN', entityId: 31, entityName: 'Parity Loan', entityAccountNo: '000000031', parentId: 2,
   parentName: 'Ada Okafor', entityStatus: { id: 300, code: 'loanStatusType.active', value: 'Active' }, };

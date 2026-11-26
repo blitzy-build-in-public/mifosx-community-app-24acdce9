@@ -147,7 +147,6 @@ export class LoanNewComponent {
 
   private readonly router = inject(Router);
 
-  /** Completes the route subscription and the template reads should the screen be destroyed first. */
   private readonly destroyRef = inject(DestroyRef);
 
   private readonly formBuilder = inject(FormBuilder);
@@ -182,25 +181,18 @@ export class LoanNewComponent {
   /** Funds the loan may draw on, from the template's `fundOptions`; empty on a tenant that uses none, and the field is then simply not offered a value. */
   readonly fundOptions = signal<readonly SelectOption[]>([]);
 
-  /** Charges applicable to the application, from the template's `chargeOptions`, in its order. */
   readonly chargeOptions = signal<readonly LoanChargeOption[]>([]);
 
-  /** Units `loanTermFrequency` may be counted in, from `termFrequencyTypeOptions`. */
   readonly termFrequencyTypeOptions = signal<readonly SelectOption[]>([]);
 
-  /** Units `repaymentEvery` may be counted in, from `repaymentFrequencyTypeOptions`. */
   readonly repaymentFrequencyTypeOptions = signal<readonly SelectOption[]>([]);
 
-  /** Units `interestRatePerPeriod` may be counted in, from `interestRateFrequencyTypeOptions`. */
   readonly interestRateFrequencyTypeOptions = signal<readonly SelectOption[]>([]);
 
-  /** Amortisation methods, from `amortizationTypeOptions`. */
   readonly amortizationTypeOptions = signal<readonly SelectOption[]>([]);
 
-  /** Interest methods, from `interestTypeOptions`. */
   readonly interestTypeOptions = signal<readonly SelectOption[]>([]);
 
-  /** Interest calculation periods, from `interestCalculationPeriodTypeOptions`. */
   readonly interestCalculationPeriodTypeOptions = signal<readonly SelectOption[]>([]);
 
   /** Transaction processing strategies, keyed by the `code` the application posts rather than by an id, because the fork's list is keyed by code (see the class comment). */

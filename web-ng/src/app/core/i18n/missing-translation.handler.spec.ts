@@ -28,7 +28,6 @@ const LEGACY_EN_BUNDLE_URL = 'global-translations/locale-en.json';
 /** One legacy bundle read in place: the file it came from and its flat contents. */
 interface LegacyEnglishBundle {
   readonly path: string;
-  /** That file's contents: flat, dotted keys mapped to their translations. */
   readonly bundle: Record<string, string>;
 }
 
@@ -89,7 +88,6 @@ function readLegacyEnglishBundle(): LegacyEnglishBundle | null {
   template: '{{ key() | translate }}',
 })
 class TranslateProbeComponent {
-  /** The key the probe renders; supplied by a case that needs a different one. */
   readonly key = input<string>('label.message.session.expiring');
 }
 
@@ -98,11 +96,24 @@ interface TranslateHarness {
   readonly httpMock: HttpTestingController;
 }
 
-/** The two keys the application itself introduces, each with the English copy it must render (AAP 0.1.1). */
+/** The nine keys the application itself carries, each with the English copy it must render: the clients list's card title (AAP 0.7.4), the login screen's closing paragraph as legacy words it (`app/scripts/controllers/main/MainController.js:220-222`), and the idle warning with its button (AAP 0.1.1). */
 const APP_OWNED_COPY: readonly (readonly [key: string, text: string])[] = [
+  ['label.heading.listofclients', 'List of Clients'],
   ['label.message.session.expiring', 'You have been inactive and will be signed out shortly.'],
   ['label.button.stay.signed.in', 'Stay signed in'],
+  ['label.text.mifosx.designedby', 'Mifos X is designed by the'],
+  ['label.anchor.mifosinitiative', 'Mifos Initiative'],
+  ['label.anchor.globalcommunity', 'A global community'],
+  [
+    'label.text.mifosx.community',
+    'that aims to speed the elimination of poverty by enabling Organizations to more effectively and efficiently deliver responsible financial services to the world’s poor and unbanked.',
+  ],
+  ['label.text.mifosx.interesting', 'Sounds interesting?'],
+  ['label.anchor.getinvolved', 'Get involved!'],
 ];
+
+const FRENCH_COMMUNITY =
+  'qui vise à accélérer l’élimination de la pauvreté en permettant aux organisations de fournir plus efficacement des services financiers responsables aux populations pauvres et non bancarisées du monde.';
 
 function createHarness(): TranslateHarness {
   TestBed.configureTestingModule({
@@ -125,7 +136,7 @@ async function loadLegacyBundle(
   harness.httpMock.verify();
 }
 
-/** Builds the context ngx-translate hands the handler. Only `key` is read by the handler, and `translateService` is the real instance, so no cast and no stub is needed. */
+/** Builds the context ngx-translate hands the handler: the key to answer and the real service, whose active language decides whether the application's French copy applies, so no cast and no stub is needed. */
 function missingKeyParams(key: string, translateService: TranslateService): MissingTranslationHandlerParams {
   return { key, translateService };
 }
@@ -320,7 +331,7 @@ describe('FineractMissingTranslationHandler', () => {
 
         const warnings = captureWarnings();
 
-        // The key reaches the handler — the bundle below carries neither of the two — and the application's own copy comes back instead of a humanised key, which is what makes the idle warning translatable rather than frozen (AAP 0.1.1, AAP 0.7.4).
+        // The key reaches the handler — the bundle below carries none of the nine — and the application's own copy comes back instead of a humanised key, which is what makes the card title, the closing paragraph and the idle warning translatable rather than frozen (AAP 0.1.1, AAP 0.7.4).
         expect(harness.translate.instant(key)).toBe(expected);
         expect(harness.translate.instant(key)).not.toBe(key);
 
@@ -329,12 +340,42 @@ describe('FineractMissingTranslationHandler', () => {
       },
     );
 
-    it('holds exactly the two keys the application introduces, so no legacy key is shadowed', () => {
+    it('holds exactly the nine keys the application introduces, so no legacy key is shadowed', () => {
       expect([...APP_OWNED_TRANSLATIONS.keys()]).toEqual(APP_OWNED_COPY.map(([key]) => key));
 
       for (const [key, text] of APP_OWNED_COPY) {
         expect(APP_OWNED_TRANSLATIONS.get(key)).toBe(text);
       }
+    });
+
+    it('answers the application-owned copy in French once the service is showing French, while a legacy key still resolves from its bundle', async () => {
+      const harness = createHarness();
+      const warnings = captureWarnings();
+
+      await loadLegacyBundle(harness);
+
+      // A bundle registered in memory and the switch to it: the application's own copy needs no bundle, and a language the loader was never asked for requests nothing.
+      harness.translate.setTranslation('fr', {});
+      await firstValueFrom(harness.translate.use('fr'));
+
+      expect(harness.translate.getCurrentLang()).toBe('fr');
+
+      // The active language decides the copy: the French wording replaces the English for both the card title and the paragraph's longest fragment (AAP 0.7.4, AAP 0.1.1).
+      expect(harness.translate.instant('label.heading.listofclients')).toBe('Liste des clients');
+      expect(harness.translate.instant('label.text.mifosx.community')).toBe(FRENCH_COMMUNITY);
+
+      const fixture = TestBed.createComponent(TranslateProbeComponent);
+      fixture.componentRef.setInput('key', 'label.heading.listofclients');
+      fixture.detectChanges();
+
+      // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines the boundary cast to this line (Rule 1 clause 4).
+      const rendered: string = (fixture.nativeElement as HTMLElement).textContent?.trim() ?? '';
+
+      expect(rendered).toBe('Liste des clients');
+
+      // A legacy key is untouched by the application's copy: it still resolves from the served bundle, and none of the above reported a missing key (Rule 1 clause 6, AAP 0.14.2).
+      expect(harness.translate.instant('label.heading.clients')).toBe('Clients');
+      expect(warnings).toHaveLength(0);
     });
 
     it('still humanises and warns once for an unrelated key after answering an application-owned one', async () => {

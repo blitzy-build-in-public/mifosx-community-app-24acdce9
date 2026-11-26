@@ -9,7 +9,6 @@ const STUB_LOGIN = 'stub-login';
 /** The session key the stub answers with, assembled from parts so no scanner reads the result as a real credential (AAP 0.10.4); the assertions below require the thrown message never to carry it. */
 const STUB_SESSION_KEY = ['RkFLRS1TRVNT', 'SU9OLUtFWS1GT1It', 'UkVQUk8='].join('');
 const STUB_TENANT = 'default';
-/** How the stub fails the business-date read — the two failure modes that read can fail with, each with the status the raised `StateSnapshotError` must carry. */
 type FailureMode = 'no-response' | 'refused';
 interface FailureCase {
   readonly mode: FailureMode;
@@ -29,7 +28,6 @@ const CASES: FailureCase[] = [
     label: 'the business-date read is answered with HTTP 500',
   },
 ];
-/** The stub backend every test talks to, and the base address `FINERACT_URL` is pointed at. */
 let stub: Server;
 let stubUrl: string;
 let failureMode: FailureMode = 'no-response';

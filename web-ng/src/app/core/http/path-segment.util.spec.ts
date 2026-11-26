@@ -6,10 +6,8 @@ import { datatableName, isResourceId, resourceId } from './path-segment.util';
 
 const SOURCE = 'PathSegmentSpec.call';
 
-/** The sentence a refused identifier is reported with — the text a screen renders, pinned whole. */
 const RESOURCE_ID_SENTENCE = 'The record could not be opened because its address is not valid.';
 
-/** The sentence a refused datatable name is reported with — the text a screen renders, pinned whole. */
 const DATATABLE_NAME_SENTENCE =
   'The account action could not be checked because the server named a table that is not valid.';
 
@@ -37,10 +35,8 @@ const ACCEPTED_RESOURCE_IDS: readonly (readonly [label: string, id: number | str
   ['a zero-padded route-string id', '000000002', '000000002'],
 ];
 
-/** Route values that are not an identifier, each of which must be refused before a request exists. */
 const REFUSED_RESOURCE_IDS: readonly string[] = ['', '../..', '..%2Fx', '1/2', '-1', '1.5', 'NaN', '1e+21'];
 
-/** Values a screen may hold before it builds a path segment — a route segment or a model id — each of which `isResourceId` must accept and `resourceId` must then write unchanged: the two must agree, so a caller that asks the predicate issues exactly the reads the guard would have allowed. */
 const IDENTIFIER_CANDIDATES: readonly (readonly [label: string, value: number | string])[] = [
   ['a numeric id', 2],
   ['a numeric zero', 0],
@@ -48,7 +44,6 @@ const IDENTIFIER_CANDIDATES: readonly (readonly [label: string, value: number | 
   ['a zero-padded route-string id', '000000002'],
 ];
 
-/** Values a screen may hold that are not an identifier, each of which the predicate must refuse so the caller issues no request at all: the empty string of a route that names no id, a word, digits behind a word, a traversal segment, a space-padded id and the numeric shapes `resourceId` also refuses. */
 const REFUSED_IDENTIFIER_CANDIDATES: readonly (readonly [label: string, value: number | string])[] = [
   ['an empty string', ''],
   ['a word', 'abc'],

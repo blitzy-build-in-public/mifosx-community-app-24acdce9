@@ -7,7 +7,6 @@ import {
 describe('NotificationService', () => {
   let service: NotificationService;
 
-  /** One published snapshot, so a test asserts against a single state of the queue. */
   const queue = (): readonly NotificationMessage[] => service.messages();
   const texts = (): string[] => queue().map((notice) => notice.message);
   const ids = (): number[] => queue().map((notice) => notice.id);

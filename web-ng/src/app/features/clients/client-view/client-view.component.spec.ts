@@ -27,16 +27,13 @@ import { TabStripComponent, tabDomId } from '../../../shared/tab-strip/tab-strip
 
 /** Behaviour of the client record screen — `#/viewclient/:id`, the last step of the "Sign in and open a client record" flow and the entry point of workflow W3's record read (AAP 0.7.4 "Client view"; AAP 0.8.2 feature route; Rule 1 clause 8, Rule 1 clause 5, AAP 0.1.1, AAP 0.7.1). */
 
-/** The route that serves the record, exactly as `clients.routes.ts` declares it. */
 const ROUTES: Routes = [
   { path: 'viewclient/:id', component: ClientViewComponent },
   { path: 'viewclient', component: ClientViewComponent, pathMatch: 'full' },
 ];
 
-/** The record the route was opened on: the client id `#/viewclient/2` names. */
 const CLIENT_ID = '2';
 
-/** The record the stubbed read answers with: the client the design's third screen shows. */
 const CLIENT: Client = {
   id: 2,
   accountNo: '000000002',
@@ -51,10 +48,8 @@ const CLIENT: Client = {
   timeline: { submittedOnDate: '2026-11-21', activatedOnDate: [2026, 11, 21] },
 };
 
-/** The message Fineract answers a missing record with, matched character for character. */
 const NOT_FOUND_MESSAGE = 'Client with id `2` does not exist.';
 
-/** The record a second route emission addresses: the id `#/viewclient/25` names, and the client the baseline data holds under client number 000000025. */
 const SECOND_CLIENT_ID = '25';
 
 const SECOND_CLIENT: Client = {
@@ -77,7 +72,6 @@ const CLOSED_CLIENT: Client = {
   status: { id: 600, code: 'clientStatusType.closed', value: 'Closed' },
 };
 
-/** The same client while its application is still pending: the state that offers the lifecycle commands, and the closest the action row comes to the design's full set. A pending client has no activation date, so the record carries none. */
 const PENDING_CLIENT: Client = {
   ...CLIENT,
   status: { id: 100, code: 'clientStatusType.pending', value: 'Pending' },
@@ -116,13 +110,10 @@ const NO_ACTION_STATES: readonly (readonly [string, Client])[] = [
   ['invalid', INVALID_CLIENT],
 ];
 
-/** The account summary the accounts tab reads: a client holding none of either family. */
 const NO_ACCOUNTS: ClientAccountSummary = {};
 
-/** The identifiers the identities tab reads: none. */
 const NO_IDENTIFIERS: ClientIdentifier[] = [];
 
-/** The document types the identifiers template offers: none is needed for an empty list. */
 const NO_DOCUMENT_TYPES: ClientIdentifierTemplate = { allowedDocumentTypes: [] };
 
 /** The captions this screen resolves, keyed exactly as the shipped flat legacy bundles key them (`app/global-translations/`) (Rule 1 clause 6). */
@@ -145,7 +136,6 @@ const TRANSLATIONS: Readonly<Record<string, string>> = {
   'error.msg.resource.not.found': 'The requested resource is not available.',
 };
 
-/** `ClientService` as this screen and its two loading tabs use it, every method stubbed. */
 interface ClientServiceStub {
   readonly get: Mock<(id: number | string) => Observable<Client>>;
   readonly accounts: Mock<(id: number | string) => Observable<ClientAccountSummary>>;
@@ -163,7 +153,6 @@ function failure(status: number, defaultUserMessage: string): ApiError {
   return toApiError(new HttpErrorResponse({ status, error: { defaultUserMessage } }));
 }
 
-/** The ngx-translate surface this screen touches: the two event streams the constructor subscribes to, the `currentLang()` and `instant()` reads behind the tab and profile-card labels, and the `translate()` signal. */
 interface TranslateStub {
   readonly currentLang: Signal<string>;
   instant(key: string): string;
@@ -172,7 +161,6 @@ interface TranslateStub {
   readonly onTranslationChange: Observable<unknown>;
 }
 
-/** Builds the translation stub the TestBed provides. */
 function translateStub(): TranslateStub {
   return {
     currentLang: signal('en').asReadonly(),
@@ -225,7 +213,6 @@ describe('ClientViewComponent', () => {
     return element;
   }
 
-  /** The routed component instance, narrowed once for the tab-switch cases. */
   function componentOf(harness: RouterTestingHarness): ClientViewComponent {
     const instance: unknown = harness.routeDebugElement?.componentInstance;
 
@@ -241,7 +228,6 @@ describe('ClientViewComponent', () => {
     return (host.textContent ?? '').replace(/\s+/g, ' ').trim();
   }
 
-  /** Every anchor the action row renders, in render order. */
   function actionLinks(host: HTMLElement): HTMLAnchorElement[] {
     return Array.from(host.querySelectorAll<HTMLAnchorElement>('.btn-group a'));
   }
@@ -303,7 +289,6 @@ describe('ClientViewComponent', () => {
     'label.button.withdraw',
   ];
 
-  /** The permission each pending-record descriptor is gated on, in the same order. */
   const PENDING_PERMISSIONS: readonly string[] = [
     'UPDATE_CLIENT',
     'CLOSE_CLIENT',
@@ -319,7 +304,6 @@ describe('ClientViewComponent', () => {
     harness.detectChanges();
   }
 
-  /** The label and value cells of the profile card's rows, in render order. */
   function profileRows(host: HTMLElement): readonly (readonly [string, string])[] {
     return Array.from(host.querySelectorAll<HTMLElement>('[data-testid="profile-field"]')).map(
       (row) => [

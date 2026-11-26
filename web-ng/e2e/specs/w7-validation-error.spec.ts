@@ -18,7 +18,6 @@ const LOAN_RECORD_ROUTE = '#/viewloanaccount/';
 
 const CLIENT_RECORD_HASH = /\/viewclient\/(\d+)/;
 
-/** The principal control, rendered as `#principal` on both front ends (`LoanNewComponent`). */
 const PRINCIPAL_FIELD = '#principal';
 
 /** The screen's failure banner. Both front ends render the server's message in this region — the new app's `loan-new.component.html` as `.alert.alert-danger`, the legacy screen through the `uib-alert` the `apiValidate` directive renders. */
@@ -99,7 +98,6 @@ function readTextMember(value: unknown, member: string): string | null {
   return typeof memberValue === 'string' ? memberValue : null;
 }
 
-/** Whether a member of `errors` is an entry carrying its own message. */
 function carriesDefaultUserMessage(value: unknown): value is { readonly defaultUserMessage: string } {
   return (
     typeof value === 'object' &&

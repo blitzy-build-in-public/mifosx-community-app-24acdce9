@@ -30,21 +30,13 @@ const TRANSLATIONS: Readonly<Record<string, string>> = {
   'label.button.save': 'Save',
   'label.button.cancel': 'Cancel',
 };
-/** The office the form starts on: the template's own default. */
 const HEAD_OFFICE_ID = 1;
-/** The other office the template offers, and the office the office-change cases move to. */
 const BRANCH_OFFICE_ID = 2;
-/** The loan officer the head office offers, and the one the operator picks there. */
 const PARITY_OFFICER_ID = 7;
-/** The head office's office labels, in the order its template sends them. */
 const OFFICE_NAMES: readonly string[] = ['Head Office', 'Branch Two'];
-/** The officers the head office offers, labelled by the `displayName` a `staffOptions` entry carries. */
 const STAFF_NAMES: readonly string[] = ['Officer, Parity'];
-/** The second office's template narrows the office list, so a replaced list is observable. */
 const BRANCH_OFFICE_NAMES: readonly string[] = ['Branch Two'];
-/** The officers the second office offers: no officer of the first office survives the change. */
 const BRANCH_STAFF_NAMES: readonly string[] = ['Officer, Branch'];
-/** The template the head office answers with: two offices, one loan officer, and the activation default the fork sends as a `[year, month, day]` triple, with the client not yet active. */
 const HEAD_OFFICE_TEMPLATE: ClientTemplate = {
   officeId: HEAD_OFFICE_ID,
   officeOptions: [{ id: HEAD_OFFICE_ID, name: 'Head Office' }, { id: BRANCH_OFFICE_ID, name: 'Branch Two' },],
@@ -52,7 +44,6 @@ const HEAD_OFFICE_TEMPLATE: ClientTemplate = {
   activationDate: [2026, 11, 24],
   active: false,
 };
-/** What the same read answers once another office is chosen: that office's own option lists. */
 const BRANCH_TEMPLATE: ClientTemplate = {
   officeId: BRANCH_OFFICE_ID,
   officeOptions: [{ id: BRANCH_OFFICE_ID, name: 'Branch Two' }],
@@ -60,29 +51,21 @@ const BRANCH_TEMPLATE: ClientTemplate = {
   activationDate: [2026, 11, 24],
   active: true,
 };
-/** The command result a create answers with: the record and the client id the screen opens. */
 const CREATED: ClientMutationResponse = { resourceId: 42, clientId: 42 };
-/** The same result without a client id, which the screen must open by its resource id. */
 const RESOURCE_ID_ONLY: ClientMutationResponse = { resourceId: 99 };
-/** A rejection quoted from a real Fineract validation failure; compared character for character. */
 const REJECTED_MESSAGE = 'The client name is already in use by another client.';
-/** The text a 5xx answers with. */
 const SERVER_FAILURE_MESSAGE = 'Internal server error, please contact your system administrator.';
-/** The message a refused navigation produces once the create itself succeeded. */
 const NAVIGATION_FAILURE_MESSAGE = 'Navigation to the created record was refused.';
-/** The message a failed template read answers with: Fineract's own text, rendered verbatim. */
 const TEMPLATE_FAILURE_MESSAGE = 'The office template is not available for this user.';
 /** Local midnight of today, the browser-clock default a form's own date starts from. */
 function startOfToday(): Date {
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
-/** `ClientService` as this screen uses it: the template read and the create post, both stubbed. */
 interface ClientServiceStub {
   readonly template: Mock<ClientService['template']>;
   readonly create: Mock<ClientService['create']>;
 }
-/** `Router` as this screen and its cancel link use it: the two navigation entry points, each replaced by a spy so no case performs a navigation and every command list and target the screen sends is observable. `navigate` is the component's own call on a successful create; `navigateByUrl` is what `RouterLink` asks for when the cancel anchor is activated. */
 interface RouterStub {
   readonly navigate: Mock<Router['navigate']>;
   readonly navigateByUrl: Mock<Router['navigateByUrl']>;
@@ -93,7 +76,6 @@ describe('ClientCreateComponent', () => {
   let component: ClientCreateComponent;
   let clients: ClientServiceStub;
   let router: RouterStub;
-  /** The rendered host, narrowed once. */
   const host = (): HTMLElement => {
     const element: unknown = fixture.nativeElement;
     if (!(element instanceof HTMLElement)) {
@@ -115,7 +97,6 @@ describe('ClientCreateComponent', () => {
     }
     return element;
   }
-  /** The visible option labels of one select, in render order. */
   function optionLabels(select: HTMLSelectElement): string[] {
     return Array.from(select.options).map((option) => option.textContent?.trim() ?? '');
   }

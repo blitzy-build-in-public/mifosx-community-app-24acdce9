@@ -9,7 +9,6 @@ import { NotificationComponent } from './notification.component';
 
 /** Behaviour of the application's single notification host (AAP 0.7.1 `NotificationComponent`, AAP 0.9.1 item 7): one `div.notification` per queued notice inside the widget's single `div.notification-container`, in queue (AAP 0.2.3, AAP 0.7.4, Rule 1 clause 3, AAP 0.1.1). */
 
-/** Text chosen to expose tampering: mixed case, a comma-grouped number and a trailing full stop make capitalisation, trimming or truncation visible in the rendered notice. */
 const SHORT_INFO = 'Saved.';
 const LONG_ERROR =
   'The request failed: principal 50,000 exceeds the maximum allowed for this product.';
@@ -17,7 +16,6 @@ const LONG_ERROR =
 /** A message padded the way a Fineract `defaultUserMessage` or a legacy translation can be: leading and trailing spaces are part of the text the host was given, so the rendered notice has to keep both of them. */
 const PADDED_INFO = '  Saved: 50,000.  ';
 
-/** The one character the template's own markup contributes after the message: the line break that `notification.component.html` puts between `{{ message.message }}` and its closing `</div>`, which Angular's whitespace. */
 const TEMPLATE_TAIL = ' ';
 
 /** The close control's accessible name in the two bundles this suite serves, under the legacy key `label.button.close` (Rule 1 clause 6). */

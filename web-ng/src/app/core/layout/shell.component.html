@@ -1,7 +1,5 @@
 <!-- The signed-in shell (AAP 0.2.3 `AppShell`, AAP 0.7.1 and AAP 0.8.2 "Shell and navigation"), which `app.routes.ts` renders behind its authenticated layout route (AAP 0.9.2, AAP 0.10.5, Rule 1 clause 6).
-
   The shell's skip link, and its first focusable element, so a keyboard user reaches the screen's content without tabbing the navbar, the search control and the user menu on every screen. Bootstrap 3.4.3's own `sr-only` and `sr-only-focusable` classes keep it out of sight until it takes focus, so the shell paints what it painted before and no rule is added for it (Rule 1 clause 6); the element is not in legacy's markup, which the checkpoint's accessibility checks require it to be, and nothing else about the shell changes.
-
   The wording is an English literal because no shipped legacy bundle carries a key for a skip link, and a dotted key invented here would reach the user as humanised placeholder text through `core/i18n/missing-translation.handler.ts`. The `href` is what makes the control a real link a browser starts a fragment navigation on, and `skipToMain` cancels that navigation before moving focus: this application routes on the hash (`withHashLocation`, Rule 1 clause 5), so an un-cancelled `#main-content` would be read as a route and would take the screen away. -->
 <a class="sr-only sr-only-focusable" href="#main-content" (click)="skipToMain($event)">Skip to content</a>
 

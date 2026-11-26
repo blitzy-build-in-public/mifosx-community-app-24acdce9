@@ -64,7 +64,6 @@ export interface TransactionRow {
   id: string;
   /** Transaction-date column, formatted by the legacy `DateFormat` filter. */
   date: string;
-  /** Transaction-type column: Fineract's `type.value`, without the reversal marker. */
   type: string;
   amount: string;
   /** Principal column, Fineract's `principalPortion`. */
@@ -100,25 +99,20 @@ export type LoanAccountAction =
 
 const PREVIEW_TABLE_HEADERS = ['principal due', 'interest due', 'due'] as const;
 
-/** Positions the record's Repayment Schedule table. It is the only one of the three schedule tables that carries both a `Due` and a `Paid` column (viewloanaccountdetails.html), which is what separates it from the Original and Future schedules. */
 const SCHEDULE_TABLE_HEADERS = ['principal due', 'interest', 'fees', 'due', 'paid'] as const;
 
-/** Positions the record's transaction list, whose second header row carries `Principal`. */
 const TRANSACTION_TABLE_HEADERS = ['transaction type', 'amount', 'principal'] as const;
 
-/** Positions the record's charge list, the only table headed `Name` that also has `Outstanding`. */
 const CHARGE_TABLE_HEADERS = ['name', 'outstanding'] as const;
 
 const SUMMARY_TABLE_HEADERS = ['original', 'paid', 'outstanding', 'overdue'] as const;
 
-/** The tab headings each read section lives under (viewloanaccountdetails.html `uib-tabset`). */
 const SECTION_TABS = {
   schedule: ['repayment schedule'],
   transactions: ['transactions'],
   charges: ['charges'],
 } as const;
 
-/** Column aliases per summary field, most specific first. An absent column reads as `''`. */
 const PREVIEW_COLUMNS = {
   period: ['#', 'period', 'no.'],
   fromDate: ['from date', 'period from'],
@@ -160,7 +154,6 @@ interface FieldSpec {
   readonly labels: readonly string[];
 }
 
-/** The four fields `fillApplication` types into, by the model's own key, plus the two the action and repayment forms carry. */
 const FILLABLE_FIELDS: ReadonlyMap<string, FieldSpec> = new Map<string, FieldSpec>([
   ['principal', { key: 'principal', id: 'principal', labels: ['Principal'] }],
   [
@@ -180,7 +173,6 @@ const FILLABLE_FIELDS: ReadonlyMap<string, FieldSpec> = new Map<string, FieldSpe
   ['note', { key: 'note', id: 'note', labels: ['Note'] }],
 ]);
 
-/** The dropdown of the application form each `LoanApplicationValues` field selects from (newloanaccount.html). */
 const APPLICATION_SELECTS = {
   productName: 'select#productId',
   loanOfficerName: 'select#loanOfficerId',

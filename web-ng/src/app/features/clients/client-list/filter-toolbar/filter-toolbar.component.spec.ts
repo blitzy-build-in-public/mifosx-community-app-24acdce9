@@ -20,7 +20,6 @@ const FILTER_KEY = 'label.input.filterbynameaccno';
 const FIND_KEY = 'label.input.searchByNameAccNo';
 const SEARCH_KEY = 'label.heading.search';
 
-/** The permission codes the stubbed gate answers `true` for; reset before every case. */
 let grantedCodes: readonly string[] = [];
 
 /** The half of `PermissionsService` the toolbar's permission gate reads, typed on the real class so the stub cannot drift from the directive's questions, and reading {@link grantedCodes} as its effect runs so a case can open the gate. */
@@ -40,7 +39,6 @@ describe('FilterToolbarComponent', () => {
   let fixture: ComponentFixture<FilterToolbarComponent>;
   let component: FilterToolbarComponent;
 
-  /** Mounts the toolbar and waits for its first render. */
   async function mount(): Promise<HTMLElement> {
     fixture = TestBed.createComponent(FilterToolbarComponent);
     component = fixture.componentInstance;

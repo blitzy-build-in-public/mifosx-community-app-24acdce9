@@ -2,8 +2,8 @@
 <div class="container-fluid">
   <div class="row">
     <div class="col-md-12">
-      <div appPanelCard variant="default" [title]="'List of Clients'" titleTag="h1">
-        <!-- "List of Clients" is the one string on this screen that is not translated, because no shipped locale bundle carries a key for it — the legacy template hardcodes the same literal (`app/views/clients/clients.html:9`), so a key invented here would be one only this build defines, and Rule 1 clause 6 forbids copying or regenerating the legacy translation files (`label.heading.clients` is the word "Clients", which the breadcrumb already uses). The title is an `h1` because it is the screen's own title and no other heading is on the page; `.panel-title` keeps the design's 18px/700 box, so the level moves the document outline and nothing else (AAP 0.2.3 row `PanelCard`). -->
+      <div appPanelCard variant="default" [title]="'label.heading.listofclients' | translate" titleTag="h1">
+        <!-- The card title is the application's own key rather than a legacy bundle's, because no shipped locale bundle carries one: `label.heading.listofclients` is answered by the application's copy in `core/i18n/app-translations.ts` through the missing-translation handler, so English reads exactly the design's "List of Clients" (AAP 0.7.4) and French reads "Liste des clients", and a legacy or build-owned bundle carrying that key would win with no code change here. The title is an `h1` because it is the screen's own title and no other heading is on the page; `.panel-title` keeps the design's 18px/700 box, so the level moves the document outline and nothing else (AAP 0.2.3 row `PanelCard`). -->
         <div class="panel-body" [attr.aria-busy]="loading() ? 'true' : null">
           <!-- Fineract's own failure text, verbatim and untranslated, above whatever the screen holds: a failed read leaves the card mounted and its toolbar usable. `role="alert"` announces it without a focus change (AAP 0.7.4; AAP 0.14.1 "errors are values"). -->
           @if (errorMessage(); as message) {

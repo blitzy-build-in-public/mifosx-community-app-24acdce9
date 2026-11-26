@@ -5,7 +5,6 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { CAPTURES_DIR } from './network-capture';
 
-/** Directory this module sits in, so every path below is resolved from the file rather than from the shell's working directory, as `capture/network-capture.ts` resolves its own. */
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 
 /** `web-ng/`, the package root every artefact must resolve inside: the capture directory and the two report files AAP 0.10.4 names all live below it, and the deletion guard refuses anything that does not (AAP 0.8.1, AAP 0.11.1). */

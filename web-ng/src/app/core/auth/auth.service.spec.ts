@@ -14,7 +14,6 @@ import { SessionService, LEGACY_STORAGE_PREFIX, SESSION_ORIGIN_ENTRY, sessionSto
 
 /** Contract and behaviour spec for `AuthService`, the application's only credential exchange and the proof of workflow W1 (AAP 0.10.1: `POST /authentication`, then `GET /users/{id}`); a restore that leaves no session in effect rejects the login with the projection failure's own `ApiError`, so a failed post-login read is never an unexplained return to the login form (AAP 0.14.2). */
 
-/** The served API host and root, written out exactly as `web-ng/src/assets/config.json` ships them. */
 const API_BASE_URL = 'https://localhost:8443';
 const API_PATH = '/fineract-provider/api/v1';
 const API_ROOT = API_BASE_URL + API_PATH;
@@ -34,10 +33,8 @@ function usersUrl(userId: number | string): string {
 const USER_ID = 42;
 const USERNAME = 'mifos';
 
-/** The stand-in password, joined from parts at run time. It is never a literal in this file and it is asserted to be absent from the stored session. */
 const SECRET_PARTS = ['correct', 'horse', 'battery', 'staple'];
 
-/** The stand-in authentication key, joined from parts for the same reason as the password. */
 const KEY_PARTS = ['Zm9v', 'YmFy', 'OnNlY3JldA'];
 
 const GRANTED: readonly string[] = ['READ_CLIENT', 'CREATE_CLIENT'];
@@ -101,11 +98,9 @@ function byMethodAndUrl(method: 'GET' | 'POST', url: string) {
 }
 
 interface LoginAnswers {
-  /** The password the test submits; the assertion on the body compares this same value. */
   readonly password: string;
   /** The `POST /authentication` answer; the standard fixture when absent. */
   readonly authentication?: AuthResponse;
-  /** How the restore's read is answered; a successful projection when absent. */
   readonly users?: (request: TestRequest) => void;
 }
 
@@ -422,7 +417,6 @@ describe('AuthService', () => {
   });
 });
 
-/** The tenant identifier the resolved configuration reports: configuration, never tenant data. */
 const TENANT_ID = 'default';
 
 /** The two header names the Fineract contract fixes (AAP 0.4.3); the interceptor is their only writer. */
@@ -432,7 +426,6 @@ const AUTHORIZATION_HEADER = 'Authorization';
 /** The refusal Fineract answers a bad credential exchange with, as the server sends it (AAP 0.4.4). */
 const SERVER_MESSAGE = 'Invalid credentials';
 
-/** The resolved configuration's shape, taken from the accessor that publishes it rather than declared a second time here, so a member the interceptor starts reading fails the build in this spec as well. */
 type ResolvedConfig = AppConfigService['config'];
 
 function resolvedConfig(): ResolvedConfig {
@@ -448,7 +441,6 @@ function resolvedConfig(): ResolvedConfig {
   };
 }
 
-/** The router surface the interceptor reads. A refused authentication navigates nowhere — the user is already on the login screen — so this stand-in exists for the injection to resolve, and its `url` keeps the 401 branch from navigating, because it already starts with `/login`. */
 const routerStub = {
   url: '/login',
   navigate: (): Promise<boolean> => Promise.resolve(true),

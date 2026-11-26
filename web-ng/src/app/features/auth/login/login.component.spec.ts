@@ -12,42 +12,33 @@ import { AVAILABLE_LANGS, FALLBACK_LANG } from '../../../core/i18n/translate.con
 import { LoginFormComponent, type LoginCredentials } from './login-form/login-form.component';
 import { LoginComponent } from './login.component';
 
-/** Behaviour of the login screen at `#/login` — the entry point of workflow W1 and step 1 of the design flow "Sign in and open a client record" (AAP 0.7.1 Features row `auth`; AAP 0.7.4 "Login (`#/login`)", Figma node `1:5`; AAP 0.10.1 W1; Rule 1 clause 8, "no empty or boilerplate spec files; every spec contains at least one `expect`"). Each case states one contract the component owns: the screen rendering its two controls and its single primary submit outside the signed-in shell, with labels resolved through the translation pipe; an empty form sending nothing and marking both controls touched, legacy's only client-side rule (Rule 1 clause 3); a filled form calling `AuthService.login` once and leaving for `#/clients`, or for the `returnUrl` the auth guard left when it is an in-app path (AAP 0.7.4 "navigate to the attempted route or `#/clients`"); a rejected exchange rendering Fineract's own message verbatim in the one `.alert.alert-danger` region, keeping the account name, clearing only the credential control and navigating nowhere (workflow W7 compares that text character for character), with a non-Fineract failure rendering the generic legacy message instead; the primary button disabled only while a login is in flight, a second submit issuing no second call because `POST /authentication` is not idempotent (AAP 0.14.1 "one request per click"); and the language switcher swapping the active bundle in place without navigating, a failed load reported and the switcher put back on the language in force, withdrawing only that failure and never a sign-in failure (AAP 0.7.4; AAP 0.14.2 "no `catch` swallows an error silently"). The credentials and their `Validators.required` belong to `LoginFormComponent` (AAP 0.2.3's `LoginForm` row) and the language row to `LanguageSwitcherComponent`, both with their own specs, so this suite drives them through the DOM and asserts what the screen owns. Every collaborator is a typed object literal at its own injection token: `AuthService` a `login` spy (the `POST /authentication` request itself, and the `GET /users/{id}` restore behind it, are `core/auth/auth.service.spec.ts`'s contract test), `Router` a `navigateByUrl` spy, `ActivatedRoute` a stand-in answering `snapshot.queryParamMap`, and `TranslateService` the four members this screen touches. No HTTP provider exists anywhere in this file (Rule 1 clause 5; Rule 2), and the fixtures are synthetic: nothing logs, stores or prints a credential (Rule 1 clause 9; AAP 0.10.4). */
+/** Behaviour of the login screen at `#/login` — the entry point of workflow W1 and step 1 of the design flow "Sign in and open a client record" (AAP 0.7.1 Features row `auth`; AAP 0.7.4 "Login (`#/login`)", Figma node `1:5`; AAP 0.10.1 W1; Rule 1 clause 8, "no empty or boilerplate spec files; every spec contains at least one `expect`"). Each case states one contract the component owns: the screen rendering its two controls and its single primary submit outside the signed-in shell, with labels resolved through the translation pipe and the closing paragraph rendered from the application's own translation keys rather than from literal English; an empty form sending nothing and marking both controls touched, legacy's only client-side rule (Rule 1 clause 3); a filled form calling `AuthService.login` once and leaving for `#/clients`, or for the `returnUrl` the auth guard left when it is an in-app path (AAP 0.7.4 "navigate to the attempted route or `#/clients`"); a rejected exchange rendering Fineract's own message verbatim in the one `.alert.alert-danger` region, keeping the account name, clearing only the credential control and navigating nowhere (workflow W7 compares that text character for character), with a non-Fineract failure rendering the generic legacy message instead; the primary button disabled only while a login is in flight, a second submit issuing no second call because `POST /authentication` is not idempotent (AAP 0.14.1 "one request per click"); and the language switcher swapping the active bundle in place without navigating, a failed load reported and the switcher put back on the language in force, withdrawing only that failure and never a sign-in failure (AAP 0.7.4; AAP 0.14.2 "no `catch` swallows an error silently"). The credentials and their `Validators.required` belong to `LoginFormComponent` (AAP 0.2.3's `LoginForm` row) and the language row to `LanguageSwitcherComponent`, both with their own specs, so this suite drives them through the DOM and asserts what the screen owns. Every collaborator is a typed object literal at its own injection token: `AuthService` a `login` spy (the `POST /authentication` request itself, and the `GET /users/{id}` restore behind it, are `core/auth/auth.service.spec.ts`'s contract test), `Router` a `navigateByUrl` spy, `ActivatedRoute` a stand-in answering `snapshot.queryParamMap`, and `TranslateService` the four members this screen touches. No HTTP provider exists anywhere in this file (Rule 1 clause 5; Rule 2), and the fixtures are synthetic: nothing logs, stores or prints a credential (Rule 1 clause 9; AAP 0.10.4). */
 
-/** The account name the form is typed with; obviously a test value rather than a real login. */
 const ACCOUNT_NAME = 'spec.officer';
 
 /** The text typed into the credential control, named as text rather than as the secret it stands for so that no property named `password`, `pass`, `secret` or `authenticationKey` holds a literal — the shape `check:wiring` fails on (AAP 0.10.4 credential gate; Rule 1 clause 9). */
 const TYPED_TEXT = 'spec value, not a credential';
 
-/** A language the switcher offers that is not the active one, taken from the shipped language list. */
 const OTHER_LANG = 'fr';
 
-/** A second offered language, used to show a sign-in failure surviving repeated switches. */
 const THIRD_LANG = 'es';
 
-/** Where the router sends a signed-in user when the route carries no usable `returnUrl`. */
 const DEFAULT_DESTINATION = '/clients';
 
-/** The pair the form reports in the cases that drive the guard directly rather than through the DOM. Typed, so it cannot drift from the output's `LoginCredentials` shape. */
 const CREDENTIALS: LoginCredentials = { username: ACCOUNT_NAME, password: TYPED_TEXT };
 
-/** The attempted URL the auth guard leaves on the login route when it refuses a navigation. */
 const RETURN_URL = '/viewclient/2';
 
-/** The protocol-relative shape the component refuses, composed here from {@link RETURN_URL} so the file holds no host-shaped literal and the value's provenance stays visible. */
 const PROTOCOL_RELATIVE = ['', '', RETURN_URL.slice(1)].join('/');
 
-/** Fineract's refusal text, quoted from a real 401 body; it is rendered verbatim (workflow W7). */
 const FINERACT_MESSAGE = 'Invalid user credentials.';
 
-/** What the screen shows when the failure carries no Fineract text of its own. */
 const GENERIC_MESSAGE = 'The connection to the server failed.';
 
 /** The credential field's own label key, assembled from its parts rather than written as one dotted key beside its text: `check:wiring` fails on a credential-shaped assignment (AAP 0.10.4), and a full key written immediately before a literal is the shape that scan reads as one (Rule 1 clause 9). */
 const CREDENTIAL_LABEL_KEY = ['label', 'input', 'password'].join('.');
 
-/** The legacy captions this screen resolves, keyed exactly as the shipped flat legacy bundles key them (`app/global-translations/`). A key the map does not hold would render as itself through the stub, so serving the real wording is what proves every label on the screen resolves rather than falls back. */
+/** The captions this screen resolves: the legacy captions keyed exactly as the shipped flat legacy bundles key them (`app/global-translations/`), and the six fragments of the closing paragraph, which are the application's own keys because legacy hard-coded that English HTML and no bundle carries a key for it (`core/i18n/app-translations.ts`). A key the map does not hold would render as itself through the stub, so serving the real wording is what proves every label on the screen resolves rather than falls back. */
 const TRANSLATIONS: Readonly<Record<string, string>> = {
   'label.input.changelanguage': 'Change language:',
   'label.heading.mifosx': 'Mifos X',
@@ -67,20 +58,24 @@ const TRANSLATIONS: Readonly<Record<string, string>> = {
   'label.anchor.keydesignprinciples': 'Key design principles',
   'label.anchor.workingwithcode': 'Working with the code',
   'label.anchor.donate': 'Donate',
+  'label.text.mifosx.designedby': 'Mifos X is designed by the',
+  'label.anchor.mifosinitiative': 'Mifos Initiative',
+  'label.anchor.globalcommunity': 'A global community',
+  'label.text.mifosx.community':
+    'that aims to speed the elimination of poverty by enabling Organizations to more effectively and efficiently deliver responsible financial services to the world’s poor and unbanked.',
+  'label.text.mifosx.interesting': 'Sounds interesting?',
+  'label.anchor.getinvolved': 'Get involved!',
   'error.connection.failed': GENERIC_MESSAGE,
 };
 
-/** The half of `AuthService` this screen uses: the one `login` call and the promise whose settlement decides what the user reads next. Typed as a spy over the real signature, so the stub cannot drift from the method the component calls, and it holds no session, storage or transport of its own. */
 interface AuthStub {
   readonly login: Mock<(accountName: string, typedText: string) => Promise<void>>;
 }
 
-/** The one router member the screen uses; the argument is the whole assertion. */
 interface RouterStub {
   readonly navigateByUrl: Mock<(url: string) => Promise<boolean>>;
 }
 
-/** The ngx-translate surface this screen touches, and nothing else. - `currentLang` — ngx-translate 18 declares it a `Signal<Language | null>` and the component's own `currentLang` computed reads it, falling back to `FALLBACK_LANG` while it is `null`. - `use` — the shared `LanguageSwitcherComponent` subscribes to the observable it returns, which is where a bundle load happens and where its failure arrives; the screen reacts to the component's two reporting outputs. - `instant` — resolves the generic failure message the screen shows for a failure Fineract did not describe. - `translate` — the member `TranslatePipe.transform` resolves every `| translate` key through, so the template's labels render as text rather than as keys. */
 interface TranslateStub {
   readonly currentLang: Signal<string | null>;
 
@@ -90,7 +85,6 @@ interface TranslateStub {
 
   translate(key: string): Signal<string>;
 
-  /** The codes whose bundle was really subscribed to, in order: proof the observable actually ran. */
   readonly applied: readonly string[];
 
   /** Makes the next `use` answer on its error channel, the way a bundle that cannot load does. */
@@ -155,10 +149,8 @@ describe('LoginComponent', () => {
   let router: RouterStub;
   let translate: TranslateStub;
 
-  /** The query parameters the route stand-in answers with; a case that carries a `returnUrl` sets it. */
   let queryParams: ParamMap = convertToParamMap({});
 
-  /** The route the user came from. `ActivatedRoute.snapshot` is read at submit time, so the stand-in answers with whatever {@link queryParams} holds then instead of freezing one value for the suite. */
   const route: { readonly snapshot: { readonly queryParamMap: ParamMap } } = {
     get snapshot(): { readonly queryParamMap: ParamMap } {
       return { queryParamMap: queryParams };
@@ -179,7 +171,6 @@ describe('LoginComponent', () => {
     return element;
   }
 
-  /** The language control the design puts above the lockup. */
   function languageSelector(): HTMLSelectElement {
     const element = host().querySelector<HTMLSelectElement>('#langSelect');
 
@@ -588,6 +579,27 @@ describe('LoginComponent', () => {
 
     expect(newContext).toHaveLength(8);
     expect(newContext.every((anchor) => anchor.getAttribute('rel') === 'noopener noreferrer')).toBe(true);
+  });
+
+  it('renders the closing paragraph from the application’s own copy rather than from literal English', () => {
+    const paragraph = host().querySelector<HTMLParagraphElement>('.text-muted');
+
+    if (paragraph === null) {
+      throw new Error('the screen rendered no closing paragraph');
+    }
+
+    // The rendered sentence, with each whitespace run collapsed to one space: Angular drops the whitespace between a fragment and the element beside it, so the wording is compared with its spacing normalised rather than character for character against the template's line breaks.
+    const rendered: string = paragraph.textContent.replace(/\s+/g, ' ').trim();
+
+    // The sentence is the six keys' copy in the order the paragraph reads it, which is legacy's own wording (Rule 1 clause 3), so no fragment is a literal any more and no fragment is a raw key.
+    expect(rendered).toBe([
+      `${TRANSLATIONS['label.text.mifosx.designedby']} ${TRANSLATIONS['label.anchor.mifosinitiative']}.`,
+      `${TRANSLATIONS['label.anchor.globalcommunity']} ${TRANSLATIONS['label.text.mifosx.community']}`,
+      `${TRANSLATIONS['label.text.mifosx.interesting']} ${TRANSLATIONS['label.anchor.getinvolved']}`,
+    ].join(' '));
+    expect(rendered).not.toContain('label.');
+    expect(paragraph.querySelector('br')).not.toBeNull();
+    expect(paragraph.querySelectorAll('a')).toHaveLength(3);
   });
 
   it('starts the heading outline at level 1 and keeps the design size on the class', () => {

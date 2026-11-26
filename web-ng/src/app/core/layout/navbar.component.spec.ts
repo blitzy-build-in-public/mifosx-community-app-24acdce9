@@ -12,11 +12,9 @@ import { NavbarComponent } from './navbar.component';
 
 /**
  * Behavioural spec for `NavbarComponent` — the `Navbar` row of the component inventory (AAP 0.2.3) and the signed-in chrome of the clients list screen in the "Sign in and open a client record" flow (Figma node `1:3`, file `DKm5TBFbXypfqyx4xUdhBw`; AAP 0.7.1 `core/layout`, AAP 0.7.4). It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with at least one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`). It pins the five in-scope things the bar renders and the out-of-scope chrome it does not (AAP 0.10.5 items 4 and 8), the permission-gated "Clients" destination including `ALL_FUNCTIONS`, the user-menu label, a search becoming a navigation to `/search/:query` with the scope and exact-match flag, the language switch without navigation, sign-out clearing the session before it navigates (AAP 0.7.1; W1), a navigation the router refuses settled in its own words (AAP 0.14.2), the inventory's public contract (AAP 0.2.3's `Navbar` props: `searchScope`, `(langChange)`, `(signOut)`), and the menu opening and closing on the trigger and on `Escape` through Angular state rather than the Bootstrap dropdown plugin. `AuthService` and `PermissionsService` are stubs typed against the real classes, so no session is assembled and no storage read. No HTTP provider exists: the component injects no Fineract service, so reaching the backend from it would fail with NG0201 rather than passing silently (Rule 1 clause 5, Rule 2). The router is the real one, its route table empty and its `navigate` spied.
- *
  * The bar's groups are authored in the order the design reads them — brand, Clients, search, scope, language, user menu — which is the order Tab visits them, and the user menu closes on a click anywhere outside it through the same Angular state (Rule 1 clause 3).
  */
 
-/** The permission the clients route group declares, spelled out rather than imported from routes. */
 const READ_CLIENT = 'READ_CLIENT';
 
 /** The permission Fineract returns to a user who may do everything, spelled out rather than imported: the wildcard the legacy gate answers before it considers any other code (`app/scripts/controllers/main/MainController.js:104-127`; AAP 0.3.4 claim 12). */
@@ -26,7 +24,6 @@ const ACCOUNT_NAME = 'mifos';
 
 const SUPPLIED_NAME = 'supplied-by-shell';
 
-/** The text a refusing router rejects the sign-out navigation with; it is what the user must be shown. */
 const SIGN_OUT_NAVIGATION_FAILURE = 'Navigation cancelled because a guard returned false';
 /** The one sentence a refused return to the login screen is reported with (AAP 0.14.2). */
 const LOGIN_SCREEN_MESSAGE = 'The login screen did not open. Reload the page and try again.';
@@ -54,7 +51,6 @@ const GENERIC_MESSAGE = SPEC_BUNDLE['error.connection.failed'] ?? '';
 class AuthStub implements Pick<AuthService, 'username' | 'logout'> {
   private readonly account: WritableSignal<string | null> = signal<string | null>(ACCOUNT_NAME);
 
-  /** The label's source, the same projection `SessionService.username` publishes. */
   readonly username: Signal<string | null> = this.account.asReadonly();
 
   readonly logout = vi.fn((): void => {
@@ -108,7 +104,6 @@ describe('NavbarComponent', () => {
     return (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
   }
 
-  /** The "Clients" destination's list item, which is the element the permission gate hides. */
   const clientsItem = (): HTMLElement => find<HTMLElement>('#main-menu-left li');
 
   const userMenuTrigger = (): HTMLElement => find<HTMLElement>('#user-dropdown');

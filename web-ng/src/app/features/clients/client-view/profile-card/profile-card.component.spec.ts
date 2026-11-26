@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { ProfileCardComponent, type ProfileCardField } from './profile-card.component';
 
 /** Behavioural spec for the client record's profile card — the `ProfileCard` row of the component inventory, whose states are "with values, with empty values" (AAP 0.2.3). */
-/** Heading the parent renders, standing for the client's display name. */
 const DISPLAY_NAME = 'Spec Card Holder';
 /** Rows in the order the parent supplies them, the last carrying no value: the design shows such a row, and AAP 0.7.4 fixes how it renders. */
 const FIELDS: readonly ProfileCardField[] = [
@@ -12,15 +11,11 @@ const FIELDS: readonly ProfileCardField[] = [
   { label: 'External ID', value: 'EXT-0001' },
   { label: 'Staff', value: '' },
 ];
-/** The label of the row above that carries no value. */
 const EMPTY_VALUE_LABEL = 'Staff';
-/** Text a missing value must never be replaced with, checked against the card's whole rendered text and not only the one value cell: the design shows a label with nothing beside it. */
 const STAND_IN_TEXT: readonly string[] = ['N/A', '—', '–', 'null', 'undefined'];
-/** A dash alone, the stand-in a reader would mistake for a value; the empty cell carries none. */
 const LONE_DASH = /^[-–—]+$/;
 /** Copy of the client sub-features the plan keeps out of scope: the signature link and the avatar upload and camera overlay buttons the design draws over this card (AAP 0.10.5 item 7). */
 const OUT_OF_SCOPE_TEXT: readonly string[] = ['View Client Signature', 'Signature', 'Upload', 'Camera',];
-/** Legacy key of the sub-heading the design places beneath the label/value rows (`label.heading.performancehistory`), and the label this spec serves for it. */
 const SUBHEADING_KEY = 'label.heading.performancehistory';
 const SUBHEADING_LABEL = 'Performance History';
 /** Figma provenance of every expectation below: file `DKm5TBFbXypfqyx4xUdhBw`, frame `2:2` ("Legacy"). */
@@ -49,7 +44,6 @@ describe('ProfileCardComponent', () => {
     fixture.detectChanges();
     return fixture;
   }
-  /** The card's label/value rows, in render order. */
   function rows(fixture: ComponentFixture<ProfileCardComponent>): HTMLElement[] {
     return Array.from(host(fixture).querySelectorAll<HTMLElement>('[data-testid="profile-field"]'));
   }

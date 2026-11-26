@@ -66,7 +66,6 @@ export class LoanRepaymentComponent {
   /** Which seed read is the current one, incremented by every run of {@link load}: a superseded run compares its own number with this one after the await and writes nothing — not the payment types, not the seeded date or amount, not the failure. */
   private loadSequence = 0;
 
-  /** The failure the template renders inline, or `null` while the last call succeeded. */
   readonly error = signal<ApiError | null>(null);
 
   /** Whether the seed read answered 404, meaning the loan does not exist or is not visible to this user; held apart from `error` because the template renders it in place of the form, where a validation failure is rendered above a form the user keeps editing (AAP 0.7.4). */

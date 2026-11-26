@@ -31,13 +31,10 @@ import { ClientActionsComponent } from './client-actions.component';
 
 /** Behaviour of the client lifecycle action screen at `#/client/:id/:action` — the five commands `activate`, `close`, `reject`, `withdraw` and `reactivate`, each preceded by the datatable gate the legacy controller runs (AAP 0.7.1, AAP 0.7.3, AAP 0.7.4, AAP 0.11.1). */
 
-/** The configuration the stubbed transport serves: the application's own documented default shape. */
 const SERVED_CONFIG = DEFAULT_APP_CONFIG;
 
-/** The API root every client URL is composed from, built from the resolved configuration. */
 const API_ROOT = `${SERVED_CONFIG.apiBaseUrl}${SERVED_CONFIG.apiPath}`;
 
-/** The client the commands apply to, as the `:id` segment delivers it. */
 const CLIENT_ID = '2';
 
 /** The five in-scope commands, in the order the legacy controller's own `case` labels name them. */
@@ -56,10 +53,8 @@ const REASON_COMMANDS = [
   'withdraw',
 ] as const satisfies readonly ClientActionCommand[];
 
-/** The two commands that take only a date and render no select, in the order the screen's own `switch` handles them; each owns a date field no other command shares, which is why their messages carry an id of their own. */
 const DATE_ONLY_COMMANDS = ['activate', 'reactivate'] as const satisfies readonly ClientActionCommand[];
 
-/** The id the date field of each date-only command carries its message's id from, quoted from `client-actions.component.html`: `close`, `reject` and `withdraw` share `client-action-date-error`, because only one of those three forms renders at a time. */
 const DATE_ONLY_ERROR_ID: Readonly<Record<(typeof DATE_ONLY_COMMANDS)[number], string>> = {
   activate: 'client-action-activation-date-error',
   reactivate: 'client-action-reactivation-date-error',
@@ -90,13 +85,10 @@ const TEMPLATE_URL = `${API_ROOT}/clients/template`;
 /** `POST /clients/{id}?command=<command>` — the one write this screen makes. */
 const CLIENT_URL = `${API_ROOT}/clients/${CLIENT_ID}`;
 
-/** Where the screen returns once a command lands. */
 const RECORD_ROUTE = ['/viewclient', CLIENT_ID];
 
-/** The `:id` tail every per-client request ends with, taken from the client URL rather than spelled again: the gate's check read addresses the same client the command does, so one composed URL is what proves the segment. */
 const CLIENT_SUFFIX: string = relativeUrl(CLIENT_URL).slice(-(CLIENT_ID.length + 1));
 
-/** The pattern every date-bearing body carries, spelled out as the contract fixes it. */
 const PAYLOAD_DATE_FORMAT = 'dd MMMM yyyy';
 
 /** The legacy captions the screen's copy resolves, keyed exactly as the shipped flat translation bundles key them. */
@@ -126,31 +118,22 @@ const REASONS: readonly SelectOption[] = [
   { id: 12, name: 'Other' },
 ];
 
-/** The reason every submit case chooses: the first the tenant configured, as the select offers it. */
 const CHOSEN_REASON: SelectOption = REASONS[0];
 
-/** The second reason the tenant configured: the one a case selects through the rendered control, so the id a body carries is proven to be the option the operator picked rather than the first of the list. */
 const OTHER_REASON: SelectOption = REASONS[1];
 
-/** The gate's answer for a tenant with no applicable check: nothing to read, so the gate passes. */
 const NO_CHECKS = { totalFilteredRecords: 0, pageItems: [] } as const;
 
-/** The day the closure is submitted with, as the form's date control holds it. */
 const CLOSURE_DATE = new Date(2026, 10, 24);
 
-/** The same day as a payload carries it: the one display pattern, in the active language. */
 const CLOSURE_DATE_AS_PAYLOAD = formatDate(CLOSURE_DATE, DISPLAY_DATE_FORMAT, 'en');
 
-/** The day an activation or a reactivation is submitted with, as its date control holds it. */
 const ACTION_DATE = new Date(2026, 10, 24);
 
-/** The same day as a payload carries it: the one display pattern, in the active language. */
 const ACTION_DATE_AS_PAYLOAD = formatDate(ACTION_DATE, DISPLAY_DATE_FORMAT, 'en');
 
-/** The message a failed gate answers with, quoted from a real server-side failure. */
 const GATE_FAILURE_MESSAGE = 'The datatables could not be read.';
 
-/** The message a refused command answers with, quoted from a real Fineract validation failure. */
 const COMMAND_FAILURE_MESSAGE = 'The closure date cannot be in the future.';
 
 /** Installs the production mapping of a Fineract failure onto the test transport, so a rejection arrives as the `ApiError` the component renders (AAP 0.4.2; workflow W7). */
@@ -159,10 +142,8 @@ const MAP_FINERACT_FAILURES: HttpInterceptorFn = (request, next) =>
     catchError((failure: HttpErrorResponse) => throwError(() => toApiError(failure))),
   );
 
-/** The method and configuration-relative path of every request the screen has issued, in the order it issued them. {@link show} empties it, so each case reads the sequence of its own screen alone. */
 let recorded: string[] = [];
 
-/** Records a request before the mapping interceptor answers it, which is what lets a case assert the **relative order** of the gate, the reason list and the command rather than only their presence. */
 const RECORD_REQUESTS: HttpInterceptorFn = (request, next) => {
   recorded.push(`${request.method} ${relativeUrl(request.urlWithParams)}`);
 
@@ -179,12 +160,10 @@ function isAnyRequest(): boolean {
   return true;
 }
 
-/** Matches the gate's one call. */
 function isGateRead(request: TestRequest['request']): boolean {
   return request.method === 'GET' && request.url === GATE_URL;
 }
 
-/** Matches the reason-list read of one command. */
 function isTemplateRead(command: string): (request: TestRequest['request']) => boolean {
   return (request) =>
     request.method === 'GET' &&
@@ -197,7 +176,6 @@ function isCommandPost(request: TestRequest['request']): boolean {
   return request.method === 'POST' && request.url === CLIENT_URL;
 }
 
-/** Whether a command reads its reason list from the tenant's template. */
 function isReasonCommand(command: ClientActionCommand): boolean {
   return command === 'close' || command === 'reject' || command === 'withdraw';
 }
@@ -226,7 +204,6 @@ describe('ClientActionsComponent', () => {
     return host().querySelector('.panel-title')?.textContent?.trim() ?? null;
   }
 
-  /** The one primary button, or `null` while the form is not rendered yet. */
   function saveButton(): HTMLButtonElement | null {
     return host().querySelector<HTMLButtonElement>('#save');
   }
@@ -276,7 +253,6 @@ describe('ClientActionsComponent', () => {
     return recorded;
   }
 
-  /** The route stub's parameter map for the segments a case is about. */
   function paramsFor(action: string, id: string): ParamMap {
     return convertToParamMap({ id, action });
   }
@@ -336,7 +312,6 @@ describe('ClientActionsComponent', () => {
     await settle();
   }
 
-  /** Answers the reason-list read of `command` with the tenant's reasons. */
   async function answerTemplate(command: string): Promise<void> {
     httpMock.expectOne(isTemplateRead(command)).flush({ narrations: REASONS });
     await settle();

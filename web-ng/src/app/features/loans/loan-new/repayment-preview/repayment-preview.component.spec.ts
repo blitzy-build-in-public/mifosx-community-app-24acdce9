@@ -8,13 +8,11 @@ import { RepaymentPreviewComponent } from './repayment-preview.component';
 
 /** Behavioural spec for the loan application's repayment schedule preview: the table the applicant reads after `POST /loans?command=calculateLoanSchedule` returns before anything is submitted (AAP 0.7.1 Features row `loans` — "`LoanNewComponent` (with `RepaymentPreviewComponent`)"; AAP 0.7.4 "`#/newclientloanaccount/:clientId` presents the product and terms fields from the loan template with a 'Preview schedule' action that posts `calculateLoanSchedule` and renders the returned periods as a table"; AAP 0.11.1, AAP 0.14.1, AAP 0.14.2). */
 
-/** Language the spec serves its labels in, matching `AppConfig.locale` for the fixture. */
 const SPEC_LANG = 'en';
 
 /** Locale `DatePipe` and `DecimalPipe` format with. Pinned so month names, thousands separators and the decimal point are the assertions below, on any host, under any default locale. */
 const SPEC_LOCALE = 'en-US';
 
-/** The nine header keys the template translates, in render order, read from `repayment-preview.component.html`. */
 const COLUMN_KEYS: readonly string[] = [
   'label.heading.no',
   'label.heading.fromdate',
@@ -27,7 +25,6 @@ const COLUMN_KEYS: readonly string[] = [
   'label.heading.outstanding',
 ];
 
-/** The label each header key resolves to in the in-memory bundle below. */
 const COLUMN_LABELS: Readonly<Record<string, string>> = {
   'label.heading.no': 'No.',
   'label.heading.fromdate': 'From Date',
@@ -40,10 +37,8 @@ const COLUMN_LABELS: Readonly<Record<string, string>> = {
   'label.heading.outstanding': 'Outstanding',
 };
 
-/** Legacy no-data label the template passes to the shared empty state, from the same bundle. */
 const EMPTY_STATE_KEY = 'label.nodata';
 
-/** The message the empty state renders once that key resolves. */
 const EMPTY_STATE_TEXT = 'No repayment schedule has been calculated.';
 
 /** The in-memory translation bundle. It covers the ten keys the template uses — the nine headers and the no-data label — and nothing else, so serving it is what proves the template's keys are the ones the legacy bundle (AAP 0.10.2). */
@@ -105,7 +100,6 @@ function textOf(element: Element | null): string {
 describe('RepaymentPreviewComponent', () => {
   // The spec deliberately registers no HTTP provider, no HTTP testing controller and no routing: the preview is a pure projection of its input, so the injector below is the translate stack and the locale and nothing more (Rule 1 clause 5, Rule 1 clause 8, Rule 2).
 
-  /** The fixture's host element, the root the queries below start from. */
   function hostOf(fixture: ComponentFixture<RepaymentPreviewComponent>): HTMLElement {
     // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps every element the helpers return an `HTMLElement` and confines the cast to this single boundary (Rule 1 clause 4).
     return fixture.nativeElement as HTMLElement;
@@ -116,22 +110,18 @@ describe('RepaymentPreviewComponent', () => {
     return host.querySelector<HTMLTableElement>('table#repayment-preview');
   }
 
-  /** The table's header cells in render order. */
   function headerCells(host: HTMLElement): HTMLElement[] {
     return Array.from(host.querySelectorAll<HTMLElement>('table#repayment-preview thead tr th'));
   }
 
-  /** The table's body rows in render order. */
   function bodyRows(host: HTMLElement): HTMLElement[] {
     return Array.from(host.querySelectorAll<HTMLElement>('table#repayment-preview tbody tr'));
   }
 
-  /** One body row's cells in render order. */
   function cellsOf(row: HTMLElement): HTMLElement[] {
     return Array.from(row.querySelectorAll<HTMLElement>('td'));
   }
 
-  /** Every body row's cell texts: `[row][column]`, in render order. */
   function renderedCells(host: HTMLElement): string[][] {
     return bodyRows(host).map((row) => cellsOf(row).map((cell) => textOf(cell)));
   }

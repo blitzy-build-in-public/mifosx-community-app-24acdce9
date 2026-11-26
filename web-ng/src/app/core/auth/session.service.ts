@@ -1,6 +1,7 @@
 import { DOCUMENT, Injectable, computed, inject, signal, type Signal } from '@angular/core';
 import { firstValueFrom, type Observable } from 'rxjs';
 
+import { ApiError } from '../http/api-error';
 import { PermissionsService } from './permissions.service';
 import type { SessionData, SessionUserResponse } from './session.model';
 import { apiOriginOf, credentialOriginFor, type ApiBaseUrls } from './session-origin';
@@ -38,6 +39,11 @@ function failureStatus(cause: unknown): number | null {
   return typeof status === 'number' && Number.isFinite(status) ? status : null;
 }
 
+/** Whether a failed read is this application's own request bound firing on a request Fineract never answered — the `timedOut` mark `fineract.interceptor.ts` sets on the `TimeoutError` it replaces with an `ApiError` — rather than anything the server said. The status cannot tell the two apart: an unanswered read carries the transport-failure status `0`, which is also the form this deployment's refused cross-origin credential arrives in, while an unanswered read says nothing whatever about the key (AAP 0.7.2, AAP 0.4.2). */
+function isUnansweredRead(cause: unknown): boolean {
+  return cause instanceof ApiError && cause.timedOut;
+}
+
 /** The stored entry as a `SessionData`, or `null` when it is anything else: whatever a previous release of either front end wrote is input rather than a typed value, so it is parsed into `unknown` and narrowed field by field (Rule 1 clause 4, AAP 0.7.2 row `SessionData`). */
 function toSessionData(value: unknown): SessionData | null {
   if (!isRecord(value)) {
@@ -72,7 +78,7 @@ function toSessionData(value: unknown): SessionData | null {
 /** Supplies the `GET /users/{id}` answer the restore needs (AAP 0.7.3 W1) — legacy's `userResource.get({userId})` at `SessionManager.js:41` — so this service owns no HTTP call and names no Fineract path: only `auth.service.ts` of the two may hold `HttpClient` (AAP 0.8.2, AAP 0.14.1), and the owning service passes its call in. */
 export type SessionUserReader = (userId: number) => Observable<SessionUserResponse>;
 
-/** The legacy session entry both front ends share, bound to the API origin it was issued against: reads, writes and removes the `{userId, authenticationKey, userPermissions}` JSON `SessionManager` writes under the `mifosX` prefix, restores it through `GET /users/{id}`, and clears it on logout and on a 401 (AAP 0.7.1 `SessionService`; AAP 0.4.2; AAP 0.3.4 claim 9), with `PermissionsService` the one owner of the list and the key never logged (Rule 1 clause 9). Each write also records that origin in the sibling `mifosXsessionOrigin` entry and each restore publishes it, so the interceptor presents the key only to the origin it was issued against (AAP 0.4.4 decision 5). A credential whose recorded origin is not the origin this page resolved is withheld rather than deleted: the stored entry belongs to another origin, where the legacy app may still be using it, so it is left exactly where it was found (Rule 1 clause 9, Rule 1 clause 3). */
+/** The legacy session entry both front ends share, bound to the API origin it was issued against: reads, writes and removes the `{userId, authenticationKey, userPermissions}` JSON `SessionManager` writes under the `mifosX` prefix, restores it through `GET /users/{id}`, and clears it on logout and on an observed refusal of the credential (AAP 0.7.1 `SessionService`; AAP 0.4.2; AAP 0.3.4 claim 9), with `PermissionsService` the one owner of the list and the key never logged (Rule 1 clause 9). A refusal is a received 401 or the status-0 form a refused cross-origin 401 arrives in; a read the application's own request bound cut off is not one — it is indeterminate, so the stored entry is kept for the next start-up to re-validate, exactly as legacy's `SessionManager.restore()` keeps an entry it could not validate (AAP 0.7.2, Rule 1 clause 3). Each write also records that origin in the sibling `mifosXsessionOrigin` entry and each restore publishes it, so the interceptor presents the key only to the origin it was issued against (AAP 0.4.4 decision 5). A credential whose recorded origin is not the origin this page resolved is withheld rather than deleted: the stored entry belongs to another origin, where the legacy app may still be using it, so it is left exactly where it was found (Rule 1 clause 9, Rule 1 clause 3). */
 @Injectable({ providedIn: 'root' })
 export class SessionService {
   /** Injected rather than read off the `document` global, so a test can supply a document with no browsing context and the storage-unavailable path stays exercisable. */
@@ -203,11 +209,11 @@ export class SessionService {
       if (this.state() === stored) {
         const status = failureStatus(cause);
 
-        if (status === 401 || status === 0) {
-          // A credential the server refuses ends the session, so its entry goes with the signals instead of being left behind. That departs from Rule 1 clause 3, whose legacy `SessionManager` keeps an entry it could not validate, because AAP 0.4.2 requires a refused session to be cleared. The browser calling the API cross-origin reports this deployment's 401 as status 0 (no proxy, AAP 0.4.2), so the refusal is recognised where it is observed, not only in the interceptor.
+        if (!isUnansweredRead(cause) && (status === 401 || status === 0)) {
+          // A credential the server refuses ends the session, so its entry goes with the signals instead of being left behind. That departs from Rule 1 clause 3, whose legacy `SessionManager` keeps an entry it could not validate, because AAP 0.4.2 requires a refused session to be cleared. The browser calling the API cross-origin reports this deployment's 401 as status 0 (no proxy, AAP 0.4.2), so the refusal is recognised where it is observed, not only in the interceptor — and the departure is narrowed to an observed refusal, because a read this application's own bound cut off never was one and takes the branch below.
           this.clear();
         } else {
-          // The read failed for a reason that is no refusal, so the entry stays where a later restore can use it, while nothing is in effect: the credential origin empties with the session it described.
+          // The read failed for a reason that is no refusal — a server failure, or a read the application's own 30-second bound cut off before anything answered, which is indeterminate rather than refused — so the entry stays where a later restore can use it, exactly as legacy's `SessionManager.restore()` keeps an entry it could not validate (Rule 1 clause 3), while nothing is in effect: the credential origin empties with the session it described.
           this.state.set(null);
           this.origin.set(null);
           this.currentUser.set(null);

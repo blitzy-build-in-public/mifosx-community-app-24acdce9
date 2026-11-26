@@ -16,8 +16,8 @@ import {
 } from '@angular/common/http/testing';
 import { EnvironmentInjector, computed, runInInjectionContext, signal, type WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { Router } from '@angular/router';
-import { NEVER, firstValueFrom, of, throwError, type Observable } from 'rxjs';
+import { NavigationEnd, Router, type Event } from '@angular/router';
+import { NEVER, Subject, firstValueFrom, of, throwError, type Observable } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SessionData } from '../auth/session.model';
@@ -28,25 +28,21 @@ import { NotificationService } from '../notifications/notification.service';
 import { ApiError } from './api-error';
 import { fineractInterceptor } from './fineract.interceptor';
 
-/** Tenant identifier the resolved configuration reports; the value is configuration, not a credential. */
 const TENANT = 'default';
 
 /** The API origin the stand-in configuration names: scheme, host and port, because the credential is presented only to the origin it was issued against and a relative stub would have no origin to compare (AAP 0.4.4 decision 5). */
 const API_ORIGIN = 'https://fineract.example:8443';
 
-/** Stand-in API root the stubbed `apiUrl()` prefixes, so this spec names no real endpoint. */
 const API_ROOT = `${API_ORIGIN}/api/v1`;
 
 const CLIENTS_URL = `${API_ROOT}/clients`;
 
 const AUTHENTICATION_URL = `${API_ROOT}/authentication`;
 
-/** The origin a crafted page URL would name in place of the one the session was issued against: the F01 case, and a host this spec sends nothing to. */
 const OTHER_ORIGIN = 'https://other.example:4421';
 
 const ATTEMPTED_URL = '/viewclient/2';
 
-/** A second protected URL of the same origin, so a burst of simultaneous failures is three distinct requests rather than three readings of one. */
 const LOANS_URL = `${API_ROOT}/loans`;
 
 /** A request the application makes to its own origin rather than to Fineract: the translation bundle `TranslateHttpLoader` fetches while the application starts, which must travel with no credential (AAP 0.4.2, Rule 1 clause 9). */
@@ -62,10 +58,8 @@ const USER_ID = 7;
 
 const PROBE_URL = `${USERS_URL}/${USER_ID}`;
 
-/** How long the interceptor waits for an answer, in milliseconds: the bound a case advances a fake clock past to fail a request no server answered. */
 const REQUEST_TIMEOUT_MS = 30_000;
 
-/** The sentence a request that ran out of time is reported with, so a case pins the text a user reads rather than the operator's own words. */
 const TIMED_OUT_TEXT = 'The server did not answer in time. Try again in a moment.';
 
 /** The sentence shown once a refused credential has ended the session: what the user is told to do next, and nothing about the exchange (Rule 1 clause 9). */
@@ -75,10 +69,8 @@ const SESSION_ENDED_TEXT = 'Your session has ended. Sign in again to continue.';
 const TENANT_HEADER = 'Fineract-Platform-TenantId';
 const AUTHORIZATION_HEADER = 'Authorization';
 
-/** The authentication key parts the fixture joins; the value exists only in this run's memory. */
 const KEY_PARTS = ['Zm9v', 'YmFy', 'OnNlY3JldA'];
 
-/** The server's own validation text, which a screen must render verbatim (workflow W7). */
 const SERVER_MESSAGE = 'The maximum allowed principal is 10,000';
 
 /** The generic sentence Fineract puts in the envelope's top-level `defaultUserMessage` beside a validation failure's own field-level text; it must never displace that text (AAP 0.4.4 decision 6). */
@@ -120,7 +112,13 @@ interface Harness {
   /** The origin the session's credential was issued against, which a case sets when the page resolved its base elsewhere (AAP 0.4.4 decision 5). */
   readonly issuedAgainst: WritableSignal<string | null>;
   readonly clear: ReturnType<typeof vi.fn>;
-  readonly router: { url: string; navigated: boolean; navigate: ReturnType<typeof vi.fn> };
+  readonly router: {
+    url: string;
+    navigated: boolean;
+    /** The router's finished-navigation stream, which a notice raised before the first navigation waits for. */
+    events: Subject<Event>;
+    navigate: ReturnType<typeof vi.fn>;
+  };
   readonly notifications: NotificationService;
   readonly server: HttpTestingController;
   readonly run: (
@@ -141,6 +139,8 @@ function harnessFor(): Harness {
     url: '/clients',
     // A route the application has already shown: the state a mid-session failure arrives in, and the one a case sets false to reproduce the start-up read.
     navigated: true,
+    // The finished navigations a notice raised before the first navigation waits for; a case emits one to stand for the landing the route guard's redirect produces (AAP 0.1.1, AAP 0.7.4).
+    events: new Subject<Event>(),
     navigate: vi.fn(() => Promise.resolve(true)),
   };
   const notifications = new NotificationService();
@@ -197,10 +197,8 @@ function rejectionOf(observable: Observable<unknown>): Promise<unknown> {
   );
 }
 
-/** The text a refusing router rejects its navigation with; it is never what the user must be shown. */
 const NAVIGATION_FAILURE = 'Navigation cancelled because a guard returned false';
 
-/** The sentence a refused return to the login screen is reported with: it names the screen. */
 const LOGIN_SCREEN_MESSAGE = 'The login screen did not open. Reload the page and try again.';
 
 /** The promise a refusing router rejects its navigation with, counting the rejection handlers the code under test attaches to it. */
@@ -469,7 +467,7 @@ describe('fineractInterceptor', () => {
     }
   });
 
-  it('says nothing of its own when the re-validation is the request that runs out of time', async () => {
+  it('keeps the session and reports the failure once when the re-validation is itself the request that runs out of time', async () => {
     vi.useFakeTimers();
 
     try {
@@ -486,23 +484,28 @@ describe('fineractInterceptor', () => {
 
       expect(error).toBeInstanceOf(ApiError);
       expect((error as ApiError).status).toBe(0);
-      // The re-validation's own bound is not the user's failure to read: the sentence on the screen is the session one, once (AAP 0.14.2).
-      expect(notifications.messages().map((notice) => notice.message)).not.toContain(TIMED_OUT_TEXT);
+      // A re-validation nobody answered says nothing about the key, so an indeterminate answer is no refusal: the session stays exactly where it was, nothing is navigated to, and the failure is the one thing said (AAP 0.4.2, Rule 1 clause 3).
+      expect(clear).not.toHaveBeenCalled();
+      expect(session()).not.toBeNull();
+      expect(router.navigate).not.toHaveBeenCalled();
       expect(notifications.messages()).toHaveLength(1);
-      expect(notifications.messages()[0]?.message).toBe(SESSION_ENDED_TEXT);
-      expect(clear).toHaveBeenCalledTimes(1);
-      expect(router.navigate).toHaveBeenCalledTimes(1);
+      expect(notifications.messages()[0]?.kind).toBe('error');
+      expect(notifications.messages()[0]?.message).toBe(UNMAPPED_FAILURE_TEXT);
+      // The re-validation's own bound is not the user's failure to read, and it is certainly not a session end (AAP 0.14.2).
+      expect(notifications.messages().map((notice) => notice.message)).not.toContain(TIMED_OUT_TEXT);
+      expect(notifications.messages().map((notice) => notice.message)).not.toContain(SESSION_ENDED_TEXT);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it('ends the session and returns to the login screen carrying the attempted route on a 401', async () => {
+  it('ends the session, returns to the login screen carrying the attempted route, and says once why, on a 401', async () => {
     const { run, session, clear, router, notifications } = harnessFor();
     session.set(sessionFixture());
     router.url = ATTEMPTED_URL;
 
     const error = await rejectionOf(run(new HttpRequest('GET', CLIENTS_URL), failing(401)));
+    await navigationSettled();
 
     expect(error).toBeInstanceOf(ApiError);
     expect(clear).toHaveBeenCalledTimes(1);
@@ -510,7 +513,36 @@ describe('fineractInterceptor', () => {
     expect(router.navigate).toHaveBeenCalledWith(['/login'], {
       queryParams: { returnUrl: ATTEMPTED_URL },
     });
-    expect(notifications.messages()).toHaveLength(0);
+    // A forced sign-out is one thing to explain, so the ended-session sentence is shown exactly once, after the return has landed (AAP 0.1.1, AAP 0.7.4).
+    expect(notifications.messages()).toHaveLength(1);
+    expect(notifications.messages()[0]?.kind).toBe('error');
+    expect(notifications.messages()[0]?.message).toBe(SESSION_ENDED_TEXT);
+  });
+
+  it('ends the session once and says so once when three 401s arrive together', async () => {
+    const { run, session, clear, router, notifications } = harnessFor();
+    session.set(sessionFixture());
+    router.url = ATTEMPTED_URL;
+
+    await Promise.all([
+      rejectionOf(run(new HttpRequest('GET', CLIENTS_URL), failing(401))),
+      rejectionOf(run(new HttpRequest('GET', LOANS_URL), failing(401))),
+      rejectionOf(
+        run(
+          new HttpRequest('GET', CLIENTS_URL, { params: new HttpParams().set('offset', '15') }),
+          failing(401),
+        ),
+      ),
+    ]);
+    await navigationSettled();
+
+    // One refusal reaching the screen three times is one thing to explain: the failure that ends the session returns and speaks, and the requests that follow carry no credential to refuse, so they add no second notice (AAP 0.7.4, AAP 0.14.2).
+    expect(clear).toHaveBeenCalledTimes(1);
+    expect(router.navigate).toHaveBeenCalledWith(['/login'], {
+      queryParams: { returnUrl: ATTEMPTED_URL },
+    });
+    expect(notifications.messages()).toHaveLength(1);
+    expect(notifications.messages()[0]?.message).toBe(SESSION_ENDED_TEXT);
   });
 
   it('reports a refused return to the login screen once, and leaves no rejection unhandled', async () => {
@@ -759,7 +791,7 @@ describe('fineractInterceptor', () => {
     expect(notifications.messages()[0]?.message).toBe(SESSION_ENDED_TEXT);
   });
 
-  it('leaves the start-up read its own refusal handling, re-validating nothing before the first navigation', async () => {
+  it('leaves the start-up read its own refusal handling, and holds its notice until the landing navigation has finished', async () => {
     const { run, session, server, clear, router, notifications } = harnessFor();
     session.set(sessionFixture());
     router.navigated = false;
@@ -770,9 +802,40 @@ describe('fineractInterceptor', () => {
     expect((error as ApiError).status).toBe(0);
     expect(revalidations(server)).toHaveLength(0);
     expect(clear).not.toHaveBeenCalled();
+    // The landing this start-up read belongs to is the route guard's own redirect, still to come, so this layer starts no navigation of its own.
     expect(router.navigate).not.toHaveBeenCalled();
+    // A notice queued now would be retired by the root's clear of the queue on that landing, so nothing is queued until it has finished (AAP 0.1.1, AAP 0.7.4).
+    expect(notifications.messages()).toHaveLength(0);
+
+    router.events.next(new NavigationEnd(1, '/login', '/login'));
+    await navigationSettled();
+
     expect(notifications.messages()).toHaveLength(1);
+    expect(notifications.messages()[0]?.kind).toBe('error');
     expect(notifications.messages()[0]?.message).toBe(UNMAPPED_FAILURE_TEXT);
+  });
+
+  it('raises the ended-session notice on the landing screen when a refresh meets a refused credential', async () => {
+    const { run, session, clear, router, notifications } = harnessFor();
+    session.set(sessionFixture());
+    // A reload whose stored session the server refuses: the application has not navigated yet, and the route guard's redirect is the landing that is still to come.
+    router.navigated = false;
+
+    const error = await rejectionOf(run(new HttpRequest('GET', CLIENTS_URL), failing(401)));
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(clear).toHaveBeenCalledTimes(1);
+    expect(session()).toBeNull();
+    // Nothing navigates here: a second navigation would race the guard's own redirect to the same screen.
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(notifications.messages()).toHaveLength(0);
+
+    router.events.next(new NavigationEnd(1, '/login?returnUrl=%2Fclients', '/login?returnUrl=%2Fclients'));
+    await navigationSettled();
+
+    expect(notifications.messages()).toHaveLength(1);
+    expect(notifications.messages()[0]?.kind).toBe('error');
+    expect(notifications.messages()[0]?.message).toBe(SESSION_ENDED_TEXT);
   });
 
   it('reports a refused return to the login screen once when a refused credential ends the session', async () => {

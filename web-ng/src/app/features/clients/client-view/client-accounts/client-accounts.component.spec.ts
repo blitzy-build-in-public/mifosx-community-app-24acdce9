@@ -20,22 +20,16 @@ import type {
 import { ClientAccountsComponent } from './client-accounts.component';
 
 /** Behaviour of the accounts section of the individual client record's `General` tab. */
-/** The configuration the stubbed transport serves: the application's own documented default shape. */
 const SERVED_CONFIG = DEFAULT_APP_CONFIG;
-/** The API root every client URL is composed from, built from the resolved configuration. */
 const API_ROOT = `${SERVED_CONFIG.apiBaseUrl}${SERVED_CONFIG.apiPath}`;
-/** The client whose accounts the section is bound to, as the record route delivers it. */
 const CLIENT_ID = '2';
-/** A second client, for the rebinding case: a record opened on another client must re-read. */
 const OTHER_CLIENT_ID = 5;
 /** `GET /clients/{id}/accounts` for one client id. Composed here from the same root the service uses, so a changed endpoint would fail this suite rather than pass silently (Rule 1 clause 2). */
 function accountsUrl(id: number | string): string {
   return `${API_ROOT}/clients/${id}/accounts`;
 }
-/** Status objects as Fineract sends them: only the code is read, and never rendered. */
 const LOAN_STATUS = { id: 300, code: 'loanStatusType.active', value: 'Active' };
 const SAVINGS_STATUS = { id: 300, code: 'savingsAccountStatusType.active', value: 'Active' };
-/** A loan account carrying the outstanding figure its family reports. */
 const LOAN_ACCOUNT: ClientLoanAccountSummary = {
   id: 21,
   accountNo: '000000021',
@@ -43,7 +37,6 @@ const LOAN_ACCOUNT: ClientLoanAccountSummary = {
   status: LOAN_STATUS,
   loanBalance: 5000,
 };
-/** A savings account carrying the balance its family reports, with a fractional part. */
 const SAVINGS_ACCOUNT: ClientSavingsAccountSummary = {
   id: 31,
   accountNo: '000000031',
@@ -51,21 +44,17 @@ const SAVINGS_ACCOUNT: ClientSavingsAccountSummary = {
   status: SAVINGS_STATUS,
   accountBalance: 1200.5,
 };
-/** A savings account whose family reported no figure at all: `accountBalance` is absent, which is the state the balance cell must render as empty. */
 const SAVINGS_WITHOUT_FIGURE: ClientSavingsAccountSummary = {
   id: 32,
   accountNo: '000000032',
   productName: 'Parity Savings Two',
   status: SAVINGS_STATUS,
 };
-/** The endpoint's answer for a client holding one loan and two savings accounts. */
 const ACCOUNTS: ClientAccountSummary = {
   loanAccounts: [LOAN_ACCOUNT],
   savingsAccounts: [SAVINGS_ACCOUNT, SAVINGS_WITHOUT_FIGURE],
 };
-/** The endpoint's answer for a client holding nothing: both collections are omitted rather than sent empty, which was observed live and is what the model documents. */
 const NO_ACCOUNTS: ClientAccountSummary = {};
-/** A refusal as the fork sends one: `defaultUserMessage` is the text a screen renders verbatim, character for character. */
 const FINERACT_REFUSAL: FineractError = {
   defaultUserMessage: 'Client has reached the maximum number of active loan accounts',
   userMessageGlobalisationCode: 'error.msg.client.max.accounts',
@@ -78,7 +67,6 @@ const FINERACT_REFUSAL: FineractError = {
 };
 /** Status words the section conveys through the swatch and never through text. Checked in lower case over each row's whole text (AAP 0.10.5 item 11). */
 const STATUS_TEXT: readonly string[] = ['active', 'pending', 'closed', 'rejected', 'withdrawn'];
-/** A dash alone, the stand-in a reader would mistake for a figure; the empty cell carries none. */
 const LONE_DASH = /^[-–—]+$/;
 /** Installs the production mapping of a Fineract failure onto the test transport, so a rejection arrives as the `ApiError` the component catches (AAP 0.4.2). */
 const MAP_FINERACT_FAILURES: HttpInterceptorFn = (request, next) =>
@@ -92,18 +80,15 @@ describe('ClientAccountsComponent', () => {
   let httpMock: HttpTestingController;
   // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines the cast to one line and keeps the DOM assertions type-checked (Rule 1 clause 4).
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
-  /** Mounts the section for one client. */
   function mount(clientId: number | string): void {
     fixture = TestBed.createComponent(ClientAccountsComponent);
     component = fixture.componentInstance;
     fixture.componentRef.setInput('clientId', clientId);
     fixture.detectChanges();
   }
-  /** Matches the section's one read for `clientId`. */
   function isAccountsRead(clientId: number | string): (request: TestRequest['request']) => boolean {
     return (request) => request.method === 'GET' && request.url === accountsUrl(clientId);
   }
-  /** The rendered account rows, in document order. */
   function renderedRows(): HTMLTableRowElement[] {
     return Array.from(host().querySelectorAll<HTMLTableRowElement>('#client-accounts tbody tr'));
   }

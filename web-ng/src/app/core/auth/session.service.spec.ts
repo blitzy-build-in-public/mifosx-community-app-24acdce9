@@ -21,10 +21,8 @@ const COMPOSED_KEY = 'mifosXsessionData';
 /** The composed sibling key the credential's API origin is recorded at, `prefix` `'mifosX'` + `sessionOrigin`: the entry that binds the session to the origin it was issued against (AAP 0.4.4 decision 5). */
 const ORIGIN_KEY = 'mifosXsessionOrigin';
 
-/** The bare key the library writes from release 0.11.0 on, which `read()` must accept too. */
 const BARE_KEY = 'sessionData';
 
-/** The authentication key parts the fixture joins: the value exists only in this run's memory. */
 const KEY_PARTS = ['Zm9v', 'YmFy', 'OnNlY3JldA'];
 
 const USER_ID = 42;
@@ -71,7 +69,6 @@ function recordingReader(response: SessionUserResponse, calls: number[]): Sessio
   };
 }
 
-/** The served API host and root, written out exactly as `web-ng/src/assets/config.json` ships them. */
 const API_BASE_URL = 'https://localhost:8443';
 const API_PATH = '/fineract-provider/api/v1';
 const API_ROOT = `${API_BASE_URL}${API_PATH}`;
@@ -81,7 +78,6 @@ const BASES: ApiBaseUrls = { resolved: API_BASE_URL, served: API_BASE_URL };
 
 const SEPARATOR = '/';
 
-/** The resource path the reader asks the configuration for, named rather than written into an `apiUrl()` call so the endpoint scan sees a constant instead of a new judged literal. */
 const USERS_PATH = 'users';
 
 /** The stub `apiUrl()`: the configuration owns the host and the API root, the caller owns the resource path, and the two are joined as `AppConfigService.apiUrl()` documents — one `/` at the join, no other rewriting — so a stand-in typed to the one member it replaces, rather than an `any`, composes the same URL the shipped service does (Rule 1 clause 4). */
@@ -383,6 +379,32 @@ describe('SessionService', () => {
       expect(permissions.can('READ_CLIENT')).toBe(false);
     },
   );
+
+  it('keeps both stored entries and stays closed when the user read is never answered', async () => {
+    const { service, permissions } = harnessFor();
+    const fixture = legacyFixture();
+    service.write(fixture, API_BASE_URL);
+    permissions.setPermissions(fixture.userPermissions);
+
+    // The failure the interceptor builds once its own 30-second bound fires on the read: the transport-failure status `0`, marked `timedOut` so it is told apart from the status 0 a refused cross-origin 401 arrives in (AAP 0.7.2, AAP 0.4.2).
+    const restored = await service.restore(BASES, () =>
+      throwError(
+        () => new ApiError('The server did not answer in time. Try again in a moment.', 0, [], true),
+      ),
+    );
+
+    expect(restored).toBe(false);
+    // An unanswered read is indeterminate rather than a refusal: both entries stay exactly where they were, the one the legacy screens share included, as legacy's `SessionManager.restore()` leaves an entry it could not validate (Rule 1 clause 3).
+    expect(window.localStorage.getItem(COMPOSED_KEY)).not.toBeNull();
+    expect(window.localStorage.getItem(ORIGIN_KEY)).not.toBeNull();
+    expect(window.localStorage.length).toBe(2);
+    expect(service.read()).toEqual(fixture);
+    // Nothing is in effect, so no guard reading `session()` can treat this as a signed-in state.
+    expect(service.session()).toBeNull();
+    expect(service.user()).toBeNull();
+    expect(service.username()).toBeNull();
+    expect(permissions.can('READ_CLIENT')).toBe(false);
+  });
 
   it('leaves a session that replaced the stored one while its user read was in flight', async () => {
     const { service, permissions } = harnessFor();

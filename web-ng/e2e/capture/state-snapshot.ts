@@ -19,7 +19,6 @@ import type { NormalizedValue } from './network-capture';
 
 /** A client's end state after a workflow, reduced to what AAP 0.10.1 asserts: W2's activation, W3's sections and the counts a workflow adds to. */
 export interface ClientSnapshot {
-  /** Status as Fineract names it, e.g. `Active`; `''` only when the payload carried none. */
   readonly status: string;
   /** Days from the run date to the client's activation date, or `null` when it has none — offsets keep the comparison valid on any run date (AAP 0.10.2). */
   readonly activationDateOffset: number | null;
@@ -32,26 +31,20 @@ export interface ClientSnapshot {
   /** Identifiers in `GET /clients/{id}/identifiers`; `0` when the client has none. */
   readonly identifierCount: number;
 }
-/** A loan account's end state, reduced to what W4 to W7 assert: the submitted terms, the money the schedule and the balance carry, and the transactions and charges a workflow adds. */
 export interface LoanSnapshot {
   readonly status: string;
-  /** Principal as submitted — W4's 5,000. */
   readonly principal: number | null;
   readonly approvedPrincipal: number | null;
   /** `summary.totalExpectedRepayment` — what W6's outstanding balance is measured against. */
   readonly totalExpectedRepayment: number | null;
-  /** `summary.totalOutstanding` — the balance the repayment must reduce and W5 and W6 assert. */
   readonly totalOutstanding: number | null;
   /** The first numbered installment's total due, the amount W6 repays: `totalDue`, or `totalDueForPeriod` as the running fork sends it, skipping the leading disbursement row that has no period and a zero total (AAP 0.7.2, `RepaymentPeriod`). */
   readonly firstPeriodTotalDue: number | null;
-  /** Transactions the loan carries; a repayment adds one (W6). */
   readonly transactionCount: number;
   readonly chargeCount: number;
 }
-/** One workflow's end state on one front end plus the metadata that makes the file self-describing; `client` and `loan` appear only when the caller asked for them, and nothing names the machine the run happened on. */
 export interface StateSnapshot {
   readonly project: 'legacy' | 'next';
-  /** Workflow id the snapshot covers, e.g. `W2` or `CHAIN`. */
   readonly workflow: string;
   readonly runDate: string;
   readonly client?: ClientSnapshot;
@@ -60,7 +53,6 @@ export interface StateSnapshot {
 export interface WrittenStateSnapshot extends StateSnapshot {
   readonly path: string;
 }
-/** What {@link captureState} is asked to read; every target is optional and independent, so a workflow that touched only a client writes `client` alone. */
 export interface StateTargets {
   project: 'legacy' | 'next';
   /** Workflow id the snapshot covers, e.g. `'W1'` … `'W7'` or `'CHAIN'`. */
@@ -72,7 +64,6 @@ export interface StateTargets {
 }
 /** One field-level difference between the two front ends' end states, shaped like the traffic side's `ExchangeDiff` so the report writer renders both the same way. */
 export interface StateDiff {
-  /** What differs, as a value path: `client.status` or `loan.totalOutstanding`. */
   readonly field: string;
   readonly legacy: NormalizedValue;
   readonly next: NormalizedValue;

@@ -21,7 +21,6 @@ export interface LanguageOptionSummary {
   readonly label: string;
 }
 
-/** What the login screen's submit control currently offers: `'absent'` when the screen renders no submit control at all, `'hidden'` when it renders one that is not visible, `'disabled'` when it is visible but cannot be. */
 export type SubmitState = 'absent' | 'hidden' | 'disabled' | 'enabled';
 
 const ROOT_SELECTOR = 'app-login';
@@ -29,7 +28,6 @@ const ROOT_SELECTOR = 'app-login';
 /** The language switcher. The screen renders one bare native `<select>` (the Angular-native replacement for the legacy plugin, AAP 0.10.5 item 2), so no wrapper component element is involved and this is the only `<select>`. */
 const LANGUAGE_SELECT_SELECTOR = 'select';
 
-/** The username control, in the order it is tried: the reactive form's control name, then the `.form-control` that follows the label naming the field, then the screen's only non-search text input. */
 const USERNAME_SELECTORS: readonly string[] = [
   'input[formcontrolname="username"]',
   'input[name="username"]',
@@ -62,7 +60,6 @@ const USER_MENU_TOGGLE_SELECTORS: readonly string[] = [
   '.dropdown > a',
 ];
 
-/** The list the user menu reveals. It is in the DOM while closed and hidden by the `.open` class. */
 const USER_MENU_LIST_SELECTOR = 'app-navbar .dropdown-menu';
 
 const SIGN_OUT_LABEL_PATTERN = /sign\s*out|log\s*out/i;

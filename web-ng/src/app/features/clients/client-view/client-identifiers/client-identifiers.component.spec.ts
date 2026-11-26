@@ -17,9 +17,7 @@ import { ClientService } from '../../client.service';
 import { ClientIdentifiersComponent } from './client-identifiers.component';
 
 /** Behavioural spec for the `Identities` tab of the individual client record — the read-only list of a client's identity documents. */
-/** The client the tab is bound to — the `:id` of `#/viewclient/:id`, as the route delivers it. */
 const CLIENT_ID = 2;
-/** A second client, for the case that rebinds the input: another record must be read for. */
 const OTHER_CLIENT_ID = 5;
 /** The legacy bundle's wording for the key the template hands the empty state (`app/global-translations/locale-en.json`). */
 const NO_DATA_KEY = 'label.nodata';
@@ -28,7 +26,6 @@ const NO_DATA_TEXT = 'No Data';
 /** The one key the tab's empty state resolves. */
 /** The table's accessible name, from the legacy bundle's own identities heading. */
 const IDENTITIES_HEADING_KEY = 'label.heading.identities';
-/** The message that key resolves to in the in-memory bundle. */
 const IDENTITIES_HEADING_TEXT = 'Identities';
 /** The wording the shipped `app/global-translations/locale-en.json` bundle carries for the keys the tab resolves: the empty state's message, the table's accessible name, and the identifier-status code the Status cell passes through `TranslatePipe`, exactly as legacy's tab does (Rule 1 clauses 3 and 6). */
 const EN_BUNDLE: Readonly<Record<string, string>> = {
@@ -38,9 +35,7 @@ const EN_BUNDLE: Readonly<Record<string, string>> = {
 };
 /** Fineract's own text for a rejected identifier read, synthetic but shaped like the server's `defaultUserMessage`: the tab renders it character for character (Rule 1 clause 3). */
 const SERVER_FAILURE_TEXT = 'The document type is not active for this client.';
-/** The text a 5xx that carried no server message is rendered with — the mapper's own sentence — so the panel is provably not blank even when Fineract sends no `defaultUserMessage`. */
 const SERVER_FAULT_TEXT = 'The request could not be completed.';
-/** A document whose payload already carries its type's name: no resolution is needed for it. */
 const PASSPORT: ClientIdentifier = {
   id: 41,
   documentType: { id: 1, name: 'Passport' },
@@ -48,7 +43,6 @@ const PASSPORT: ClientIdentifier = {
   description: 'Primary travel document',
   status: 'Active',
 };
-/** A second named document, so a case can prove the row count and the endpoint's order. */
 const NATIONAL_ID: ClientIdentifier = {
   id: 42,
   documentType: { id: 2, name: 'National ID' },
@@ -56,9 +50,7 @@ const NATIONAL_ID: ClientIdentifier = {
   description: 'Issued at the head office',
   status: 'Active',
 };
-/** A document the payload sent the type id for and a blank name, without a description or a status: `ClientIdentifierTemplate` has to resolve the name. */
 const UNNAMED_PASSPORT: ClientIdentifier = { id: 43, documentType: { id: 1, name: '' }, documentKey: 'P-11223344', };
-/** A second document needing its name resolved, so one template read is proven to serve both. */
 const UNNAMED_NATIONAL_ID: ClientIdentifier = {
   id: 44,
   documentType: { id: 2, name: '' },
@@ -66,7 +58,6 @@ const UNNAMED_NATIONAL_ID: ClientIdentifier = {
   description: 'Renewed at the branch',
   status: 'Active',
 };
-/** The row `GET clients/{id}/identifiers` answered with for a seeded client, copied from the live response: the contract shape the populated state is proved against, `status` included as the endpoint's own code rather than as a display word (the same answer also carries a `clientId` this model does not hold and the tab never renders). */
 const LIVE_IDENTIFIER: ClientIdentifier = {
   id: 2,
   documentType: { id: 2, name: 'Id' },
@@ -74,17 +65,13 @@ const LIVE_IDENTIFIER: ClientIdentifier = {
   description: 'Second identity document',
   status: 'clientIdentifierStatusType.active',
 };
-/** The template's answer: the tenant's document types, in the order the endpoint returned them. */
 const DOCUMENT_TYPES: ClientIdentifierTemplate = {
   allowedDocumentTypes: [{ id: 1, name: 'Passport' }, { id: 2, name: 'National ID' },],
 };
-/** The identifiers read, typed to the service signature it stands in for. */
 type IdentifiersStub = Mock<(id: number | string) => Observable<ClientIdentifier[]>>;
-/** The document-type template read, typed to the service signature it stands in for. */
 type IdentifiersTemplateStub = Mock<
   (id: number | string) => Observable<ClientIdentifierTemplate>
 >;
-/** The notification queue's write end, whose silence every failing case asserts. */
 type NotificationShowStub = Mock<(kind: NotificationKind, message: string) => void>;
 
 describe('ClientIdentifiersComponent', () => {
@@ -93,11 +80,9 @@ describe('ClientIdentifiersComponent', () => {
   let identifiers: IdentifiersStub;
   let identifiersTemplate: IdentifiersTemplateStub;
   let notificationShow: NotificationShowStub;
-  /** The fixture's host element. */
   function host(): HTMLElement {
     return fixture.nativeElement as HTMLElement;
   }
-  /** Mounts the tab for one client and lets the load settle. */
   async function mount(clientId: number | string): Promise<void> {
     fixture = TestBed.createComponent(ClientIdentifiersComponent);
     component = fixture.componentInstance;
@@ -106,16 +91,13 @@ describe('ClientIdentifiersComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
   }
-  /** Waits for a pass that is already in flight and renders its outcome. */
   async function settle(): Promise<void> {
     await fixture.whenStable();
     fixture.detectChanges();
   }
-  /** The rendered document rows, in document order. */
   function renderedRows(): HTMLTableRowElement[] {
     return Array.from(host().querySelectorAll<HTMLTableRowElement>('tbody tr'));
   }
-  /** Trimmed text of one rendered row's cells, left to right. */
   function cellsAt(index: number): string[] {
     const row = renderedRows()[index];
     return Array.from(row?.cells ?? []).map((cell) => cell.textContent?.trim() ?? '');

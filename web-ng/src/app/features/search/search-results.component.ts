@@ -36,19 +36,15 @@ export class SearchResultsComponent {
   /** The search endpoint's only application caller: this screen composes no request of its own. */
   private readonly searchService = inject(SearchService);
 
-  /** The route whose `:query` segment and `scope` and `exactMatch` parameters select the search to run. */
   private readonly route = inject(ActivatedRoute);
 
   /** Navigation only: each row carries the `UrlTree` of the record it opens, built here from the clients and loans route paths, so the template links without composing a path of its own. */
   private readonly router = inject(Router);
 
-  /** Ends the parameter subscription with the component, so no late response writes a dead view. */
   private readonly destroyRef = inject(DestroyRef);
 
-  /** The trimmed `:query` segment of the search on screen. */
   private readonly currentQuery = signal<string>('');
 
-  /** The validated `scope` parameter of the search on screen. */
   private readonly currentScope = signal<SearchScope>('all');
 
   /** The rows the last successful search returned, in the server's order; kept when a later one fails. */
@@ -249,7 +245,6 @@ interface SearchCriteria {
 interface SearchOutcome {
   /** The rows to render, or `null` meaning "keep what is already on screen" (a failed attempt). */
   readonly rows: readonly SearchResult[] | null;
-  /** The text to render for a failed attempt — Fineract's own message for a 4xx — or `null` when there is nothing for this screen to show: a success, a 5xx, a transport failure, or a rejection that is not an `ApiError`, all. */
   readonly error: string | null;
 }
 

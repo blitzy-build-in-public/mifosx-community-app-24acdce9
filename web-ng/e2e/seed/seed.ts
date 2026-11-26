@@ -39,19 +39,14 @@ export interface SeedEntities {
 }
 
 export interface SeedClientActionReasons {
-  /** Value created under `ClientClosureReason`, which the close action offers. */
   readonly closure: SeedEntityResult;
-  /** Value created under `ClientRejectReason`, which the reject action offers. */
   readonly rejection: SeedEntityResult;
-  /** Value created under `ClientWithdrawReason`, which the withdraw action offers. */
   readonly withdrawal: SeedEntityResult;
 }
 
 export interface SeedClientActionGate {
   readonly datatableName: string;
-  /** Entity the table hangs off — `m_client`. */
   readonly apptableName: string;
-  /** Status the check is registered for: `600`, CLOSE. */
   readonly checkStatus: number;
   readonly checkId: number;
 }
@@ -61,7 +56,6 @@ export interface SeedResult {
   /** Backend the seed wrote to, so a report can prove which one was seeded (Rule 2). */
   readonly fineractUrl: string;
   readonly tenantId: string;
-  /** Verification environment, from the shared `detectBackendEnvironment` in `../check-backend`. */
   readonly environment: BackendEnvironment;
   readonly seededAt: string;
   /** The run date the seed read from Fineract, as `yyyy-mm-dd` (Rule 1 clause 2). */
@@ -93,10 +87,8 @@ interface StaffCreateBody {
 /** Body of `POST /loanproducts`: the AAP 0.10.1 terms plus the terms the endpoint requires. */
 interface LoanProductCreateBody {
   readonly name: string;
-  /** API-required addition: Fineract rejects a product without a short name, and caps it at 4 characters. */
   readonly shortName: string;
   readonly currencyCode: string;
-  /** API-required addition: currency precision, 2 for USD as the template's `currencyOptions` report it. */
   readonly digitsAfterDecimal: number;
   /** API-required addition: no multiple-of restriction, i.e. any amount is accepted. */
   readonly inMultiplesOf: number;
@@ -105,28 +97,19 @@ interface LoanProductCreateBody {
   readonly maxPrincipal: number;
   readonly numberOfRepayments: number;
   readonly repaymentEvery: number;
-  /** API-required addition: `2` — MONTHS (`repaymentFrequencyTypeOptions`). */
   readonly repaymentFrequencyType: number;
   readonly interestRatePerPeriod: number;
-  /** API-required addition: `3` — PER_YEARS (`interestRateFrequencyTypeOptions`). */
   readonly interestRateFrequencyType: number;
-  /** API-required addition: `0` — EQUAL_PRINCIPAL (`amortizationTypeOptions`). */
   readonly amortizationType: number;
-  /** API-required addition: `1` — FLAT (`interestTypeOptions`). */
   readonly interestType: number;
-  /** API-required addition: `1` — SAME_AS_REPAYMENT_PERIOD (`interestCalculationPeriodTypeOptions`). */
   readonly interestCalculationPeriodType: number;
   /** API-required addition: the strategy code the repository accepts in place of the legacy numeric id. */
   readonly transactionProcessingStrategyCode: string;
-  /** API-required addition: `1` — ACTUAL days in a month (`daysInMonthTypeOptions`). */
   readonly daysInMonthType: number;
-  /** API-required addition: `1` — ACTUAL days in a year (`daysInYearTypeOptions`). */
   readonly daysInYearType: number;
-  /** API-required addition: the endpoint requires the recalculation flag explicitly, even when false. */
   readonly isInterestRecalculationEnabled: boolean;
   /** API-required addition: `1` — NONE, because the plan configures no accounting (`accountingRuleOptions`). */
   readonly accountingRule: number;
-  /** API-required addition: the endpoint reads its terms with a locale and refuses a body that omits it. */
   readonly locale: string;
 }
 
@@ -135,24 +118,17 @@ interface LoanChargeCreateBody {
   readonly name: string;
   readonly currencyCode: string;
   readonly amount: number;
-  /** API-required addition: `1` — LOAN (`chargeAppliesToOptions`). */
   readonly chargeAppliesTo: number;
-  /** API-required addition: `2` — SPECIFIED_DUE_DATE (`loanChargeTimeTypeOptions`). */
   readonly chargeTimeType: number;
-  /** API-required addition: `1` — FLAT (`loanChargeCalculationTypeOptions`). */
   readonly chargeCalculationType: number;
-  /** API-required addition: `0` — REGULAR, paid directly rather than by account transfer. */
   readonly chargePaymentMode: number;
-  /** API-required addition: the charge must be active to be offered by the loan charge template. */
   readonly active: boolean;
-  /** API-required addition: the endpoint reads the amount with a locale and refuses a body that omits it. */
   readonly locale: string;
 }
 
 /** Body of `POST /codes/name/{codeName}/codevalues`: one narration value under an existing code. */
 interface CodeValueCreateBody {
   readonly name: string;
-  /** `true`, because an inactive value is not offered by the action templates this fixture serves. */
   readonly isActive: boolean;
   readonly position: number;
 }
@@ -169,7 +145,6 @@ interface DatatableColumnBody {
 interface DatatableCreateBody {
   readonly datatableName: string;
   readonly apptableName: string;
-  /** API-required addition: mandatory on this fork's create body, which refuses a body without it. */
   readonly entitySubType: string;
   readonly multiRow: boolean;
   readonly columns: readonly DatatableColumnBody[];
@@ -177,9 +152,7 @@ interface DatatableCreateBody {
 
 /** Body of `POST /entityDatatableChecks`: the check that makes the gate read the table before a client action whose status it names. */
 interface EntityDatatableCheckCreateBody {
-  /** Entity the check applies to — `m_client`, the client entity. */
   readonly entity: string;
-  /** Client status the check is registered for: `600`, CLOSE. */
   readonly status: number;
   readonly datatableName: string;
 }
@@ -240,7 +213,6 @@ function collectValidationMessages(body: unknown): string[] {
 }
 
 interface SeedPostResult {
-  /** Status Fineract answered with; one of {@link SUCCESS_STATUSES}. */
   readonly status: number;
   /** Parsed JSON body, `unknown` because it crosses the HTTP boundary. */
   readonly body: unknown;

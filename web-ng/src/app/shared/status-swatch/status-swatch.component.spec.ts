@@ -5,7 +5,6 @@ import { StatusSwatchComponent, type StatusKey, type StatusSwatchVariant, } from
 
 /** Behavioural spec for `StatusSwatchComponent`, the design's status indicator (AAP 0.2.3 `StatusSwatch` row; AAP 0.5.4 gaps inventory row "Status indicator"; AAP 0.7.1 shared row `StatusSwatchComponent`) (AAP 0.10.5, Rule 1 clause 3, AAP 0.2.2, Rule 1 clause 6). */
 
-/** The colour class each key paints, exactly as `web-ng/src/styles.scss` declares it. */
 const COLOUR_CLASSES: readonly (readonly [StatusKey, string])[] = [['active', 'status-active'], ['pending', 'status-pending'],
   ['closed', 'status-closed'], ['rejected', 'status-rejected'], ['withdrawn', 'status-withdrawn'], ['other', 'status-other'], ];
 

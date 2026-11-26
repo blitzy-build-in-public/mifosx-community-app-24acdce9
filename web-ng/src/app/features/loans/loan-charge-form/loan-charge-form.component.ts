@@ -21,7 +21,7 @@ import {
   type SelectValue,
 } from '../../../shared/select-field/select-field.component';
 import { createSubmitGuard } from '../../../shared/submit-guard.util';
-import type { ChargeTemplate, LoanChargeOption } from '../loan.models';
+import type { ChargeTemplate, LoanChargeActionCommand, LoanChargeOption } from '../loan.models';
 import {
   LoanService,
   type LoanChargeActionInput,
@@ -34,7 +34,15 @@ const SPECIFIED_DUE_DATE_CHARGE_TIME_TYPE_ID = 2;
 /** Which operation the current route parameters name, resolved from every emission before that emission's request: `'notfound'` is a resolved outcome for an action this application does not serve or a route without `:id`, and issues no request at all. */
 type LoanChargeFormMode = 'add' | 'pay' | 'waive' | 'notfound';
 
-/** The loan charge screen: it adds a charge to a loan and pays or waives one the loan already carries, mounted by `#/addloancharge/:id` and `#/loanaccountcharge/:id/:action/:chargeId`, one class serving both routes; any other `:action` is not a screen of this application, so it resolves to `'notfound'` and issues no request (AAP 0.7.1, AAP 0.7.3, Rule 1 clause 5, AAP 0.7.2). */
+/** The `:action` segment each charge operation answers to, legacy's own wording first: `#/loanaccountcharge/:id/paycharge/:chargeId` and `…/waivecharge/…` are the URLs the legacy record builds and the ones a cutover redirect carries (`app/scripts/routes.js:166`; `app/views/loans/viewloanaccountdetails.html:866,869`), so they are canonical — AAP 0.1.1 and AAP 0.8.2 fix the route pattern `loanaccountcharge/:id/:action/:chargeId`, not which segments fill it, and Rule 1 clause 5 mirrors legacy's URLs. `pay` and `waive` stay beside them as aliases, so a URL this screen has already served lands on the same operation. A segment absent from this map names no screen of this application — legacy's `editcharge` among them, editing a charge being outside the charge scope of AAP 0.9.1 group 3 — and resolves to `'notfound'`. */
+const CHARGE_ACTION_SEGMENTS: ReadonlyMap<string, LoanChargeActionCommand> = new Map([
+  ['paycharge', 'pay'],
+  ['waivecharge', 'waive'],
+  ['pay', 'pay'],
+  ['waive', 'waive'],
+]);
+
+/** The loan charge screen: it adds a charge to a loan and pays or waives one the loan already carries, mounted by `#/addloancharge/:id` and `#/loanaccountcharge/:id/:action/:chargeId`, one class serving both routes, with `:action` read through {@link CHARGE_ACTION_SEGMENTS} — legacy's `paycharge` and `waivecharge`, which the record's links emit, plus the `pay` and `waive` aliases; any other `:action` is not a screen of this application, so it resolves to `'notfound'` and issues no request (AAP 0.1.1, AAP 0.7.1, AAP 0.7.3, Rule 1 clause 5, AAP 0.7.2). */
 @Component({
   selector: 'app-loan-charge-form',
   imports: [
@@ -64,7 +72,6 @@ export class LoanChargeFormComponent {
   /** The route's `:chargeId` — the loan-charge id, the `id` of the charge row the loan carries and the `resourceId` the add call answers, posted as the endpoint's own path segment; not the charge definition id the add form's picker offers, which names a charge the loan does not carry. A signal for the same reuse reason as {@link loanId}. */
   readonly chargeId = signal<string | null>(null);
 
-  /** Which operation the route's current parameters name; re-resolved on every emission. */
   readonly mode = signal<LoanChargeFormMode>('add');
 
   /** Which read is the current one, incremented by every run of {@link load}: a superseded run compares its own number with this one after the await and writes nothing — not the picker, not the failure, not `loading`, which belongs to the run that replaced it. */
@@ -82,16 +89,13 @@ export class LoanChargeFormComponent {
   /** Charges the loan accepts, exactly as `GET /loans/{id}/charges/template` returned them — same order, same labels, nothing sorted or filtered (Rule 1 clause 3). */
   readonly chargeOptions = signal<readonly LoanChargeOption[]>([]);
 
-  /** The charge the user picked in the add form's picker, or `null` while none is picked. */
   readonly selectedCharge = signal<LoanChargeOption | null>(null);
 
   /** {@link mode} narrowed for the template's three sections. */
   readonly isAddMode = computed(() => this.mode() === 'add');
 
-  /** {@link mode} narrowed for the template's three sections. */
   readonly isPayMode = computed(() => this.mode() === 'pay');
 
-  /** {@link mode} narrowed for the template's three sections. */
   readonly isWaiveMode = computed(() => this.mode() === 'waive');
 
   /** Whether the picked charge falls due on a date the user must supply — the legacy `chargeTimeType.id == 2` test; it reveals and requires the due-date control and is what {@link buildAddRequest} posts `dueDate` for. */
@@ -150,7 +154,7 @@ export class LoanChargeFormComponent {
       });
   }
 
-  /** Clears everything the previous route put on the screen, so an emission naming another loan or another operation never shows the earlier picker, values or message: the form is reset rather than rebuilt because the template binds these control instances, and pay mode's date then returns to the browser clock — legacy's own default for a form's date (AAP 0.10.5). */
+  /** Clears everything the previous route put on the screen, so an emission naming another loan or another operation never shows the earlier picker, values or message: the form is reset rather than rebuilt because the template binds these control instances, and pay mode's date then returns to the browser clock. That default is this build's own and not legacy's: legacy's pay-charge screen reads the charge with `GET /loans/{id}/charges/{chargeId}?command=pay` and seeds the payment date from the charge's `dueDate`, while this build issues no per-charge read, because that endpoint lies outside AAP 0.7.3's loan-charge row and AAP 0.10.4 admits a URL outside it only with a justification written into the plan — so the difference is registered in `e2e/report/difference-register.ts` rather than delivered (AAP 0.10.5 item 15, Rule 1 clause 3). */
   private reset(mode: LoanChargeFormMode): void {
     this.notFound.set(mode === 'notfound');
     this.loading.set(true);
@@ -218,7 +222,7 @@ export class LoanChargeFormComponent {
     throw new Error(`The '${this.mode()}' screen posts no charge action, so it has no body to post.`);
   }
 
-  /** Resolves which operation the route asks for: `:chargeId` absent is the add route, present means `:action` must be `pay` or `waive`, and everything else — an unknown action, a charge-scoped route without an action, a route without `:id` — is `'notfound'`, so no request is made for a screen this application does not serve (AAP 0.9.2). */
+  /** Resolves which operation the route asks for: `:chargeId` absent is the add route, present means `:action` must name the pay or the waive screen through {@link CHARGE_ACTION_SEGMENTS} — legacy's `paycharge` and `waivecharge`, or the `pay` and `waive` aliases — and everything else, legacy's `editcharge` included, is `'notfound'`, so no request is made for a screen this application does not serve (AAP 0.8.2, AAP 0.9.2). */
   private resolveMode(params: ParamMap): LoanChargeFormMode {
     const action = params.get('action');
 
@@ -230,7 +234,7 @@ export class LoanChargeFormComponent {
       return action === null ? 'add' : 'notfound';
     }
 
-    return action === 'pay' || action === 'waive' ? action : 'notfound';
+    return CHARGE_ACTION_SEGMENTS.get(action ?? '') ?? 'notfound';
   }
 
   /** Applies the `required` validators the legacy form carries and no others (Rule 1 clause 3): the picker and the amount in add mode, and the payment date in pay mode; the due date's validator is set per picked charge by {@link applyDueDateRule}. */

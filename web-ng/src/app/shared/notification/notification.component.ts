@@ -11,7 +11,6 @@ import { NotificationService } from '../../core/notifications/notification.servi
   imports: [TranslatePipe],
 })
 export class NotificationComponent {
-  /** The queue owner; the component reads its `messages` signal and calls only `dismiss(id)`. */
   private readonly notifications = inject(NotificationService);
 
   /** The notices awaiting display, oldest first, bound directly as the read-only signal that `NotificationService` publishes (AAP 0.7.1 key interface "binds `NotificationService.messages()`"). */

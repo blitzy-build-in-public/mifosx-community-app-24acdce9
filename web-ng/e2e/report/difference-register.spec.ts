@@ -15,7 +15,6 @@ import {
 
 const REGISTER_HEADING = '## Deliberate-difference register (AAP 0.10.5)';
 
-/** A header holding every `ReportHeader` field, with addresses that name no Fineract endpoint: the register's section is what is under test here, so the run's own provenance is only required to be present and typed. */
 const HEADER: ReportHeader = {
   environment: 'codespaces',
   backendRemote: 'Blitzy-Sandbox/blitzy-fineract',
@@ -45,12 +44,15 @@ function readingWhere(prefix: string): DifferenceRegisterReading | undefined {
 }
 
 describe('the deliberate-difference register\'s readings', () => {
-  it('holds the seven readings this run takes from the plan, and no other', () => {
-    expect(DIFFERENCE_REGISTER_READINGS).toHaveLength(7);
+  it('holds the ten readings this run takes from the plan, and no other', () => {
+    expect(DIFFERENCE_REGISTER_READINGS).toHaveLength(10);
     expect(readingWhere('AAP 0.10.5 item 5')).toBeDefined();
     expect(readingWhere('AAP 0.10.5 item 15')).toBeDefined();
+    expect(readingWhere('AAP 0.8.2 and 0.1.1')).toBeDefined();
+    expect(readingWhere('AAP 0.9.1 group 3 and 0.9.3')).toBeDefined();
     expect(readingWhere('AAP 0.10.1')).toBeDefined();
     expect(readingWhere('AAP 0.10.5 — the session-expiry warning')).toBeDefined();
+    expect(readingWhere('AAP 0.10.5 — the two legacy literals')).toBeDefined();
     expect(readingWhere('AAP 0.10.5 — the bounded request')).toBeDefined();
     expect(readingWhere('AAP 0.10.5 — a credential refusal')).toBeDefined();
     expect(readingWhere('AAP 0.10.5 — the accessibility markup')).toBeDefined();
@@ -86,6 +88,41 @@ describe('the deliberate-difference register\'s readings', () => {
     expect(item15?.why).toContain('register as a request difference in every workflow');
   });
 
+  it('records the charge form\'s payment date as the one default that does not follow legacy, with the read this build does not make', () => {
+    const item15 = readingWhere('AAP 0.10.5 item 15');
+    expect(item15?.delivered).toContain('the due date the charge form fills for a specified-due-date charge');
+    expect(item15?.delivered).toContain('The charge form\'s payment date is the one default that does not follow legacy');
+    expect(item15?.delivered).toContain('`GET /loans/{id}/charges/{chargeId}?command=pay`');
+    expect(item15?.delivered).toContain('seeds the payment date from the charge\'s `dueDate`');
+    expect(item15?.delivered).toContain('opens it on the browser clock and issues no per-charge read');
+    expect(item15?.why).toContain('lies outside AAP 0.7.3\'s loan-charge row');
+    expect(item15?.why).toContain('AAP 0.10.4 admits a URL outside that table only with a justification written into the plan');
+    expect(item15?.why).toContain('registering the divergence is the alternative that rule leaves');
+  });
+
+  it('records the charge-action route as legacy\'s paycharge and waivecharge with the aliases beside them, and editcharge not found', () => {
+    const route = readingWhere('AAP 0.8.2 and 0.1.1');
+    expect(route?.delivered).toContain('serves legacy\'s own segments `paycharge` and `waivecharge`');
+    expect(route?.delivered).toContain('accepts `pay` and `waive` as aliases');
+    expect(route?.delivered).toContain('`editcharge` resolves to not found and issues no request');
+    expect(route?.delivered).toContain('outside the charge scope of AAP 0.9.1 group 3');
+    expect(route?.why).toContain('AAP 0.8.2 fixes the route pattern and leaves the vocabulary to the tree');
+    expect(route?.why).toContain('Rule 1 clause 5 requires hash routing with paths mirroring legacy\'s URLs');
+    expect(route?.why).toContain('Rule 1 clause 3 asks the one deliberate difference');
+  });
+
+  it('records the charge-pay happy path as unreachable, with the refusal the screen renders and add and waive proven', () => {
+    const chargePay = readingWhere('AAP 0.9.1 group 3 and 0.9.3');
+    expect(chargePay?.delivered).toContain('add and waive are exercised end to end against that fixture');
+    expect(chargePay?.delivered).toContain('the pay command\'s happy path is unreachable in the delivered scope');
+    expect(chargePay?.delivered).toContain('is Regular mode (`chargePaymentMode: 0`');
+    expect(chargePay?.delivered).toContain('needs a loan-linked savings account');
+    expect(chargePay?.delivered).toContain('This loan charge cannot be paid as the charge payment mode is not account transfer');
+    expect(chargePay?.delivered).toContain('renders verbatim above the form with the entered date kept');
+    expect(chargePay?.why).toContain('refuses to add or to pay an account-transfer loan charge');
+    expect(chargePay?.why).toContain('The savings family is the first item of AAP 0.9.3\'s fixed cut order');
+  });
+
   it('records the W2 row as the plain client record read the parity spec asserts', () => {
     const w2 = readingWhere('AAP 0.10.1');
     expect(w2?.delivered).toContain('reads the plain client record');
@@ -101,6 +138,24 @@ describe('the deliberate-difference register\'s readings', () => {
     expect(sessionExpiry?.delivered).toContain('adding the copy to a build-owned bundle per locale is the path');
     expect(sessionExpiry?.why).toContain('AAP 0.1.1 requires the 10-second warning before logout');
     expect(sessionExpiry?.why).toContain('Rule 1 clause 6 keeps app/ read-only');
+  });
+
+  it('records the clients card title and the login paragraph as the application\'s own copy, in English and in French', () => {
+    const literals = readingWhere('AAP 0.10.5 — the two legacy literals');
+    expect(literals?.plan).toContain('carry no entry for the clients list\'s card title');
+    expect(literals?.delivered).toContain('render through the application\'s own copy in `core/i18n/app-translations.ts`');
+    expect(literals?.delivered).toContain('`label.heading.listofclients`');
+    expect(literals?.delivered).toContain('`label.text.mifosx.community`');
+    expect(literals?.delivered).toContain('English is byte-identical to what both screens rendered before');
+    expect(literals?.delivered).toContain('French copy is carried for exactly those seven keys');
+    expect(literals?.delivered).toContain('the eleven other offered languages fall back to the English copy');
+    expect(literals?.delivered).toContain('wins with no code change');
+    expect(literals?.why).toContain('AAP 0.1.1 requires i18n through ngx-translate');
+    expect(literals?.why).toContain('AAP 0.7.4 names the card title "List of Clients"');
+    expect(literals?.why).toContain('No file under the read-only `app/global-translations/` carries a key');
+    expect(literals?.why).toContain(
+      'Rule 1 clause 3 asks every deliberate difference from legacy to be listed with its reason',
+    );
   });
 
   it('records the bounded request as a 30-second limit with its own sentence, one notice and an untouched answer inside the bound', () => {
@@ -144,12 +199,15 @@ describe('the rendered register', () => {
     expect(indexOfLine(lines, REGISTER_HEADING)).toBeGreaterThanOrEqual(0);
     expect(lines).toContain(
       'The register itself is AAP 0.10.5\'s sixteen deliberate differences, and every `intentional-diff` row '
-        + 'above cites one of them by number. The entries below are the ones this run states on the register\'s '
-        + 'behalf: readings narrower than the plan wrote them — at item 5 a difference the run does not deliver at '
-        + 'all, as AAP 0.9.3\'s fixed cut order required, and at the session-expiry warning copy of the '
-        + 'application\'s own because no legacy bundle supplies it — the two failure behaviours this run adds '
-        + 'where the sixteen differences name none, and the accessibility markup the sixteen name nowhere, each '
-        + 'stated with what the run delivers so that the register and the specs agree.',
+        + 'above cites one of them by number. The entries below are the ten readings this run states on the '
+        + 'register\'s behalf: readings narrower than the plan wrote them — at item 5 a difference the run does not '
+        + 'deliver at all, as AAP 0.9.3\'s fixed cut order required, at item 15 the charge form\'s payment date, '
+        + 'which legacy seeds from the charge itself, and at the session-expiry warning copy of the application\'s '
+        + 'own because no legacy bundle supplies it — the charge-action route\'s action vocabulary, the charge-pay '
+        + 'happy path the cut savings family leaves unreachable, and the clients card title and login paragraph the '
+        + 'legacy bundles supply no key for, the two failure behaviours this run adds where the sixteen differences '
+        + 'name none, and the accessibility markup the sixteen name nowhere, each stated with what the run delivers '
+        + 'so that the register and the specs agree.',
     );
   });
 

@@ -9,7 +9,6 @@ import { DataTableComponent, type ColumnDef } from './data-table.component';
  * caller's cell template rendering instead of the column text with the row, the column and its value — how Status becomes an `app-status-swatch` (AAP 0.2.3 row `StatusSwatch`; AAP 0.10.5 deliberate difference 11) — rows and order following the input tracked by the caller's key, an empty row list rendering the header and no body row (Rule 1 clause 3), and the caller's caption becoming the table's own invisible `<caption>`, with none rendered when the caller supplies none. The keyboard path is the last item it pins and the table's one deliberate difference from legacy: Enter or Space on a focused row opens that row's own destination exactly once, through the same router call its click makes,
  * cancels Space's default so the page cannot scroll behind it, and opens nothing — not even a default — for a row the caller gave no destination or for a key that is neither of the two (Rule 1 clause 3, which matches legacy's pointer-only rows and allows a difference only where it is recorded). The two hosts are the only place the generic contract is exercised from a template, which proves it composes with a feature's own row type while `shared/` names none of it (AAP 0.14.1 "`shared` never imports from `features`"). The router is provided empty because no case completes a navigation: each asserts the destination the row asks the router for. */
 
-/** The row a host hands the table: a feature's own shape, invented for this suite. */
 interface ProbeRow {
   readonly key: string;
   readonly id: number;
@@ -29,7 +28,6 @@ const PROBE_COLUMNS: readonly ColumnDef<ProbeRow>[] = [
   { key: 'status', header: 'Status', value: (row) => row.status },
 ];
 
-/** The clients list's own class list, which is what sizes its columns in the global layer. */
 const PROBE_TABLE_CLASSES = 'table table-striped client-list';
 
 /** The legacy table's id, which is what the parity harness addresses the list by. */
@@ -52,12 +50,10 @@ const PROBE_TABLE_ID = 'client-list';
   `,
 })
 class DataTableHostComponent {
-  /** The page the table renders; a case replaces it to observe the repaint. */
   readonly rows = signal<readonly ProbeRow[]>(PROBE_ROWS);
 
   readonly columns: readonly ColumnDef<ProbeRow>[] = PROBE_COLUMNS;
 
-  /** The caller's tracking key: stable across a repaint, so rows reconcile. */
   readonly rowKey = (row: ProbeRow): string => row.key;
 
   readonly rowLink = signal<((row: ProbeRow) => readonly (string | number)[]) | null>(

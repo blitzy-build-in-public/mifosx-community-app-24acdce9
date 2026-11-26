@@ -25,7 +25,6 @@ const EN_BUNDLE: Readonly<Record<string, string>> = {
   'label.heading.activationdate': 'Activation Date',
   'label.input.activationdate': 'Activation date',
 };
-/** The wording the same bundle's French file carries for the same keys — what the language switcher must put on screen once `fr` is active, and what a label hardcoded in English could never render. */
 const FR_BUNDLE: Readonly<Record<string, string>> = {
   'label.heading.clientno': 'Numéro de client',
   'label.input.externalid': 'Identifiant externe',
@@ -34,7 +33,6 @@ const FR_BUNDLE: Readonly<Record<string, string>> = {
   'label.heading.activationdate': 'Date d’activation',
   'label.input.activationdate': 'Date d’activation',
 };
-/** Labels of the five rows in the language the switcher selects, in render order. */
 const FR_ROW_LABELS: readonly string[] = [
   'Numéro de client',
   'Identifiant externe',
@@ -42,23 +40,15 @@ const FR_ROW_LABELS: readonly string[] = [
   'Équipe',
   'Date d’activation',
 ];
-/** Zero-padded client number the design prints verbatim, held as text and never parsed. */
 const ACCOUNT_NO = '000000002';
-/** Bank-assigned external id of the activated fixture, obviously synthetic. */
 const EXTERNAL_ID = 'EXT-0002';
-/** Office the client is filed under, as the template returned it. */
 const OFFICE_NAME = 'Head Office';
-/** Loan officer of the activated fixture, a synthetic name rather than a real person's. */
 const STAFF_NAME = 'Spec Officer';
-/** Activation date in the wire form `Client.activationDate` carries: a `'yyyy-MM-dd'` string. */
 const ACTIVATION_DATE_WIRE = '2026-11-21';
-/** The same day as the local-midnight `Date` every display pattern is computed from: month index 10 is November. */
 const ACTIVATION_DATE = new Date(2026, 10, 21);
-/** The same day as the record renders it at `dd MMMM yyyy` in `en`, the pattern the design prints. */
 const ACTIVATION_DATE_TEXT = '21 November 2026';
 /** The same day at the same pattern in the language the switcher can select, French: the month name the row has to re-render, and the one a `DatePipe` bound to `LOCALE_ID` could never print (AAP 0.7.2 "Date handling"). */
 const ACTIVATION_DATE_TEXT_FR = '21 novembre 2026';
-/** A client with every field the block renders: the state four of the design's five rows show, and the only one whose activation date row carries a value. */
 const ACTIVE_CLIENT: Client = {
   id: 2,
   accountNo: ACCOUNT_NO,
@@ -74,7 +64,6 @@ const ACTIVE_CLIENT: Client = {
   activationDate: ACTIVATION_DATE_WIRE,
   timeline: { submittedOnDate: ACTIVATION_DATE_WIRE, activatedOnDate: ACTIVATION_DATE_WIRE },
 };
-/** A client the payload carries no external id, no staff assignment and no activation date for. */
 const PENDING_CLIENT: Client = {
   id: 4,
   accountNo: '000000004',
@@ -86,9 +75,7 @@ const PENDING_CLIENT: Client = {
   status: { id: 100, code: 'clientStatusType.pending', value: 'Pending' },
   timeline: {},
 };
-/** Text a missing value must never be replaced with, compared case-insensitively against every rendered cell: the record shows a label with nothing beside it. */
 const STAND_IN_TEXT: readonly string[] = ['N/A', 'Not provided', 'Unassigned'];
-/** A dash alone, the stand-in a reader would mistake for a value; the empty cells carry none. */
 const LONE_DASH = /^[-–—]+$/;
 /** Status words the record conveys through the header's dot and pill, and never through this block (AAP 0.10.5 deliberate difference 11). Checked in lower case over the block's whole text. */
 const STATUS_TEXT: readonly string[] = ['active', 'pending', 'closed', 'rejected', 'withdrawn'];
@@ -124,21 +111,17 @@ describe('ClientSummaryComponent', () => {
     fixture.detectChanges();
     return fixture;
   }
-  /** Trimmed text of every element `selector` matches, in document order. */
   function texts(fixture: ComponentFixture<ClientSummaryComponent>, selector: string): string[] {
     return Array.from(host(fixture).querySelectorAll<HTMLElement>(selector)).map(
       (element) => element.textContent?.trim() ?? '',
     );
   }
-  /** The block's label/value rows, in render order. */
   function rows(fixture: ComponentFixture<ClientSummaryComponent>): HTMLElement[] {
     return Array.from(host(fixture).querySelectorAll<HTMLElement>('.row'));
   }
-  /** Labels of the bold key column, in render order. */
   function labels(fixture: ComponentFixture<ClientSummaryComponent>): string[] {
     return texts(fixture, '.value-key');
   }
-  /** Values of the common value column, in render order. */
   function values(fixture: ComponentFixture<ClientSummaryComponent>): string[] {
     return texts(fixture, '.col-md-8');
   }

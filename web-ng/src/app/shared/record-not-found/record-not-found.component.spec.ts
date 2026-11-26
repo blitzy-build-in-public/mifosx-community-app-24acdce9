@@ -14,10 +14,8 @@ import { RecordNotFoundComponent } from './record-not-found.component';
 
 /** Behaviour of the one not-found presentation every record screen renders for a record it does not have (AAP 0.7.4 "States every list and record screen must implement"; Rule 1 clause 8): a single legacy `.alert.alert-danger` carrying the two shipped keys and nothing else. */
 
-/** The heading key the template resolves, `label.heading.notavailable` in the shipped bundles. */
 const HEADING_KEY = 'label.heading.notavailable';
 
-/** The sentence key the template resolves, `error.msg.resource.not.found` in the shipped bundles. */
 const BODY_KEY = 'error.msg.resource.not.found';
 
 /** Stand-in for a shipped bundle, with one distinct value per key so an assertion can tell which key produced which text and in which order; test input only (Rule 1 clause 6). */

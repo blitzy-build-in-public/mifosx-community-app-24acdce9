@@ -5,11 +5,8 @@ import { FINERACT_URL, NEXT_URL, TENANT_ID } from '../../seed/fixtures.js';
 
 /** The record header's identity, as AAP 0.10.1 W3 compares it against the API's answer. */
 export interface ClientHeaderView {
-  /** The client name the record title renders — the API's `displayName`. */
   readonly displayName: string;
-  /** The client number the inline metadata renders — the API's `accountNo`. */
   readonly clientNumber: string;
-  /** The external identifier, or `''` when the client has none — never a placeholder. */
   readonly externalId: string;
   readonly staff: string;
   readonly statusClass: string;
@@ -29,7 +26,6 @@ export interface IdentifierRow {
   readonly documentType: string;
   readonly documentKey: string;
   readonly description: string;
-  /** The row's indicator colour class, or `''` — this table prints its status as text, not as a colour. */
   readonly statusClass: string;
   readonly cells: readonly string[];
 }
@@ -47,14 +43,12 @@ interface TableRowReading {
 
 const ROOT_SELECTOR = 'app-client-view';
 
-/** The record's own trail (`<ol class="breadcrumb">` holding the client's office). */
 const BREADCRUMB_SELECTOR = '.breadcrumb';
 
 const RECORD_HEADER_SELECTOR = 'app-record-header';
 
 const TAB_STRIP_SELECTOR = 'app-tab-strip';
 
-/** The record's joined action row, with its `More` dropdown. */
 const ACTION_GROUP_SELECTOR = 'app-action-button-group';
 
 const ACCOUNTS_SELECTOR = 'app-client-accounts';
@@ -78,14 +72,12 @@ const ACTIVE_TAB_SELECTOR = '.nav-tabs li.active > a';
 
 const TOP_LEVEL_ACTION_SELECTOR = 'a.btn.btn-primary';
 
-/** An entry of the action row's `More` menu, which Bootstrap hides until the `.open` class is set. */
 const MENU_ACTION_SELECTOR = '.dropdown-menu a';
 
 const MENU_TOGGLE_SELECTOR = '.dropdown-toggle';
 
 const MENU_SELECTOR = '.dropdown-menu';
 
-/** The dropdown wrapper whose `.open` class reveals {@link MENU_SELECTOR}. */
 const DROPDOWN_SELECTOR = '.dropdown';
 
 const LOAN_VIEW_SELECTOR = 'app-loan-view';
@@ -102,7 +94,6 @@ const ACTION_DESTINATIONS: readonly {
 
 const SCREEN_TIMEOUT_MS = 30_000;
 
-/** Ceiling for the `More` menu to open, which is a class change and nothing else. */
 const MENU_TIMEOUT_MS = 5_000;
 
 function normalizeText(value: string): string {

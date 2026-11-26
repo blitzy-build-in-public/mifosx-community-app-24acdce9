@@ -111,10 +111,8 @@ export class ClientIdentifiersComponent {
   /** The rows the last load produced, in the server's order; empty before the first load settles. */
   private readonly rowsState = signal<readonly ClientIdentifierRow[]>(NO_ROWS);
 
-  /** Whether a load is in flight. */
   private readonly loadingState = signal(false);
 
-  /** Whether the last load rejected. */
   private readonly failedState = signal(false);
 
   /** The last rejected load's own failure text, or `null` before the first load and after one that succeeded. */

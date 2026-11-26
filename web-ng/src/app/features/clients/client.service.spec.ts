@@ -27,26 +27,20 @@ const API_BASE_URL = 'https://localhost:8443';
 const API_PATH = '/fineract-provider/api/v1';
 const API_ROOT = API_BASE_URL + API_PATH;
 
-/** The one separator every expected URL is joined with, so expectation and request are built alike. */
 const SEPARATOR = '/';
 
-/** The active language these cases run in, and therefore the `locale` every body must carry. */
 const APP_LOCALE = 'en';
 
-/** The one payload format, spelled once; the service takes it from `AppConfig.dateFormat`. */
 const FINERACT_DATE_FORMAT = 'dd MMMM yyyy';
 
-/** The client every action and read is aimed at, in both the numeric and the route-parameter form. */
 const CLIENT_ID = 2;
 const CLIENT_ID_TEXT = '2';
 
 /** A date the client screens hold as a `Date`, built from its local calendar parts so the expected string below cannot shift with the machine's time zone (AAP 0.7.2 "Date handling"). */
 const CLIENT_DATE = new Date(2026, 10, 21);
 
-/** That date as every date-bearing payload must carry it: `dd MMMM yyyy` in the active locale. */
 const CLIENT_DATE_TEXT = '21 November 2026';
 
-/** The same date in French, for the case that proves the payload follows the selected language. */
 const CLIENT_DATE_TEXT_FR = '21 novembre 2026';
 
 /** The URL the service must request for the given path segments: the API root the configuration supplies and the resource segments the service owns, joined with one separator. @param segments Resource segments, exactly as `client.service.ts` names them. */
@@ -70,7 +64,6 @@ function bodyKeys(request: HttpRequest<unknown>): string[] {
   return typeof body === 'object' && body !== null ? Object.keys(body) : [];
 }
 
-/** The `AppConfigService` surface `ClientService` uses: the resolved configuration, the URL composition every service shares, and the live active locale. */
 type ConfigSurface = Pick<AppConfigService, 'config' | 'apiUrl' | 'activeLocale'>;
 
 /** Builds the stub from the two live members the cases below need to change: the `apiUrl` spy the host assertions read, and the active-locale signal the language case moves. */
@@ -94,7 +87,6 @@ function configSurface(
   };
 }
 
-/** The status object the client endpoints send, of which only `code` is ever read. */
 const ACTIVE_STATUS = { id: 300, code: 'clientStatusType.active', value: 'Active' } as const;
 
 /** One person, as `GET /clients` rows and `GET /clients/{id}` return it. */
@@ -114,7 +106,6 @@ const PERSON: Client = {
   timeline: { submittedOnDate: '2026-11-21', activatedOnDate: [2026, 11, 21] },
 };
 
-/** One entity, named through `fullname` alone — the other name set the endpoints send. */
 const ENTITY: Client = {
   id: 5,
   accountNo: '000000005',
@@ -192,7 +183,6 @@ const IDENTIFIER_TEMPLATE: ClientIdentifierTemplate = {
   ],
 };
 
-/** The command result every write answers with, carrying the ids a screen navigates by. */
 const MUTATION_RESULT: ClientMutationResponse = { resourceId: CLIENT_ID, clientId: CLIENT_ID };
 
 
@@ -214,7 +204,6 @@ const TEMPLATE_CASES: readonly {
   },
 ];
 
-/** A person the create form posts: both names, both optional strings, an active record whose submission and activation fall on the same day. */
 const PERSON_CREATE: ClientCreateRequest = {
   officeId: 1,
   legalFormId: 1,
@@ -229,7 +218,6 @@ const PERSON_CREATE: ClientCreateRequest = {
   locale: APP_LOCALE,
 };
 
-/** `PERSON_CREATE` as it must reach the server: every date a string, plus the date-format pair. */
 const PERSON_CREATE_WIRE: Readonly<Record<string, unknown>> = {
   dateFormat: FINERACT_DATE_FORMAT,
   locale: APP_LOCALE,
@@ -244,7 +232,6 @@ const PERSON_CREATE_WIRE: Readonly<Record<string, unknown>> = {
   activationDate: CLIENT_DATE_TEXT,
 };
 
-/** The same person, with every optional member absent and both dates missing. */
 const UNDATED_CREATE: ClientCreateRequest = {
   officeId: 1,
   legalFormId: 1,
@@ -257,7 +244,6 @@ const UNDATED_CREATE: ClientCreateRequest = {
   locale: APP_LOCALE,
 };
 
-/** `UNDATED_CREATE` as it must reach the server. */
 const UNDATED_CREATE_WIRE: Readonly<Record<string, unknown>> = {
   dateFormat: FINERACT_DATE_FORMAT,
   locale: APP_LOCALE,
@@ -270,7 +256,6 @@ const UNDATED_CREATE_WIRE: Readonly<Record<string, unknown>> = {
   activationDate: null,
 };
 
-/** An entity, which is named by `fullname` alone and carries no activation date while pending. */
 const ENTITY_CREATE: ClientCreateRequest = {
   officeId: 1,
   legalFormId: 2,
@@ -282,7 +267,6 @@ const ENTITY_CREATE: ClientCreateRequest = {
   locale: APP_LOCALE,
 };
 
-/** `ENTITY_CREATE` as it must reach the server: no individual name parts, no activation date. */
 const ENTITY_CREATE_WIRE: Readonly<Record<string, unknown>> = {
   dateFormat: FINERACT_DATE_FORMAT,
   locale: APP_LOCALE,
@@ -390,7 +374,6 @@ const EDIT_CASES: readonly {
   },
 ];
 
-/** The three commands that offer a configured reason list, and therefore read the template. */
 const COMMAND_PARAM_VALUES: readonly Extract<ClientActionCommand, 'close' | 'reject' | 'withdraw'>[] =
   ['close', 'reject', 'withdraw'];
 

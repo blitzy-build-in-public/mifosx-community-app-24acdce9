@@ -1,3 +1,4 @@
+import { LowerCasePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { TranslatePipe } from '@ngx-translate/core';
@@ -15,7 +16,7 @@ export interface LoginCredentials {
 @Component({
   selector: 'app-login-form',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, TranslatePipe],
+  imports: [LowerCasePipe, ReactiveFormsModule, TranslatePipe],
   templateUrl: './login-form.component.html',
 })
 export class LoginFormComponent {

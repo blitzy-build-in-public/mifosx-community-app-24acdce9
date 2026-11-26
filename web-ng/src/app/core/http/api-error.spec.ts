@@ -1,5 +1,4 @@
 /** Behaviour spec for `core/http/api-error.ts`, the one mapper that turns a failed Fineract response into the text and status a screen renders (AAP 0.7.1 row "`ApiError` + mapper"; AAP 0.7.2, AAP 0.7.4; Rule 1 clauses 3 and 8).
- *
  * Two rules meet in this file. An ordinary Fineract message reaches the user verbatim, which is the behavioural inheritance AAP 0.4.4 decision 6 records and what AAP 0.7.4 renders above a form; a message carrying a database's, a driver's or a framework's own words does not, because it is not text written for a user (qaw007-F02). The fork's exception mapping is out of this work's scope (AAP 0.9.2), so the guard lives here, and every case below drives it through the production mapper exactly as the interceptor does (AAP 0.4.2). */
 import { HttpErrorResponse } from '@angular/common/http';
 import { describe, expect, it } from 'vitest';
@@ -12,11 +11,9 @@ const UNMAPPED_FAILURE_TEXT = 'The request could not be completed.';
 /** An ordinary Fineract validation message, of the kind workflow W7 compares: the server's own text, which a screen must render verbatim (AAP 0.4.4 decision 6; AAP 0.7.4). */
 const ORDINARY_MESSAGE = 'The parameter `firstname` exceeds max length of 50.';
 
-/** Ordinary prose that mentions both words the database-internal shapes look for — "where" and "error" — and is still a message written for the user, so the guard must leave it alone rather than over-sanitise (qaw007-F02). */
 const ORDINARY_PROSE =
   'The date cannot be in the future. Check where you entered it, the error is on the form.';
 
-/** The text Fineract's envelope carried in the NUL-byte create captured for qaw007-F02: PostgreSQL's own failure, the encoding it failed on and the prepared statement that carried the value, verbatim. */
 const DATABASE_INTERNAL_MESSAGE =
   'Unknown data integrity issue with resource: ERROR: invalid byte sequence for encoding "UTF8": 0x00\n  Where: unnamed portal parameter $7';
 
@@ -28,7 +25,6 @@ interface WireValidationError {
   readonly args: readonly unknown[];
 }
 
-/** Fineract's error envelope as the wire carries it: the members the client maps (`defaultUserMessage`, `errors`) beside the `developerMessage` and `httpStatusCode` it never reads (qaw007-F02). */
 interface WireEnvelope {
   readonly developerMessage: string;
   readonly httpStatusCode: string;
@@ -53,7 +49,6 @@ const NUL_BYTE_ENVELOPE: WireEnvelope = {
   ],
 };
 
-/** One message per shape the database, the driver or the framework answers with (qaw007-F02), each written the way the backend actually words it and each exercising only the shape its label names, so a case that stops matching reads against the pattern it exists for. */
 const BACKEND_INTERNAL_MESSAGES: readonly (readonly [label: string, message: string])[] = [
   [
     "PostgreSQL's own ERROR line",
@@ -103,6 +98,42 @@ const STATUSES_ALREADY_REPORTED: readonly (readonly [label: string, status: numb
 function failureOf(status: number, error: unknown): ApiError {
   return toApiError(new HttpErrorResponse({ status, error }));
 }
+
+/** Failures that describe a response or a general failure rather than this application's own request bound, so each must report `timedOut: false` and none may be mistaken for an unanswered request (AAP 0.7.2). */
+const NOT_TIMED_OUT: readonly (readonly [label: string, produce: () => ApiError])[] = [
+  [
+    'a mapped transport failure, the status a refused cross-origin credential arrives in',
+    () => failureOf(0, null),
+  ],
+  ['a mapped server failure', () => failureOf(500, { defaultUserMessage: ORDINARY_MESSAGE })],
+  ['a general failure', () => toDisplayableFailure(new Error('the request failed elsewhere'))],
+];
+
+describe('ApiError', () => {
+  it('carries no timeout mark unless the caller sets one, so a response is never read as an unanswered request', () => {
+    const failure = new ApiError(ORDINARY_MESSAGE, 0);
+
+    expect(failure.timedOut).toBe(false);
+    expect(failure.status).toBe(0);
+    expect(failure.validationErrors).toEqual([]);
+  });
+
+  it('carries the timeout mark the interceptor sets on its own request bound', () => {
+    const failure = new ApiError(UNMAPPED_FAILURE_TEXT, 0, [], true);
+
+    expect(failure.timedOut).toBe(true);
+    expect(failure.status).toBe(0);
+    expect(failure.validationErrors).toEqual([]);
+  });
+
+  it.each(NOT_TIMED_OUT)(
+    "reports %s as no timeout, because it describes a response and not the application's own bound",
+    (_label, produce) => {
+      // Status 0 alone says nothing either way: the mark is the only thing that separates "nothing answered" from "the server refused" (AAP 0.7.2, AAP 0.4.2).
+      expect(produce().timedOut).toBe(false);
+    },
+  );
+});
 
 describe('toApiError', () => {
   it('returns an ordinary Fineract validation message verbatim with its status', () => {

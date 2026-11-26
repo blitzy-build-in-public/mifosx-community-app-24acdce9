@@ -276,13 +276,11 @@ export class LoanEditComponent {
 
   private readonly formBuilder = inject(FormBuilder);
 
-  /** Completes the route subscription should the screen be destroyed before it emits. */
   private readonly destroyRef = inject(DestroyRef);
 
   /** Which load is the current one, incremented by every run of {@link load}. The router reuses this component when the URL moves from one `#/editloanaccount/{id}` to another, so an in-place move starts a second read while the first is still in flight and the superseded run returns instead of writing. */
   private loadSequence = 0;
 
-  /** `true` until the read settles, which is what the template shows while the card fills. */
   readonly loading = signal(true);
 
   /** `true` when the loan does not exist, when the body is not a loan at all, or when the id the URL names is not a Fineract resource identifier. */
@@ -297,19 +295,15 @@ export class LoanEditComponent {
   /** The charges the loan carries, as the edit seed's `charges` member reported them — the rows the save re-posts, and the reason the load keeps that member: `PUT /loans/{id}` treats an absent or empty array as "delete every charge" (AAP 0.7.3, AAP 0.3.4). */
   readonly charges = signal<readonly LoanCharge[] | null>(null);
 
-  /** The template portion of the payload: the persisted enumerations and their option lists. */
   readonly template = signal<LoanEditTemplateFields>(EMPTY_TEMPLATE_FIELDS);
 
-  /** `loanOfficerOptions` of the payload, rendered in its order as the officer picker. */
   readonly loanOfficerOptions = signal<readonly SelectOption[]>([]);
 
-  /** `fundOptions` of the payload, rendered in its order as the fund picker. */
   readonly fundOptions = signal<readonly SelectOption[]>([]);
 
   /** One request per click: `submit` runs through it and the trigger binds `guard.busy()`. */
   readonly guard = createSubmitGuard();
 
-  /** The edit form, created once so every control reference the template binds is stable. */
   readonly form: FormGroup<LoanEditFormControls>;
 
   /** The same controls by name, so the template hands single controls to the shared fields. */

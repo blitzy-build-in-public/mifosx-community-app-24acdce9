@@ -126,7 +126,6 @@ const USER_ID = 42;
 /** The API base the fixture session is issued against, written as `web-ng/src/assets/config.json` ships it: the resolved and the served base are one while no page URL overrides them (AAP 0.4.4 decision 5). */
 const API_BASE_URL = 'https://localhost:8443';
 
-/** The two bases a restore judges the stored credential against: the same host twice, so the fixture entry is presented to the base it was written for. */
 const BASES: ApiBaseUrls = { resolved: API_BASE_URL, served: API_BASE_URL };
 
 const KEY_PARTS = ['c2Vzc2lv', 'bi1rZXk'];

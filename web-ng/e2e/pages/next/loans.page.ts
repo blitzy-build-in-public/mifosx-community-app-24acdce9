@@ -40,7 +40,6 @@ export interface LoanScheduleRow {
 /** One row of the loan record's transaction list. After W6's repayment the list must carry the new transaction and the balance it left, which is the figure the workflow compares (AAP 0.10.1). */
 export interface LoanTransactionRow {
   readonly date: string;
-  /** Fineract's own label for the transaction type, passed through untranslated. */
   readonly type: string;
   readonly amount: number | null;
   readonly outstandingBalance: number | null;
@@ -50,7 +49,6 @@ export interface LoanTransactionRow {
 /** What {@link LoansPage.fillApplication} types into the application form (AAP 0.7.2). */
 export interface LoanApplicationValues {
   readonly productId?: number | string;
-  /** Principal applied for, passed through exactly as supplied — W7 relies on that for 50,000. */
   readonly principal?: number | string;
   readonly loanTermFrequency?: number | string;
   readonly numberOfRepayments?: number | string;
@@ -58,14 +56,12 @@ export interface LoanApplicationValues {
   readonly interestRatePerPeriod?: number | string;
   readonly loanOfficerId?: number | string;
   readonly fundId?: number | string;
-  /** `yyyy-mm-dd`, always supplied by the caller from the run date — never computed here. */
   readonly expectedDisbursementDate?: string;
   readonly submittedOnDate?: string;
 }
 
 /** What {@link LoansPage.fillActionForm} types into an action form (AAP 0.7.2). */
 export interface LoanActionValues {
-  /** `yyyy-mm-dd` approval date, typed into the approve form's date field. */
   readonly approvedOnDate?: string;
   readonly approvedPrincipal?: number | string;
   readonly rejectedOnDate?: string;
@@ -128,12 +124,10 @@ const LOAN_ACTIONS: readonly string[] = [
   'repayment',
 ];
 
-/** `yyyy-mm-dd`, the only form a native date control accepts and the form this object requires. */
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 const SCREEN_TIMEOUT_MS = 30_000;
 
-/** Ceiling for a template-driven option list to arrive. The product, officer, fund and payment-type options all come from Fineract template endpoints the screen requests on entry, so a select is empty for a moment after the form paints. */
 const TEMPLATE_TIMEOUT_MS = 30_000;
 
 const OPTION_POLL_INTERVAL_MS = 100;
@@ -158,7 +152,6 @@ interface FieldSpec {
   readonly description: string;
 }
 
-/** The application form's controls, by the model member that carries each value (`LoanNewComponent`). */
 const APPLICATION_FIELDS = {
   productId: { ids: ['productId'], label: 'product', kind: 'select', description: 'loan product select' },
   principal: { ids: ['principal'], label: 'principal', kind: 'text', description: 'principal field' },
@@ -185,7 +178,6 @@ const APPLICATION_FIELD_ORDER: readonly (keyof LoanApplicationValues)[] = [
   'submittedOnDate',
 ];
 
-/** The action form's controls (`LoanActionComponent`), by the member of {@link LoanActionValues} that carries each value. */
 const ACTION_FIELDS = {
   approvedOnDate: { ids: ['approvedOnDate'], label: 'date', kind: 'date', description: 'approval date field' },
   approvedPrincipal: { ids: ['approvedPrincipal', 'approvedLoanAmount'], label: 'principal', kind: 'text', description: 'approved amount field' },
@@ -204,7 +196,6 @@ const ACTION_FIELD_ORDER: readonly (keyof LoanActionValues)[] = [
   'note',
 ];
 
-/** The repayment form's controls (`LoanRepaymentComponent`), by the member that carries each value. */
 const REPAYMENT_FIELDS = {
   transactionDate: { ids: ['transactionDate'], label: 'transaction', kind: 'date', description: 'transaction date field' },
   transactionAmount: { ids: ['transactionAmount'], label: 'amount', kind: 'text', description: 'repayment amount field' },

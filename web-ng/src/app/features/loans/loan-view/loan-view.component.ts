@@ -194,7 +194,6 @@ export class LoanViewComponent {
   private readonly loans = inject(LoanService);
   /** The activated route, subscribed to for the `:id` of `#/viewloanaccount/:id`: the router reuses this component across records, so the id is followed rather than sampled once. */
   private readonly route = inject(ActivatedRoute);
-  /** Ties the single outstanding read to this component's lifetime, so leaving cancels it. */
   private readonly destroyRef = inject(DestroyRef);
   /** The loan id from the route, as text — the `:id` of `#/viewloanaccount/:id`, empty when the route carried none. Neither an empty id nor one that is not a Fineract resource identifier ({@link isResourceId}) issues a read, because neither addresses a loan; a signal rather than a snapshot value because the router reuses this component when the URL moves from one record to another. */
   readonly loanId = signal('');
@@ -202,11 +201,9 @@ export class LoanViewComponent {
   private loadSequence = 0;
   /** Whether the last read is still outstanding; starts `true` so no half-built record can paint before the first response is read, and is cleared in the subscription's `finalize`. */
   readonly loading = signal(true);
-  /** The loan the record renders, or `null` until a response arrives and after a failed read. */
   readonly loan = signal<LoanAccount | null>(null);
   /** The loan's charges, as the record's `charges` member reported them — `[]` for a loan that carries none, and `null` until the read answers, which keeps the charges tab's empty state off the screen before the rows are known. */
   readonly charges = signal<readonly LoanCharge[] | null>(null);
-  /** The failure the read ended in, or `null`; the template derives its error branches from this. */
   readonly error = signal<ApiError | null>(null);
   /** Whether the id the URL names addresses no loan at all — it is empty, or it is not a Fineract resource identifier ({@link isResourceId}); cleared by {@link LoanViewComponent.reset} and set again by {@link LoanViewComponent.load} on every route emission, so it always describes the current URL. */
   private readonly missingId = signal(false);
@@ -214,9 +211,7 @@ export class LoanViewComponent {
   private readonly labels = createTranslatedLabels();
   /** Already-translated caption of the repayment-schedule tab (legacy `label.heading.repaymentschedule`). */
   private readonly scheduleTabLabel = this.labels('label.heading.repaymentschedule');
-  /** Already-translated caption of the transactions tab (legacy `label.heading.transactions`). */
   private readonly transactionsTabLabel = this.labels('label.heading.transactions');
-  /** Already-translated caption of the charges tab (legacy `label.heading.charges`). */
   private readonly chargesTabLabel = this.labels('label.heading.charges');
   /** Whether the record does not exist — the route named no loan id or an id that is not a Fineract resource identifier, or Fineract answered 404 — in which case the template renders the not-found message in place of the record (AAP 0.7.4). */
   readonly notFound = computed<boolean>(() => this.missingId() || this.error()?.status === 404);
@@ -277,13 +272,10 @@ export class LoanViewComponent {
     { id: TRANSACTIONS_TAB, label: this.transactionsTabLabel() },
     { id: CHARGES_TAB, label: this.chargesTabLabel() },
   ]);
-  /** The tab currently shown; the record opens on the repayment schedule. */
   readonly activeTab = signal<LoanViewTab>(SCHEDULE_TAB);
   /** Whether the repayment-schedule section is the one on screen; the template branches on this rather than comparing the active id to a literal, so the three tab ids keep one home in this file. */
   readonly showSchedule = computed<boolean>(() => this.activeTab() === SCHEDULE_TAB);
-  /** Whether the transactions section is the one on screen. */
   readonly showTransactions = computed<boolean>(() => this.activeTab() === TRANSACTIONS_TAB);
-  /** Whether the charges section is the one on screen. */
   readonly showCharges = computed<boolean>(() => this.activeTab() === CHARGES_TAB);
   /** The id the shared strip gives the tab whose own id is passed in, as each section's `aria-labelledby` uses it: the section on screen is the panel of the active tab and names that tab's element by the same id the strip put on it (AAP 0.2.3 row `TabStrip`). */
   protected readonly tabDomId = tabDomId;

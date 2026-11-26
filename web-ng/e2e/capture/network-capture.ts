@@ -17,11 +17,9 @@ const STATIC_PATH_PREFIXES: readonly string[] = ['/assets/', '/global-translatio
 const API_PATH_PREFIX = /^\/fineract-provider\//;
 /** The tenant header's name — the API contract's constant, not tenant data: only its presence is kept, as `hasTenantHeader` (Rule 1 clause 9, AAP 0.4.2). */
 const TENANT_HEADER_NAME = 'Fineract-Platform-TenantId';
-/** The credential header, compared by lowercase name because `Request.headers()` lower-cases keys. */
 const AUTHORIZATION_HEADER_NAME = 'authorization';
 /** Stands in for a request body that is not JSON, which cannot be masked field by field and so is never stored (Rule 1 clause 9). */
 const NON_JSON_BODY = '<non-json body>';
-/** How long {@link CaptureSession.settle} waits for one round of in-flight body reads; an exchange unsettled by then keeps `responseBody: null`, as a failed read leaves it. */
 const BODY_SETTLE_TIMEOUT_MS = 5000;
 /** Body fields masked by name for Rule 1 clause 9: `password`, `base64EncodedAuthenticationKey` (AAP 0.7.2 `AuthResponse`), and the credential- or session-shaped `passcode`, `token`, `secret`, `session`, `authorization`, `apiKey`, `credential`, with `pass` and `pin` whole names only — so no session-bearing field reaches a record, a diff or a file (AAP 0.10.2), while a boolean flag that merely contains one of these words is compared as it stands. */
 const SECRET_KEY_PATTERN =
@@ -38,7 +36,6 @@ const GENERATED_ID_KEYS: ReadonlySet<string> = new Set<string>([
   'identifierId',
   'resourceId',
 ]);
-/** Entity nouns whose bare `id` a run generates, so `{ client: { id: 7 } }` reads `{clientId}`; a noun outside this list (`status`, `documentType`, `loanType`) is a reference compared by value. */
 const GENERATED_ENTITY_NOUNS: readonly string[] = [
   'client',
   'loan',
@@ -51,11 +48,9 @@ const GENERATED_ENTITY_NOUNS: readonly string[] = [
   'identifier',
   'resource',
 ];
-/** A key naming a date (`submittedOnDate`, `dueDate`, and `dateOfBirth`, word first), matched as prefix, suffix or after a separator; {@link parseFineractDate} then decides whether the value is a date, which keeps `dateFormat` verbatim. */
 const DATE_KEY_PATTERN = /(^|_|\b)date|date$/i;
 /** Fineract's server-side audit block: AAP 0.10.2 drops the `timestamps` subtree, whose `[year, month, day]` arrays no workflow asserts. */
 const AUDIT_BLOCK_KEY = 'timestamps';
-/** Request kinds that can carry an API call; a `document` request is a page load, never an API call. */
 const API_RESOURCE_TYPES: readonly string[] = ['fetch', 'xhr'];
 /** Absolute `web-ng/e2e/.captures` — gitignored, resolved from this file so every launch writes the same place, and imported by `capture/state-snapshot.ts` (AAP 0.8.1, 0.11.1). */
 export const CAPTURES_DIR: string = resolve(dirname(fileURLToPath(import.meta.url)), '..', '.captures');
@@ -64,7 +59,6 @@ export function fileNamePart(value: string | null): string {
   const safe = (value ?? 'unknown').trim().replace(/[^A-Za-z0-9._-]/g, '_');
   return safe.length > 0 ? safe : 'unknown';
 }
-/** A JSON-shaped value after {@link normaliseValue}: every scalar a Fineract payload carries, and the arrays and objects built from them, so a record always serialises. */
 export type NormalizedValue =
   | string
   | number
@@ -77,11 +71,9 @@ export interface NormalizedExchange {
   readonly method: string;
   /** Origin the call went to, e.g. `https://localhost:8443`: the parity fixture proves the run never left the configured backend (Rule 2), and {@link diffExchanges} does not compare it. */
   readonly origin: string;
-  /** Pathname with numeric segments templated by role, e.g. `/fineract-provider/api/v1/clients/{clientId}`. */
   readonly path: string;
   /** Query parameters with keys sorted ascending, a repeated key's values joined with `,`, and a credential- or session-named key's value {@link MASKED} (Rule 1 clause 9). */
   readonly query: Readonly<Record<string, string>>;
-  /** HTTP status, or `0` when no response arrived (a failed request is still evidence). */
   readonly status: number;
   readonly hasTenantHeader: boolean;
   /** Whether the credential header was present. Its value is never recorded (Rule 1 clause 9). */
@@ -95,7 +87,6 @@ export interface RoleMap {
 }
 export interface NormalizedCapture {
   readonly project: string | null;
-  /** Workflow id the capture covers, e.g. `W2` or `CHAIN`, `null` when unset. */
   readonly workflow: string | null;
   readonly runDate: string | null;
   /** Exchanges in the order the page issued them — the order AAP 0.10.1 compares. */
@@ -110,7 +101,6 @@ export interface CaptureOptions {
   runDate?: Date;
   outputDir?: string;
 }
-/** A running capture: `stop()` and `write()` may be called in either order, and `write()` awaits {@link CaptureSession.settle} so the file carries every body the page had fetched. */
 export interface CaptureSession {
   readonly capture: NormalizedCapture;
   stop(): NormalizedExchange[];
@@ -123,7 +113,6 @@ export interface ExchangeDiff {
   readonly index: number;
   readonly method: string;
   readonly path: string;
-  /** What differs, as a value path: `method`, `path`, `query.command`, `status`, `hasTenantHeader`, `hasAuthorizationHeader`, `requestBody.principal`, `responseBody.errors[0].defaultUserMessage`, or `exchange`. */
   readonly field: string;
   readonly legacy: NormalizedValue;
   readonly next: NormalizedValue;
@@ -380,7 +369,6 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
   /** Every response body read this capture started and has not seen settle: {@link settle} waits for them, so a body arriving after the listeners detach still reaches its record (AAP 0.10.1 compares the calls with their bodies). */
   const pendingBodies = new Set<Promise<void>>();
   let stopped = false;
-  /** The exchanges in record order, built once, so `stop()` answers with the same array however often it is called and `capture.exchanges` agrees with it. */
   let collected: NormalizedExchange[] | null = null;
   let frozen = false;
   /** Records one request: only a Fineract API call becomes an exchange, so the document, the legacy `views/**` partials, translations, images and fonts are dropped (AAP 0.10.1 compares the ordered API calls). */
@@ -443,7 +431,6 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
     };
     void read.then(forget, forget);
   };
-  /** Attaches a response to the exchange its request created and starts reading a JSON body: a request that never got an answer keeps `status: 0`, and a body still unread after the wait is recorded as absent rather than guessed. */
   const onResponse = (response: Response): void => {
     const entry = byRequest.get(response.request());
     if (entry === undefined || stopped) {

@@ -15,13 +15,10 @@ import { NotFoundComponent } from './not-found.component';
 
 /** Behaviour of the unknown-path screen, which renders for an unmatched URL and for a 404 of a single record (AAP 0.7.1, AAP 0.7.4, AAP 0.9.1 item 1; AAP 0.11.1; Rule 1 clause 8): the injector holds a router and the translate stack and nothing else, so rendering under it is the statement that the screen needs no application service before any guard has run. */
 
-/** Translation key of the card heading the template resolves. */
 const HEADING_KEY = 'label.heading.notavailable';
 
-/** Translation key of the body sentence the template resolves. */
 const BODY_KEY = 'error.msg.resource.not.found';
 
-/** Translation key of the label on the screen's single destination, the client list. */
 const ACTION_KEY = 'label.button.clients';
 
 /** Stand-in for a shipped bundle, with one distinct value per key so an assertion can tell which key produced which text; test input only (Rule 1 clause 6). */
@@ -31,7 +28,6 @@ const SPEC_BUNDLE: Record<string, string> = {
   [ACTION_KEY]: 'Return to the client list',
 };
 
-/** What the screen reads when no bundle carries its keys: the missing-translation handler's humanised wording in template order, composed from `humaniseKey` so this stays the handler's guarantee rather than a second copy of its output. */
 const FALLBACK_COPY: string = [HEADING_KEY, BODY_KEY, ACTION_KEY].map(humaniseKey).join('');
 
 describe('NotFoundComponent', () => {
@@ -40,7 +36,6 @@ describe('NotFoundComponent', () => {
   // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps every assertion below type-checked (Rule 1 clause 4).
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
 
-  /** The card body, which holds the screen's whole message. */
   const panelBody = (): HTMLElement => {
     const body = host().querySelector<HTMLElement>('.panel .panel-body');
     if (body === null) {
@@ -49,7 +44,6 @@ describe('NotFoundComponent', () => {
     return body;
   };
 
-  /** The card body's text with every whitespace character removed, so the template's own indentation and the renderer's whitespace collapsing cannot mislead the comparison. */
   const renderedCopy = (): string => (panelBody().textContent ?? '').replace(/\s+/g, '');
 
   beforeEach(async () => {

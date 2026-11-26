@@ -1,21 +1,15 @@
 /** Legacy-only chosen-widget helper: legacy templates mark each dropdown with the `chosen` attribute and the plugin replaces the `<select>`, while the new app renders a native one (AAP 0.10.5 item 2), so no `pages/next/` chosen helper exists (AAP 0.5.2, AAP 0.5.4). */
 import type { Locator, Page } from '@playwright/test';
-/** One option of the `<select>` underneath the chosen widget, so a page object can describe a dropdown. */
 export interface ChosenOption {
   /** The `<option>` value, which is what the legacy form posts to Fineract. */
   value: string;
   label: string;
 }
 
-/** The container chosen builds beside the `<select>`, which v1.0.0 inserts as its next sibling and hides. */
 const CHOSEN_CONTAINER = 'xpath=following-sibling::div[contains(@class,"chosen-container")]';
-/** The anchor that renders the current selection inside the widget: Chosen v1.0.0's `<a class="chosen-single">`. */
 const CHOSEN_SINGLE = 'a.chosen-single';
-/** The `<span>` inside that anchor: it alone carries the selection, the `<div><b></b></div>` beside it is the caret. */
 const CHOSEN_SINGLE_LABEL = 'a.chosen-single span';
-/** One selectable row in the open dropdown: `<li class="active-result">`; a disabled option is `disabled-result`. */
 const CHOSEN_RESULT = '.chosen-results li.active-result';
-/** Redraw allowance after a dispatched `change`: AngularJS digests asynchronously, so a miss drives the widget itself. */
 const WIDGET_REDRAW_TIMEOUT_MS = 2_000;
 /** What driving the `<select>` inside the page reported back, kept serialisable for the page boundary. */
 type SelectOutcome =

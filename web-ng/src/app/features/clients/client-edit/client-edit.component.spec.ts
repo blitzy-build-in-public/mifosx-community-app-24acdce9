@@ -15,13 +15,11 @@ import { ClientEditComponent } from './client-edit.component';
 
 /** Behaviour of the edit-client screen — `#/editclient/:id`, the client half of AAP 0.7.3's "Client list and edit" row and the second of that row's two route targets (AAP 0.7.4 screens; AAP 0.8.2; Rule 1 clause 8, Rule 1 clause 5, AAP 0.7.2, AAP 0.14.1). */
 
-/** The route that serves the edit screen, exactly as `clients.routes.ts` declares it. */
 const ROUTES: Routes = [
   { path: 'editclient/:id', component: ClientEditComponent },
   { path: 'editclient', component: ClientEditComponent, pathMatch: 'full' },
 ];
 
-/** The client the screen was opened on: the id `#/editclient/2` names. */
 const CLIENT_ID = '2';
 
 /** The edit read's payload: the template members `ClientTemplate` declares plus the client's own values the same response folds in, which is what legacy's `EditClientController` seeds its form from. */
@@ -44,13 +42,11 @@ const PAYLOAD = {
   mobileNo: '2025550102',
 } satisfies ClientTemplate & Record<string, unknown>;
 
-/** The same read for a client no officer is assigned to: the staff list still arrives, and the record carries no `staffId`. */
 const UNASSIGNED_PAYLOAD = {
   ...PAYLOAD,
   staffId: undefined,
 } satisfies ClientTemplate & Record<string, unknown>;
 
-/** The same read for an entity client: named by `fullname` alone, and pending rather than active. */
 const ENTITY_PAYLOAD = {
   officeId: 1,
   officeOptions: [{ id: 1, name: 'Head Office' }],
@@ -61,10 +57,8 @@ const ENTITY_PAYLOAD = {
   mobileNo: '',
 } satisfies ClientTemplate & Record<string, unknown>;
 
-/** The message Fineract answers a missing record with, matched character for character. */
 const NOT_FOUND_MESSAGE = 'Client with id `2` does not exist.';
 
-/** The record a second route emission addresses: the id `#/editclient/25` names, and the client the baseline data holds under client number 000000025. */
 const SECOND_CLIENT_ID = '25';
 
 const SECOND_PAYLOAD = {
@@ -79,16 +73,12 @@ const SECOND_PAYLOAD = {
   mobileNo: '2025550125',
 } satisfies ClientTemplate & Record<string, unknown>;
 
-/** The message a rejected save answers with, quoted from the server's own wording. */
 const REJECTED_MESSAGE = 'The client name is already in use by another client.';
 
-/** The message a failed save answers with when the server itself broke, which the interceptor notifies rather than the form. */
 const SERVER_FAILURE_MESSAGE = 'An unexpected error occurred on the server.';
 
-/** The text a refused navigation carries, the only kind of rejection that reaches the screen without an HTTP status. */
 const REFUSED_NAVIGATION_MESSAGE = 'Navigation was cancelled before the record could open.';
 
-/** The response a successful save answers with. */
 const SAVED: ClientMutationResponse = { resourceId: 2, clientId: 2 };
 
 /** The captions this screen resolves, keyed exactly as the shipped flat legacy bundles key them (`app/global-translations/`). */
@@ -110,7 +100,6 @@ const TRANSLATIONS: Readonly<Record<string, string>> = {
   'label.button.cancel': 'Cancel',
 };
 
-/** `ClientService` as this screen uses it: the seed read and the save, both stubbed. */
 interface ClientServiceStub {
   readonly getWithTemplate: Mock<(id: number | string) => Observable<ClientTemplate>>;
   readonly update: Mock<
@@ -118,12 +107,10 @@ interface ClientServiceStub {
   >;
 }
 
-/** `PermissionsService` as the save control's gate asks it. */
 interface PermissionsStub {
   has(key: string): boolean;
 }
 
-/** The ngx-translate surface this screen touches: the `translate()` signal `TranslatePipe` 18 resolves its keys through. */
 interface TranslateStub {
   readonly currentLang: Signal<string>;
   translate(key: string): Signal<string>;
@@ -131,7 +118,6 @@ interface TranslateStub {
   readonly onTranslationChange: Observable<unknown>;
 }
 
-/** Builds the translation stub the TestBed provides. */
 function translateStub(): TranslateStub {
   return {
     currentLang: signal('en').asReadonly(),

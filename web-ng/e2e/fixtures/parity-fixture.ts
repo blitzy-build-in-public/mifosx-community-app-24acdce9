@@ -63,7 +63,6 @@ export type WorkflowBody = (tools: WorkflowTools) => Promise<WorkflowArtifacts |
 /** `runWorkflow(id, body)` — the fixture value a spec calls to run one workflow (AAP 0.10.1). */
 export type RunWorkflow = (workflowId: WorkflowId, body: WorkflowBody) => Promise<void>;
 
-/** Per-test paths and facts the fixtures share: the capture names itself at setup, `runWorkflow` writes the artefacts and the record, and the capture's teardown fills in the path it wrote when the body never got that far. */
 export interface EvidenceSink {
   captureLabel?: string;
   workflow?: WorkflowId;

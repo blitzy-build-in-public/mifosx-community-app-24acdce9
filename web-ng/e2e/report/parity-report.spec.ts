@@ -5,7 +5,6 @@ import { FINERACT_URL, LEGACY_URL, NEXT_URL, TENANT_ID } from '../seed/fixtures'
 import { collectProblems, redactEntryLocation, renderMarkdown, validateRecord } from './parity-report';
 import type { LineBudget, ParityReport, WorkflowRecord } from './parity-report';
 
-/** The backend address as the entry URL carries it: `encodeURIComponent` of `FINERACT_URL`. */
 const ENCODED_BACKEND_URL: string = encodeURIComponent(FINERACT_URL);
 
 const ENCODED_TENANT: string = encodeURIComponent(TENANT_ID);

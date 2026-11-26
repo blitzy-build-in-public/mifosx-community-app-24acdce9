@@ -7,7 +7,6 @@ import type { Client, ClientStatus } from '../../client.models';
 import { RecordHeaderComponent } from './record-header.component';
 
 /** Behavioural spec for the client record's header — the `RecordHeader` row of the component inventory (AAP 0.2.3). */
-/** The client status codes this record can receive, paired with the indicator key each must paint. */
 const STATUS_CASES: readonly (readonly [string, StatusKey])[] = [
   ['clientStatusType.active', 'active'],
   ['clientStatusType.pending', 'pending'],
@@ -18,15 +17,10 @@ const STATUS_CASES: readonly (readonly [string, StatusKey])[] = [
 ];
 /** The codes the model does not recognise, including the empty code a malformed payload could carry. All of them must paint the neutral colour rather than claim a state (AAP 0.7.2 row `Client`). */
 const UNMAPPED_CODES: readonly string[] = ['clientStatusType.invalid', 'clientStatusType.transfer.on.hold', '',];
-/** The record's client number, the zero-padded display text the design prints verbatim. */
 const ACCOUNT_NO = '000000002';
-/** The record's external id, a value the header prints as received. */
 const EXTERNAL_ID = 'CL-002';
-/** The record's loan officer, the label the header prints as received. */
 const STAFF_NAME = 'Parity Officer';
-/** The `status.value` a client response carries — the server's own English label for the state. */
 const STATUS_VALUE_SENTINEL = 'STATUS-VALUE-SENTINEL';
-/** Text a run with no value must never be filled in with. */
 const STAND_IN_TEXT: readonly string[] = ['N/A', 'n/a', 'undefined', 'null', '-', '—'];
 /** The wording is the shipped bundle's own: `app/global-translations/locale-en.json` holds 'Client Number', ' External ID' (leading space and all) and 'Staff' for the three keys below. */
 const ENGLISH_LABELS: readonly string[] = ['Client Number:', 'External ID:', 'Staff:'];
@@ -36,15 +30,12 @@ const ENGLISH_BUNDLE: Readonly<Record<string, string>> = {
   'label.input.externalid': ' External ID',
   'label.input.staff': 'Staff',
 };
-/** A second locale's wording for the same three keys, served to `TranslateService` in memory. */
 const SWITCHED_LANGUAGE = 'fr';
-/** The second locale's bundle, one distinct value per key, in the design's order. */
 const SWITCHED_BUNDLE: Readonly<Record<string, string>> = {
   'label.heading.clientno': 'Numéro de client',
   'label.input.externalid': 'Identifiant externe',
   'label.input.staff': 'Équipe',
 };
-/** The three labels the strip must paint once {@link SWITCHED_LANGUAGE} is in force. */
 const SWITCHED_LABELS: readonly string[] = ['Numéro de client:', 'Identifiant externe:', 'Équipe:',];
 /** The status object a client response sends, of which only `code` is ever read. */
 function makeStatus(code: string, value: string = STATUS_VALUE_SENTINEL): ClientStatus {
@@ -69,14 +60,12 @@ function makeClient(overrides: Partial<Client> = {}): Client {
     ...overrides,
   };
 }
-/** A freshly rendered header. */
 function render(client: Client = makeClient()): ComponentFixture<RecordHeaderComponent> {
   const fixture = TestBed.createComponent(RecordHeaderComponent);
   fixture.componentRef.setInput('client', client);
   fixture.detectChanges();
   return fixture;
 }
-/** The fixture's host element, the root the assertions query. */
 function hostOf(fixture: ComponentFixture<RecordHeaderComponent>): HTMLElement {
   return fixture.nativeElement as HTMLElement;
 }

@@ -30,7 +30,6 @@ import { SearchResultsComponent } from './features/search/search-results.compone
 
 /** Behaviour of the application's route tree (AAP 0.8.2 "Shell and navigation" and "Feature routes"; AAP 0.3.4 claims 1 and 2; AAP 0.10.4 route list; AAP 0.11.1 row `app.routes.ts`) (AAP 0.10.5, AAP 0.1.1). */
 
-/** The sixteen paths `web-ng/tools/parity/in-scope-routes.json` declares, in its own order, with the response status the list gives each of them. */
 const IN_SCOPE_PATHS: readonly string[] = [
   'login',
   '',
@@ -50,13 +49,10 @@ const IN_SCOPE_PATHS: readonly string[] = [
   '**',
 ];
 
-/** The shape every access code has as the route table declares it: an upper-case Fineract code. */
 const ACCESS_CODE = /^[A-Z][A-Z_]+$/;
 
-/** The one route that serves five lifecycle commands from a parameter. */
 const CLIENT_ACTION_PATH = 'client/:id/:action';
 
-/** The five codes the lifecycle-action route declares, spelled out rather than imported from `CLIENT_ACTION_PERMISSIONS`: this declaration is what the guard enforces on `#/client/2/close`, so a code swapped, added or removed here fails the assertion that compares the declaration whole. */
 const CLIENT_ACTION_CODES: Readonly<Record<string, string>> = {
   activate: 'ACTIVATE_CLIENT',
   close: 'CLOSE_CLIENT',
@@ -127,7 +123,6 @@ async function composePaths(routes: readonly Route[], prefix = ''): Promise<read
   return paths;
 }
 
-/** A segment no in-scope route begins with, so a URL built from it reaches a catch-all. */
 const UNKNOWN_SEGMENT = 'no-such-screen';
 
 /** The route the application declares at `path`, with every lazy group's children spliced in exactly as {@link composePaths} splices them — the same composition, kept as the route object so a case can read the declaration. */
@@ -179,7 +174,6 @@ async function findRoute(
 const unknownUrl = (router: Router): string =>
   router.serializeUrl(router.createUrlTree([UNKNOWN_SEGMENT]));
 
-/** The `currentSnapshot` a `canMatch` predicate is handed. The predicates `app.routes.ts` declares read the URL segments or the session and nothing else, so the members they cannot read carry the empty values the matching. */
 const MATCH_SNAPSHOT: PartialMatchRouteSnapshot = {
   routeConfig: null,
   url: [],
@@ -240,7 +234,6 @@ describe('APP_ROUTES', () => {
       expect(mount.canMatch ?? []).not.toHaveLength(0);
     }
 
-    /** A mount's `canMatch` array is an AND, so the verdict is every predicate's verdict. */
     const accepts = (mount: Route, segment: string): boolean =>
       (mount.canMatch ?? [])
         .filter((guard): guard is CanMatchFn => typeof guard === 'function')
@@ -446,15 +439,12 @@ describe('APP_ROUTES', () => {
   });
 });
 
-/** The guard's synchronous answer: let the navigation through, or replace it with a redirect. */
 type GuardAnswer = ReturnType<CanActivateFn>;
 
 /** Behaviour of `permissionGuard` on the declaration shapes the route table uses — the code the route states, the list it requires, the `{ any }` list the search screen admits either code of, and the parameterised declaration `client/:id/:action` uses, where the `:action` segment (AAP 0.1.1, AAP 0.14.1). */
 describe('permissionGuard', () => {
-  /** The declaration `client/:id/:action` states, as the guard receives it. */
   const ACTION_DECLARATION = { param: 'action', codes: CLIENT_ACTION_CODES };
 
-  /** The declaration `search/:query` states, as the guard receives it: one held code of the list admits the screen. */
   const SEARCH_DECLARATION = { any: ['READ_CLIENT', 'READ_LOAN'] };
 
   /** The route snapshot the guard is handed for `#/client/2/<action>`. @param action the `:action` segment the URL carries. @param permission the route's `data.permission`, which defaults to the lifecycle declaration. */

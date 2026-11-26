@@ -6,7 +6,6 @@ import { join, resolve } from 'node:path';
 
 import { PACKAGE_ROOT_DIR, RUN_ARTEFACT_PATHS, main, purgeRunArtefacts } from './retention';
 
-/** Every temporary root this spec created, emptied after each case so a failed assertion leaves nothing behind and the real `e2e/.captures` and report files are never a target. */
 const temporaryRoots: string[] = [];
 
 function makePackageRoot(): string {

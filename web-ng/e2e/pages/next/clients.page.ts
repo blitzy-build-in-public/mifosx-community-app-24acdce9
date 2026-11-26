@@ -15,13 +15,11 @@ export interface ClientRow {
 
 export interface StatusSwatchView {
   readonly statusClass: string;
-  /** The indicator's own text, which is `''` by design — never a status word read from a neighbour. */
   readonly text: string;
 }
 
 export interface NotificationView {
   readonly kind: 'info' | 'success' | 'error' | 'unknown';
-  /** Fineract's own message, verbatim: never translated, prefixed or truncated. */
   readonly text: string;
 }
 
@@ -30,16 +28,12 @@ export interface SearchResultRow {
   readonly name: string;
   readonly accountNo: string;
   readonly secondaryText: string;
-  /** The result's product, or `''`. No result line names a product in either application — a loan result's name is its product's name — so this answers `''` instead of inventing a value or repeating the name. */
   readonly product: string;
-  /** The result's status colour class; always `''`, because a result carries no swatch. */
   readonly statusClass: string;
   readonly link: string | null;
 }
 
-/** One option of a native `<select>`, in the order the Fineract template returned it. */
 export interface SelectOptionView {
-  /** The option's DOM value; for an `[ngValue]` option Angular prefixes it with the option's key. */
   readonly value: string;
   readonly label: string;
   readonly selected: boolean;
@@ -54,7 +48,6 @@ export interface ClientFormValues {
   readonly externalId?: string;
   readonly mobileNo?: string;
   readonly submittedOnDate?: string;
-  /** `yyyy-mm-dd`; rendered only while the client is to be created active, so `active` must be set too. */
   readonly activationDate?: string;
   readonly active?: boolean;
 }

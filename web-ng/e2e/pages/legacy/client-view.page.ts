@@ -38,19 +38,16 @@ const BREADCRUMB = '.breadcrumb';
 /** AAP 0.2.3 `RecordHeader`: the record's title block `<h3 class="client-title">` (app/views/clients/viewclient.html:168). */
 const RECORD_HEADER = '.client-title';
 
-/** The 24px bold client name inside the record header: `<strong>{{client.displayName}}</strong>`. */
 const RECORD_TITLE = `${RECORD_HEADER} strong`;
 
 /** The record's status marker: `<i class="fa fa-circle {{client.status.code | StatusLookup}}">` (app/views/clients/viewclient.html:169) (AAP 0.10.5). */
 const STATUS_DOT = `${RECORD_HEADER} i.fa-circle`;
 
-/** The inline metadata run of the record header — its last `<small>`, rendering `Client Number: {accountNo} | External ID: {externalId} | Staff: {staffName}`. */
 const RECORD_METADATA = `${RECORD_HEADER} > small:last-child`;
 
 /** AAP 0.2.3 `TabStrip`: the `<ul class="nav nav-tabs">` that `uib-tabset` renders (angular-bootstrap 1.3.2), holding the record's tabs — General, Identities, Documents, Notes and Credit Report on the legacy app, of which only General and Identities are in scope for the new one. */
 const TAB_STRIP = '.nav-tabs';
 
-/** The pane container `uib-tabset` renders beside the strip: `<div class="tab-content"><div class="tab-pane">`. */
 const TAB_PANEL = '.tab-content .tab-pane';
 
 const ACTIVE_TAB = `${TAB_STRIP} li.active > a`;
@@ -58,7 +55,6 @@ const ACTIVE_TAB = `${TAB_STRIP} li.active > a`;
 /** AAP 0.2.3 `ActionButtonGroup`: the joined primary-button group of the record (`<div class="col-md-11 col-sm-11 btn-group row pull-right">`, app/views/clients/viewclient.html:183) inside the active tab pane, together with the `More` dropdown it contains. */
 const ACTION_GROUP = `${TAB_PANEL}.active .btn-group`;
 
-/** The `More` dropdown's menu: `<ul class="dropdown dropdown-menu dropdown-menu-right">`. */
 const ACTION_MENU = '.dropdown-menu';
 
 /** Tab labels as the legacy English translations render them: `label.heading.general` = "General" and `label.heading.identities` = "Identities" (app/global-translations/locale-en.json). */

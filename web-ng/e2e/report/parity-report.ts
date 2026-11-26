@@ -87,7 +87,6 @@ export interface ReportHeader {
   backendVerified: boolean;
 }
 
-/** One cell of the report's workflow matrix: a record as the report sees it, or the `missing` row no record produced. */
 export interface WorkflowRow {
   workflow: WorkflowId;
   project: UiProject;
@@ -122,9 +121,7 @@ export interface ParityReport {
 
 /** AAP 0.9.3's size record, taken on the plan's own basis at report time: the delivered tree's generated lines, the ceiling they are held to, the prose trim, the scope cut AAP 0.9.3's fixed order required once the tree crossed that ceiling, and the check scripts' recorded share. */
 export interface LineBudget {
-  /** Generated lines across every tracked file except `package-lock.json`; `null` when the tree could not be listed. */
   readonly measuredLines: number | null;
-  /** Tracked files the measurement covered, `package-lock.json` aside. */
   readonly measuredFiles: number;
   /** Lines in the three check scripts and their `lib/` helpers, against AAP 0.9.3's share of "about 600". */
   readonly checkScriptLines: number;
@@ -195,7 +192,6 @@ export const LINES_BEFORE_NINTH_TRIM = 60_397;
 /** Net lines the change before the ninth documentation prose trim added, which took the tree back over the ceiling: the session credential's binding to the API origin that issued it and the error mapper's refusal to render backend-internal text, with their specs, +798/−96 over 14 files, all of it kept (AAP 0.9.3, Rule 1 clause 10). */
 export const NINTH_TRIM_ADDED_LINES = 702;
 
-/** The repository root every measurement below is taken from — `web-ng/`'s parent — resolved from this module's own URL so `git ls-files` sees the whole delivered tree. */
 const REPO_ROOT_DIR = fileURLToPath(new URL('../../../', import.meta.url));
 
 /** The check scripts and their helpers: the files AAP 0.9.3 budgets "about 600 lines" for. */
@@ -312,7 +308,6 @@ function optionalDiffs(source: Record<string, unknown>): WorkflowDiff[] | undefi
 /** What {@link redactEntryLocation} writes in place of a masked value: `***`, the marker AAP 0.10.2 uses for session and auth material in both captures and the one {@link UNMASKED_CREDENTIAL_PATTERN} already exempts, so one marker covers every sensitive value a document can carry. */
 const ENTRY_LOCATION_MASK = '***';
 
-/** One `baseApiUrl`/`tenantIdentifier` value in free text, in every form — `tenantIdentifier=default` in a query string, `"tenantIdentifier": "default"` as JSON, either one with spaces around the separator. */
 const ENTRY_LOCATION_PAIR = /\b(baseApiUrl|tenantIdentifier)(["']?\s*[:=]\s*["']?)(?!\*\*\*)([^\s"'&#,;)|}\]]+)/gi;
 
 /** Masks the values a legacy entry URL carries out of free text: the `baseApiUrl` and `tenantIdentifier` query parameters' values become `***` and everything else is kept, so a diagnostic that quotes (Rule 2, AAP 0.3.4, Rule 1 clause 9, AAP 0.10.4). */
@@ -405,7 +400,6 @@ function isMissingFileError(error: unknown): boolean {
   return isRecord(error) && error['code'] === 'ENOENT';
 }
 
-/** Reads every record the fixtures left in `.captures/workflows/`. */
 export async function readWorkflowRecords(): Promise<{ records: WorkflowRecord[]; unreadable: UnreadableRecord[] }> {
   let entries: string[];
   try {

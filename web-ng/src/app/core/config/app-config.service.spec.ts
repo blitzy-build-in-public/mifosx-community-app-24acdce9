@@ -7,7 +7,6 @@ import { AppConfigService } from './app-config.service';
 
 /** Contract and behaviour spec for `AppConfigService`: the one request it makes, the three-source precedence it resolves, the values it refuses, the URL composition it owns, the failure text it reports and the locale. */
 
-/** Served path of the runtime configuration. */
 const CONFIG_URL = 'assets/config.json';
 
 /** The eight keys and values `web-ng/src/assets/config.json` ships (AAP 0.4.4 decision 5(a), AAP 0.7.2). */
@@ -15,21 +14,17 @@ const SERVED_CONFIG: AppConfig = {
   apiBaseUrl: 'https://localhost:8443', apiPath: '/fineract-provider/api/v1', tenantId: 'default',
   dateFormat: 'dd MMMM yyyy', locale: 'en', idleMinutes: 30, warningSeconds: 10, keepaliveMinutes: 15, };
 
-/** The API root `apiUrl()` composes for a path with no resource segment. Composed from the served values rather than written out. */
 const API_ROOT_URL = `${SERVED_CONFIG.apiBaseUrl}${SERVED_CONFIG.apiPath}`;
 
-/** The two ways a caller can ask `apiUrl()` for the API root itself — an empty path and a bare slash. */
 const EMPTY_RESOURCE_PATH = '';
 const SLASHES_ONLY_RESOURCE_PATH = '/';
 
-/** What the stubbed transport does for one configuration read — the four outcomes `fetchRawConfig` distinguishes: a body to serve, a body that is not JSON, a status the server answered with, and a request that never. */
 type FetchAnswer =
   | { readonly kind: 'served'; readonly body: unknown }
   | { readonly kind: 'not-json' }
   | { readonly kind: 'status'; readonly status: number; readonly statusText: string }
   | { readonly kind: 'unreachable' };
 
-/** The served configuration, the answer almost every case uses. */
 const SERVED: FetchAnswer = { kind: 'served', body: SERVED_CONFIG };
 
 /** A `Response` stand-in carrying exactly what `fetchRawConfig` reads — `ok`, `status`, `statusText` and `json()` — so a case can reach every one of its branches (Rule 1 clause 4). */
@@ -58,7 +53,6 @@ function fakeDocument(search: string, hash: string): Document {
   return { location: { search, hash } } as unknown as Document;
 }
 
-/** The service under test and the stubbed transport that answers its configuration read. */
 interface ConfigHarness {
   readonly service: AppConfigService;
   readonly fetchMock: Mock<typeof fetch>;

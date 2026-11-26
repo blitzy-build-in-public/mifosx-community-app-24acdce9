@@ -1,4 +1,4 @@
-/** The deliberate-difference register: the readings the delivered tree takes more narrowly than AAP 0.10.5's own wording, the one copy it carries because no legacy bundle supplies it, and the two failure behaviours and the accessibility markup it adds where the register's sixteen differences name none, carried into `parity-report.md` and `parity-report.json` so acceptance criterion 4's reader can compare them (AAP 0.10.3, AAP 0.11.1, AAP 0.3.4, Rule 1 clause 3). */
+/** The deliberate-difference register: the readings the delivered tree takes more narrowly than AAP 0.10.5's own wording or where the cut scope stops short of it, the application-owned copy it carries because no legacy bundle supplies it — the session-expiry warning, and the clients card title and login paragraph the sixteen differences name nowhere — and the two failure behaviours and the accessibility markup it adds where the register's sixteen differences name none, carried into `parity-report.md` and `parity-report.json` so acceptance criterion 4's reader can compare them (AAP 0.10.3, AAP 0.11.1, AAP 0.3.4, Rule 1 clause 3). */
 
 /** One reading of AAP 0.10.5's register: the plan's own wording, what this run delivers instead, and the authority that settles the difference. */
 export interface DifferenceRegisterReading {
@@ -10,7 +10,7 @@ export interface DifferenceRegisterReading {
   readonly why: string;
 }
 
-/** The seven readings the delivered tree takes from the plan's wording, in AAP order: AAP 0.10.5 item 5, the savings entry point AAP 0.9.3's fixed cut order withdrew; AAP 0.10.5 item 15, the default dates a form opens with; AAP 0.10.1's W2 row, the client template read (AAP 0.3.4); AAP 0.10.5 itself, the session-expiry copy the application owns because no legacy bundle carries a key for it; and what the sixteen differences name nowhere — the two failure behaviours, the bounded request and the credential refusal this deployment's browser reports as a transport failure, and the accessibility markup the named breadcrumb landmark and the ARIA tab strip add. */
+/** The ten readings the delivered tree takes from the plan's wording, in the order the report renders them: AAP 0.10.5 item 5, the savings entry point AAP 0.9.3's fixed cut order withdrew; AAP 0.10.5 item 15, the default dates a form opens with, the charge form's payment date being the one that does not follow legacy; the charge-action route's action vocabulary (AAP 0.8.2, AAP 0.1.1) and the charge-pay happy path AAP 0.9.3's cut leaves unreachable; AAP 0.10.1's W2 row, the client template read (AAP 0.3.4); AAP 0.10.5 itself, the application-owned copy no legacy bundle carries a key for — the session-expiry warning's two strings, and the clients list's card title and the login screen's legal paragraph, the two legacy literals the sixteen differences name nowhere; and what the sixteen differences name nowhere — the two failure behaviours, the bounded request and the credential refusal this deployment's browser reports as a transport failure, and the accessibility markup the named breadcrumb landmark and the ARIA tab strip add. */
 export const DIFFERENCE_REGISTER_READINGS: readonly DifferenceRegisterReading[] = [
   {
     where: 'AAP 0.10.5 item 5 — the client record\'s "New Saving" entry point',
@@ -36,9 +36,13 @@ export const DIFFERENCE_REGISTER_READINGS: readonly DifferenceRegisterReading[] 
     delivered:
       'every date default the application itself chooses comes from the browser clock: the loan application\'s '
       + 'submission and expected disbursement dates, the approve, reject and disburse dates, the repayment form\'s '
-      + 'transaction date, the charge form\'s payment date and the due date it fills for a specified-due-date charge, '
-      + 'and the client create form\'s submission date and the activation action\'s date. Where a server payload '
-      + 'carries the date a form opens on, the form opens on that payload\'s value instead: the client create form\'s '
+      + 'transaction date, the due date the charge form fills for a specified-due-date charge, and the client '
+      + 'create form\'s submission date and the activation action\'s date. The charge form\'s payment date is the '
+      + 'one default that does not follow legacy, and it is registered here rather than delivered: legacy\'s '
+      + 'pay-charge screen reads the charge with `GET /loans/{id}/charges/{chargeId}?command=pay` and seeds the '
+      + 'payment date from the charge\'s `dueDate`, while this build opens it on the browser clock and issues no '
+      + 'per-charge read. Where a server payload carries the date a form opens on, the form opens on that '
+      + 'payload\'s value instead: the client create form\'s '
       + 'activation date comes from the client template\'s `activationDate`, with the browser clock only as its '
       + 'fallback, the loan edit form\'s two dates come from the loan\'s own `timeline`, and the client edit form\'s '
       + 'activation date comes from the record the form edits. No form seeds a date member from GET /loans/template '
@@ -51,7 +55,53 @@ export const DIFFERENCE_REGISTER_READINGS: readonly DifferenceRegisterReading[] 
       + 'reason: reading the tenant business date inside the application would add a request legacy never makes and '
       + 'register as a request difference in every workflow. The business date stays authoritative where AAP 0.10.1, '
       + 'AAP 0.12 and Rule 1 clause 2 require it — the seed, every workflow input and every comparison, each of them '
-      + 'read from the harness\'s one business-date call.',
+      + 'read from the harness\'s one business-date call. The charge form\'s payment date departs from legacy\'s '
+      + 'because closing that gap needs `GET /loans/{id}/charges/{chargeId}`, which lies outside AAP 0.7.3\'s '
+      + 'loan-charge row, and AAP 0.10.4 admits a URL outside that table only with a justification written into '
+      + 'the plan, which may not be edited — so registering the divergence is the alternative that rule leaves, '
+      + 'as Rule 1 clause 3 asks of every deliberate difference.',
+  },
+  {
+    where: 'AAP 0.8.2 and 0.1.1 — the charge-action route\'s action vocabulary',
+    plan:
+      'the route is `loanaccountcharge/:id/:action/:chargeId`, and the plan names no segment that fills `:action`',
+    delivered:
+      'the route serves legacy\'s own segments `paycharge` and `waivecharge` — the ones the record\'s links emit '
+      + 'and a legacy deep link or cutover redirect carries — and also accepts `pay` and `waive` as aliases, so '
+      + 'a URL either front end has already served lands on the same charge form. Legacy\'s third segment '
+      + '`editcharge` resolves to not found and issues no request, editing a charge lying outside the charge '
+      + 'scope of AAP 0.9.1 group 3.',
+    why:
+      'AAP 0.1.1 requires the legacy URL scheme to be mirrored, `#/` hash style included, so screens can be cut '
+      + 'over one route at a time, while AAP 0.8.2 fixes the route pattern and leaves the vocabulary to the '
+      + 'tree: `features/loans/loans.routes.ts` declares that pattern and the charge form maps the four segments '
+      + 'in `CHARGE_ACTION_SEGMENTS`. Rule 1 clause 5 requires hash routing with paths mirroring legacy\'s URLs, '
+      + 'and Rule 1 clause 3 asks the one deliberate difference — `editcharge` — to be listed with its reason, '
+      + 'which is what this entry does.',
+  },
+  {
+    where: 'AAP 0.9.1 group 3 and 0.9.3 — the charge-pay happy path',
+    plan:
+      'the charge screens add, pay and waive a loan charge against AAP 0.10.1\'s fixed `Parity Fee`, each of the '
+      + 'three exercised end to end on the running backend',
+    delivered:
+      'add and waive are exercised end to end against that fixture and the fee they book is read back in the '
+      + 'repayment schedule, while the pay command\'s happy path is unreachable in the delivered scope: this '
+      + 'backend pays a loan charge only when the charge\'s payment mode is account transfer, the seeded '
+      + '`Parity Fee` is Regular mode (`chargePaymentMode: 0`, AAP 0.10.1\'s row naming no payment mode), and no '
+      + 'payable charge can be seeded instead, because an account-transfer charge needs a loan-linked savings '
+      + 'account that only the cut savings family could open. The pay screen\'s one reachable outcome is the '
+      + 'server\'s refusal — `403` "This loan charge cannot be paid as the charge payment mode is not account '
+      + 'transfer" — which it renders verbatim above the form with the entered date kept.',
+    why:
+      'the fork\'s own validation refuses to add or to pay an account-transfer loan charge without a '
+      + 'loan-linked, funded savings account, so a second charge in that mode would fail the seed script instead '
+      + 'of making the workflow reachable. The savings family is the first item of AAP 0.9.3\'s fixed cut order, '
+      + 'applied and recorded with its revised totals because the tree crossed the 60,000-line ceiling, and '
+      + 'restoring it to reach the happy path would put the tree back over that ceiling, which Rule 1 clause 10 '
+      + 'forbids. Paying a charge is therefore the one part of AAP 0.9.1 group 3\'s "charges add, pay and waive" '
+      + 'that the delivered scope cannot reach, and the refusal rendered verbatim is what the delivered scope '
+      + 'proves.',
   },
   {
     where: 'AAP 0.10.1 — the W2 create-and-activate row',
@@ -86,6 +136,31 @@ export const DIFFERENCE_REGISTER_READINGS: readonly DifferenceRegisterReading[] 
       + 'answering the two keys with neither copy nor a bundle would put the humanised fragments "Expiring" and "In" in '
       + 'front of the user. Rule 1 clause 3 asks every deliberate difference from legacy to be listed with its reason, '
       + 'which is what this entry does; shell.component.html renders both strings.',
+  },
+  {
+    where: 'AAP 0.10.5 — the two legacy literals the register\'s sixteen differences do not cover',
+    plan:
+      'every label resolves through the legacy `app/global-translations/*.json` bundles ngx-translate loads in place '
+      + '(AAP 0.1.1, AAP 0.4.3), and the register\'s sixteen differences carry no entry for the clients list\'s card '
+      + 'title or for the login screen\'s legal paragraph: legacy hard-codes both as English HTML and no bundle under '
+      + 'the legacy tree carries a key for either',
+    delivered:
+      'both now render through the application\'s own copy in `core/i18n/app-translations.ts` — '
+      + '`label.heading.listofclients` for the card title and `label.text.mifosx.designedby`, '
+      + '`label.anchor.mifosinitiative`, `label.anchor.globalcommunity`, `label.text.mifosx.community`, '
+      + '`label.text.mifosx.interesting` and `label.anchor.getinvolved` for the paragraph\'s six fragments. English is '
+      + 'byte-identical to what both screens rendered before and to legacy\'s own wording — the design\'s "List of '
+      + 'Clients" (AAP 0.7.4) and the sentence `app/scripts/controllers/main/MainController.js:220-222` hard-codes — '
+      + 'French copy is carried for exactly those seven keys, and the eleven other offered languages fall back to the '
+      + 'English copy rather than to a humanised key. A legacy or build-owned bundle carrying any of those keys wins '
+      + 'with no code change: the handler is consulted only for a key the active and fallback bundles both lack.',
+    why:
+      'AAP 0.1.1 requires i18n through ngx-translate over the legacy bundles with a language switcher, while AAP '
+      + '0.7.4 names the card title "List of Clients" and both strings stayed English under a French UI because they '
+      + 'never entered the translation layer at all. No file under the read-only `app/global-translations/` carries a '
+      + 'key for any of the seven (Rule 1 clause 6), so a key invented there is not available, and Rule 1 clause 3 '
+      + 'asks every deliberate difference from legacy to be listed with its reason, which is what this entry does; '
+      + '`client-list.component.html` and `login.component.html` render the keys.',
   },
   {
     where: 'AAP 0.10.5 — the bounded request, which the register\'s sixteen differences do not cover',
@@ -175,12 +250,15 @@ export function renderDifferenceRegister(
     '## Deliberate-difference register (AAP 0.10.5)',
     '',
     'The register itself is AAP 0.10.5\'s sixteen deliberate differences, and every `intentional-diff` row '
-      + 'above cites one of them by number. The entries below are the ones this run states on the register\'s '
-      + 'behalf: readings narrower than the plan wrote them — at item 5 a difference the run does not deliver at '
-      + 'all, as AAP 0.9.3\'s fixed cut order required, and at the session-expiry warning copy of the '
-      + 'application\'s own because no legacy bundle supplies it — the two failure behaviours this run adds '
-      + 'where the sixteen differences name none, and the accessibility markup the sixteen name nowhere, each '
-      + 'stated with what the run delivers so that the register and the specs agree.',
+      + 'above cites one of them by number. The entries below are the ten readings this run states on the '
+      + 'register\'s behalf: readings narrower than the plan wrote them — at item 5 a difference the run does not '
+      + 'deliver at all, as AAP 0.9.3\'s fixed cut order required, at item 15 the charge form\'s payment date, '
+      + 'which legacy seeds from the charge itself, and at the session-expiry warning copy of the application\'s '
+      + 'own because no legacy bundle supplies it — the charge-action route\'s action vocabulary, the charge-pay '
+      + 'happy path the cut savings family leaves unreachable, and the clients card title and login paragraph the '
+      + 'legacy bundles supply no key for, the two failure behaviours this run adds where the sixteen differences '
+      + 'name none, and the accessibility markup the sixteen name nowhere, each stated with what the run delivers '
+      + 'so that the register and the specs agree.',
     '',
     `| ${REGISTER_COLUMNS.join(' | ')} |`,
     `| ${REGISTER_COLUMNS.map(() => '---').join(' | ')} |`,

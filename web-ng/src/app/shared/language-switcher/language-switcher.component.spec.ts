@@ -13,16 +13,12 @@ import { LanguageSwitcherComponent } from './language-switcher.component';
 /** Behaviour of the language switcher — the `LanguageSwitcher` row of the component inventory (AAP 0.2.3), the login screen's row (Figma node `1:5`) and the navbar's (node `1:3`). It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with at least one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`). It pins the caller's label and id with every offered language in the application's order, the language actually in force, one `TranslateService.use()` per change reported only once the switch took effect, a bundle that cannot load reported rather than swallowed with the select written back to the language in force (AAP 0.14.2), a blank
  * selection switching and reporting nothing, no colour or dimension of its own (AAP 0.2.3, Rule 1 clause 6), and the choice remembered in the legacy `ls.Language` entry as the switch is made (`app/scripts/controllers/main/MainController.js:343-345`; Rule 1 clause 3). The translate stack is a typed stand-in for the four members this component and `TranslatePipe` touch, so a case can make one load fail; no HTTP provider exists, because the component reaches no host itself (Rule 1 clause 5). */
 
-/** The offered languages, standing in for `AVAILABLE_LANGS`. */
 const LANGS: readonly string[] = ['en', 'fr', 'es'];
 
-/** The language every fixture starts on. */
 const ACTIVE = 'en';
 
-/** The offered language a case switches to. */
 const OTHER_LANG = 'fr';
 
-/** The navbar's label key, which is the component's default. */
 const NAVBAR_LABEL_KEY = 'label.heading.language';
 
 /** The login screen's label key — legacy's own wording for the same row. */
@@ -37,7 +33,6 @@ const TRANSLATIONS: Readonly<Record<string, string>> = {
   [LOGIN_LABEL_KEY]: 'Change language:',
 };
 
-/** The ngx-translate surface this component and `TranslatePipe` use: - `currentLang` — ngx-translate 18 declares it a `Signal<Language | null>`, `null` until a bundle is applied; a successful `use` moves it and a failing one leaves it where it was. - `use` — the load a change performs; subscribing to what it returns is what really switches. - `translate` — the member `TranslatePipe.transform` resolves the label key through. */
 interface TranslateStub {
   readonly currentLang: Signal<string | null>;
 
@@ -45,7 +40,6 @@ interface TranslateStub {
 
   translate(key: string): Signal<string>;
 
-  /** The codes whose bundle was really subscribed to, in order: proof the observable actually ran. */
   readonly applied: readonly string[];
 
   /** Makes the next `use` answer on its error channel, the way a bundle that cannot load does. */
@@ -90,7 +84,6 @@ describe('LanguageSwitcherComponent', () => {
   let component: LanguageSwitcherComponent;
   let translate: TranslateStub;
 
-  /** Every code the component reported as switched, in emission order. */
   let switched: string[];
 
   /** How many times the component reported a bundle that could not be loaded. */
@@ -98,7 +91,6 @@ describe('LanguageSwitcherComponent', () => {
 
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
 
-  /** The select the row renders, addressed by the id its caller chose. */
   function selector(id: string = 'language-switcher'): HTMLSelectElement {
     const element = host().querySelector<HTMLSelectElement>(`select#${id}`);
 
@@ -150,7 +142,6 @@ describe('LanguageSwitcherComponent', () => {
     });
   });
 
-  /** Sets the two required inputs above and renders the row. */
   function render(langs: readonly string[] = LANGS, current: string = ACTIVE): void {
     fixture.componentRef.setInput('langs', langs);
     fixture.componentRef.setInput('current', current);

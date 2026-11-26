@@ -9,7 +9,6 @@ import {
 } from './client.models';
 import type { StatusKey } from '../../shared/status-key.util';
 
-/** Every status the fork's `ClientStatus` enum declares (`ClientStatus.java`), with the indicator key it must paint. */
 const STATUS_CASES: readonly { readonly code: string; readonly key: StatusKey }[] = [
   { code: 'clientStatusType.invalid', key: 'other' },
   { code: 'clientStatusType.pending', key: 'pending' },
@@ -58,13 +57,11 @@ describe('isClosedClientStatus', () => {
     expect(isClosedClientStatus('')).toBe(false);
   });
 });
-/** The three codes that end a client's lifecycle, which are the records the client view offers `Reactivate` on. */
 const TERMINAL_CODES: readonly string[] = [
   'clientStatusType.closed',
   'clientStatusType.rejected',
   'clientStatusType.withdraw',
 ];
-/** The codes that do not end it: the open states, the two transfers and an invalid record. */
 const OPEN_CODES: readonly string[] = [
   'clientStatusType.active',
   'clientStatusType.pending',
@@ -89,7 +86,6 @@ describe('isTerminalClientStatus', () => {
     expect(isTerminalClientStatus('clientStatusType.notAStateYet')).toBe(false);
   });
 });
-/** Every status the fork's two account enums declare — `LoanStatus.java` for `loanStatusType.*` and `SavingsAccountStatusType.java` for `savingsAccountStatusType.*`. */
 const ACCOUNT_STATUS_CASES: readonly { readonly code: string; readonly key: StatusKey }[] = [
   { code: 'loanStatusType.active', key: 'active' },
   { code: 'savingsAccountStatusType.active', key: 'active' },

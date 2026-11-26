@@ -116,12 +116,10 @@ function setRequired(control: AbstractControl, required: boolean): void {
 export class ClientEditComponent {
   /** The clients family's one typed Fineract service: the seed read and the save (Rule 1 clause 5). */
   private readonly clients = inject(ClientService);
-  /** The activated route, subscribed to for the `:id` of `#/editclient/:id` so the id follows every emission instead of the URL's value at construction. */
   private readonly route = inject(ActivatedRoute);
   /** Navigation only: to the record on success, through the router and never through `location`. */
   private readonly router = inject(Router);
 
-  /** Completes the route subscription, and cancels an outstanding seed read, should the screen be destroyed first. */
   private readonly destroyRef = inject(DestroyRef);
 
   /** Which load is the current one, incremented by every run of {@link load}: a superseded run writes nothing, so a late answer can neither seed another client's values under this URL nor clear the loading state of the run that replaced it. */

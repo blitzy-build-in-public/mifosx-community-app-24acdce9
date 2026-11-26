@@ -19,13 +19,10 @@ import { NotificationService } from './core/notifications/notification.service';
 })
 class RoutedStubComponent {}
 
-/** The one route this suite registers and navigates to, as the root-relative segment the router commands and the route declaration share; the root template declares no route of its own. */
 const ROUTED_PATH = 'routed-stub';
 
-/** Marker the routed stub renders, so the outlet's output is distinguishable from the root's own. */
 const ROUTED_TEXT = 'Routed screen';
 
-/** Notice texts chosen to expose reordering or truncation: one short and one long, so queue order stays visible in the rendered stack. */
 const INFO_NOTICE = 'Client saved.';
 const ERROR_NOTICE =
   'The request failed: principal 50,000 exceeds the maximum allowed for this product.';

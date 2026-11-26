@@ -53,7 +53,6 @@ class FakePage {
 }
 interface FakeRequestOptions {
   readonly url: string;
-  /** HTTP method; `get` when unset. */
   readonly method?: string;
   readonly resourceType?: string;
   readonly headers?: Record<string, string>;

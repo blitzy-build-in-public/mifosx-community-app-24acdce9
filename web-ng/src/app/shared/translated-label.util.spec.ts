@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createTranslatedLabels, type TranslatedLabel } from './translated-label.util';
 
-/** Behaviour of the resolver the client list and the loan record share: the text it answers for a key, and its re-resolution on the two events that change it — a language switch and a bundle arriving. */
 
 type Bundle = Readonly<Record<string, string>>;
 
@@ -14,7 +13,6 @@ const ENGLISH: Bundle = { 'label.input.product': 'Product', 'label.input.submitt
 
 const FRENCH: Bundle = { 'label.input.product': 'Produit', 'label.input.submittedon': 'Soumis le', };
 
-/** The part of `TranslateService` the resolver touches, and nothing more. */
 interface TranslateStub {
   readonly currentLang: Signal<string>;
   instant(key: string): string;

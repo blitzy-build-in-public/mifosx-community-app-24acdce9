@@ -9,7 +9,6 @@ import { ALL_FUNCTIONS, PermissionsService } from '../../../../core/auth/permiss
 import { ActionButtonGroupComponent, type ClientActionButton } from './action-button-group.component';
 
 /** Behavioural spec for the client record's joined action group — the `ActionButtonGroup` row of the component inventory (AAP 0.2.3). */
-/** The descriptors the client record supplies for client `1`, in its own order — the three row entries followed by the four lifecycle commands of the `More` menu, with the label keys. */
 const ACTIONS: readonly ClientActionButton[] = [
   { label: 'label.button.edit', icon: 'fa-edit', permission: 'UPDATE_CLIENT', routerLink: '/editclient/1', },
   {
@@ -34,13 +33,10 @@ const ACTIONS: readonly ClientActionButton[] = [
     menu: true,
   },
 ];
-/** Every permission code {@link ACTIONS} names, so a case can grant the whole row. */
 const EVERY_CODE: readonly string[] = ACTIONS.map((action) => action.permission);
-/** The route each row entry names, in render order. */
 const ROW_HREFS: readonly string[] = ACTIONS.filter((action) => action.menu !== true).map(
   (action) => action.routerLink,
 );
-/** The route each `More` menu entry names, in render order. */
 const MENU_HREFS: readonly string[] = ACTIONS.filter((action) => action.menu === true).map(
   (action) => action.routerLink,
 );
@@ -125,7 +121,6 @@ describe('ActionButtonGroupComponent', () => {
   function menuItems(fixture: ComponentFixture<ActionButtonGroupComponent>): HTMLLIElement[] {
     return Array.from(host(fixture).querySelectorAll<HTMLLIElement>('.dropdown-menu li'));
   }
-  /** The `More` trigger, or a named failure when the group rendered none. */
   function trigger(fixture: ComponentFixture<ActionButtonGroupComponent>): HTMLButtonElement {
     const element: unknown = host(fixture).querySelector('.dropdown-toggle');
     if (!(element instanceof HTMLButtonElement)) {
@@ -152,7 +147,6 @@ describe('ActionButtonGroupComponent', () => {
     }
     return element;
   }
-  /** The hrefs of the entries the user may actually use, in render order. */
   function usableHrefs(entries: readonly HTMLAnchorElement[]): (string | null)[] {
     return entries.filter((entry) => entry.style.display !== 'none')
       .map((entry) => entry.getAttribute('href'));

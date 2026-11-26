@@ -4,7 +4,6 @@ import { STATUS_KEYS, normaliseStatusCode, toStatusKey, type StatusKey } from '.
 
 /** Behaviour of the one status vocabulary the whole application shares, and of the single mapping from a Fineract status code onto it (AAP 0.2.3 `StatusSwatch` row; AAP 0.7.2 rows `Client`, `ClientAccountSummary`, `LoanAccount`, `SavingsAccount`; AAP 0.14.1 "One direction of dependency"; Rule 1 clause 8). */
 
-/** Every status code of the three families, paired with the indicator key it must paint: the complete `ClientStatus.java` enumeration, the complete `LoanStatus.java` enumeration and the complete `SavingsAccountStatusType.java` enumeration. Every terminal state is listed separately, and the closed family is kept apart from the rejected and the withdrawn states, so a table that dropped one of them fails here instead of silently painting that record with another state's colour. */
 const STATUS_CASES: readonly (readonly [string, StatusKey])[] = [['clientStatusType.active', 'active'],
   ['clientStatusType.pending', 'pending'], ['clientStatusType.closed', 'closed'], ['clientStatusType.rejected', 'rejected'],
   ['clientStatusType.withdraw', 'withdrawn'], ['loanStatusType.submitted.and.pending.approval', 'pending'],
@@ -24,13 +23,11 @@ const NEUTRAL_CASES: readonly (readonly [string, string | undefined])[] = [['an 
   ['a savings transfer on hold', 'savingsAccountStatusType.transfer.on.hold'], ['an overpaid loan', 'loanStatusType.overpaid'],
   ['a code no enum declares', 'clientStatusType.notAStateYet'], ['an empty code', ''], ['a status the payload omitted', undefined], ];
 
-/** The one normalisation, in the spellings the three families and the payloads actually produce: an upper-cased message code with its family prefix, a multi-word code whose separators are dots, a camel-cased code with no prefix at all, and a code whose separators are underscores. */
 const NORMALISATION_CASES: readonly (readonly [string, string])[] = [['CLIENTSTATUSTYPE.ACTIVE', 'active'],
   ['loanStatusType.closed.written.off', 'closedwrittenoff'], ['preMatureClosure', 'prematureclosure'],
   ['SAVINGSACCOUNTSTATUSTYPE.ACTIVE', 'active'], ['submittedAndPendingApproval', 'submittedandpendingapproval'],
   ['closed_written_off', 'closedwrittenoff'], ];
 
-/** The same four spellings as keys, which is what the normalisation is for: a family prefix, a different case and a different separator all have to reach the colour the canonical code reaches. */
 const SPELLING_CASES: readonly (readonly [string, StatusKey])[] = [['CLIENTSTATUSTYPE.ACTIVE', 'active'],
   ['loanStatusType.closed.written.off', 'closed'], ['preMatureClosure', 'closed'], ['SAVINGSACCOUNTSTATUSTYPE.ACTIVE', 'active'], ];
 

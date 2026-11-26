@@ -21,7 +21,6 @@ export interface LanguageOptionSummary {
   label: string;
 }
 
-/** What the login screen's submit control currently offers: `'absent'` when the screen renders no submit control at all, `'hidden'` when it renders one that is not visible, `'disabled'` when it is visible but cannot be clicked, and `'enabled'` when it can be clicked. */
 export type SubmitState = 'absent' | 'hidden' | 'disabled' | 'enabled';
 
 /** How long the login form is given to appear on a fresh navigation (AAP 0.10.1 W1). */
@@ -60,7 +59,6 @@ const LEGACY_LANGUAGE_NAMES: ReadonlyMap<string, string> = new Map<string, strin
   ['te', 'తెలుగు'],
 ]);
 
-/** The same codes as a lookup set, used to recognise which `<select>` is the language switcher. */
 const LEGACY_LANGUAGE_CODES: ReadonlySet<string> = new Set<string>(LEGACY_LANGUAGE_NAMES.keys());
 
 function readOptionValues(element: HTMLElement): string[] {

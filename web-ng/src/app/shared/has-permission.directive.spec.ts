@@ -7,7 +7,6 @@ import { HasPermissionDirective } from './has-permission.directive';
 
 /** Behavioural spec for `HasPermissionDirective`, the template-side permission gate the app shell's navigation and action buttons hang off (AAP 0.7.1 row "`hasPermission` directive"; AAP 0.9.1 item 1; AAP 0.1.1 fail-closed requirement; AAP 0.3.4 claim 12 legacy semantics; AAP 0.4.1). */
 
-/** The permission Fineract returns to a user who may do everything; spelled out, not imported. */
 const ALL_FUNCTIONS = 'ALL_FUNCTIONS';
 
 /** The permission answers `PermissionsService` gives in the state a test puts it in — none while no session is present, and the legacy answers for the list, `!` and `ALL_FUNCTIONS` once one is — replacing the real service. */
@@ -63,7 +62,6 @@ class PermissionsStub implements Pick<PermissionsService, 'can' | 'has'> {
   `,
 })
 class PermissionHostComponent {
-  /** The code bound to `#gated`; each test sets it before the render it measures. */
   readonly key = signal('CLIENT_VIEW');
 }
 

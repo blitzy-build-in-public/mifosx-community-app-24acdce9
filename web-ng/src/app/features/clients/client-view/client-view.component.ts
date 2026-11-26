@@ -79,7 +79,6 @@ export class ClientViewComponent {
   /** The route, subscribed to for the `:id` of `#/viewclient/:id` so the id follows every emission, not the URL the component was built with. */
   private readonly route = inject(ActivatedRoute);
 
-  /** Completes the route subscription and cancels an outstanding record read should the screen be destroyed first. */
   private readonly destroyRef = inject(DestroyRef);
 
   /** Which load is the current one, incremented by every run of {@link load}. The router reuses this component when the URL moves from one `#/viewclient/{id}` to another, so an in-place move starts a second read while the first can still answer last; a superseded run compares its own number with this one and writes nothing, so a late response can neither paint the earlier client under the later client's URL nor clear the newer run's loading state — the guard `loan-edit.component.ts` and `client-actions.component.ts` keep over their own load sequences. */
@@ -97,7 +96,6 @@ export class ClientViewComponent {
   /** Whether the record read is still outstanding. Starts `true` so no half-built record and no empty state can flash before the first response, and is cleared in `finalize`. */
   readonly loading = signal(true);
 
-  /** The record the screen renders, or `null` until a response arrives and after a failed read. */
   readonly client = signal<Client | null>(null);
 
   /** The failure the read ended in, or `null`; the template derives its error branches from this. */
@@ -208,10 +206,8 @@ export class ClientViewComponent {
   /** Permission of the `Close` entry point: legacy's own gate (`CLOSE_CLIENT`). */
   readonly closePermission = CLIENT_ACTION_PERMISSIONS.close;
 
-  /** Permission of the `Reject` entry point: legacy's own gate (`REJECT_CLIENT`). */
   readonly rejectPermission = CLIENT_ACTION_PERMISSIONS.reject;
 
-  /** Permission of the `Withdraw` entry point: legacy's own gate (`WITHDRAW_CLIENT`). */
   readonly withdrawPermission = CLIENT_ACTION_PERMISSIONS.withdraw;
 
   /** Permission of the `Reactivate` entry point: legacy's own gate (`REACTIVATE_CLIENT`), which the fork issues as permission id 618 and which legacy's `Closed` status carries as the one button that state offers. Deliberately not `ACTIVATE_CLIENT`: a user holding only the activation code would then be shown a control the server refuses (Rule 1 clause 3; AAP 0.1.1). */

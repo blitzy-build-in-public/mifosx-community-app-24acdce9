@@ -1,4 +1,4 @@
-/** The application's single HTTP interceptor (AAP 0.4.2, AAP 0.7.1, AAP 0.14.1; Rule 1 clause 5): it owns the two headers a Fineract call carries — `Fineract-Platform-TenantId` and `Authorization: Basic <key>` — sends them only to the configured API origin, presents the credential only to the origin it was issued against (Rule 1 clause 9), leaves every URL a service composed untouched, bounds each request, maps every failure into `ApiError`, ends the session and returns to the login screen carrying the attempted route on a 401 or a confirmed credential refusal, and raises one notification for a 5xx, a transport failure or a timeout (AAP 0.7.4, AAP 0.10.5). The tenant stays configuration and is attached wherever this page's base points (AAP 0.10.4), while the stored key is withheld from any other origin — the one deliberate departure from legacy in this file, which re-attaches the stored key to whatever base the page URL names (Rule 1 clause 3). */
+/** The application's single HTTP interceptor (AAP 0.4.2, AAP 0.7.1, AAP 0.14.1; Rule 1 clause 5): it owns the two headers a Fineract call carries — `Fineract-Platform-TenantId` and `Authorization: Basic <key>` — sends them only to the configured API origin, presents the credential only to the origin it was issued against (Rule 1 clause 9), leaves every URL a service composed untouched, bounds each request, maps every failure into `ApiError`, ends the session and returns to the login screen carrying the attempted route on a 401 or on a credential the re-validation itself refuses, and raises one notification for a 5xx, a transport failure or a timeout (AAP 0.7.4, AAP 0.10.5). A request nothing answered is not a refusal: the `timedOut` mark `ApiError` carries tells the application's own bound apart from a response the server sent, so a slow or unavailable backend leaves the session the legacy screens share where legacy leaves it, and the notice each failure owes the user is shown once the landing screen has finished navigating (AAP 0.7.2, AAP 0.1.1). The tenant stays configuration and is attached wherever this page's base points (AAP 0.10.4), while the stored key is withheld from any other origin — the one deliberate departure from legacy in this file, which re-attaches the stored key to whatever base the page URL names (Rule 1 clause 3). */
 import {
   HttpClient,
   HttpContext,
@@ -7,13 +7,15 @@ import {
   type HttpInterceptorFn,
 } from '@angular/common/http';
 import { inject } from '@angular/core';
-import { Router } from '@angular/router';
+import { NavigationEnd, Router, type Event } from '@angular/router';
 import {
   TimeoutError,
   catchError,
+  filter,
   firstValueFrom,
   from,
   switchMap,
+  take,
   throwError,
   timeout,
   type Observable,
@@ -47,8 +49,11 @@ const SESSION_ENDED_MESSAGE = 'Your session has ended. Sign in again to continue
 /** Marks the one read this file sends to re-validate a refused credential: that read re-enters this interceptor, so the mark keeps it from starting a second recovery or raising a notice of its own (AAP 0.14.1). */
 const SESSION_REVALIDATION = new HttpContextToken<boolean>(() => false);
 
+/** What a re-validation answered about the credential it carried: `valid` when the read resolved, `refused` when Fineract answered it without a user, and `unknown` when the read was never answered at all, which says nothing about the key either way. */
+type CredentialAnswer = 'valid' | 'refused' | 'unknown';
+
 /** The re-validation in flight, shared by every failure that arrives while it runs, so a burst of refusals from one screen costs exactly one extra request (AAP 0.14.2). */
-let revalidation: Promise<boolean> | null = null;
+let revalidation: Promise<CredentialAnswer> | null = null;
 
 /** The collaborators a recovery of a refused credential works through, read from the injection context of the request that failed. */
 interface RecoveryDependencies {
@@ -64,7 +69,7 @@ interface RecoveryDependencies {
   readonly notifications: NotificationService;
 }
 
-/** Attaches the tenant header to a Fineract call, the Basic authorization header only where the call's origin is the one the stored session was issued against, bounds it, maps its failure into `ApiError`, ends the session and returns to the login screen with the attempted route on a 401 or a confirmed refusal, and raises one notification for a 5xx, a transport failure or a timeout. Nothing loose is left unmodelled here: the error `catchError` receives is `unknown` narrowed by a guard, and so is the body the re-validation reads, so the file holds no `any` (AAP 0.14.1, Rule 1 clause 4). */
+/** Attaches the tenant header to a Fineract call, the Basic authorization header only where the call's origin is the one the stored session was issued against, bounds it, maps its failure into `ApiError`, ends the session and returns to the login screen with the attempted route on a 401 or on a credential the re-validation itself refuses — a refused key and a request nothing answered are told apart, so an indeterminate answer never ends the session — and raises one notification for a 5xx, a transport failure or a timeout, on the screen that is landing when the application has not navigated yet. Nothing loose is left unmodelled here: the error `catchError` receives is `unknown` narrowed by a guard, and so is the body the re-validation reads, so the file holds no `any` (AAP 0.14.1, Rule 1 clause 4). */
 export const fineractInterceptor: HttpInterceptorFn = (req, next) => {
   const config = inject(AppConfigService);
   const http = inject(HttpClient);
@@ -111,7 +116,7 @@ export const fineractInterceptor: HttpInterceptorFn = (req, next) => {
       }
 
       const apiError =
-        cause instanceof TimeoutError ? new ApiError(REQUEST_TIMED_OUT, 0) : toApiError(cause);
+        cause instanceof TimeoutError ? new ApiError(REQUEST_TIMED_OUT, 0, [], true) : toApiError(cause);
 
       // The re-validation re-enters this interceptor and is nobody's request to report: its outcome is the answer the recovery waits for, so a notice or a second recovery here would report one refusal twice (AAP 0.14.1).
       if (isRevalidationRequest) {
@@ -119,21 +124,23 @@ export const fineractInterceptor: HttpInterceptorFn = (req, next) => {
       }
 
       if (cause instanceof TimeoutError) {
-        // Status 0 is the transport-failure status `api-error.ts` documents, so a screen treats an unanswered request exactly like an unreachable host (AAP 0.7.2, AAP 0.10.5).
-        notifications.show('error', apiError.message);
+        // Status 0 is the transport-failure status `api-error.ts` documents, so a screen treats an unanswered request exactly like an unreachable host (AAP 0.7.2, AAP 0.10.5), and the notice waits for the landing screen when the application has not navigated yet, so a start-up timeout is read on the screen it lands on instead of being retired by that landing.
+        raiseNotice(router, notifications, apiError.message);
         return throwError(() => apiError);
       }
 
       if (cause.status === 401) {
         if (!isAuthenticationRequest) {
-          // Only a request that actually carried the credential can refuse it: when the key was withheld the stored session belongs to another origin, so it stays where the legacy screens may still be using it, while the user is returned to the login screen all the same (Rule 1 clause 9).
-          if (current !== null) {
+          // Only a request that actually carried the credential can refuse it: when the key was withheld the stored session belongs to another origin, so it stays where the legacy screens may still be using it, while the user is returned to the login screen all the same (Rule 1 clause 9). A return is started by the failure that ends the session and by no other, so a burst of refusals from one screen produces one return and one notice.
+          if (current !== null && session.session() === current) {
             session.clear();
+            void returnToLoginTelling(router, notifications, apiError.message);
+          } else if (current === null) {
+            void returnToLogin(router, notifications);
           }
-          void returnToLogin(router, notifications);
         }
       } else if (cause.status === 0 && current !== null && router.navigated) {
-        // Status 0 with a credential in hand is how this browser reports a refused key: the 401 Fineract sends carries no CORS header, so the branch above never sees it (AAP 0.4.2). Only a request made once the application has navigated qualifies, which keeps the start-up case with `SessionService.restore()` — that read already treats status 0 as a refusal and its guard redirect is the verified behaviour (AAP 0.1.1, AAP 0.7.3 W1). Legacy keeps the refused key in storage and leaves its screen blank, and this ends the session instead: Rule 1 clause 3's legacy match does not extend to a screen no user can recover from, and the refused-credential return this layer owes requires the session end the browser never reports as a 401.
+        // Status 0 with a credential in hand is how this browser reports a refused key: the 401 Fineract sends carries no CORS header, so the branch above never sees it (AAP 0.4.2). Only a request made once the application has navigated qualifies, which keeps the start-up case with `SessionService.restore()` — that read treats a status 0 it did not time out itself as a refusal, and its guard redirect is the verified behaviour (AAP 0.1.1, AAP 0.7.3 W1). Legacy keeps the refused key in storage and leaves its screen blank, and this ends the session instead: Rule 1 clause 3's legacy match does not extend to a screen no user can recover from, and the refused-credential return this layer owes requires the session end the browser never reports as a 401.
         return from(
           recoverRefusedSession(current, apiError.message, {
             config,
@@ -144,7 +151,7 @@ export const fineractInterceptor: HttpInterceptorFn = (req, next) => {
           }),
         ).pipe(switchMap(() => throwError(() => apiError)));
       } else if (cause.status === 0 || cause.status >= 500) {
-        notifications.show('error', apiError.message);
+        raiseNotice(router, notifications, apiError.message);
       }
 
       return throwError(() => apiError);
@@ -152,16 +159,24 @@ export const fineractInterceptor: HttpInterceptorFn = (req, next) => {
   );
 };
 
-/** Answers whether the credential a failed request carried still works, by reading the allowlisted `GET /users/{id}` the session restore already makes (AAP 0.7.3 W1): a resolution means the key still works, and any failure means Fineract refused it — the browser reports a refused key as status 0, because Fineract's 401 carries no CORS header, so the outcome of the read and not its status is the answer. A rejection is that answer and not a swallowed error: nothing else may act on why the read failed (AAP 0.14.2, Rule 1 clause 4). */
-async function revalidateCredential(userId: number, deps: RecoveryDependencies): Promise<boolean> {
+/** Whether a failed read was this application's own request bound firing on a request nothing answered, rather than a response Fineract sent: the `timedOut` mark this file sets on the `TimeoutError` it replaces with an `ApiError`, and which no other producer sets — `toApiError` maps a response and never carries it, so an `HttpErrorResponse` is always something the server said (a refusal included) (AAP 0.7.2, AAP 0.4.2). */
+function wasUnanswered(cause: unknown): boolean {
+  return cause instanceof ApiError && cause.timedOut;
+}
+
+/** Answers what the credential a failed request carried is now worth, by reading the allowlisted `GET /users/{id}` the session restore already makes (AAP 0.7.3 W1): a resolution means the key still works, a rejection carrying anything the server sent means Fineract refused it, and a rejection carrying this application's own bound means the read was never answered, so nothing at all is known about the key and the answer is `unknown` rather than a refusal. A rejection is that answer and not a swallowed error: nothing else may act on why the read failed (AAP 0.14.2, Rule 1 clause 4). */
+async function revalidateCredential(
+  userId: number,
+  deps: RecoveryDependencies,
+): Promise<CredentialAnswer> {
   revalidation ??= firstValueFrom(
     deps.http.get<unknown>(deps.config.apiUrl('users/' + userId), {
       context: new HttpContext().set(SESSION_REVALIDATION, true),
     }),
   )
     .then(
-      () => true,
-      () => false,
+      (): CredentialAnswer => 'valid',
+      (cause: unknown): CredentialAnswer => (wasUnanswered(cause) ? 'unknown' : 'refused'),
     )
     .finally(() => {
       revalidation = null;
@@ -173,7 +188,7 @@ async function revalidateCredential(userId: number, deps: RecoveryDependencies):
 /** What became of a return to the login screen: it opened, it was not needed because the user is already there, or it was refused and is already reported in `navigationFailure`'s words. */
 type LoginReturn = 'opened' | 'already-there' | 'refused';
 
-/** Recovers from a credential the browser has just refused, in the order AAP 0.4.2 sets: re-validate the key once, keep the session while it still works, and otherwise end the session, return to the login screen carrying the attempted route and tell the user that signing in again is what continues (AAP 0.1.1, AAP 0.10.5). */
+/** Recovers from a credential the browser may have refused, in the order AAP 0.4.2 sets: re-validate the key once, keep the session unless that read is refused itself, and otherwise end the session, return to the login screen carrying the attempted route and tell the user that signing in again is what continues (AAP 0.1.1, AAP 0.10.5). A re-validation that was never answered leaves the session where it is, because an unanswered read is no refusal (AAP 0.7.2, Rule 1 clause 3). */
 async function recoverRefusedSession(
   carried: SessionData,
   message: string,
@@ -181,15 +196,15 @@ async function recoverRefusedSession(
 ): Promise<void> {
   // A session that is no longer the one this request carried has already been ended — by a logout, by a 401, or by another failure of the same burst — so there is nothing left to end and only this failure to report.
   if (deps.session.session() !== carried) {
-    deps.notifications.show('error', message);
+    raiseNotice(deps.router, deps.notifications, message);
     return;
   }
 
-  const stillValid = await revalidateCredential(carried.userId, deps);
+  const answer = await revalidateCredential(carried.userId, deps);
 
-  if (stillValid) {
-    // The key works, so the fault was the transport's: the session stays and only the failure is reported.
-    deps.notifications.show('error', message);
+  if (answer !== 'refused') {
+    // 'valid': the key works, so the fault was the transport's. 'unknown': the re-validation was itself never answered, so nothing is known about the key and an indeterminate answer is no refusal. Either way the session stays and only the failure is reported.
+    raiseNotice(deps.router, deps.notifications, message);
     return;
   }
 
@@ -200,17 +215,10 @@ async function recoverRefusedSession(
 
   deps.session.clear();
 
-  const returned = await returnToLogin(deps.router, deps.notifications);
-
-  if (returned === 'opened') {
-    deps.notifications.show('error', SESSION_ENDED_MESSAGE);
-  } else if (returned === 'already-there') {
-    // The refusal reached a user who is on the login screen already: no destination and no session end has to be explained, so the failure's own sentence is the one thing said (AAP 0.7.4).
-    deps.notifications.show('error', message);
-  }
+  await returnToLoginTelling(deps.router, deps.notifications, message);
 }
 
-/** Returns the user to the login screen carrying the route the failed request was for — the 401 contract (AAP 0.4.2), which a confirmed refusal takes as well: a navigation that lands needs nothing said, a refused one is reported once in `navigationFailure`'s own words, and a return attempted from the login screen itself is skipped because the user is already there. @returns what became of the return. */
+/** Returns the user to the login screen carrying the route the failed request was for — the 401 contract (AAP 0.4.2), which a confirmed refusal takes as well: a refused navigation is reported once in `navigationFailure`'s own words, and a return attempted from the login screen itself is skipped because the user is already there. What the user is told about the session is the caller's, not this function's. @returns what became of the return. */
 function returnToLogin(router: Router, notifications: NotificationService): Promise<LoginReturn> {
   if (router.url.startsWith('/login')) {
     return Promise.resolve('already-there');
@@ -224,4 +232,45 @@ function returnToLogin(router: Router, notifications: NotificationService): Prom
       return false;
     })
     .then((opened: boolean): LoginReturn => (opened ? 'opened' : 'refused'));
+}
+
+/** Returns the user to the login screen and tells them why: the ended-session sentence once the return has landed, or the failure's own sentence when they are on the login screen already (AAP 0.1.1, AAP 0.7.4). A router that has not navigated yet is left to the route guard's own redirect — the landing nothing has started is still to come — so no competing navigation is begun here and the notice waits for that landing instead (AAP 0.4.2). */
+async function returnToLoginTelling(
+  router: Router,
+  notifications: NotificationService,
+  message: string,
+): Promise<void> {
+  if (!router.navigated) {
+    raiseNotice(router, notifications, SESSION_ENDED_MESSAGE);
+    return;
+  }
+
+  const returned = await returnToLogin(router, notifications);
+
+  if (returned === 'opened') {
+    raiseNotice(router, notifications, SESSION_ENDED_MESSAGE);
+  } else if (returned === 'already-there') {
+    // The refusal reached a user who is on the login screen already: no destination and no session end has to be explained, so the failure's own sentence is the one thing said (AAP 0.7.4).
+    raiseNotice(router, notifications, message);
+  }
+}
+
+/** Raises one notice for the user on the screen that is landing rather than on the one being left: an application that has already navigated shows it at once, while one whose landing navigation is still to come waits for the next finished navigation and raises it on the turn after it. The wait is what makes the notice survive: `AppComponent` empties the notice queue on every `NavigationEnd`, so a notice queued before the landing has finished is retired by that clear — which is how a start-up timeout or a session end used to tell the user nothing (AAP 0.1.1, AAP 0.7.4, AAP 0.14.2). */
+function raiseNotice(router: Router, notifications: NotificationService, message: string): void {
+  if (router.navigated) {
+    notifications.show('error', message);
+    return;
+  }
+
+  router.events
+    .pipe(
+      filter((event: Event): event is NavigationEnd => event instanceof NavigationEnd),
+      take(1),
+    )
+    .subscribe((): void => {
+      // The landing navigation has just emptied the queue through that same `NavigationEnd`, so this notice is queued on the turn after it and stays queued for the user to read.
+      queueMicrotask((): void => {
+        notifications.show('error', message);
+      });
+    });
 }

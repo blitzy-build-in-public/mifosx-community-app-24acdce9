@@ -67,7 +67,6 @@ const UNMAPPED_SAVE_TRANSPORT: HttpInterceptorFn = (request, next) =>
   request.method === 'PUT' ? throwError(() => 'a transport fault') : next(request);
 type PersistedId = { readonly id: number } | number;
 interface LoanEditSeed extends LoanAccount {
-  /** The persisted term, widened beyond `number` so a case can send the member in another shape. */
   readonly termFrequency: number | string;
   readonly termPeriodFrequencyType: PersistedId;
   readonly repaymentFrequencyType: PersistedId;
@@ -78,23 +77,14 @@ interface LoanEditSeed extends LoanAccount {
   readonly transactionProcessingStrategyCode: string;
   readonly loanOfficerId?: PersistedId;
   readonly fundId?: PersistedId;
-  /** `loanOfficerOptions` as the seed sends it: rows carrying `id` and a name member. */
   readonly loanOfficerOptions?: readonly Readonly<Record<string, unknown>>[];
-  /** `fundOptions` as the seed sends it: rows carrying `id` and the label member — `name` as `OptionItem` declares it, or `value` in the enumeration shape. */
   readonly fundOptions?: readonly Readonly<Record<string, unknown>>[];
-  /** `termFrequencyTypeOptions` — the term unit's picker rows, shaped `{id, value}`. */
   readonly termFrequencyTypeOptions?: readonly Readonly<Record<string, unknown>>[];
-  /** `repaymentFrequencyTypeOptions` — the interval unit's picker rows. */
   readonly repaymentFrequencyTypeOptions?: readonly Readonly<Record<string, unknown>>[];
-  /** `interestRateFrequencyTypeOptions` — the rate unit's picker rows. */
   readonly interestRateFrequencyTypeOptions?: readonly Readonly<Record<string, unknown>>[];
-  /** `amortizationTypeOptions` — the amortisation method's picker rows. */
   readonly amortizationTypeOptions?: readonly Readonly<Record<string, unknown>>[];
-  /** `interestTypeOptions` — the interest method's picker rows. */
   readonly interestTypeOptions?: readonly Readonly<Record<string, unknown>>[];
-  /** `interestCalculationPeriodTypeOptions` — the calculation basis's picker rows. */
   readonly interestCalculationPeriodTypeOptions?: readonly Readonly<Record<string, unknown>>[];
-  /** `transactionProcessingStrategyOptions` — the strategy's picker rows, keyed by `code`. */
   readonly transactionProcessingStrategyOptions?: readonly Readonly<Record<string, unknown>>[];
 }
 const CHARGE: LoanCharge = {

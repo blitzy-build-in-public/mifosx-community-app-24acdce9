@@ -31,10 +31,8 @@ import { FilterToolbarComponent } from './filter-toolbar/filter-toolbar.componen
 
 /** Behaviour of the clients list at `#/clients` — the post-authentication landing screen, step 2 of the design flow "Sign in and open a client record", and the entry point of workflow W2 (its "Create Client" control) and W3 (a row opened onto the record) (AAP 0.7.1 Features row `clients`; AAP 0.7.4 "Clients list (`#/clients`)", Figma node `1:3`; AAP 0.11.1; Rule 1 clause 8). It pins the traffic the screen produces, the state it holds and the few properties only the markup can express, because those are the parts a rewrite would silently change: one `GET /clients` on construction carrying `offset=0`, `limit=15` and no `searchText`, the set the legacy `getAllClients({offset, limit})` sends (Rule 1 clauses 2 and 3; AAP 0.7.3 row "Client list and edit"); the envelope's `pageItems` becoming the rows held, in display-name order as AngularJS 1.7.9's default comparator orders them (`app/views/clients/clients.html:63`); the two display filters costing no request; a 4xx rendering Fineract's own message while a 5xx leaves it empty and only flags the failure (AAP 0.7.4; workflow W7); the find running `GET /search` with `query`, `resource` and the `exactMatch` flag legacy derives from the surrounding double quotes (`app/scripts/controllers/client/ClientController.js:44-62`; Rule 1 clause 2; AAP 0.7.2 `GlobalSearchParams`); and the "Create Client" gate following `CREATE_CLIENT`, hidden rather than removed when it is absent. **Two levels of assertion**: the traffic on `HttpTestingController` and the state on the component's own signals, then the markup only where a property exists in the DOM alone (the text-free status cell, the row that is itself the link, the gate that hides rather than removes, the empty state, the pager's links); wording that only restates a translated caption is not asserted, so re-keying the bundles cannot break this file. **Providers**: the configuration from a stubbed `fetch`, the ngx-translate stack, `PermissionsService` and `NotificationService` stubs — the interceptor owns the single notification a 5xx raises, so a stub proves the screen raises none of its own — `provideRouter([])` for the links, and `core/http`'s own error mapping so the rejection the component narrows is the type it narrows in the application (AAP 0.4.2). */
 
-/** The configuration the stubbed transport serves: the application's own documented default shape. */
 const SERVED_CONFIG = DEFAULT_APP_CONFIG;
 
-/** The API root every client URL is composed from, built from the resolved configuration. */
 const API_ROOT = `${SERVED_CONFIG.apiBaseUrl}${SERVED_CONFIG.apiPath}`;
 
 /** `GET /clients` — the one read this screen makes. */
@@ -53,7 +51,6 @@ const SECOND_PAGE_OFFSET = '15';
 /** The eleventh page's offset: ten pages of fifteen rows skipped — legacy's `(page - 1) * clientsPerPage` for the eleven-page match `w007-F06` measured. */
 const LAST_PAGE_OFFSET = '150';
 
-/** The office the Head Office fixtures are filed under. */
 const OFFICE_NAME = 'Head Office';
 
 /** A find's answer of `count` client rows, numbered so a page's slice is identifiable by name. */
@@ -72,13 +69,10 @@ function findAnswer(count: number): SearchResult[] {
   });
 }
 
-/** The staff member a case searches the list by; the seeded officer's own label form. */
 const STAFF_NAME = 'Officer, Parity';
 
-/** A second office, so the office half of the display filter has a row of its own to find. */
 const BRANCH_NAME = 'Kigali Branch';
 
-/** Names the fixtures are filtered by, chosen so case-insensitive matching is observable. */
 const ADA = 'Ada Okafor';
 const MARCUS = 'Marcus Rowe-Bennett';
 const JOSE = 'José Luis Núñez';
@@ -89,7 +83,6 @@ const OMAR = 'Omar Haddad';
 const QA20_ROW = 'QA20 ProbeEdited';
 const QA008_ROW = 'Qa008 Client';
 
-/** The message a refused list read answers with. A 4xx is the one status this screen renders itself. */
 const REFUSED_MESSAGE = 'The client list could not be read for this office.';
 
 /** The status label every fixture carries in its payload. The design paints a colour swatch with no word beside it (AAP 0.10.5 item 11), so a value a test would notice if it leaked into the markup is exactly what the fixture stores. */
@@ -115,28 +108,21 @@ function clientRow(
   };
 }
 
-/** An open client: the state "Show Closed" leaves on screen and the filter can narrow. */
 const ACTIVE_CLIENT = clientRow(2, ADA, 'clientStatusType.active');
 
-/** A terminal client, which the list hides until "Show Closed" is ticked. */
 const CLOSED_CLIENT = clientRow(3, MARCUS, 'clientStatusType.closed');
 
-/** A client still awaiting activation: neither hidden nor filtered until a case says so. */
 const PENDING_CLIENT = clientRow(4, JOSE, 'clientStatusType.pending');
 
-/** A rejected client: painted the swatch's rejected hue, and not the code the list hides. */
 const REJECTED_CLIENT = clientRow(6, NADIA, 'clientStatusType.rejected');
 
-/** A withdrawn client: the other terminal state "Show Closed" leaves on screen. */
 const WITHDRAWN_CLIENT = clientRow(7, OMAR, 'clientStatusType.withdraw', BRANCH_NAME, STAFF_NAME);
 
-/** The name a raw code-unit comparison would put first: it renders second (see the case below). */
 const QA20_CLIENT = clientRow(8, QA20_ROW, 'clientStatusType.active');
 
 /** The name legacy's lower-cased comparison puts first, although the server lists it second. */
 const QA008_CLIENT = clientRow(9, QA008_ROW, 'clientStatusType.active');
 
-/** The page the endpoint answers the first read with, in the server's own order. */
 const FIRST_PAGE = {
   totalFilteredRecords: 3,
   pageItems: [ACTIVE_CLIENT, CLOSED_CLIENT, PENDING_CLIENT],
@@ -154,7 +140,6 @@ const LARGE_MATCH_FIRST_PAGE = {
   pageItems: [ACTIVE_CLIENT],
 } as const;
 
-/** The same match on its second page: the same server-side total, a different row. */
 const LARGE_MATCH_SECOND_PAGE = {
   totalFilteredRecords: 31,
   pageItems: [PENDING_CLIENT],
@@ -178,7 +163,6 @@ const MAP_FINERACT_FAILURES: HttpInterceptorFn = (request, next) =>
     catchError((failure: HttpErrorResponse) => throwError(() => toApiError(failure))),
   );
 
-/** Matches the list read, whatever query the screen sent with it. */
 function isClientListRead(request: { readonly url: string }): boolean {
   return request.url === CLIENTS_URL;
 }
@@ -191,10 +175,8 @@ function isFindRead(request: { readonly url: string }): boolean {
 /** The legacy code the toolbar's "Create Client" control is gated on in the template. */
 const CREATE_CLIENT_CODE = 'CREATE_CLIENT';
 
-/** The permission codes the stubbed gate answers `true` for. Reset before every case and set by the one case that needs the gate open, so the rest of the suite renders the toolbar as a user without the permission sees it. */
 let grantedCodes: readonly string[] = [];
 
-/** The half of `PermissionsService` the toolbar's permission gate reads. Typed against the real class with `Pick`, so the stub cannot drift from the two questions the directive asks, and it needs no session: the screen's traffic does not depend on a permission. The answers are read from {@link grantedCodes} when the directive's effect runs rather than being fixed at construction, which is what lets one case render the gate shut and another render it open with the same registration. */
 class PermissionsStub implements Pick<PermissionsService, 'can' | 'has'> {
   /** Membership only; no case here asks a negated code through this member. */
   can(key: string): boolean {
@@ -355,8 +337,8 @@ describe('ClientListComponent', () => {
     await TestBed.inject(AppConfigService).load();
 
     const translate = TestBed.inject(TranslateService);
-    // No key is served here: the only rendered strings this suite asserts are the card title, which the template hardcodes, and the fixture data itself, so the stack is registered only because the component imports the translate pipe.
-    translate.setTranslation('en', {}, true);
+    // Only the card's title key is served: it is the one rendered string this suite asserts and the template now resolves it through the application's own copy rather than a literal, so serving the wording it must render is what proves the title reaches the screen translated. Every other string on the screen is fixture data or a legacy key another spec covers.
+    translate.setTranslation('en', { 'label.heading.listofclients': 'List of Clients' }, true);
     translate.use('en');
 
     httpMock = TestBed.inject(HttpTestingController);
@@ -1223,7 +1205,6 @@ describe('ClientListComponent', () => {
     initialRead.flush(FIRST_PAGE);
     fixture.detectChanges();
 
-    /** The names the table's first column paints, read from the rendered cells so the restore is compared row for row and not by a count alone. */
     const renderedNames = (): readonly string[] =>
       fixture.debugElement
         .queryAll(By.css('#client-list tbody tr'))

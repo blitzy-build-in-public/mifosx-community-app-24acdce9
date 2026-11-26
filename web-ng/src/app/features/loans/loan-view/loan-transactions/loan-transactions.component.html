@@ -7,10 +7,8 @@
     [message]="'label.nodata' | translate"
   />
 } @else {
-  <!-- Bootstrap 3's own `.table-responsive` around the seven columns: inert at 768px and above, and below it the table scrolls inside this section instead of pushing the whole record page sideways. The wrapper authors no colour, size or spacing, so the table keeps the look the global layer gives it (Rule 1 clause 6). -->
   <div class="table-responsive">
     <table class="table table-striped" id="loan-transactions">
-      <!-- The table's accessible name, from the legacy bundle's own transactions heading, kept off the screen by Bootstrap's `.sr-only`. -->
       <caption class="sr-only">{{ 'label.heading.transactions' | translate }}</caption>
       <thead>
         <tr>
@@ -28,7 +26,6 @@
           <tr>
             <td>{{ row.date | date: displayFormat }}</td>
             <td>{{ row.type.value }}</td>
-            <!-- Every money cell goes through the application's one money formatter, which keeps the `number` filter's digits (AAP 0.10.2) and prints no currency here: the legacy transaction table prints these same figures bare (`app/views/loans/viewloanaccountdetails.html:679-694`), so the row's figures are unchanged by the shared formatter (Rule 1 clause 3). -->
             <td>{{ row.amount | money }}</td>
             <td>{{ row.principalPortion | money }}</td>
             <td>{{ row.interestPortion | money }}</td>

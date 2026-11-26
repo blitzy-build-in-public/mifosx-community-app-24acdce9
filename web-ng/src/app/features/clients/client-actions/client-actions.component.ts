@@ -129,13 +129,11 @@ export class ClientActionsComponent {
   /** The datatable gate's two calls, in legacy's order, run before any command is posted. */
   private readonly dataTableGate = inject(DataTableGateService);
 
-  /** The route whose `:id` and `:action` segments name the record and the command. */
   private readonly route = inject(ActivatedRoute);
 
   /** The router the cancel link shares and the navigation back to the record. */
   private readonly router = inject(Router);
 
-  /** Completes the route subscription should the screen be destroyed before it emits. */
   private readonly destroyRef = inject(DestroyRef);
 
   /** The document the refused submit focuses the first invalid control in, injected rather than read off the global so a test focuses the element the application itself would. */

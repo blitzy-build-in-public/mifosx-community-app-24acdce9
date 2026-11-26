@@ -64,7 +64,6 @@ const START_OF_WINDOW = new Date(0);
 /** The value `AuthService.session()` reports while a session is in effect (Rule 1 clause 9, Rule 1 clause 4). */
 const SESSION_EFFECTIVE = { userId: USER_ID } as unknown as SessionData;
 
-/** A matched route node as the shell walks it: the two members the breadcrumb derivation reads out of the router's snapshot tree, and nothing else. */
 interface RouteNode {
   readonly data: Record<string, unknown>;
   readonly firstChild: RouteNode | null;
@@ -83,13 +82,11 @@ function routerStateFor(root: RouteNode): RouterState {
 class AuthStub implements Pick<AuthService, 'session' | 'logout'> {
   private readonly current = signal<SessionData | null>(null);
 
-  /** The session in effect, or `null` — what the shell's `effect()` watches. */
   readonly session: Signal<SessionData | null> = this.current.asReadonly();
 
   /** The account name the navbar would fall back to on its own; deliberately empty here. */
   readonly username = signal<string | null>(null);
 
-  /** Records each logout, in the order the shell performs it, and ends the session. */
   readonly logout = vi.fn((): void => {
     this.endSession();
   });
@@ -121,7 +118,6 @@ class IdleStub implements Pick<IdleService, 'start' | 'stop' | 'reset' | 'warnin
 class SessionsStub implements Pick<SessionService, 'user'> {
   private readonly current = signal<SessionUserResponse | null>(null);
 
-  /** The projection a completed restore publishes; `null` until {@link resolveUser} supplies one. */
   readonly user: Signal<SessionUserResponse | null> = this.current.asReadonly();
 
   /** Publishes a resolved projection, exactly as a restore does once `GET /users/{id}` answers. */
