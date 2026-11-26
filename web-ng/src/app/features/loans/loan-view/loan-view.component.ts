@@ -25,6 +25,7 @@ import {
   toLoanStatusKey,
   type LoanAccount,
   type LoanCharge,
+  type LoanCommand,
   type RepaymentPeriod,
 } from '../loan.models';
 import { LoanService } from '../loan.service';
@@ -83,7 +84,7 @@ export interface LoanActionLink {
   readonly id: string;
   /** Legacy translation key of the link's caption, resolved by the template's `TranslatePipe`. */
   readonly labelKey: string;
-  /** Fineract permission code the link is gated on, as the legacy record gates it. */
+  /** Fineract permission code the link is gated on: the member of {@link LOAN_ACTION_PERMISSIONS} or {@link LOAN_CHARGE_PERMISSION} that the route the link opens declares as its own `data.permission`, so the directive and that route's `permissionGuard` ask the same question (AAP 0.1.1, AAP 0.4.2, AAP 0.14.1). */
   readonly permission: string;
   /** Router commands of the screen the link opens. */
   readonly commands: readonly string[];
@@ -97,19 +98,52 @@ export interface LoanActionDefinition extends Omit<LoanActionLink, 'commands'> {
   readonly route: (id: string) => readonly string[];
 }
 
+/**
+ * The Fineract code each `loanaccount/:id/:action` command requires, keyed by the `:action` segment
+ * that names it.
+ *
+ * This record is the one statement of those codes: `loans.routes.ts` declares it as that route's
+ * `data.permission` — `{ param: 'action', codes: LOAN_ACTION_PERMISSIONS }` — and every row of
+ * {@link LOAN_ACTIONS} opening the route is gated on the same member, so `HasPermissionDirective`
+ * and the route's `permissionGuard` ask one question and a user holding `APPROVE_LOAN` both sees
+ * the Approve link and reaches the form it opens (AAP 0.1.1, AAP 0.4.2, AAP 0.14.1). The codes are
+ * the legacy record's own (`ViewLoanDetailsController.js`) and the ones Fineract enforces for those
+ * commands, so nothing here is a difference from legacy (Rule 1 clause 3; AAP 0.10.5 registers
+ * none).
+ *
+ * `satisfies Record<LoanCommand | 'repayment', string>` makes a command the route serves without a
+ * code here a compile error, and a code added for a command the route does not serve one too.
+ */
+export const LOAN_ACTION_PERMISSIONS = {
+  approve: 'APPROVE_LOAN',
+  reject: 'REJECT_LOAN',
+  disburse: 'DISBURSE_LOAN',
+  undoapproval: 'APPROVALUNDO_LOAN',
+  undodisbursal: 'DISBURSALUNDO_LOAN',
+  repayment: 'REPAYMENT_LOAN',
+} satisfies Record<LoanCommand | 'repayment', string>;
+
+/**
+ * The Fineract code the add-charge form requires: `addloancharge/:id`'s `data.permission` in
+ * `loans.routes.ts` and the gate on the record's Add Loan Charge link, so the link and the screen it
+ * opens are one permission rather than two (AAP 0.1.1, AAP 0.14.1). It is the legacy record's own
+ * code for that form (Rule 1 clause 3).
+ */
+export const LOAN_CHARGE_PERMISSION = 'CREATE_LOANCHARGE';
+
 /** The actions the legacy loan record offers, and the states it offers each one in, transcribed from `ViewLoanDetailsController.js`, whose `scope.buttons.singlebuttons` is built per loan status: submitted and pending (Rule 1 clause 3, AAP 0.7.4). Add-charge's provenance differs by state and does not narrow its `statuses`: legacy carries `button.addloancharge` in the button row (`singlebuttons`) for a submitted application and for an active loan, and in the `options` list for an approved loan, which `viewloanaccountdetails.html` renders as its "More" dropdown — this record shows both legacy lists as its one joined action group, so the row is offered in all three states exactly as the legacy record offers it. */
 export const LOAN_ACTIONS: readonly LoanActionDefinition[] = [
   {
     id: 'loan-action-addcharge',
     labelKey: 'label.button.addloancharge',
-    permission: 'CREATE_LOANCHARGE',
+    permission: LOAN_CHARGE_PERMISSION,
     statuses: [100, 200, 300],
     route: (id) => ['/addloancharge', id],
   },
   {
     id: 'loan-action-approve',
     labelKey: 'label.button.approve',
-    permission: 'APPROVE_LOAN',
+    permission: LOAN_ACTION_PERMISSIONS.approve,
     statuses: [100],
     route: (id) => ['/loanaccount', id, 'approve'],
   },
@@ -123,35 +157,35 @@ export const LOAN_ACTIONS: readonly LoanActionDefinition[] = [
   {
     id: 'loan-action-reject',
     labelKey: 'label.button.reject',
-    permission: 'REJECT_LOAN',
+    permission: LOAN_ACTION_PERMISSIONS.reject,
     statuses: [100],
     route: (id) => ['/loanaccount', id, 'reject'],
   },
   {
     id: 'loan-action-disburse',
     labelKey: 'label.button.disburse',
-    permission: 'DISBURSE_LOAN',
+    permission: LOAN_ACTION_PERMISSIONS.disburse,
     statuses: [200],
     route: (id) => ['/loanaccount', id, 'disburse'],
   },
   {
     id: 'loan-action-undoapproval',
     labelKey: 'label.button.undoapproval',
-    permission: 'APPROVALUNDO_LOAN',
+    permission: LOAN_ACTION_PERMISSIONS.undoapproval,
     statuses: [200],
     route: (id) => ['/loanaccount', id, 'undoapproval'],
   },
   {
     id: 'loan-action-repayment',
     labelKey: 'label.button.makerepayment',
-    permission: 'REPAYMENT_LOAN',
+    permission: LOAN_ACTION_PERMISSIONS.repayment,
     statuses: [300],
     route: (id) => ['/loanaccount', id, 'repayment'],
   },
   {
     id: 'loan-action-undodisbursal',
     labelKey: 'label.button.undodisbursal',
-    permission: 'DISBURSALUNDO_LOAN',
+    permission: LOAN_ACTION_PERMISSIONS.undodisbursal,
     statuses: [300],
     route: (id) => ['/loanaccount', id, 'undodisbursal'],
   },
@@ -241,7 +275,7 @@ export class LoanViewComponent {
       },
     ];
   });
-  /** The links the record renders: the rows of {@link LOAN_ACTIONS} the loan's current state offers, each carrying the router commands for the id on screen. The only derivation is that filter — the loan's numeric status id against each row's `statuses` — so the entry points are the legacy record's own, in its order, with its permission codes; a loan that has not loaded, or whose payload reported no status, offers no action at all, the reading the legacy record itself takes (Rule 1 clause 3). */
+  /** The links the record renders: the rows of {@link LOAN_ACTIONS} the loan's current state offers, each carrying the router commands for the id on screen. The only derivation is that filter — the loan's numeric status id against each row's `statuses` — so the entry points are the legacy record's own, in its order, each gated on the code the screen it opens declares: {@link LOAN_ACTION_PERMISSIONS} or {@link LOAN_CHARGE_PERMISSION}, which `loans.routes.ts` reads as those routes' `data.permission`, so the link and that route's guard cannot disagree (AAP 0.1.1, AAP 0.4.2, AAP 0.14.1); a loan that has not loaded, or whose payload reported no status, offers no action at all, the reading the legacy record itself takes (Rule 1 clause 3). */
   readonly actions = computed<readonly LoanActionLink[]>(() => {
     const status = this.loan()?.status;
     if (status === undefined) {

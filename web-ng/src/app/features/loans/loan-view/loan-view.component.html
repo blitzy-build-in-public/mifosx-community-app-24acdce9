@@ -93,8 +93,12 @@
   the one parameterised route — and is gated by `HasPermissionDirective` on that row's own Fineract
   code, so a user holding exactly the codes the legacy record asks for sees exactly the links it
   showed. The captions are the legacy record's own button keys, the codes a link and the screen it
-  reaches come from one table, and the group is omitted entirely for a state with no action rather
-  than rendered empty.
+  reaches come from one table: `LOAN_ACTION_PERMISSIONS` for the six action segments and
+  `LOAN_CHARGE_PERMISSION` for the charge form, the same two declarations `loans.routes.ts` reads as
+  each route's `data.permission`, so the directive and the route's `permissionGuard` ask one question
+  and a user who sees a link can act on the screen it opens (AAP 0.1.1, AAP 0.4.2, AAP 0.14.1). The
+  codes are the legacy record's own, and the group is omitted entirely for a state with no action
+  rather than rendered empty.
 
   The block resolves once the record's one read has answered, and the sections are handed the
   payload's own slices: `record.repaymentSchedule ?? null`, `record.transactions ?? []` and the

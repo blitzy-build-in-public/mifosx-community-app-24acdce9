@@ -55,12 +55,16 @@ export const routes: Routes = [
         loadChildren: () => import('./features/loans/loans.routes').then((m) => m.LOANS_ROUTES),
       },
       {
-        // The access code the AAP requires on every route — "each route declares its permission in `data.permission` so `permissionGuard` and the nav can share one source" (AAP 0.8.2) — with the guard that reads it, because a (AAP 0.14.1, Rule 1 clause 3).
+        // Either family's read code admits this screen, because the scope the user picks at run time decides which rows they may read: the global search control offers an "all" scope and a loans scope and is rendered for every user (AAP 0.7.4), each result row is gated on its own family's read code (`search-results.component.ts`), and legacy's own search route gates nothing while its search form renders for every user (Rule 1 clause 3).
+        // So no single code can honour the scope, and a READ_LOAN-only user must not be turned away from the loan rows they may read (AAP 0.1.1, AAP 0.10.5 item 9, AAP 0.14.1). The declaration sits in the member `permissionGuard` and the nav share (AAP 0.8.2), with the guard that reads it.
         path: 'search/:query',
         loadComponent: () =>
           import('./features/search/search-results.component').then((m) => m.SearchResultsComponent),
         canActivate: [permissionGuard],
-        data: { permission: 'READ_CLIENT', breadcrumb: ['label.heading.search'] },
+        data: {
+          permission: { any: ['READ_CLIENT', 'READ_LOAN'] },
+          breadcrumb: ['label.heading.search'],
+        },
       },
       // Last among the shell's children, so an unknown URL is matched here instead of backtracking out of the shell: a signed-in visitor keeps the navbar, the breadcrumb and the `.content-wrapper` main landmark — the.
       { path: '**', component: NotFoundComponent, canMatch: [inSession] },

@@ -6,7 +6,11 @@ import { LoanActionComponent } from './loan-action/loan-action.component';
 import { LoanChargeFormComponent } from './loan-charge-form/loan-charge-form.component';
 import { LoanEditComponent } from './loan-edit/loan-edit.component';
 import { LoanNewComponent } from './loan-new/loan-new.component';
-import { LoanViewComponent } from './loan-view/loan-view.component';
+import {
+  LOAN_ACTION_PERMISSIONS,
+  LOAN_CHARGE_PERMISSION,
+  LoanViewComponent,
+} from './loan-view/loan-view.component';
 
 /** The loans family's six paths under their legacy URLs, exported as the array `app.routes.ts` loads lazily. */
 export const LOANS_ROUTES: Routes = [
@@ -40,23 +44,23 @@ export const LOANS_ROUTES: Routes = [
       breadcrumb: ['label.anchor.loans', 'label.heading.loanaccount'],
     },
   },
-  /** One action's form for the loan the route's `id` names, selected by `action`: approve, undoapproval, reject, disburse and undodisbursal are W5, `repayment` is W6, any other segment renders not-found without posting. */
+  /** One action's form for the loan the route's `id` names, selected by `action`: approve, undoapproval, reject, disburse and undodisbursal are W5, `repayment` is W6. The declaration below names exactly those six segments, so a segment naming no command is refused by `permissionGuard` before this screen mounts, exactly as a code the user does not hold is — fail closed, and the navigation lands on the clients list (AAP 0.1.1, AAP 0.14.1), the same shape `clients.routes.ts` gives `client/:id/:action`. The screen keeps its own not-found branch for the states the guard cannot judge (a 404 from the mode's seed read). The segment also selects the code the screen requires — `LOAN_ACTION_PERMISSIONS`, the declaration the loan record's own action links read — so the link that opens a command and this route's guard ask for the same code (AAP 0.1.1, AAP 0.4.2), and it is the code Fineract enforces for that command rather than a broader one (Rule 1 clause 3). */
   {
     path: 'loanaccount/:id/:action',
     component: LoanActionComponent,
     canActivate: [permissionGuard],
     data: {
-      permission: 'UPDATE_LOAN',
+      permission: { param: 'action', codes: LOAN_ACTION_PERMISSIONS },
       breadcrumb: ['label.anchor.loans', 'label.heading.loanaccount'],
     },
   },
-  /** The add-charge form for the loan the route's `id` names (AAP 0.7.3 row "Loan charges"). */
+  /** The add-charge form for the loan the route's `id` names (AAP 0.7.3 row "Loan charges"), gated on `LOAN_CHARGE_PERMISSION` — the code the loan record's Add Loan Charge link carries — so the link and the screen it opens are one permission (AAP 0.1.1, AAP 0.14.1). */
   {
     path: 'addloancharge/:id',
     component: LoanChargeFormComponent,
     canActivate: [permissionGuard],
     data: {
-      permission: 'UPDATE_LOAN',
+      permission: LOAN_CHARGE_PERMISSION,
       breadcrumb: ['label.anchor.loans', 'label.heading.addloancharge'],
     },
   },

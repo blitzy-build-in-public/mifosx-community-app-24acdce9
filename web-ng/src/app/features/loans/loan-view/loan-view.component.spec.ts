@@ -2,15 +2,28 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { provideZonelessChangeDetection, signal, type WritableSignal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
-import { ActivatedRoute, convertToParamMap, provideRouter, type ParamMap } from '@angular/router';
+import {
+  ActivatedRoute,
+  ActivatedRouteSnapshot,
+  Router,
+  UrlTree,
+  convertToParamMap,
+  provideRouter,
+  type CanActivateFn,
+  type ParamMap,
+  type Route,
+  type RouterStateSnapshot,
+} from '@angular/router';
 import { provideTranslateService, TranslateService } from '@ngx-translate/core';
 import { BehaviorSubject, Observable, of, throwError } from 'rxjs';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
+import { permissionGuard } from '../../../core/auth/permission.guard';
 import { PermissionsService } from '../../../core/auth/permissions.service';
 import { ApiError, toApiError } from '../../../core/http/api-error';
 import type { LoanAccount, LoanCharge, LoanTransaction, RepaymentSchedule } from '../loan.models';
 import { LoanService } from '../loan.service';
+import { LOANS_ROUTES } from '../loans.routes';
 import { LoanChargesComponent } from './loan-charges/loan-charges.component';
 import { LoanScheduleComponent } from './loan-schedule/loan-schedule.component';
 import { LoanTransactionsComponent } from './loan-transactions/loan-transactions.component';
@@ -824,5 +837,123 @@ describe('LoanViewComponent', () => {
     expect(component.loading()).toBe(false);
     expect(component.error()).toBeNull();
     expect(component.notFound()).toBe(false);
+  });
+
+  /**
+   * The codes the record's action links are gated on, held against the routes those links open: the
+   * link that offers a command and the guard that admits the screen behind it must ask one code, or a
+   * user is offered an action they are then bounced from and refused one they may take (AAP 0.1.1,
+   * AAP 0.4.2, AAP 0.14.1).
+   */
+  describe('the codes its action links are gated on', () => {
+    /** Whether a value is a non-null object that is not an array — the shape a `{ param, codes }` permission declaration has, and the shape its `codes` map has (Rule 1 clause 4). */
+    function isDeclarationObject(value: unknown): value is Record<string, unknown> {
+      return typeof value === 'object' && value !== null && !Array.isArray(value);
+    }
+
+    /** The route of `LOANS_ROUTES` the given commands open: the one whose first path segment is the commands' first, so the pairing is the URL's own rather than a second table written beside it. @param commands the link's router commands. */
+    function routeFor(commands: readonly string[]): Route {
+      const segment = commands[0].replace(/^\//, '');
+      const route = LOANS_ROUTES.find(
+        (candidate: Route): boolean => (candidate.path ?? '').split('/')[0] === segment,
+      );
+
+      if (route === undefined) {
+        throw new Error(`No loans route serves ${commands.join('/')}.`);
+      }
+
+      return route;
+    }
+
+    /** The code a route declares for the screen the given commands open: a single-code declaration is its own answer, while the `{ param, codes }` declaration is asked about the `:action` segment those commands carry, exactly as `permissionGuard` reads it. @param route the route the commands open. @param commands the link's router commands. */
+    function declaredCode(route: Route, commands: readonly string[]): string | null {
+      const declared: unknown = route.data?.['permission'];
+
+      if (typeof declared === 'string') {
+        return declared;
+      }
+
+      if (!isDeclarationObject(declared)) {
+        return null;
+      }
+
+      const codes: unknown = declared['codes'];
+      const command = commands[2];
+
+      if (command === undefined || !isDeclarationObject(codes) || !Object.hasOwn(codes, command)) {
+        return null;
+      }
+
+      const code: unknown = codes[command];
+
+      return typeof code === 'string' ? code : null;
+    }
+
+    /** The `loanaccount/:id/:action` route the router mounts — the screen the record's Approve link opens. */
+    const ACTION_ROUTE: Route = routeFor(['/loanaccount', LOAN_ID, 'approve']);
+
+    /** The guard's answer: let the navigation through, or replace it with a redirect. */
+    type GuardAnswer = ReturnType<CanActivateFn>;
+
+    /** The snapshot `permissionGuard` is handed for `#/loanaccount/<id>/<action>`, built from the declaration the router mounts rather than from a copy of it. @param command the `:action` segment the URL carries. */
+    function actionSnapshot(command: string): ActivatedRouteSnapshot {
+      const route = new ActivatedRouteSnapshot();
+      route.params = { id: LOAN_ID, action: command };
+      route.data = ACTION_ROUTE.data ?? {};
+
+      return route;
+    }
+
+    /** The router state the guard is handed. Its second parameter is never consulted — no verdict depends on the target URL — so the router's own empty snapshot is the whole of what the contract needs. */
+    function unreadState(): RouterStateSnapshot {
+      return TestBed.inject(Router).routerState.snapshot;
+    }
+
+    /** Runs the guard in the injector this case configured, which is what lets it inject its two services. @param route the route snapshot the guard decides on. */
+    function runGuard(route: ActivatedRouteSnapshot): GuardAnswer {
+      return TestBed.runInInjectionContext(() => permissionGuard(route, unreadState()));
+    }
+
+    /** The route a denial redirects to, serialized by the same router the guard built the tree with, or `null` when the guard allowed the navigation. @param answer the guard's answer. */
+    function denialTarget(answer: GuardAnswer): string | null {
+      return answer instanceof UrlTree ? TestBed.inject(Router).serializeUrl(answer) : null;
+    }
+
+    beforeEach(() => {
+      // A fresh injector per case: the guard injects `Router` for its denial target and `PermissionsService` for its verdict, answered by the same stub the component cases already grant codes to.
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [provideRouter([]), { provide: PermissionsService, useValue: permissions }],
+      });
+    });
+
+    it.each(LOAN_ACTIONS)('gates $id on the code the route it opens declares', (action) => {
+      const commands = action.route(LOAN_ID);
+      const route = routeFor(commands);
+      const declared = declaredCode(route, commands);
+
+      // One code for the link and for its route, row by row over the whole table rather than the one entry a case happened to try (AAP 0.1.1, AAP 0.4.2).
+      expect(declared).not.toBeNull();
+      expect(action.permission).toBe(declared);
+      // A declaration no guard reads would be decorative, so each route a link opens is gated by `permissionGuard` as well.
+      expect(route.canActivate ?? []).toContain(permissionGuard);
+    });
+
+    it('admits the approve form for the session the Approve link is shown to', () => {
+      permissions.grant(['READ_LOAN', 'APPROVE_LOAN']);
+
+      // The user holding the code the Approve link is gated on reaches the screen that link opens: the guard asks for that same code, for the `:action` the URL carries (AAP 0.1.1).
+      expect(runGuard(actionSnapshot('approve'))).toBe(true);
+    });
+
+    it.each<[string, readonly string[]]>([
+      ['only the record read code', ['READ_LOAN']],
+      ['the record read and the edit code, but not the action code', ['READ_LOAN', 'UPDATE_LOAN']],
+    ])('turns a session holding %s away from the approve form', (_label, granted) => {
+      permissions.grant(granted);
+
+      // The read code opens the record and nothing more, and a code the approve form does not require is no substitute for the one it does: the navigation is replaced by the clients list rather than painted (AAP 0.1.1, AAP 0.4.2).
+      expect(denialTarget(runGuard(actionSnapshot('approve')))).toBe('/clients');
+    });
   });
 });

@@ -23,7 +23,7 @@ import type {
 } from '../loan.models';
 import { LoanRepaymentComponent } from '../loan-repayment/loan-repayment.component';
 import { LoanService, type LoanActionInput } from '../loan.service';
-/** What the route's `:action` segment selects: one of the five lifecycle commands, the repayment form, or — for every other segment, including a missing one — the not-found outcome, which issues no request and renders the not-found message (AAP 0.7.4 state rules; AAP 0.9.2). */
+/** What the route's `:action` segment selects: one of the five lifecycle commands, the repayment form, or — for a missing segment or one this application does not serve — the not-found outcome, which issues no request and renders the not-found message (AAP 0.7.4 state rules; AAP 0.9.2). The route's own `data.permission` names exactly the six served segments, so the router refuses an unserved segment before this screen mounts (`loans.routes.ts`); the branch stays because a 404 from a mode's own seed read reaches it too. */
 type LoanActionMode = LoanCommand | 'repayment' | 'notfound';
 
 /** The six modes that name a real screen, i.e. every mode but the not-found outcome. */
@@ -120,7 +120,7 @@ function today(): Date {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
-/** The single-purpose loan lifecycle action screen — workflow W5 — mounted at `#/loanaccount/:id/:action` by `loans.routes.ts` under the `UPDATE_LOAN` permission; the `:action` segment decides which of six screens renders (AAP 0.7.1, AAP 0.10.4, AAP 0.7.3, Rule 1 clause 5). */
+/** The single-purpose loan lifecycle action screen — workflow W5 — mounted at `#/loanaccount/:id/:action` by `loans.routes.ts` under the code `LOAN_ACTION_PERMISSIONS` holds for the `:action` segment the URL names (`APPROVE_LOAN`, `REJECT_LOAN`, `DISBURSE_LOAN`, `APPROVALUNDO_LOAN`, `DISBURSALUNDO_LOAN` or `REPAYMENT_LOAN`), which is also the code the loan record's link to this screen carries; the segment then decides which of six screens renders (AAP 0.7.1, AAP 0.10.4, AAP 0.7.3, AAP 0.1.1, Rule 1 clause 5). */
 @Component({
   selector: 'app-loan-action',
   imports: [

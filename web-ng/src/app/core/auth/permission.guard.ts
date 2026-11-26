@@ -62,7 +62,23 @@ function toParameterisedPermission(
   return { param, codes };
 }
 
-/** Route guard for every screen whose route declares a permission (AAP 0.7.1, row `permissionGuard`; AAP 0.8.2, "each route declares its permission in `data.permission`") (AAP 0.14.1, AAP 0.1.1). */
+/** The codes of an any-of permission declaration — the `{ any: [...] }` shape a route uses when more than one code admits the same screen — or `null` when the declaration does not hold one, holds an empty list, or holds anything except strings (Rule 1 clause 4). */
+function toAnyPermission(declared: object): readonly string[] | null {
+  if (!('any' in declared)) {
+    return null;
+  }
+
+  const declaredAny: unknown = declared.any;
+
+  // A list of none names no code the route admits, and a value that is not a list is not this shape: neither states a restriction the gate can honour.
+  if (!Array.isArray(declaredAny) || declaredAny.length === 0) {
+    return null;
+  }
+
+  return toPermissionCodes(declaredAny);
+}
+
+/** Route guard for every screen whose route declares a permission (AAP 0.7.1, row `permissionGuard`; AAP 0.8.2, "each route declares its permission in `data.permission`") (AAP 0.14.1, AAP 0.1.1). Reads the four declaration shapes a route may state: one code, which the user must hold; a list, every code of which the user must hold; `{ any: [...] }`, one code of which the user must hold, for a screen whose scope the user picks at run time; and `{ param, codes }`, which picks the code from a URL segment. */
 export const permissionGuard: CanActivateFn = (route: ActivatedRouteSnapshot): boolean | UrlTree => {
   const permissions = inject(PermissionsService);
   const router = inject(Router);
@@ -89,19 +105,26 @@ export const permissionGuard: CanActivateFn = (route: ActivatedRouteSnapshot): b
   if (typeof declared === 'object' && declared !== null) {
     const parameterised = toParameterisedPermission(declared);
 
-    // A declaration the gate cannot read states no restriction it can honour, so it denies rather than letting the navigation through on a shape nobody intended.
-    if (parameterised === null) {
-      return deny();
+    if (parameterised !== null) {
+      const value = route.paramMap.get(parameterised.param);
+
+      // No such parameter in the URL, or a value the map names no code for, leaves no code to ask about.
+      if (value === null || !Object.hasOwn(parameterised.codes, value)) {
+        return deny();
+      }
+
+      return permissions.has(parameterised.codes[value]) ? true : deny();
     }
 
-    const value = route.paramMap.get(parameterised.param);
+    const anyOf: readonly string[] | null = toAnyPermission(declared);
 
-    // No such parameter in the URL, or a value the map names no code for, leaves no code to ask about.
-    if (value === null || !Object.hasOwn(parameterised.codes, value)) {
-      return deny();
+    // Any one of the codes admits the screen, which is the shape a route whose scope the user picks at run time can state. `canAny` asks each code through `has()`, so `!`, `ALL_FUNCTIONS` and `ALL_FUNCTIONS_READ` answer as they do everywhere else (AAP 0.4.2).
+    if (anyOf !== null) {
+      return permissions.canAny(anyOf) ? true : deny();
     }
 
-    return permissions.has(parameterised.codes[value]) ? true : deny();
+    // A declaration the gate cannot read states no restriction it can honour, so it denies rather than letting the navigation through on a shape nobody intended (AAP 0.1.1).
+    return deny();
   }
 
   return deny();

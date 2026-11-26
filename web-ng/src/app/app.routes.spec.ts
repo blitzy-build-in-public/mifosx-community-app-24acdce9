@@ -70,7 +70,7 @@ function isDeclarationObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** Every access code a route's `data.permission` declaration names, whatever shape it uses: a single code, a list of codes, or the `{ param, codes }` declaration whose map the route parameter selects from. */
+/** Every access code a route's `data.permission` declaration names, whatever shape it uses: a single code, a list of codes, the `{ any }` list of which one held code admits the screen, or the `{ param, codes }` declaration whose map the route parameter selects from. */
 function declaredCodes(declared: unknown): readonly string[] {
   if (typeof declared === 'string') {
     return [declared];
@@ -81,6 +81,13 @@ function declaredCodes(declared: unknown): readonly string[] {
   }
 
   if (isDeclarationObject(declared)) {
+    const any: unknown = declared['any'];
+
+    // The any-of list: one held code of it admits the screen, so every entry of it is a code the route names.
+    if (Array.isArray(any)) {
+      return any.filter((code: unknown): code is string => typeof code === 'string');
+    }
+
     const codes: unknown = declared['codes'];
 
     return isDeclarationObject(codes)
@@ -298,12 +305,12 @@ describe('APP_ROUTES', () => {
     await expect(search?.loadComponent?.()).resolves.toBe(SearchResultsComponent);
   });
 
-  it('declares an access code on the search route and the guard that reads it', () => {
+  it('declares the read codes either family admits the search on, and the guard that reads them', () => {
     const shell = APP_ROUTES.find((route: Route): boolean => route.component === ShellComponent);
     const search = shell?.children?.find((route: Route): boolean => route.path === 'search/:query');
 
-    // The one in-scope route that declared none (AAP 0.8.2), declared together with the guard that enforces it (AAP 0.14.1): a code no guard reads would be decorative.
-    expect(search?.data?.['permission']).toBe('READ_CLIENT');
+    // Either read code admits the screen, because the scope the user picks at run time decides which rows they may read: the search control offers an "all" scope and a loans scope and is rendered for every user, and the results screen gates each row on its own family's read code, so a READ_LOAN-only user must reach the loan rows they may read (AAP 0.1.1, AAP 0.10.5 item 9, AAP 0.14.1).
+    expect(search?.data?.['permission']).toEqual({ any: ['READ_CLIENT', 'READ_LOAN'] });
     expect(search?.canActivate ?? []).toContain(permissionGuard);
     // The declaration changes neither the trail nor the lazily loaded screen.
     expect(search?.data?.['breadcrumb']).toEqual(['label.heading.search']);
@@ -410,6 +417,26 @@ describe('APP_ROUTES', () => {
     expect(router.url).toBe('/clients');
   });
 
+  it('keeps a search navigation for a user holding only the loans read code', async () => {
+    const router = routerFor(true);
+    TestBed.inject(PermissionsService).setPermissions(['READ_LOAN']);
+
+    // The finding's reproduction, against the real tree: the loans rows this user may read are behind this screen, so the navigation stays instead of being replaced by the clients list.
+    await router.navigateByUrl('/search/ada');
+
+    expect(router.url).toBe('/search/ada');
+  });
+
+  it('sends a search navigation to the clients list when the user holds neither read code', async () => {
+    const router = routerFor(true);
+    TestBed.inject(PermissionsService).setPermissions(['CREATE_CLIENT']);
+
+    // The screen is still gated: a user who may read neither family is denied, and the denial lands where permissionGuard sends every denial.
+    await router.navigateByUrl('/search/ada');
+
+    expect(router.url).toBe('/clients');
+  });
+
   it('renders an unknown URL inside the shell for a signed-in visitor', async () => {
     const router = routerFor(true);
     const unknown = unknownUrl(router);
@@ -437,10 +464,13 @@ describe('APP_ROUTES', () => {
 /** The guard's synchronous answer: let the navigation through, or replace it with a redirect. */
 type GuardAnswer = ReturnType<CanActivateFn>;
 
-/** Behaviour of `permissionGuard` on the declaration shapes the route table uses — the code the route states, the list it requires, and the parameterised declaration `client/:id/:action` uses, where the `:action` segment (AAP 0.1.1, AAP 0.14.1). */
+/** Behaviour of `permissionGuard` on the declaration shapes the route table uses — the code the route states, the list it requires, the `{ any }` list the search screen admits either code of, and the parameterised declaration `client/:id/:action` uses, where the `:action` segment (AAP 0.1.1, AAP 0.14.1). */
 describe('permissionGuard', () => {
   /** The declaration `client/:id/:action` states, as the guard receives it. */
   const ACTION_DECLARATION = { param: 'action', codes: CLIENT_ACTION_CODES };
+
+  /** The declaration `search/:query` states, as the guard receives it: one held code of the list admits the screen. */
+  const SEARCH_DECLARATION = { any: ['READ_CLIENT', 'READ_LOAN'] };
 
   /** The route snapshot the guard is handed for `#/client/2/<action>`. @param action the `:action` segment the URL carries. @param permission the route's `data.permission`, which defaults to the lifecycle declaration.. */
   function routeFor(action: string, permission: unknown = ACTION_DECLARATION): ActivatedRouteSnapshot {
@@ -528,5 +558,43 @@ describe('permissionGuard', () => {
     // The gate fails closed: no login, no answer but a denial, whatever the segment names.
     expect(denialTarget(runGuard(routeFor('close')))).toBe('/clients');
     expect(denialTarget(runGuard(routeFor('activate')))).toBe('/clients');
+  });
+
+  it('admits the search screen on the loans read code alone', () => {
+    TestBed.inject(PermissionsService).setPermissions(['READ_LOAN']);
+
+    // The screen offers a loans scope and gates its loan rows on this very code, so a user holding it may read what the search returns (AAP 0.1.1, AAP 0.10.5 item 9).
+    expect(runGuard(routeFor('ada', SEARCH_DECLARATION))).toBe(true);
+  });
+
+  it('admits the search screen on the clients read code alone', () => {
+    TestBed.inject(PermissionsService).setPermissions(['READ_CLIENT']);
+
+    // The client rows are the ones a READ_CLIENT user may see, and the screen was already open to them.
+    expect(runGuard(routeFor('ada', SEARCH_DECLARATION))).toBe(true);
+  });
+
+  it('denies the any-of declaration when the user holds neither code, sending the navigation to the clients list', () => {
+    TestBed.inject(PermissionsService).setPermissions(['CREATE_CLIENT']);
+
+    // Neither family's rows are readable, so the screen has nothing to show and the guard keeps the gate it declares.
+    expect(denialTarget(runGuard(routeFor('ada', SEARCH_DECLARATION)))).toBe('/clients');
+  });
+
+  it('denies a malformed any-of declaration rather than admitting a screen on a list it cannot read', () => {
+    // Both codes are held, so every denial below can only come from the declaration: a shape the gate cannot read states no restriction it can honour.
+    TestBed.inject(PermissionsService).setPermissions(['READ_CLIENT', 'READ_LOAN']);
+
+    // A list that names no code.
+    expect(denialTarget(runGuard(routeFor('ada', { any: [] })))).toBe('/clients');
+    // An entry that is not a code.
+    expect(denialTarget(runGuard(routeFor('ada', { any: [7] })))).toBe('/clients');
+    // A value that is not a list at all.
+    expect(denialTarget(runGuard(routeFor('ada', { any: 'READ_CLIENT' })))).toBe('/clients');
+  });
+
+  it('denies the any-of declaration while no session is present', () => {
+    // `canAny` answers false without a session, so a list the user would hold after a login admits nothing before one.
+    expect(denialTarget(runGuard(routeFor('ada', SEARCH_DECLARATION)))).toBe('/clients');
   });
 });
