@@ -1,4 +1,4 @@
-/** The single Playwright fixture the whole legacy-versus-next parity suite is written against (AAP 0.11.1 row 48, "page-object selection per project and the host assertion"; AAP 0.8.1 tree `web-ng/e2e/fixtures/`; AAP (AAP 0.10.1, AAP 0.10.2, AAP 0.10.3, AAP 0.10.4). */
+/** The single Playwright fixture the whole legacy-versus-next parity suite is written against (AAP 0.11.1 row 48, "page-object selection per project and the host assertion"; AAP 0.8.1 tree `web-ng/e2e/fixtures/`; AAP 0.10.1, AAP 0.10.2, AAP 0.10.3, AAP 0.10.4). */
 import { test as base, expect } from '@playwright/test';
 import type { Page, TestInfo } from '@playwright/test';
 
@@ -95,7 +95,7 @@ const DEMO_HOSTNAMES: readonly string[] = [
   ['demo', 'fineract', 'dev'].join('.'),
 ];
 
-/** The run date already resolved for each front end. AAP 0.10.4 runs the legacy project and then the next one in a single command, so the date is memoised per project and re-read once per project: a business date that. */
+/** The run date already resolved for each front end. AAP 0.10.4 runs the legacy project and then the next one in a single command, so the date is memoised per project and re-read once per project: a business date that cannot change mid-run. */
 const RUN_DATES = new Map<UiProject, Promise<Date>>();
 
 /** The hostname of an origin, or `null` when the origin is not a URL this module can read. */
@@ -150,7 +150,7 @@ function isWorkflowId(value: string): value is WorkflowId {
   return (WORKFLOW_IDS as readonly string[]).includes(value);
 }
 
-/** The workflow label the capture artefact is named for. `startCapture()` fixes a capture's name when it starts, and the capture here starts in a fixture — before the spec has called {@link RunWorkflow} with the id it (AAP 0.11.1). */
+/** The workflow label the capture artefact is named for. `startCapture()` fixes a capture's name when it starts, and the capture here starts in a fixture — before the spec has called {@link RunWorkflow} with the id it will record (AAP 0.11.1). */
 function captureLabelOf(testInfo: TestInfo): string {
   const workflowToken = /(?:^|[^A-Z0-9])(W[1-7]|CHAIN)(?![A-Z0-9])/;
   const specName = (testInfo.file.split(/[\\/]/).pop() ?? '').replace(/\.spec\.ts$/i, '');
@@ -208,7 +208,7 @@ function nextPages(page: Page): NextParityPages {
   };
 }
 
-/** The path of the capture this test's record will declare, written once. {@link CaptureSession.write} settles the capture and is idempotent, so `runWorkflow` writes here (the record needs the path) and the capture's. */
+/** The path of the capture this test's record will declare, written once. {@link CaptureSession.write} settles the capture and is idempotent, so `runWorkflow` writes here (the record needs the path) and the capture's teardown fills in the path when the body never got that far. */
 async function capturePathOf(
   session: CaptureSession,
   known: string | undefined,
@@ -225,7 +225,7 @@ async function capturePathOf(
   }
 }
 
-/** Attaches a failed workflow's evidence to its test. Only the two artefacts the masking writers produced are attached — the normalised capture, whose headers, bodies and ids were masked as they were recorded, and the (Rule 1 clause 9, AAP 0.10.2). */
+/** Attaches a failed workflow's evidence to its test. Only the two artefacts the masking writers produced are attached — the normalised capture, whose headers, bodies and ids were masked as they were recorded, and the workflow record, whose reason and failing step were masked as it was written (Rule 1 clause 9, AAP 0.10.2). */
 async function attachEvidence(testInfo: TestInfo, evidence: EvidenceSink): Promise<void> {
   if (evidence.capturePath !== undefined) {
     await testInfo.attach('network-capture', {
@@ -303,7 +303,7 @@ export const test = base.extend<ParityFixtures>({
         const artifacts = await body({ pages, page, runDate, capture });
         const targets = artifacts?.stateTargets;
         if (targets !== undefined) {
-          // The end state is read only after the body succeeded: a failed workflow's state is not comparable with the other front end's (AAP 0.10.1), and the metadata that identifies the snapshot is the fixture's to supply, so a.
+          // The end state is read only after the body succeeded: a failed workflow's state is not comparable with the other front end's (AAP 0.10.1), and the metadata that identifies the snapshot is the fixture's to supply, so a failed workflow's state is never read or compared.
           const written: WrittenStateSnapshot = await captureState({
             ...targets,
             project: uiProject,

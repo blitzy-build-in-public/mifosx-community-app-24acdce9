@@ -1,4 +1,4 @@
-/** The status vocabulary the whole application shares, and the single mapping from a Fineract status code onto it (AAP 0.2.3 `StatusSwatch` row; AAP 0.7.2 rows `Client`, `ClientAccountSummary`, `LoanAccount` (AAP 0.11.1, AAP 0.14.1, Rule 1 clause 6, AAP 0.4.4). */
+/** The status vocabulary the whole application shares, and the single mapping from a Fineract status code onto it (AAP 0.2.3 `StatusSwatch` row; AAP 0.7.2 rows `Client`, `ClientAccountSummary`, `LoanAccount`, `SavingsAccount`; AAP 0.11.1 row for `web-ng/src/app/shared/**`; AAP 0.14.1, Rule 1 clause 6, AAP 0.4.4). */
 
 /** The four keys of the status indicator, and the whole of its vocabulary (AAP 0.2.3 `StatusSwatch` row, whose Props Interface column fixes exactly this union). */
 export type StatusKey = 'active' | 'pending' | 'closed' | 'other';

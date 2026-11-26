@@ -83,7 +83,7 @@ const SEPARATOR = '/';
 /** The resource path the reader asks the configuration for, named rather than written into an `apiUrl()` call so the endpoint scan sees a constant instead of a new judged literal. */
 const USERS_PATH = 'users';
 
-/** The stub `apiUrl()`: the configuration owns the host and the API root, the caller owns the resource path, and the two are joined as `AppConfigService.apiUrl()` documents — one `/` at the join, no other rewriting — so a (Rule 1 clause 4). */
+/** The stub `apiUrl()`: the configuration owns the host and the API root, the caller owns the resource path, and the two are joined as `AppConfigService.apiUrl()` documents — one `/` at the join, no other rewriting — so a stand-in typed to the one member it replaces, rather than an `any`, composes the same URL the shipped service does (Rule 1 clause 4). */
 const apiConfig: Pick<AppConfigService, 'apiUrl'> = {
   apiUrl: (path: string): string => `${API_ROOT}${SEPARATOR}${path}`,
 };
@@ -93,7 +93,7 @@ function usersUrl(userId: number): string {
   return [apiConfig.apiUrl(USERS_PATH), userId].join(SEPARATOR);
 }
 
-/** The URL the contract fixes, stated here from this spec's own literals rather than taken from `usersUrl()`: an expectation derived from the helper the reader uses would agree with whatever that helper composes, and the (AAP 0.7.3). */
+/** The URL the contract fixes, stated here from this spec's own literals rather than taken from `usersUrl()`: an expectation derived from the helper the reader uses would agree with whatever that helper composes, and the W1 row's `GET /users/{id}` would then be pinned by nothing (AAP 0.7.3). */
 const EXPECTED_USERS_URL = [API_ROOT, 'users', String(USER_ID)].join(SEPARATOR);
 
 /** Matches the restore's user read by method and path; its parameter set is asserted separately. */
@@ -126,7 +126,7 @@ function projectionOf(response: HttpResponse<unknown>): SessionUserResponse {
   return response.body;
 }
 
-/** The `GET /users/{id}` reader `restore()` receives, in the shape `SessionUserReader` declares and with the semantics its production owner gives it (`auth.service.ts`, one of the six files the lint gate leaves free to. */
+/** The `GET /users/{id}` reader `restore()` receives, in the shape `SessionUserReader` declares and with the semantics its production owner gives it (`auth.service.ts`, one of the six files the lint gate leaves free to hold `HttpClient`). */
 function httpReader(handler: HttpHandler, calls: number[]): SessionUserReader {
   return (userId: number): Observable<SessionUserResponse> => {
     calls.push(userId);
@@ -184,7 +184,7 @@ describe('SessionService', () => {
 
     const restored = await service.restore((userId: number) => {
       calls.push(userId);
-      // The session is published before the read, because the interceptor takes the `Authorization: Basic` key off `session()` for this very request (legacy sets the authorization before `userResource.get`.
+      // The session is published before the read, because the interceptor takes the `Authorization: Basic` key off `session()` for this very request (legacy sets the authorization before `userResource.get`, SessionManager.js:40-41).
       expect(service.session()).toEqual(fixture);
       return of(projection());
     });
@@ -284,7 +284,7 @@ describe('SessionService', () => {
     seedEntry(JSON.stringify(fixture), BARE_KEY);
 
     expect(service.read()).toBeNull();
-    // A read is not a repair: the legacy wrapper parses the entry and throws without writing, so the corrupt value stays under the composed key and no difference registered in AAP 0.10.5 lets this service delete it (Rule 1 (Rule 1 clause 3).
+    // A read is not a repair: the legacy wrapper parses the entry and throws without writing, so the corrupt value stays under the composed key and no difference registered in AAP 0.10.5 lets this service delete it (Rule 1 clause 3).
     expect(window.localStorage.getItem(COMPOSED_KEY)).toBe('not a session');
     expect(window.localStorage.getItem(BARE_KEY)).toBe(JSON.stringify(fixture));
     // The valid entry under the other spelling is therefore unreachable for the life of the page, which is exactly what a legacy screen reading the same store would see.

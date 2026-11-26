@@ -1,4 +1,4 @@
-/** Page object for the new Angular application's individual client record — the `next` project's side of workflow **W3** (search for a client, then read the record's details, accounts and identifiers back, AAP 0.10.1) and (AAP 0.8.2, Rule 2, AAP 0.4.4, AAP 0.10.3). */
+/** Page object for the new Angular application's individual client record — the `next` project's side of workflow **W3** (search for a client, then read the record's details, accounts and identifiers back, AAP 0.10.1) and the screen every in-scope client action and every loan and savings workflow starts from (AAP 0.8.2, Rule 2, AAP 0.4.4, AAP 0.10.3). */
 import type { Locator, Page } from '@playwright/test';
 
 import { FINERACT_URL, NEXT_URL, TENANT_ID } from '../../seed/fixtures.js';
@@ -65,7 +65,7 @@ const ACTION_GROUP_SELECTOR = 'app-action-button-group';
 /** `General` tab's accounts section. */
 const ACCOUNTS_SELECTOR = 'app-client-accounts';
 
-/** The three states the accounts section paints once its own `GET /clients/{id}/accounts` has answered, and the whole of what "settled" means for it: the populated table (`#client-accounts`), the explicit empty state the. */
+/** The three states the accounts section paints once its own `GET /clients/{id}/accounts` has answered, and the whole of what "settled" means for it: the populated table (`#client-accounts`), the explicit empty state the section shows a client that genuinely holds no account, and Fineract's own refusal text for a 4xx (`.alert.alert-danger`). */
 const ACCOUNTS_SETTLED_SELECTOR =
   `${ACCOUNTS_SELECTOR} #client-accounts, ` +
   `${ACCOUNTS_SELECTOR} app-empty-state, ` +
@@ -254,7 +254,7 @@ function readTableRowsInPage(element: HTMLElement): TableRowReading[] {
   return readings;
 }
 
-/** Drives the new Angular application's client record and reads what it renders: the `next` side of workflow W3 and the entry point every in-scope client action and every loan and savings workflow uses (AAP 0.10.1, AAP (AAP 0.7.4, Rule 1 clause 9, Rule 1 clause 8). */
+/** Drives the new Angular application's client record and reads what it renders: the `next` side of workflow W3 and the entry point every in-scope client action and every loan and savings workflow uses (AAP 0.10.1, AAP 0.7.4, Rule 1 clause 9, Rule 1 clause 8). */
 export class ClientViewPage {
   constructor(private readonly page: Page) {}
 
@@ -480,7 +480,7 @@ export class ClientViewPage {
     return `${NEXT_URL}/?baseApiUrl=${encodeURIComponent(FINERACT_URL)}&tenantIdentifier=${TENANT_ID}#${route}`;
   }
 
-  /** Navigates to a hash route on the full entry URL. The navigation is confirmed against `window.location.hash` rather than trusted: when the router has not applied the fragment — a document that was already open, or a. */
+  /** Navigates to a hash route on the full entry URL. The navigation is confirmed against `window.location.hash` rather than trusted: when the router has not applied the fragment — a document that was already open, or a redirect that ran first — the hash is set in the page as the second way to ask it. */
   private async navigate(route: string): Promise<void> {
     await this.page.goto(this.screenUrl(route));
     const applied = await this.page.evaluate(

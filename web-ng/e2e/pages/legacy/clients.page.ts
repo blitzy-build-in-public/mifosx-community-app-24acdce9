@@ -120,7 +120,7 @@ const SEARCH_FIELD = [
   '.navbar-form input[type="search"]',
 ].join(', ');
 
-/** The navbar scope control, native-select form. The new application replaces the legacy dropdown with an attached native `<select>` (AAP 0.2.3 `GlobalSearch`, AAP 0.10.5 item 2), so this half of the pair only exists on. */
+/** The navbar scope control, native-select form. The new application replaces the legacy dropdown with an attached native `<select>` (AAP 0.2.3 `GlobalSearch`, AAP 0.10.5 item 2), so this half of the pair only exists on the new side. */
 const SEARCH_SCOPE_SELECT = '.navbar-form select, form.navbar-form select';
 
 /** The navbar scope control, legacy form: a Bootstrap dropdown whose toggle is `button.btn.btn-default.btn-sm` inside `div.input-group-btn.search-panel` (views/_topnavbar.html:121-124). */
@@ -133,7 +133,7 @@ const SEARCH_SCOPE_ITEMS = '.navbar-form .input-group-btn ul li';
 /** One global search result — `div.blockquoteresult` per `ng-repeat="result in searchResults"` (views/search/glresults.html:10-11). */
 const SEARCH_RESULT = '.blockquoteresult';
 
-/** Where a rendered message may live, most specific first; {@link ClientsPage.readNotifications} stops at the first candidate that renders something visible. - `.alert.alert-danger` — the `api-validate` block every (AAP 0.10.5). */
+/** Where a rendered message may live, most specific first; {@link ClientsPage.readNotifications} stops at the first candidate that renders something visible. - `.alert.alert-danger` — the `api-validate` block every in-scope form renders for a Fineract error (AAP 0.10.5). */
 const NOTIFICATION_SOURCES = [
   'div.alert.alert-danger',
   'div.alert.alert-success',
@@ -142,7 +142,7 @@ const NOTIFICATION_SOURCES = [
   '.notification-container .notification-list li h4',
 ];
 
-/** Where a validation message may live, from the two selectors AAP 0.7.4 fixes (`.alert.alert-danger` and `.help-block` inside `.has-error`) plus legacy's own field-level markup, `<small class="error required">`. */
+/** Where a validation message may live, from the two selectors AAP 0.7.4 fixes (`.alert.alert-danger` and `.help-block` inside `.has-error`) plus legacy's own field-level markup, `<small class="error required">` (createclient.html:60). */
 const VALIDATION_ERROR_SOURCES = ['div.alert.alert-danger', '.has-error .help-block', 'small.error'];
 
 const OPTIONAL_NAVIGATION_TIMEOUT_MS = 10_000;
@@ -174,7 +174,7 @@ interface ColumnIndexes {
   readonly status: number;
 }
 
-/** Which heading each compared field comes from. Headings are read as rendered — translated by the same `app/global-translations` files both applications load — and matched here rather than by column position, so a column (AAP 0.2.1). */
+/** Which heading each compared field comes from. Headings are read as rendered — translated by the same `app/global-translations` files both applications load — and matched here rather than by column position, so a column inserted or reordered on one side shows up as a difference in that field instead of shifting every field after it (AAP 0.2.1). */
 const COLUMN_HEADINGS: readonly { readonly field: keyof Omit<ColumnIndexes, 'status'>; readonly headings: readonly string[] }[] =
   [
     { field: 'name', headings: ['name', 'client name', 'display name'] },
@@ -188,7 +188,7 @@ const COLUMN_HEADINGS: readonly { readonly field: keyof Omit<ColumnIndexes, 'sta
 
 const STATUS_HEADINGS: readonly string[] = ['status'];
 
-/** One navbar search scope: the value legacy sends as the `resource` query parameter, and every spelling a caller may pass to {@link ClientsPage.searchGlobal}. The values and their order are `searchScopes` in (AAP 0.10.5). */
+/** One navbar search scope: the value legacy sends as the `resource` query parameter, and every spelling a caller may pass to {@link ClientsPage.searchGlobal}. The values and their order are `searchScopes` in `app/scripts/controllers/main/MainController.js:183-196` (AAP 0.10.5). */
 const SEARCH_SCOPES: readonly { readonly legacyValue: string; readonly aliases: readonly string[] }[] = [
   {
     legacyValue: 'clients,clientIdentifiers,groups,savings,shares,loans',
@@ -394,7 +394,7 @@ export class ClientsPage {
     return this.page.locator(LIST_ROW);
   }
 
-  /** The rows the screen actually renders, in document order. Legacy hides a closed client's row with `ng-show` rather than removing it (clients.html:65), so an unfiltered read would report rows the user cannot see — and the. */
+  /** The rows the screen actually renders, in document order. Legacy hides a closed client's row with `ng-show` rather than removing it (clients.html:65), so an unfiltered read would report rows the user cannot see — and the new app, which renders only what it received, would then differ for a reason that is not behavioural. */
   private async visibleRows(): Promise<Locator[]> {
     const rows = this.listRows();
     const total = await rows.count();
@@ -425,7 +425,7 @@ export class ClientsPage {
     await field.press('End');
   }
 
-  /** Types into the toolbar's server-side "find" box without submitting it (AAP 0.2.3 `FilterToolbar`); {@link submitFilter} performs the submission, so a caller can set several toolbar controls before one query is sent.. */
+  /** Types into the toolbar's server-side "find" box without submitting it (AAP 0.2.3 `FilterToolbar`); {@link submitFilter} performs the submission, so a caller can set several toolbar controls before one query is sent. */
   async findList(text: string): Promise<void> {
     const field = await this.firstOf([LIST_FIND, '.input-group input.form-control']);
     await field.fill(text);
@@ -562,7 +562,7 @@ export class ClientsPage {
     await this.page.locator(SEARCH_SCOPE_ITEMS).nth(position).click();
   }
 
-  /** The position of `scope` in {@link SEARCH_SCOPES}, matching either its legacy value or one of its short names. @throws When the scope is unknown, listing the scopes that are known — a caller has a bug, and a silent no-op. */
+  /** The position of `scope` in {@link SEARCH_SCOPES}, matching either its legacy value or one of its short names. @throws When the scope is unknown, listing the scopes that are known — a caller has a bug, and a silent no-op would search in whichever scope happened to be selected. */
   private resolveScopePosition(scope: string): number {
     const wanted = normaliseText(scope).toLowerCase();
     const position = SEARCH_SCOPES.findIndex(
@@ -668,7 +668,7 @@ export class ClientsPage {
     ]);
   }
 
-  /** A dropdown, addressed by the same cascade: its legacy id (`select#officeId`, `select#staffId` — createclient.html:23, :33), its `name`, its `formControlName`, then the `<select>` beside its label. @param id Stable. */
+  /** A dropdown, addressed by the same cascade: its legacy id (`select#officeId`, `select#staffId` — createclient.html:23, :33), its `name`, its `formControlName`, then the `<select>` beside its label. @param id Stable identifier of the field, e.g. `officeId`. @param label Visible label of the field, e.g. `Office`. */
   private async selectField(id: string, label: string): Promise<Locator> {
     const labelSelector = `label:has-text(${JSON.stringify(label)})`;
     return this.firstOf([
@@ -679,7 +679,7 @@ export class ClientsPage {
     ]);
   }
 
-  /** A date input, addressed by its legacy id (`#submittedon`, `#activationDate` — createclient.html:281, :271), its `name`, its `formControlName`, then the input beside its label. @param id Stable identifier of the field. */
+  /** A date input, addressed by its legacy id (`#submittedon`, `#activationDate` — createclient.html:281, :271), its `name`, its `formControlName`, then the input beside its label. @param id Stable identifier of the field, e.g. `submittedon`. @param label Visible label of the field, e.g. `Submitted on`. */
   private async dateField(id: string, label: string): Promise<Locator> {
     const labelSelector = `label:has-text(${JSON.stringify(label)})`;
     return this.firstOf([
@@ -690,7 +690,7 @@ export class ClientsPage {
     ]);
   }
 
-  /** A checkbox, addressed by its legacy id (`#activeCheckbox` — createclient.html:263), its `formControlName`, then the checkbox inside or beside its label. @param id Stable identifier of the field, e.g. */
+  /** A checkbox, addressed by its legacy id (`#activeCheckbox` — createclient.html:263), its `formControlName`, then the checkbox inside or beside its label. @param id Stable identifier of the field, e.g. `activeCheckbox`. @param label Visible label of the field, e.g. `Active`. */
   private async checkboxField(id: string, label: string): Promise<Locator> {
     const labelSelector = `label:has-text(${JSON.stringify(label)})`;
     return this.firstOf([
@@ -700,7 +700,7 @@ export class ClientsPage {
     ]);
   }
 
-  /** The `<select>` a visible label names, preferring one in the label's own cell and falling back to the next `<select>` in the document, which is what a label whose control sits further down the row needs. @param. */
+  /** The `<select>` a visible label names, preferring one in the label's own cell and falling back to the next `<select>` in the document, which is what a label whose control sits further down the row needs. @param fieldLabel Visible label of the field. */
   private async selectByLabel(fieldLabel: string): Promise<Locator> {
     const label = this.page.locator(`label:has-text(${JSON.stringify(fieldLabel)})`).first();
     const inCell = label.locator('xpath=following-sibling::div[1]//select');
@@ -708,7 +708,7 @@ export class ClientsPage {
     return label.locator('xpath=following::select[1]');
   }
 
-  /** Whether a `<select>` is enhanced by the legacy chosen widget, either because the template asks for it with the `chosen` attribute (createclient.html:23, :33) or because the plugin's container already sits beside it.. */
+  /** Whether a `<select>` is enhanced by the legacy chosen widget, either because the template asks for it with the `chosen` attribute (createclient.html:23, :33) or because the plugin's container already sits beside it. @param select Locator for the `<select>` in question. */
   private async isChosen(select: Locator): Promise<boolean> {
     if ((await select.getAttribute('chosen')) !== null) return true;
     const container = select.locator('xpath=following-sibling::div[contains(@class,"chosen-container")]');

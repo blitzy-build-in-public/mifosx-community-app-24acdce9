@@ -22,7 +22,7 @@ import type {
   ClientTemplate,
 } from './client.models';
 
-/** The clients family's HTTP client: the one place in the feature where a Fineract client URL is composed and where the request bodies of `client.models.ts` are turned into the payloads the server reads (AAP 0.7.1 Features (AAP 0.7.3, AAP 0.8.2, AAP 0.14.1, Rule 1 clause 5). */
+/** The clients family's HTTP client: the one place in the feature where a Fineract client URL is composed and where the request bodies of `client.models.ts` are turned into the payloads the server reads (AAP 0.7.1 Features, AAP 0.7.3, AAP 0.8.2, AAP 0.14.1, Rule 1 clause 5). */
 
 /** The two members every date-bearing client payload carries: the pattern the date strings are written in and the language whose month names they use (AAP 0.7.2, Rule 1 clause 2). */
 interface ClientDateWire {
@@ -93,10 +93,10 @@ type ClientActionWire =
 /** `Omit` for a union. Applied to a union, a bare `Omit` collapses it to the members every variant shares — for `ClientActionRequest` that is `command` alone — which would let a `close` body be built without its own date. */
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
-/** What the edit screen hands {@link ClientService.update}: `ClientEditRequest` without its `dateFormat` and `locale` members, because this service fills both from the resolved configuration and the active language at the (AAP 0.7.2, Rule 1 clause 2). */
+/** What the edit screen hands {@link ClientService.update}: `ClientEditRequest` without its `dateFormat` and `locale` members, because this service fills both from the resolved configuration and the active language at the boundary where the body is built (AAP 0.7.2, Rule 1 clause 2). */
 export type ClientEditInput = Omit<ClientEditRequest, 'dateFormat' | 'locale'>;
 
-/** What an action screen hands {@link ClientService.action}: one of the five lifecycle bodies without its format members, for the same reason as {@link ClientEditInput}. The union stays discriminated by `command`, so a. */
+/** What an action screen hands {@link ClientService.action}: one of the five lifecycle bodies without its format members, for the same reason as {@link ClientEditInput}. The union stays discriminated by `command`, so a screen holding a `close` body cannot read a rejection reason from it. */
 export type ClientActionInput = DistributiveOmit<ClientActionRequest, 'dateFormat' | 'locale'>;
 
 /** The two query parameters the edit screen's seed read sends, legacy's own pair: `template=true` for the record and its option lists, and `staffInSelectedOfficeOnly=true`, which is the flag `EditClientController` reads its staff picker from (`GET /clients/{id}?template=true&staffInSelectedOfficeOnly=true`; Rule 1 clause 2). */
@@ -110,7 +110,7 @@ export class ClientService {
   private readonly http = inject(HttpClient);
   private readonly config = inject(AppConfigService);
 
-  /** One page of clients: `GET /clients`. The endpoint answers with a paged envelope, not a bare array — `{ totalFilteredRecords, pageItems }` — which is why the page's rows are read from `pageItems` and its row count from (AAP 0.7.3). */
+  /** One page of clients: `GET /clients`. The endpoint answers with a paged envelope, not a bare array — `{ totalFilteredRecords, pageItems }` — which is why the page's rows are read from `pageItems` and its row count from `totalFilteredRecords` (AAP 0.7.3). */
   list(params: ClientListParams): Observable<ClientListPage> {
     return defer(() =>
       this.http.get<ClientListPage>(this.config.apiUrl('clients'), {
@@ -174,7 +174,7 @@ export class ClientService {
     );
   }
 
-  /** Creates a client: `POST /clients`. The caller supplies the record's own fields; this method fills `dateFormat` and `locale` from the resolved configuration and the active language and formats `submittedOnDate` and, when (Rule 1 clause 2). */
+  /** Creates a client: `POST /clients`. The caller supplies the record's own fields; this method fills `dateFormat` and `locale` from the resolved configuration and the active language and formats `submittedOnDate` and, when it is supplied, `activationDate` (Rule 1 clause 2). */
   create(body: ClientCreateRequest): Observable<ClientMutationResponse> {
     return defer(() =>
       this.http.post<ClientMutationResponse>(this.config.apiUrl('clients'), this.createWire(body)),
@@ -267,7 +267,7 @@ export class ClientService {
     return { dateFormat: this.config.config.dateFormat, locale: this.config.activeLocale() };
   }
 
-  /** `ClientCreateRequest` as the wire body: the caller's members passed through, each date formatted in the active locale, and a member the caller left `undefined` left out entirely so the server's required-field rules. */
+  /** `ClientCreateRequest` as the wire body: the caller's members passed through, each date formatted in the active locale, and a member the caller left `undefined` left out entirely so the server's required-field rules decide what is missing. */
   private createWire(body: ClientCreateRequest): ClientCreateWire {
     const dates = this.dateWire();
 

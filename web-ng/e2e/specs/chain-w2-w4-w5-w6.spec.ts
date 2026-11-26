@@ -36,7 +36,7 @@ const CLIENT_RECORD_ROUTE = /#\/viewclient\/(\d+)$/;
 const LOAN_APPLICATION_ROUTE = /#\/newclientloanaccount\/(\d+)$/;
 const LOAN_RECORD_ROUTE = /#\/viewloanaccount\/(\d+)$/;
 
-/** The colour class an active status indicator carries, in either application's spelling: the baseline paints `statusactive` and this one `status-active`, and neither paints a status word at all (AAP 0.10.5 item 11), so. */
+/** The colour class an active status indicator carries, in either application's spelling: the baseline paints `statusactive` and this one `status-active`, and neither paints a status word at all (AAP 0.10.5 item 11), so the comparison is made on the class both applications paint, never on text. */
 const ACTIVE_STATUS_CLASS = /status[-_]?active/i;
 
 /** One captured request body as its field map — the shape `capture/network-capture.ts` records a JSON object in, with keys canonicalised and every generated id already a role token. */
@@ -47,7 +47,7 @@ function isFieldMap(value: NormalizedValue | null): value is FormFields {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** The field map of one exchange's request body, or `null` when it carried no JSON object — a call with no body, and one whose body is an array, both answer `null` so a caller can assert on it. @param exchange The captured. */
+/** The field map of one exchange's request body, or `null` when it carried no JSON object — a call with no body, and one whose body is an array, both answer `null` so a caller can assert on it. @param exchange The captured exchange, or `null`. */
 function requestFields(exchange: NormalizedExchange | null): FormFields | null {
   const body = exchange === null ? null : exchange.requestBody;
   return isFieldMap(body) ? body : null;
@@ -169,7 +169,7 @@ test.describe('Chain W2 → W4 → W5 → W6 end-to-end proof', () => {
         'W1: signing in sends exactly one POST /authentication, the only credential exchange of the run',
       ).toBe(1);
 
-      // ── Stage 1 — W2 create and activate a client (AAP 0.10.1 W2) ─────────────────────────────── The list it starts from is asserted before anything is written: an alphabetical run puts this spec first, so the database (AAP 0.7.4).
+      // ── Stage 1 — W2 create and activate a client (AAP 0.10.1 W2) ─────────────────────────────── The list it starts from is asserted before anything is written: an alphabetical run puts this spec first, so the database may hold no client at all and the list is allowed to show its empty state (AAP 0.7.4).
       await pages.clients.open();
       const columnHeaders = await pages.clients.readColumnHeaders();
       expect(
@@ -229,7 +229,7 @@ test.describe('Chain W2 → W4 → W5 → W6 end-to-end proof', () => {
       }
       await pages.clients.submitForm();
 
-      // The client is created pending, which is the state W2's activate command acts on: W2's outcome is the two calls in the AAP's order, and a client created already active leaves the activate command nothing the server.
+      // The client is created pending, which is the state W2's activate command acts on: W2's outcome is the two calls in the AAP's order, and a client created already active leaves the activate command nothing the server would accept.
       const clientId = await routeIdOf(page, CLIENT_RECORD_ROUTE, 'W2: creating the client');
       const clientCreates = callsTo(capture, 'POST', CLIENT_COLLECTION_PATH);
       expect(
@@ -276,7 +276,7 @@ test.describe('Chain W2 → W4 → W5 → W6 end-to-end proof', () => {
 
       await pages.clients.openClientAction(clientId, 'activate');
       if (pages.uiProject === 'next') {
-        // The action form seeds its date from the browser clock (AAP 0.10.5 item 15), so the workflow input is written from the tenant business date instead: every date a workflow sends is the run date or an offset from it (AAP (AAP 0.10.1).
+        // The action form seeds its date from the browser clock (AAP 0.10.5 item 15), so the workflow input is written from the tenant business date instead: every date a workflow sends is the run date or an offset from it (AAP 0.10.1).
         await pages.clients.fillClientForm({ activationDate: runDateInput });
       }
       await pages.clients.submitAction();
@@ -595,7 +595,7 @@ test.describe('Chain W2 → W4 → W5 → W6 end-to-end proof', () => {
 
       await pages.loans.openView(loanId);
       const transactionsAfterDisbursal = await pages.loans.readTransactions();
-      // The product is accrual-based, so the disbursal leaves the loan with the disbursement and the interest it accrues; what matters here is that the record shows exactly what the API reports, and that the repayment below.
+      // The product is accrual-based, so the disbursal leaves the loan with the disbursement and the interest it accrues; what matters here is that the record shows exactly what the API reports, and that the repayment below repays the first period's total due.
       expect(
         transactionsAfterDisbursal.length,
         'W5: the loan record shows the transactions the disbursal left on the loan',
@@ -689,7 +689,7 @@ test.describe('Chain W2 → W4 → W5 → W6 end-to-end proof', () => {
         'W6: that read asks for the schedule, the transactions and the charges together',
       ).toContain('all');
 
-      // ── Final proof — the record evidence, then AAP 0.10.3 criterion 12's three facts ───────── The screen reads happen before the API snapshots and before the acceptance assertions, so the three facts that decide the.
+      // ── Final proof — the record evidence, then AAP 0.10.3 criterion 12's three facts ───────── The screen reads happen before the API snapshots and before the acceptance assertions, so the three facts that decide the verdict are read once the chain has settled.
       await pages.clientView.open(clientId);
       const finalClientHeader = await pages.clientView.readHeader();
       await pages.loans.openView(loanId);

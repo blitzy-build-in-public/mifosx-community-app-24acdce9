@@ -39,7 +39,7 @@ const ACTIVE_STATUS_CLASS: Readonly<Record<'legacy' | 'next', RegExp>> = {
   next: /status-active/i,
 };
 
-/** How a legacy notice is recognised as a failure. The baseline's `readNotifications()` answers text only — it has no kind to read — and it does surface success toasts, so the check is on the vocabulary Fineract's own. */
+/** How a legacy notice is recognised as a failure. The baseline's `readNotifications()` answers text only — it has no kind to read — and it does surface success toasts, so the check is on the vocabulary Fineract's own error text uses. */
 const LEGACY_FAILURE_NOTICE = /error|fail|invalid|unable|cannot|denied|required/i;
 
 type JsonObject = { readonly [field: string]: NormalizedValue };
@@ -134,7 +134,7 @@ function resourceIdOf(capture: CaptureSession, value: NormalizedValue | undefine
   return null;
 }
 
-/** The generated id one of the application's hash routes carries, e.g (AAP 0.10.2). */
+/** The generated id one of the application's hash routes carries, e.g. `#/viewloanaccount/42` (AAP 0.10.2). */
 function requireHashId(url: string, route: string, subject: string): number {
   const hash = url.includes('#') ? url.slice(url.indexOf('#')) : '(no hash)';
   const matched = new RegExp(`#/${route}/(\\d+)(?=$|[/?#])`).exec(hash);
@@ -214,7 +214,7 @@ test.describe('W5 approve and disburse the loan', () => {
         `the submitted loan must be the application W4 posted for ${principal} (AAP 0.10.1 W4)`,
       ).toBe(principal);
 
-      // This fork reports an `approvedPrincipal` on a submitted loan as well, echoing the amount the application proposes — the same observation `w4-loan-application.spec.ts` and `chain-w2-w4-w5-w6.spec.ts` record for this `GET.
+      // This fork reports an `approvedPrincipal` on a submitted loan as well, echoing the amount the application proposes — the same observation `w4-loan-application.spec.ts` and `chain-w2-w4-w5-w6.spec.ts` record for this `GET /loans/{id}?associations=all` read.
       expect(
         submittedLoan.snapshot.transactionCount,
         'a loan awaiting approval has booked no transaction: approving it books none, and the disbursement W5 ' +
@@ -253,7 +253,7 @@ test.describe('W5 approve and disburse the loan', () => {
         'every Fineract call carries the basic-auth header (Rule 1 clause 2), and the capture records its presence',
       ).toBe(true);
 
-      // The two payload shapes are the one place the two front ends genuinely differ: the legacy datepicker takes a Date and the amount as text, while the application's native date input takes `yyyy-mm-dd` and a number (AAP (AAP 0.10.5, Rule 1 clause 2).
+      // The two payload shapes are the one place the two front ends genuinely differ: the legacy datepicker takes a Date and the amount as text, while the application's native date input takes `yyyy-mm-dd` and a number (AAP 0.10.5, Rule 1 clause 2).
       if (pages.uiProject === 'legacy') {
         await pages.loans.fillActionForm({ date: runDate, amount: String(principal) });
       } else {

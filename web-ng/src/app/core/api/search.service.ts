@@ -13,11 +13,11 @@ export interface GlobalSearchParams {
   readonly query: string;
   /** The selected scope, carried under the member name AAP 0.7.2 fixes for this model: the member is the resource to search. */
   readonly resource: SearchScope;
-  /** The optional `exactMatch` flag. Left undefined, nothing is sent; an explicit `false` is still sent, because legacy's parameter distinguishes "false" from "absent" and dropping it would change the request (Rule 1 clause (Rule 1 clause 3). */
+  /** The optional `exactMatch` flag. Left undefined, nothing is sent; an explicit `false` is still sent, because legacy's parameter distinguishes "false" from "absent" and dropping it would change the request (Rule 1 clause 3). */
   readonly exactMatch?: boolean;
 }
 
-/** The Fineract search row — the `SearchData` envelope's element — reduced to the fields an in-scope results list reads (AAP 0.7.2's `SearchResult` row; AAP 0.10.2's displayed-data comparison). **The one loose boundary (Rule 1 clause 4). */
+/** The Fineract search row — the `SearchData` envelope's element — reduced to the fields an in-scope results list reads (AAP 0.7.2's `SearchResult` row; AAP 0.10.2's displayed-data comparison). **The one loose boundary (Rule 1 clause 4).** The rest of the element is left unmodelled — the `SearchData` members no in-scope results list reads — rather than typed from guesswork. */
 interface SearchData {
   /** Identifier of the matched entity within its own resource — a client id or a loan id. */
   readonly entityId: number;
@@ -31,7 +31,7 @@ interface SearchData {
   readonly parentId?: number;
   /** Display name of that owning client, rendered beside the row when present. */
   readonly parentName?: string;
-  /** The entity's status as Fineract sends it — an object, not a bare string: `GET /search` returns `{ id, code, value }` for every row that carries a status (Fineract's `EnumOptionData`, e.g. */
+  /** The entity's status as Fineract sends it — an object, not a bare string: `GET /search` returns `{ id, code, value }` for every row that carries a status (Fineract's `EnumOptionData`, e.g. `{ id: 300, code: 'clientStatusType.active', value: 'Active' }`). */
   readonly entityStatus?: {
     readonly id: number;
     readonly code: string;

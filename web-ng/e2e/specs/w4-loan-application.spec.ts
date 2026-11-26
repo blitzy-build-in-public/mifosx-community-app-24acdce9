@@ -110,7 +110,7 @@ function routeId(url: string, pattern: RegExp, what: string): number {
   return Number(matched[1]);
 }
 
-/** Whether a captured date member names the run date. The capture rewrites a date to its day offset from the run date — the run date itself becomes `d0` — and leaves a value it could not read as a date verbatim (AAP 0.10.2. */
+/** Whether a captured date member names the run date. The capture rewrites a date to its day offset from the run date — the run date itself becomes `d0` — and leaves a value it could not read as a date verbatim (AAP 0.10.2). */
 function namesRunDate(value: unknown, runDate: Date): boolean {
   if (value === 'd0') {
     return true;
@@ -119,7 +119,7 @@ function namesRunDate(value: unknown, runDate: Date): boolean {
   return parsed !== null && dayOffset(runDate, parsed) === 0;
 }
 
-/** Whether a control's own text is a calendar date, in either shape the two front ends render one: the new application's `yyyy-mm-dd` native date input and the legacy screen's `dd MMMM yyyy` text. @param text The control's. */
+/** Whether a control's own text is a calendar date, in either shape the two front ends render one: the new application's `yyyy-mm-dd` native date input and the legacy screen's `dd MMMM yyyy` text. @param text The control's own text content. */
 function isCalendarDate(text: string): boolean {
   return parseFineractDate(text) !== null;
 }
@@ -137,7 +137,7 @@ function isLoanTemplateRead(exchange: NormalizedExchange): boolean {
   return exchange.method === 'GET' && exchange.path.endsWith(LOAN_TEMPLATE_PATH);
 }
 
-/** Whether one exchange is a `POST /loans`, with the command the caller names or — for `null` — with no command at all, which is the submission. @param exchange One normalised API exchange. @param command The `command`. */
+/** Whether one exchange is a `POST /loans`, with the command the caller names or — for `null` — with no command at all, which is the submission. @param exchange One normalised API exchange. @param command The `command` value to match, or `null` for the submission that carries none. */
 function isLoanPost(exchange: NormalizedExchange, command: string | null): boolean {
   if (exchange.method !== 'POST' || !exchange.path.endsWith(LOAN_COLLECTION_PATH)) {
     return false;
@@ -185,7 +185,7 @@ test.describe('W4 submit an individual loan application after previewing the sch
         );
       }
 
-      // 3. Open the record and take its id from the route. The id is used as the `clientId` argument and to prove the application screen names the same client; its value is never asserted (AAP 0.10.2 compares a generated id by.
+      // 3. Open the record and take its id from the route. The id is used as the `clientId` argument and to prove the application screen names the same client; its value is never asserted (AAP 0.10.2 compares a generated id by its role in the sequence, not its literal value).
       await pages.clients.openClient(requiredClient);
       const clientId = routeId(page.url(), CLIENT_RECORD_HASH, 'the client record');
 
@@ -253,7 +253,7 @@ test.describe('W4 submit an individual loan application after previewing the sch
       expect(namesRunDate(submittedAfterFill, runDate)).toBe(true);
       expect(namesRunDate(disbursementAfterFill, runDate)).toBe(true);
 
-      // 10. Preview. Exactly one `POST /loans?command=calculateLoanSchedule` may leave the screen — one click, one request (AAP 0.1.1 duplicate-submission rule) — and its body must be the application AAP 0.7.2 describes, in the (Rule 1 clause 2).
+      // 10. Preview. Exactly one `POST /loans?command=calculateLoanSchedule` may leave the screen — one click, one request (AAP 0.1.1 duplicate-submission rule) — and its body must be the application AAP 0.7.2 describes, in the shape and the `dateFormat` + `locale` pair Rule 1 clause 2 fixes.
       await pages.loans.previewSchedule();
 
       const previewPosts = await awaitExchanges(capture, (exchange) => isLoanPost(exchange, PREVIEW_COMMAND));
@@ -333,7 +333,7 @@ test.describe('W4 submit an individual loan application after previewing the sch
       expect(snapshot.principal).toBe(SCENARIO.loanApplication.principal);
       expect(snapshot.transactionCount).toBe(0);
 
-      // 14. The record the application landed on. It is opened explicitly, so the readers below never race the navigation the submission started and both front ends make the same one record read (AAP 0.7.3 "W6 repayment": `GET.
+      // 14. The record the application landed on. It is opened explicitly, so the readers below never race the navigation the submission started and both front ends make the same one record read (AAP 0.7.3 "W6 repayment": `GET /loans/{id}?associations=all`).
       await pages.loans.openView(loanId);
       const summary: LoanSummaryReading = await pages.loans.readSummary();
       // The status is a colour and never a word (AAP 0.10.5 item 11): a loan awaiting approval paints the pending colour, which the two front ends spell `status-pending` and `statuspending`.

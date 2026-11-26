@@ -1,4 +1,4 @@
-/** W1 — log in and log out: the Playwright proof of the workflow AAP 0.10.1 lists first, run against both front ends (AAP 0.11.1 row "specs/w1-login … w8-savings, chain-w2-w4-w5-w6"; AAP 0.10.3 criteria 3, 4 and 12; AAP (AAP 0.7.3, AAP 0.10.5, AAP 0.10.2, AAP 0.4.4). */
+/** W1 — log in and log out: the Playwright proof of the workflow AAP 0.10.1 lists first, run against both front ends (AAP 0.11.1 row "specs/w1-login … w8-savings, chain-w2-w4-w5-w6"; AAP 0.10.3 criteria 3, 4 and 12; AAP 0.7.3, AAP 0.10.5, AAP 0.10.2, AAP 0.4.4). */
 import { MASKED } from '../capture/network-capture';
 import type { NormalizedExchange, NormalizedValue } from '../capture/network-capture';
 import { expect, test } from '../fixtures/parity-fixture';
@@ -9,11 +9,11 @@ import { API_PATH, LOCALE, readCredentials } from '../seed/fixtures';
 const LEGACY_SESSION_PREFIX = 'mifosX';
 const SESSION_ENTRY_NAME = 'sessionData';
 
-/** Where the hash settles after a successful login. `#/clients` in this application (AAP 0.10.5 item 3); the legacy baseline may also settle on `#/home`, because `MainController.js:175` ends its authentication-success. */
+/** Where the hash settles after a successful login. `#/clients` in this application (AAP 0.10.5 item 3); the legacy baseline may also settle on `#/home`, because `MainController.js:175` ends its authentication-success handler by navigating to the dashboard. */
 const NEXT_LANDING_HASH = '#/clients';
 const LEGACY_LANDING_HASHES: readonly string[] = ['#/clients', '#/home'];
 
-/** Where the hash settles after a sign-out: `#/login` in this application (the navbar's sign-out navigates there), `#/` or `#/login` in the legacy baseline, whose `logout()` ends in `location.path('/').replace()` with the. */
+/** Where the hash settles after a sign-out: `#/login` in this application (the navbar's sign-out navigates there), `#/` or `#/login` in the legacy baseline, whose `logout()` ends in `location.path('/').replace()` with the `#/` hash prefix, so both readings below are accepted. */
 const NEXT_LOGIN_HASH = '#/login';
 const LEGACY_LOGIN_HASHES: readonly string[] = ['#/', '#/login'];
 
@@ -24,7 +24,7 @@ const USER_READ_CALL = /^\/users\/(?:\d+|\{[A-Za-z][A-Za-z0-9]*\})$/;
 /** A request-body field naming a credential: the names the capture masks (Rule 1 clause 9). */
 const CREDENTIAL_FIELD = /password/i;
 
-/** The `localStorage` key of this page's own document marker, written before the language switch and read after it: a value that survives proves the switch swapped the active translation in place rather than reloading the (AAP 0.7.4, AAP 0.10.5). */
+/** The `localStorage` key of this page's own document marker, written before the language switch and read after it: a value that survives proves the switch swapped the active translation in place rather than reloading the page (AAP 0.7.4, AAP 0.10.5). */
 const DOCUMENT_MARKER_KEY = '__w1DocumentMarker';
 
 /** The languages this spec is willing to switch to, in preference order, each with the spellings the two switchers can show for it: this application renders the code itself, while the legacy `uib-dropdown` renders the name. */
@@ -38,12 +38,12 @@ const LANGUAGE_CODE = /^[a-z]{2}(?:[_-][A-Z]{2})?$/;
 
 type CapturedJsonObject = { readonly [field: string]: NormalizedValue };
 
-/** The resource path of a captured exchange with the API root taken off, e.g (AAP 0.7.3). */
+/** The resource path of a captured exchange with the API root taken off, e.g. `/clients/{clientId}` (AAP 0.7.3). */
 function resourcePath(exchange: NormalizedExchange): string {
   return exchange.path.startsWith(API_PATH) ? exchange.path.slice(API_PATH.length) : exchange.path;
 }
 
-/** The position of the first recorded call that matches one method and one resource path, or `-1` when the page has not made it (yet). @param exchanges The capture's exchanges, in the order the page issued them. @param. */
+/** The position of the first recorded call that matches one method and one resource path, or `-1` when the page has not made it (yet). @param exchanges The capture's exchanges, in the order the page issued them. @param method The HTTP method the call must carry. @param pattern The pattern the resource path must match. */
 function indexOfCall(
   exchanges: readonly NormalizedExchange[],
   method: string,
@@ -68,7 +68,7 @@ function isSessionEntry(entry: SessionEntrySummary): boolean {
   );
 }
 
-/** Whether a switcher option names the locale under test. This application's options carry the code (`en`), the legacy switcher carries the language's own name (`English`), so both readings are accepted for English and the. */
+/** Whether a switcher option names the locale under test. This application's options carry the code (`en`), the legacy switcher carries the language's own name (`English`), so both readings are accepted for English and the code reading for every other language. */
 function namesLocale(option: LanguageOptionSummary, locale: string): boolean {
   const code = locale.toLowerCase();
   return [option.value, option.label].some((shown) => {
@@ -153,7 +153,7 @@ test.describe('W1 log in and log out', () => {
       } else {
         expect(LEGACY_LANDING_HASHES).toContain(landingHash);
       }
-      // The anonymous screen is gone, and the submit-state reading now separates "the form went away" from "the button is disabled": this application unmounts its login component, so nothing is left to read and the state is (Rule 1 clause 3).
+      // The anonymous screen is gone, and the submit-state reading now separates "the form went away" from "the button is disabled": this application unmounts its login component, so nothing is left to read and the state is therefore `absent` (Rule 1 clause 3).
       if (pages.uiProject === 'next') {
         expect(await pages.login.readSubmitState()).toBe('absent');
       } else {
@@ -192,7 +192,7 @@ test.describe('W1 log in and log out', () => {
 
       const authentication = exchanges[authenticationIndex];
       const userRead = exchanges[userReadIndex];
-      // The tenant header is on every call; the credential is not, because the exchange that produces it is the one being made — this application's interceptor attaches the key only once a session exists, exactly as the legacy.
+      // The tenant header is on every call; the credential is not, because the exchange that produces it is the one being made — this application's interceptor attaches the key only once a session exists, exactly as the legacy does.
       expect(authentication.hasTenantHeader).toBe(true);
       expect(authentication.hasAuthorizationHeader).toBe(false);
       expect(userRead.hasTenantHeader).toBe(true);

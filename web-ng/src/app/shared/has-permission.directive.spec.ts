@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { PermissionsService } from '../core/auth/permissions.service';
 import { HasPermissionDirective } from './has-permission.directive';
 
-/** Behavioural spec for `HasPermissionDirective`, the template-side permission gate the app shell's navigation and action buttons hang off (AAP 0.7.1 row "`hasPermission` directive"; AAP 0.9.1 item 1; AAP 0.1.1 fail-closed (AAP 0.3.4, AAP 0.4.1). */
+/** Behavioural spec for `HasPermissionDirective`, the template-side permission gate the app shell's navigation and action buttons hang off (AAP 0.7.1 row "`hasPermission` directive"; AAP 0.9.1 item 1; AAP 0.1.1 fail-closed requirement; AAP 0.3.4 claim 12 legacy semantics; AAP 0.4.1). */
 
 /** The permission Fineract returns to a user who may do everything; spelled out, not imported. */
 const ALL_FUNCTIONS = 'ALL_FUNCTIONS';

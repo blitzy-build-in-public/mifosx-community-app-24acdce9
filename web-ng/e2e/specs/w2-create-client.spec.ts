@@ -70,7 +70,7 @@ function isActiveSwatchClass(className: string): boolean {
   );
 }
 
-/** Whether the API's own status word is the active one. Compared case-insensitively against the word the backend sent, never against a status the harness chose: Fineract answers `Active` here, and a renamed value has to (AAP 0.10.2). */
+/** Whether the API's own status word is the active one. Compared case-insensitively against the word the backend sent, never against a status the harness chose: Fineract answers `Active` here, and a renamed value has to fail rather than pass (AAP 0.10.2). */
 function isActiveStatus(status: string): boolean {
   return status.trim().toLowerCase() === 'active';
 }

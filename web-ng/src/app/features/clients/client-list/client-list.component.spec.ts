@@ -1081,4 +1081,96 @@ describe('ClientListComponent', () => {
     // Narrowing the rows already in hand is a display filter: neither filter cost a read (Rule 1 clause 3).
     expect(httpMock.match(isClientListRead)).toHaveLength(0);
   });
+
+  /**
+   * The QA report's own reproduction of F17, pinned at the DOM: a query that matches nothing shows the explicit empty state, and clearing the field brings the loaded page back row for row. The case
+   * above proves the empty state is painted; this one proves the screen comes back out of it without a reload (AAP 0.7.4 "an empty result set shows the explicit empty state and no error"; Rule 1
+   * clause 3, the filter a display filter and no request).
+   */
+  it('restores the loaded page when a filter that matched nothing is cleared', () => {
+    mount();
+    initialRead.flush(FIRST_PAGE);
+    fixture.detectChanges();
+
+    /** The names the table's first column paints, read from the rendered cells so the restore is compared row for row and not by a count alone. */
+    const renderedNames = (): readonly string[] =>
+      fixture.debugElement
+        .queryAll(By.css('#client-list tbody tr'))
+        .map(
+          (row) => (row.query(By.css('td')).nativeElement as HTMLElement).textContent?.trim() ?? '',
+        );
+
+    // The page the filter starts from: the two rows the display filters leave on screen, Ada then José (Rule 1 clause 3).
+    expect(renderedNames()).toEqual([ADA, JOSE]);
+
+    setFilter('zzzz');
+    fixture.detectChanges();
+
+    // Nothing matches, so the table gives way to the explicit empty state and no error (AAP 0.7.4).
+    expect(component.isEmpty()).toBe(true);
+    expect(fixture.debugElement.queryAll(By.css('app-empty-state'))).toHaveLength(1);
+    expect(element<HTMLTableElement>('#client-list')).toBeNull();
+    expect(fixture.debugElement.queryAll(By.css('#client-list tbody tr'))).toHaveLength(0);
+
+    setFilter('');
+    fixture.detectChanges();
+
+    // Clearing the field is the absence of a query, so the rows return from the page already in hand — the same two, in the same order, with no stale row left behind (Rule 1 clause 3).
+    expect(component.isEmpty()).toBe(false);
+    expect(fixture.debugElement.queryAll(By.css('app-empty-state'))).toHaveLength(0);
+    expect(element<HTMLTableElement>('#client-list')).not.toBeNull();
+    expect(renderedNames()).toEqual([ADA, JOSE]);
+
+    // And the recovery costs no read: clearing a display filter narrows nothing into the server's query, so the one list read is still the only request made (Rule 1 clause 3).
+    expect(httpMock.match(isClientListRead)).toHaveLength(0);
+  });
+
+  /**
+   * The QA report's second symptom of F17: a positive query that matched one row left that one stale row on screen after the field was cleared. Every row of the loaded page returns instead
+   * (AAP 0.7.4 "an empty result set shows the explicit empty state and no error", the state a cleared query has to leave; Rule 1 clause 3).
+   */
+  it('restores every visible row when a positive filter is cleared', () => {
+    mount();
+    initialRead.flush(FIRST_PAGE);
+    fixture.detectChanges();
+
+    setFilter('ada');
+    fixture.detectChanges();
+
+    // The one match, on the component's own rows and in the table (Rule 1 clause 3).
+    expect(component.visibleRows().map((row) => row.name)).toEqual([ADA]);
+    expect(fixture.debugElement.queryAll(By.css('#client-list tbody tr'))).toHaveLength(1);
+
+    setFilter('');
+    fixture.detectChanges();
+
+    // Both rows the display filters leave on screen are painted again, so the cleared field is a whole page and not the previous match (Rule 1 clause 3).
+    expect(component.visibleRows().map((row) => row.name)).toEqual([ADA, JOSE]);
+    expect(fixture.debugElement.queryAll(By.css('#client-list tbody tr'))).toHaveLength(2);
+
+    expect(httpMock.match(isClientListRead)).toHaveLength(0);
+  });
+
+  /**
+   * A blank or whitespace-only query is the absence of a filter: the needle is trimmed before it is compared, so the loaded page stays whole rather than being read as a search for a space (AAP 0.7.4
+   * "an empty result set shows the explicit empty state and no error"; Rule 1 clause 3).
+   */
+  it.each(['   ', '\t '])(
+    'treats the blank query %j as no filter at all',
+    (blank: string) => {
+      mount();
+      initialRead.flush(FIRST_PAGE);
+      fixture.detectChanges();
+
+      setFilter(blank);
+      fixture.detectChanges();
+
+      // The unfiltered visible rows, unchanged, and no empty state: whitespace matches nothing only if the query is taken literally (Rule 1 clause 3).
+      expect(component.visibleRows().map((row) => row.name)).toEqual([ADA, JOSE]);
+      expect(component.isEmpty()).toBe(false);
+      expect(fixture.debugElement.queryAll(By.css('#client-list tbody tr'))).toHaveLength(2);
+
+      expect(httpMock.match(isClientListRead)).toHaveLength(0);
+    },
+  );
 });

@@ -62,7 +62,7 @@ export class AppConfigService {
   /** Resolves the translate service only when `activeLocale` is read, never during construction. */
   private readonly injector = inject(Injector);
 
-  /** The locale every date-bearing Fineract payload must carry: the locale of the selected language, as AAP 0.1.1's date discipline requires ("every date-bearing payload carries `dateFormat` and the `locale` of the selected (AAP 0.7.2). */
+  /** The locale every date-bearing Fineract payload must carry: the locale of the selected language, as AAP 0.1.1's date discipline requires ("every date-bearing payload carries `dateFormat` and the `locale` of the selected language", AAP 0.7.2). */
   readonly activeLocale: Signal<string> = computed(() => {
     const translate = this.injector.get<TranslateService | null>(TranslateService, null, {
       optional: true,
@@ -107,7 +107,7 @@ export class AppConfigService {
     return resolved;
   }
 
-  /** Composes a Fineract URL from the configured `apiBaseUrl`, the configured `apiPath` and the relative resource path a service owns, with exactly one `/` at each join. @param path a relative resource path such as (Rule 1 clause 2). */
+  /** Composes a Fineract URL from the configured `apiBaseUrl`, the configured `apiPath` and the relative resource path a service owns, with exactly one `/` at each join. @param path a relative resource path such as `'clients/2/accounts'` (Rule 1 clause 2). */
   apiUrl(path: string): string {
     const { apiBaseUrl, apiPath } = this.config;
     const base = apiBaseUrl.replace(/\/+$/, '');
@@ -207,7 +207,7 @@ export class AppConfigService {
       return 0;
     };
 
-    /** The one format a date-bearing payload may carry. Fixed rather than merely type-checked: the Fineract contract pairs this string with the active locale, and a second format would change what the server parses (Rule 1 (Rule 1 clause 2). */
+    /** The one format a date-bearing payload may carry. Fixed rather than merely type-checked: the Fineract contract pairs this string with the active locale, and a second format would change what the server parses (Rule 1 clause 2). */
     const dateFormat = (): typeof FINERACT_DATE_FORMAT => {
       if (record['dateFormat'] === FINERACT_DATE_FORMAT) {
         return FINERACT_DATE_FORMAT;

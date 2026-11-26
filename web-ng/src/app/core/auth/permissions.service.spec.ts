@@ -4,7 +4,7 @@ import { ALL_FUNCTIONS, ALL_FUNCTIONS_READ, PermissionsService } from './permiss
 import type { SessionData } from './session.model';
 import { SessionService } from './session.service';
 
-/** Behavioural spec for `PermissionsService`, the one answer to "may this user do this?" that both the `hasPermission` directive and the route guard read (AAP 0.7.1, row `PermissionsService`; AAP 0.3.4 claim 12; the (AAP 0.1.1). */
+/** Behavioural spec for `PermissionsService`, the one answer to "may this user do this?" that both the `hasPermission` directive and the route guard read (AAP 0.7.1, row `PermissionsService`; AAP 0.3.4 claim 12; AAP 0.1.1): the permission algebra it pins is the one the gate answers with — `ALL_FUNCTIONS` grants every code, `ALL_FUNCTIONS_READ` every `READ_` code and nothing else, and with no session every answer is `false`, so the gate fails closed. */
 describe('PermissionsService', () => {
   it('fails closed until a session supplies a permission list', () => {
     const service = new PermissionsService();

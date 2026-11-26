@@ -1,9 +1,9 @@
-/** Page object for the new Angular application's individual-loan screens — the `next` project's side of workflows W4 (submit an application after previewing its schedule), W5 (approve and disburse), W6 (make a repayment) (AAP 0.8.2, Rule 2, AAP 0.4.4, AAP 0.10.5). */
+/** Page object for the new Angular application's individual-loan screens — the `next` project's side of workflows W4 (submit an application after previewing its schedule), W5 (approve and disburse), W6 (make a repayment) and W7 (a Fineract validation error rendered verbatim) (AAP 0.8.2, Rule 2, AAP 0.4.4, AAP 0.10.5). */
 import type { Locator, Page } from '@playwright/test';
 
 import { FINERACT_URL, NEXT_URL, TENANT_ID } from '../../seed/fixtures.js';
 
-/** One label/value row of a record as the page renders it: the record's `#loan-summary` block prints a bold key and its figure side by side, and the same pair is what the legacy sibling's summary reader reports for the. */
+/** One label/value row of a record as the page renders it: the record's `#loan-summary` block prints a bold key and its figure side by side, and the same pair is what the legacy sibling's summary reader reports for the baseline it drives. */
 export interface LabelValue {
   readonly label: string;
   /** The row's rendered value, trimmed; `''` when the row renders no value. */
@@ -152,7 +152,7 @@ const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 const SCREEN_TIMEOUT_MS = 30_000;
 
-/** Ceiling for a template-driven option list to arrive. The product, officer, fund and payment-type options all come from Fineract template endpoints the screen requests on entry, so a select is empty for a moment after. */
+/** Ceiling for a template-driven option list to arrive. The product, officer, fund and payment-type options all come from Fineract template endpoints the screen requests on entry, so a select is empty for a moment after the form paints. */
 const TEMPLATE_TIMEOUT_MS = 30_000;
 
 const OPTION_POLL_INTERVAL_MS = 100;
@@ -532,7 +532,7 @@ export class LoansPage {
     );
   }
 
-  /** Opens the loan record. Serves the read-back step of W5 and W6 over `#/viewloanaccount/:id` (AAP 0.8.2), where the one read carries the status, the summary figures, the repayment schedule, the transactions and the (AAP 0.7.3, AAP 0.7.4). */
+  /** Opens the loan record. Serves the read-back step of W5 and W6 over `#/viewloanaccount/:id` (AAP 0.8.2), where the one read carries the status, the summary figures, the repayment schedule, the transactions and the charges together (AAP 0.7.3, AAP 0.7.4). */
   async openView(loanId: number | string): Promise<void> {
     const id = requireRouteId(loanId, 'the loan id');
     await this.navigate(`/viewloanaccount/${id}`);
@@ -649,7 +649,7 @@ export class LoansPage {
     return `${NEXT_URL}/?baseApiUrl=${encodeURIComponent(FINERACT_URL)}&tenantIdentifier=${TENANT_ID}#${route}`;
   }
 
-  /** Navigates to a hash route on the full entry URL. The navigation is confirmed against `window.location.hash` rather than trusted: when the router has not applied the fragment — a document that was already open, or a. */
+  /** Navigates to a hash route on the full entry URL. The navigation is confirmed against `window.location.hash` rather than trusted: when the router has not applied the fragment — a document that was already open, or a redirect that ran first — the hash is set in the page as the second way to ask it. */
   private async navigate(route: string): Promise<void> {
     await this.page.goto(this.screenUrl(route));
     const applied = await this.page.evaluate(

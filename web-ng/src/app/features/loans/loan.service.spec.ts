@@ -29,7 +29,7 @@ import {
   type LoanRepaymentInput,
 } from './loan.service';
 
-/** Contract spec for `LoanService`: the one place the loans family composes a Fineract URL and turns a model into a payload (Rule 1 clause 8; AAP 0.7.3 endpoint rows "W4 loan application", "Loan edit", "W5 approve and (AAP 0.11.1, AAP 0.7.2, Rule 1 clause 2, AAP 0.4.2). */
+/** Contract spec for `LoanService`: the one place the loans family composes a Fineract URL and turns a model into a payload (Rule 1 clause 8; AAP 0.7.3 endpoint rows "W4 loan application", "Loan edit", "W5 approve and disburse"; AAP 0.11.1, AAP 0.7.2, Rule 1 clause 2, AAP 0.4.2). */
 
 /** The served API host and root, written as `web-ng/src/assets/config.json` ships them, so the URLs this spec expects are the URLs the deployed application produces (AAP 0.4.4 decision 5(a)) (Rule 2). */
 const API_BASE_URL = 'https://localhost:8443';
@@ -802,7 +802,7 @@ describe('LoanService', () => {
       expect(received).toEqual([LOAN_ACCOUNT]);
       expect(received[0]?.repaymentSchedule?.periods).toHaveLength(1);
 
-      // The charges the record's charge section lists and the edit re-posts come out of this same answer, unchanged: the loan-charge id beside the definition id, the amounts, and the due date as the server sent it (AAP 0.7.3 (Rule 1 clause 2).
+      // The charges the record's charge section lists and the edit re-posts come out of this same answer, unchanged: the loan-charge id beside the definition id, the amounts, and the due date as the server sent it (AAP 0.7.3; Rule 1 clause 2).
       expect(received[0]?.charges).toEqual(LOAN_CHARGES);
       expect(received[0]?.charges?.[0]?.chargeId).toBe(PICKED_CHARGE_ID);
       expect(received[0]?.charges?.[1]?.dueDate).toBeUndefined();
@@ -916,7 +916,7 @@ describe('LoanService', () => {
 
       expect(sent.request.params.keys()).toEqual(['command']);
       expect(sent.request.params.get('command')).toBe(command);
-      // The date-format pair and nothing else: the date the form left empty is no date at all, and no optional member is invented in its place, so Fineract's required-field rule reports the gap (Rule 1 clauses 2 and 3; AAP (AAP 0.7.2).
+      // The date-format pair and nothing else: the date the form left empty is no date at all, and no optional member is invented in its place, so Fineract's required-field rule reports the gap (Rule 1 clauses 2 and 3; AAP 0.7.2).
       expect(sent.request.body).toEqual({ dateFormat: FINERACT_DATE_FORMAT, locale: APP_LOCALE });
       for (const member of absent) {
         expect(bodyKeys(sent.request)).not.toContain(member);
@@ -1110,7 +1110,7 @@ describe('LoanService', () => {
       expect(sent.request.params.get('command')).toBe(command);
       expect(sent.request.body).toEqual(wire);
       expect(bodyKeys(sent.request)).not.toContain('command');
-      // The members the endpoint refuses on the parameter binding: neither command posts an amount and neither posts a payment type, while only `pay` posts the date it is recorded on (AAP 0.7.3, "Loan charges".
+      // The members the endpoint refuses on the parameter binding: neither command posts an amount and neither posts a payment type, while only `pay` posts the date it is recorded on (AAP 0.7.3, "Loan charges").
       expect(bodyKeys(sent.request)).not.toContain('amount');
       expect(bodyKeys(sent.request)).not.toContain('paymentTypeId');
 

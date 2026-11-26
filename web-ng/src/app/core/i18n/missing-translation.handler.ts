@@ -4,7 +4,7 @@ import type {
   MissingTranslationHandlerParams,
 } from '@ngx-translate/core';
 
-/** Keeps a missing translation key from reaching the user as the raw dotted key, and reports it to the developer console in development builds only. ngx-translate's own handler returns `params.key` unchanged, which would. */
+/** Keeps a missing translation key from reaching the user as the raw dotted key, and reports it to the developer console in development builds only. ngx-translate's own handler returns `params.key` unchanged, which would put the untranslated key itself on the screen instead of a readable label. */
 
 /** Acronym run followed by a capitalised word, as in `IDField`: split before the last capital. */
 const ACRONYM_TO_WORD_BOUNDARY = /([A-Z]+)([A-Z][a-z])/g;

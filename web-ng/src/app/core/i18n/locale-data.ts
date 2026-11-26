@@ -29,7 +29,7 @@ import vi from '@angular/common/locales/vi';
 import zhHans from '@angular/common/locales/zh-Hans';
 import zhHant from '@angular/common/locales/zh-Hant';
 
-/** Angular's CLDR locale data for every language the application can be configured in, registered once per code: `formatDate` takes calendar names from it and throws `NG0701` for any code other than `en-US` without it, so (AAP 0.7.2, AAP 0.7.3, Rule 1 clause 7). */
+/** Angular's CLDR locale data for every language the application can be configured in, registered once per code: `formatDate` takes calendar names from it and throws `NG0701` for any code other than `en-US` without it, so each configured code is registered here before `formatDate` is asked for it (AAP 0.7.2, AAP 0.7.3, Rule 1 clause 7). */
 
 /** One module of Angular's generated CLDR data, named the way the library names it. A documented `any` boundary of Rule 1 clause 4: `registerLocaleData` declares its first parameter `any`, the value is opaque calendar data, and it is only ever handed straight back, which is why deriving the type from the library's own signature is more truthful than modelling a structure the application does not touch. */
 type LocaleDataModule = Parameters<typeof registerLocaleData>[0];

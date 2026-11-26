@@ -2,7 +2,7 @@ import { Directive, ElementRef, Renderer2, effect, inject, input } from '@angula
 
 import { PermissionsService } from '../core/auth/permissions.service';
 
-/** Template-side permission gate for the signed-in shell: the host element is hidden, never removed, whenever the user lacks the permission the caller names (AAP 0.7.1 `hasPermission` row; AAP 0.9.1 item 1 (AAP 0.3.4, AAP 0.1.1). */
+/** Template-side permission gate for the signed-in shell: the host element is hidden, never removed, whenever the user lacks the permission the caller names (AAP 0.7.1 `hasPermission` row; AAP 0.9.1 item 1, "permission-gated navigation and action buttons"; AAP 0.3.4 claim 12 legacy semantics; AAP 0.1.1, "a route guard and a template directive must agree, or a user reaches a screen they cannot act on"). */
 @Directive({ selector: '[hasPermission]', standalone: true, exportAs: 'hasPermission', })
 export class HasPermissionDirective {
   /** The permission code that decides the host element's visibility; `'CLIENT_VIEW'` and `'!READ_CLIENT'` are the two shapes a caller writes. A signal input, so rebinding it from the host template re-runs the effect and the element follows the new code without the host re-rendering its structure; required, because a gated element that names no code names nothing to check. */

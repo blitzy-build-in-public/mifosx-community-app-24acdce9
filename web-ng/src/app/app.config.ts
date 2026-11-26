@@ -1,4 +1,4 @@
-// The application's composition root - the single place the router, the HTTP client with its one interceptor, the translation stack and the start-up configuration are declared (AAP 0.4.3 rows 1, 4 and 7; AAP 0.8.2; AAP (AAP 0.11.1, AAP 0.4.1, AAP 0.3.4, Rule 1 clause 5).
+// The application's composition root - the single place the router, the HTTP client with its one interceptor, the translation stack and the start-up configuration are declared (AAP 0.4.3 rows 1, 4 and 7; AAP 0.8.2; AAP 0.11.1; AAP 0.4.1; Rule 1 clause 5).
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import {
   inject,

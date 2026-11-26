@@ -56,7 +56,7 @@ const ACCESS_CODE = /^[A-Z][A-Z_]+$/;
 /** The one route that serves five lifecycle commands from a parameter. */
 const CLIENT_ACTION_PATH = 'client/:id/:action';
 
-/** The five codes the lifecycle-action route declares, spelled out rather than imported from `CLIENT_ACTION_PERMISSIONS`: this declaration is what the guard enforces on `#/client/2/close`, so a code swapped, added or. */
+/** The five codes the lifecycle-action route declares, spelled out rather than imported from `CLIENT_ACTION_PERMISSIONS`: this declaration is what the guard enforces on `#/client/2/close`, so a code swapped, added or removed here fails the assertion that compares the declaration whole. */
 const CLIENT_ACTION_CODES: Readonly<Record<string, string>> = {
   activate: 'ACTIVATE_CLIENT',
   close: 'CLOSE_CLIENT',
@@ -97,7 +97,7 @@ function declaredCodes(declared: unknown): readonly string[] {
   return [];
 }
 
-/** Every full path the given route array resolves to, with each lazy group's children spliced in at the path its mount declares — the composition `in-scope-routes.json` describes in its header ("full paths are app-level. */
+/** Every full path the given route array resolves to, with each lazy group's children spliced in at the path its mount declares — the composition `in-scope-routes.json` describes in its header ("full paths are app-level parent segments joined with feature child segments; lazy groups mount at path ''"). */
 async function composePaths(routes: readonly Route[], prefix = ''): Promise<readonly string[]> {
   const paths: string[] = [];
 

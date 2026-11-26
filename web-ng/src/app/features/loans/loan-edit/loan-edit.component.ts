@@ -92,7 +92,7 @@ interface LoanEditTemplateFields {
   readonly transactionProcessingStrategyCode: string | null;
   /** `transactionProcessingStrategyOptions` — the strategy picker rows, keyed by code. */
   readonly transactionProcessingStrategyOptions: readonly SelectOption[];
-  /** `loanOfficerId` — the officer the loan is assigned to, when one is. */
+  /** `loanOfficerId` — the officer the loan is assigned to, when one is assigned. */
   readonly loanOfficerId: number | null;
   /** `loanOfficerOptions` — the officer picker rows. */
   readonly loanOfficerOptions: readonly SelectOption[];

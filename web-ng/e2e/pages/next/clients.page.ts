@@ -1,4 +1,4 @@
-/** Page object for the new Angular application's client screens — the `next` project's side of workflow **W2** (create a client and activate it), workflow **W3** (search for a client and read the list's answer), the client (AAP 0.10.1, AAP 0.11.1, AAP 0.8.1, AAP 0.8.2). */
+/** Page object for the new Angular application's client screens — the `next` project's side of workflow **W2** (create a client and activate it), workflow **W3** (search for a client and read the list's answer), the client lifecycle actions and the validation surface workflow **W7** asserts (AAP 0.10.1, AAP 0.11.1, AAP 0.8.1, AAP 0.8.2). */
 import type { Locator, Page } from '@playwright/test';
 
 import { FINERACT_URL, NEXT_URL, TENANT_ID } from '../../seed/fixtures.js';
@@ -88,7 +88,7 @@ const VIEW_ROOT = 'app-client-view';
 
 const SEARCH_ROOT = 'app-search-results';
 
-/** One result of the global search: the block legacy renders per result — `div.blockquoteresult` in `app/views/search/glresults.html:10-11` — whose class the product stylesheet reproduces because the partial that declares. */
+/** One result of the global search: the block legacy renders per result — `div.blockquoteresult` in `app/views/search/glresults.html:10-11` — whose class the product stylesheet reproduces because the partial that declares it is not imported. */
 const SEARCH_RESULT_BLOCK = '.blockquoteresult';
 
 const GLOBAL_SEARCH_ROOT = 'app-global-search';
@@ -404,7 +404,7 @@ export class ClientsPage {
   /** @param page The Playwright page the `next` project drives. The object holds no other collaborator: it composes the entry URL from `seed/fixtures.ts` and reads the document through this page alone. */
   constructor(private readonly page: Page) {}
 
-  /** Opens the clients list and waits for its first answer. `authGuard` redirects an unauthenticated navigation to `/login`, so a caller that has not signed in sees this wait time out naming `app-client-list` rather than a (AAP 0.10.1). */
+  /** Opens the clients list and waits for its first answer. `authGuard` redirects an unauthenticated navigation to `/login`, so a caller that has not signed in sees this wait time out naming `app-client-list` rather than a surprising screen: the specs sign in through `pages/next/login.page.ts` first (AAP 0.10.1). */
   async open(): Promise<void> {
     await this.navigate('/clients');
     await this.awaitScreen(LIST_ROOT, 'the clients list');
@@ -462,7 +462,7 @@ export class ClientsPage {
     await this.awaitScreen(SEARCH_ROOT, 'the search results');
   }
 
-  /** Reads the search results (workflow W3's search half). One block per result, exactly as legacy renders it: the name as the link, the `#account` segment the block prints when its family carries one, and the entity and (AAP 0.7.3). */
+  /** Reads the search results (workflow W3's search half). One block per result, exactly as legacy renders it: the name as the link, the `#account` segment the block prints when its family carries one, and the entity and parent line beneath, e.g. `Entity:Client | Office:Head Office` (AAP 0.7.3). */
   async readSearchResults(): Promise<readonly SearchResultRow[]> {
     await this.awaitSearchSettled();
 
@@ -514,7 +514,7 @@ export class ClientsPage {
     await this.awaitListReplaced();
   }
 
-  /** Reads the list's column headings, in document order. The six captions are translated at run time from the legacy bundles, so they are reported as rendered and never hard-coded here: a caller compares them with the (AAP 0.10.2). */
+  /** Reads the list's column headings, in document order. The six captions are translated at run time from the legacy bundles, so they are reported as rendered and never hard-coded here: a caller compares them with the API-derived values (AAP 0.10.2) rather than with an invented English string. */
   async readColumnHeaders(): Promise<readonly string[]> {
     const headers: readonly string[] = await this.page
       .locator(`${LIST_ROOT} table thead th`)
@@ -701,7 +701,7 @@ export class ClientsPage {
     );
   }
 
-  /** Submits the open form with its own primary control. One click and never a retry: the control disables itself while its request is in flight (`[disabled]="guard.busy()"`), which is the duplicate-submission protection the. */
+  /** Submits the open form with its own primary control. One click and never a retry: the control disables itself while its request is in flight (`[disabled]="guard.busy()"`), which is the duplicate-submission protection the workflow asserts. */
   async submitForm(): Promise<void> {
     await this.submitPrimary(await this.openForm());
   }
@@ -717,7 +717,7 @@ export class ClientsPage {
     return messages;
   }
 
-  /** Opens one client lifecycle action's form by its own route. The action is a member of {@link ClientAction}, so the route segment can only be one of the five the application renders, and the id is validated as a single (AAP 0.3.4, Rule 1 clause 3). */
+  /** Opens one client lifecycle action's form by its own route. The action is a member of {@link ClientAction}, so the route segment can only be one of the five the application renders, and the id is validated as a single route segment before it is used (AAP 0.3.4, Rule 1 clause 3). */
   async openClientAction(clientId: number | string, action: ClientAction): Promise<void> {
     const id = requireRouteId(clientId, 'client id');
     await this.navigate(`/client/${id}/${action}`);
@@ -734,7 +734,7 @@ export class ClientsPage {
     return `${NEXT_URL}/?baseApiUrl=${encodeURIComponent(FINERACT_URL)}&tenantIdentifier=${TENANT_ID}#${route}`;
   }
 
-  /** Navigates to a hash route on the full entry URL. The navigation is confirmed against `window.location.hash` rather than trusted: when the router has not applied the fragment — a document already open, or a redirect that. */
+  /** Navigates to a hash route on the full entry URL. The navigation is confirmed against `window.location.hash` rather than trusted: when the router has not applied the fragment — a document that was already open, or a redirect that ran first — the hash is set in the page as the second way to ask it. */
   private async navigate(route: string): Promise<void> {
     await this.page.goto(this.screenUrl(route));
 
@@ -815,7 +815,7 @@ export class ClientsPage {
     );
   }
 
-  /** Waits until the list has painted one of its states. Four outcomes are painted mutually exclusively and any of them is a settled screen: the table, the explicit empty state, the card's failure banner for a 4xx, or the (AAP 0.7.4). */
+  /** Waits until the list has painted one of its states. Four outcomes are painted mutually exclusively and any of them is a settled screen: the table, the explicit empty state, the card's failure banner for a 4xx, or the notification host's message for a 5xx or a transport fault (AAP 0.7.4). */
   private async awaitListSettled(): Promise<void> {
     const settled = this.page
       .locator(
@@ -882,7 +882,7 @@ export class ClientsPage {
     );
   }
 
-  /** Finds the control a form field's own caption names. The create screen renders the office, staff and date captions outside the field component, as a `<label for>` pointing at the control's id, so the label's `for` target. */
+  /** Finds the control a form field's own caption names. The create screen renders the office, staff and date captions outside the field component, as a `<label for>` pointing at the control's id, so the label's `for` target is the handle that works for every field on every client form regardless of how the field is composed. */
   private async findLabeledControl(root: Locator, pattern: RegExp): Promise<Locator | null> {
     const labels = root.locator('.control-label');
     const count: number = await labels.count();
@@ -907,7 +907,7 @@ export class ClientsPage {
     return null;
   }
 
-  /** Resolves a field's control by its caption, falling back to the id the legacy markup gave it. @param root The open form's root element. @param pattern The field's caption. @param inputId The id the field carries when the. */
+  /** Resolves a field's control by its caption, falling back to the id the legacy markup gave it. @param root The open form's root element. @param pattern The field's caption. @param inputId The id the field carries when the caption cannot be matched. */
   private async controlFor(
     root: Locator,
     pattern: RegExp,

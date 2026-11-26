@@ -13,12 +13,12 @@
           -->
           <h1 class="sr-only">{{ 'label.heading.search' | translate }}</h1>
 
-          <!-- Fineract's own failure text for a 4xx, verbatim and untranslated, above whatever is already rendered: a failed search leaves the screen mounted and the previous results standing, while a 5xx or a transport failure is (AAP 0.7.4). -->
+          <!-- Fineract's own failure text for a 4xx, verbatim and untranslated, above whatever is already rendered: a failed search leaves the screen mounted and the previous results standing, while a 5xx or a transport failure is the interceptor's to announce (AAP 0.7.4). -->
           @if (error(); as message) {
             <div class="alert alert-danger" id="search-results-error" role="alert">{{ message }}</div>
           }
 
-          <!-- The bundle's own truncation notice, above the blocks the answer was cut to: a search of more than 200 results shows its first 201 and says so (`app/views/search/glresults.html:5`, whose string (Rule 1 clause 3, Rule 1 clause 6). -->
+          <!-- The bundle's own truncation notice, above the blocks the answer was cut to: a search of more than 200 results shows its first 201 and says so (`app/views/search/glresults.html:5`, whose string is `label.search.query.matched.results.exceeds.max.length`) (Rule 1 clause 3, Rule 1 clause 6). -->
           @if (exceedsMaxLength()) {
             <p class="text-danger" id="search-results-truncated">{{ 'label.search.query.matched.results.exceeds.max.length' | translate }}</p>
           }
@@ -36,7 +36,7 @@
                   <span [hasPermission]="'!' + row.permission">{{ row.name }}</span>
                   @if (row.printsAccountNo) {&nbsp;|&nbsp;#{{ row.accountNo }}}
                   <br />
-                  <!-- The family in the legacy bundles' own words ("Client", "Loan"), never the API's untranslated discriminator, and the parent named by the label its own family uses: a client's office, or the owning client of a loan or of. -->
+                  <!-- The family in the legacy bundles' own words ("Client", "Loan"), never the API's untranslated discriminator, and the parent named by the label its own family uses: a client's office, or the owning client of a loan or of an identifier match. -->
                   <strong>{{ 'label.heading.entity' | translate }}</strong>:{{ entityLabelKey[row.kind] | translate }}&nbsp;|&nbsp;<strong>{{ row.parentLabelKey | translate }}</strong>:{{ row.parentName }}
                 </div>
               }

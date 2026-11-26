@@ -21,7 +21,7 @@ const CLIENT_RECORD_HASH = /\/viewclient\/(\d+)/;
 /** The principal control, rendered as `#principal` on both front ends (`LoanNewComponent`). */
 const PRINCIPAL_FIELD = '#principal';
 
-/** The screen's failure banner. Both front ends render the server's message in this region — the new app's `loan-new.component.html` as `.alert.alert-danger`, the legacy screen through the `uib-alert` the `apiValidate`. */
+/** The screen's failure banner. Both front ends render the server's message in this region — the new app's `loan-new.component.html` as `.alert.alert-danger`, the legacy screen through the `uib-alert` the `apiValidate` directive renders. */
 const ERROR_BANNER = 'div.alert.alert-danger';
 
 /** Last path segment of the loan collection the application is submitted to (AAP 0.7.3 W4, W7). */
@@ -46,7 +46,7 @@ function collapse(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 
-/** The client id a client-record URL carries. @param url The page's absolute URL, e.g. the configured application origin followed by `/#/viewclient/2`. @throws When the hash names no client record, quoting the hash that. */
+/** The client id a client-record URL carries. @param url The page's absolute URL, e.g. the configured application origin followed by `/#/viewclient/2`. @throws When the hash names no client record, quoting the hash that was read. */
 function readClientId(url: string): number {
   const hash = new URL(url).hash;
   const match = CLIENT_RECORD_HASH.exec(hash);
@@ -57,7 +57,7 @@ function readClientId(url: string): number {
   return Number(id);
 }
 
-/** Whether one captured exchange is an application submission: a `POST` to the loan collection that carries no `command` query parameter, so the schedule calculation (`command=calculateLoanSchedule`) is never counted as a. */
+/** Whether one captured exchange is an application submission: a `POST` to the loan collection that carries no `command` query parameter, so the schedule calculation (`command=calculateLoanSchedule`) is never counted as a submission. */
 function isLoanSubmit(exchange: NormalizedExchange): boolean {
   return (
     exchange.method === 'POST' &&
@@ -83,7 +83,7 @@ function onlyLoanSubmit(exchanges: readonly NormalizedExchange[]): NormalizedExc
   return submit;
 }
 
-/** One numeric member of a captured request body, narrowed out of the unmodelled payload. @param value A captured request body, `unknown` by design (Rule 1 clause 4). @param member The member to read, e.g. */
+/** One numeric member of a captured request body, narrowed out of the unmodelled payload. @param value A captured request body, `unknown` by design (Rule 1 clause 4). @param member The member to read, e.g. `principal`. */
 function readNumericMember(value: unknown, member: string): number | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return null;
@@ -151,7 +151,7 @@ test.describe('W7 a Fineract validation error is shown to the user', () => {
       await pages.login.open();
       await pages.login.signIn(username, password);
 
-      // 2. The client record W7 applies from, and the loan-account count it starts with — the before figure step 13 compares against, read from Fineract rather than assumed to be zero (the chain spec may already have given this.
+      // 2. The client record W7 applies from, and the loan-account count it starts with — the before figure step 13 compares against, read from Fineract rather than assumed to be zero (the chain spec may already have given this client a loan).
       await pages.clients.open();
       await pages.clients.openClient(SCENARIO.client.displayName);
       const clientId = readClientId(page.url());

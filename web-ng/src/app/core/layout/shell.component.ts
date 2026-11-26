@@ -26,7 +26,7 @@ interface ShellBreadcrumb {
   readonly label: string;
 }
 
-/** The document events that count as the session being in use and re-arm the idle clock immediately: a key, a click and a touch — the three of ng-idle's own DOM interruption list that say the user has actually done (AAP 0.1.1, AAP 0.4.2). */
+/** The document events that count as the session being in use and re-arm the idle clock immediately: a key, a click and a touch — the three of ng-idle's own DOM interruption list that say the user has actually done something (AAP 0.1.1, AAP 0.4.2). */
 const IMMEDIATE_ACTIVITY_EVENTS: readonly string[] = ['keydown', 'mousedown', 'touchstart'];
 
 /** The document events that say the pointer is moving. They prove the user is present but arrive at their own rate — a trackpad emits hundreds of `mousemove` events per second — so they are counted through the throttle. */
@@ -38,7 +38,7 @@ const ACTIVITY_THROTTLE_MS = 1_000;
 /** The id of the shell's content landmark, which the skip link names and {@link ShellComponent.skipToMain} focuses. */
 const MAIN_CONTENT_ID = 'main-content';
 
-/** Reads the breadcrumb trail a matched route declares in `data['breadcrumb']` (AAP 0.8.2, "each route declares its permission in `data.permission`"; the trail is the sibling declaration the breadcrumb renders) and (Rule 1 clause 4). */
+/** Reads the breadcrumb trail a matched route declares in `data['breadcrumb']` (AAP 0.8.2, "each route declares its permission in `data.permission`"; the trail is the sibling declaration the breadcrumb renders) and the declaration arrives as `unknown` and is narrowed here rather than asserted (Rule 1 clause 4). */
 function declaredBreadcrumbKeys(value: unknown): readonly string[] {
   if (typeof value === 'string') {
     const key: string = value.trim();
@@ -55,7 +55,7 @@ function declaredBreadcrumbKeys(value: unknown): readonly string[] {
   return [];
 }
 
-/** The signed-in shell — the `AppShell` row of the component inventory (AAP 0.2.3) and the chrome AAP 0.7.1 and AAP 0.8.2 place behind the authenticated routes: "`core/layout/shell.component.ts` renders the navbar, the (AAP 0.9.2, AAP 0.10.5, AAP 0.1.1, AAP 0.4.1). */
+/** The signed-in shell — the `AppShell` row of the component inventory (AAP 0.2.3) and the chrome AAP 0.7.1 and AAP 0.8.2 place behind the authenticated routes: "`core/layout/shell.component.ts` renders the navbar, the breadcrumb and `<router-outlet>` for every authenticated route (no left rail, 0.10.5)" (AAP 0.9.2, AAP 0.10.5, AAP 0.1.1, AAP 0.4.1). */
 @Component({
   selector: 'app-shell',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -116,7 +116,7 @@ export class ShellComponent implements OnDestroy {
 
     this.publishBreadcrumb();
 
-    // The switcher changes the active language without a reload (AAP 0.7.4), so the document's own `lang` attribute has to follow it: an interface read in French or Spanish must not still be announced as English (WCAG 3.1.1.
+    // The switcher changes the active language without a reload (AAP 0.7.4), so the document's own `lang` attribute has to follow it: an interface read in French or Spanish must not still be announced as English (WCAG 3.1.1).
     bindDocumentLanguage(this.translate);
 
     // The trail is translated text, so it follows the language as well as the route: a switch from either switcher performs no navigation, and without these two subscriptions the visible crumb would keep the previous language (AAP 0.7.4, AAP 0.9.1).
@@ -192,7 +192,7 @@ export class ShellComponent implements OnDestroy {
   /** When a pointer event was last allowed to re-arm the clock, as `Date.now()` milliseconds. */
   private lastPointerActivityAt = Number.NEGATIVE_INFINITY;
 
-  /** The handler of the pointer activity events — `mousemove` and `wheel` — as a one-second leading-edge throttle over {@link ACTIVITY_THROTTLE_MS}. The first pointer event of each window calls {@link noteActivity} and. */
+  /** The handler of the pointer activity events — `mousemove` and `wheel` — as a one-second leading-edge throttle over {@link ACTIVITY_THROTTLE_MS}. The first pointer event of each window calls {@link noteActivity} and every later pointer event inside the same window is dropped until the window elapses. */
   private readonly onPointerActivity = (): void => {
     const now: number = Date.now();
 

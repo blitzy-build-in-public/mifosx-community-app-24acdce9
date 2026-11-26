@@ -1,4 +1,4 @@
-/** Baseline page object for the individual-loan screens of the legacy AngularJS application — the unchanged Mifos X community-app served on port 9090, which the parity run measures before the new Angular application is (AAP 0.10.1, AAP 0.9.3, AAP 0.8.2, Rule 2). */
+/** Baseline page object for the individual-loan screens of the legacy AngularJS application — the unchanged Mifos X community-app served on port 9090, which the parity run measures before the new Angular application is judged (AAP 0.10.1, AAP 0.9.3, AAP 0.8.2, Rule 2). */
 import type { ElementHandle, Locator, Page } from '@playwright/test';
 import { FINERACT_URL, LEGACY_URL, TENANT_ID, formatFineractDate } from '../../seed/fixtures';
 import { chooseOption } from './chosen';
@@ -119,7 +119,7 @@ export type LoanAccountAction =
 
 const PREVIEW_TABLE_HEADERS = ['principal due', 'interest due', 'due'] as const;
 
-/** Positions the record's Repayment Schedule table. It is the only one of the three schedule tables that carries both a `Due` and a `Paid` column (viewloanaccountdetails.html), which is what separates it from the Original. */
+/** Positions the record's Repayment Schedule table. It is the only one of the three schedule tables that carries both a `Due` and a `Paid` column (viewloanaccountdetails.html), which is what separates it from the Original and Future schedules. */
 const SCHEDULE_TABLE_HEADERS = ['principal due', 'interest', 'fees', 'due', 'paid'] as const;
 
 /** Positions the record's transaction list, whose second header row carries `Principal`. */
@@ -496,7 +496,7 @@ export class LoansPage {
     await this.page.locator('#numberOfRepayments:enabled').waitFor({ state: 'visible' });
   }
 
-  /** Fills the application form with the values supplied, walking the wizard's own steps to reach the control each one carries (AAP 0.10.1 W4; AAP 0.3.4 row 14). **No product bound is read, applied or reported.** W7 (AAP (Rule 1 clause 3). */
+  /** Fills the application form with the values supplied, walking the wizard's own steps to reach the control each one carries (AAP 0.10.1 W4; AAP 0.3.4 row 14). **No product bound is read, applied or reported.** W7 requires a principal above the product's 10,000 maximum to reach the server untouched (Rule 1 clause 3). */
   async fillApplication(values: LoanApplicationValues): Promise<void> {
     if (values.productName !== undefined) {
       await this.selectProduct(values.productName);
@@ -850,7 +850,7 @@ export class LoansPage {
     await chooseOption(this.page, select, optionText);
   }
 
-  /** Fills one field by its label. The control is resolved by label text first, then by the element id the legacy template gives it, then by `formControlName`, then by placeholder — all inside one page-side helper, so the. */
+  /** Fills one field by its label. The control is resolved by label text first, then by the element id the legacy template gives it, then by `formControlName`, then by placeholder — all inside one page-side helper, so the field mapping stays in a single place. */
   private async fillFieldByLabel(label: string, value: string): Promise<void> {
     const spec = FILLABLE_FIELDS.get(label);
     if (spec === undefined) {
@@ -991,7 +991,7 @@ export class LoansPage {
     return pane;
   }
 
-  /** One section's empty-state text: `''` when the section shows data, otherwise the block it renders in place of the data (`.text-center.text-muted`, the composition AAP 0.7.4 settles on), or `''` when it renders none. */
+  /** One section's empty-state text: `''` when the section shows data, otherwise the block it renders in place of the data (`.text-center.text-muted`, the composition AAP 0.7.4 settles on), or `''` when it renders none — which is what the legacy record does. */
   private async readSectionEmptyState(
     headings: readonly string[],
     required: readonly string[],

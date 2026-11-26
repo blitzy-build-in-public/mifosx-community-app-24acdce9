@@ -51,7 +51,7 @@ const STATUS_DOT = `${RECORD_HEADER} i.fa-circle`;
 /** The inline metadata run of the record header — its last `<small>`, rendering `Client Number: {accountNo} | External ID: {externalId} | Staff: {staffName}`. */
 const RECORD_METADATA = `${RECORD_HEADER} > small:last-child`;
 
-/** AAP 0.2.3 `TabStrip`: the `<ul class="nav nav-tabs">` that `uib-tabset` renders (angular-bootstrap 1.3.2), holding the record's tabs — General, Identities, Documents, Notes and Credit Report on the legacy app, of which. */
+/** AAP 0.2.3 `TabStrip`: the `<ul class="nav nav-tabs">` that `uib-tabset` renders (angular-bootstrap 1.3.2), holding the record's tabs — General, Identities, Documents, Notes and Credit Report on the legacy app, of which only General and Identities are in scope for the new one. */
 const TAB_STRIP = '.nav-tabs';
 
 /** The pane container `uib-tabset` renders beside the strip: `<div class="tab-content"><div class="tab-pane">`. */
@@ -59,7 +59,7 @@ const TAB_PANEL = '.tab-content .tab-pane';
 
 const ACTIVE_TAB = `${TAB_STRIP} li.active > a`;
 
-/** AAP 0.2.3 `ActionButtonGroup`: the joined primary-button group of the record (`<div class="col-md-11 col-sm-11 btn-group row pull-right">`, app/views/clients/viewclient.html:183) inside the active tab pane, together. */
+/** AAP 0.2.3 `ActionButtonGroup`: the joined primary-button group of the record (`<div class="col-md-11 col-sm-11 btn-group row pull-right">`, app/views/clients/viewclient.html:183) inside the active tab pane, together with the `More` dropdown it contains. */
 const ACTION_GROUP = `${TAB_PANEL}.active .btn-group`;
 
 /** The `More` dropdown's menu: `<ul class="dropdown dropdown-menu dropdown-menu-right">`. */
@@ -69,11 +69,11 @@ const ACTION_MENU = '.dropdown-menu';
 const GENERAL_TAB = 'General';
 const IDENTITIES_TAB = 'Identities';
 
-/** Action labels as the legacy English translations render them: `label.button.more` = "More" and `label.button.newloan` = "New Loan" (app/scripts/models/clientStatus.js:90-110 and. */
+/** Action labels as the legacy English translations render them: `label.button.more` = "More" and `label.button.newloan` = "New Loan" (app/scripts/models/clientStatus.js:90-110 and app/global-translations/locale-en.json). */
 const MORE_LABEL = 'More';
 const NEW_LOAN_LABEL = 'New Loan';
 
-/** Hash prefixes of the routes the record's actions lead to: `location.path('/viewloanaccount/' + id)` in app/scripts/controllers/client/ViewClientController.js:145, and the action hrefs of. */
+/** Hash prefixes of the routes the record's actions lead to: `location.path('/viewloanaccount/' + id)` in app/scripts/controllers/client/ViewClientController.js:145, and the action hrefs of app/scripts/models/clientStatus.js. */
 const LOAN_ACCOUNT_ROUTE = '#/viewloanaccount/';
 const NEW_LOAN_ROUTE = '#/newclientloanaccount/';
 
@@ -219,7 +219,7 @@ export class ClientViewPage {
     this.page = page;
   }
 
-  /** Opens the record of `clientId` (AAP 0.10.1 W3) — the entry point of W4 as well, because the "New Loan" action lives on this screen — and waits for the record header, which the profile card, the. */
+  /** Opens the record of `clientId` (AAP 0.10.1 W3) — the entry point of W4 as well, because the "New Loan" action lives on this screen — and waits for the record header, which the profile card, the tab strip and the action group all settle after. */
   async open(clientId: number): Promise<void> {
     await this.gotoHash(`#/viewclient/${clientId}`);
     await this.recordHeader().waitFor({ state: 'visible' });
@@ -349,7 +349,7 @@ export class ClientViewPage {
     return this.page.locator(RECORD_HEADER).first();
   }
 
-  /** The address the harness opens the legacy app at (Rule 2): `LEGACY_URL` with the two query parameters that make it talk to this run's Fineract — without them the legacy app resolves a public demo host, which Rule 2. */
+  /** The address the harness opens the legacy app at (Rule 2): `LEGACY_URL` with the two query parameters that make it talk to this run's Fineract — without them the legacy app resolves a public demo host, which Rule 2 forbids. */
   private entryUrl(hash?: string): string {
     const query = `?baseApiUrl=${encodeURIComponent(FINERACT_URL)}&tenantIdentifier=${encodeURIComponent(TENANT_ID)}`;
     return hash === undefined ? `${LEGACY_URL}/${query}` : `${LEGACY_URL}/${query}${hash}`;

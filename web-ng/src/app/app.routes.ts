@@ -1,4 +1,4 @@
-/** The application's route tree: the legacy URL scheme in hash form (`#/…`, produced by the `withHashLocation()` that `app.config.ts` passes to `provideRouter`), with each screen's access code declared once in. */
+/** The application's route tree: the legacy URL scheme in hash form (`#/…`, produced by the `withHashLocation()` that `app.config.ts` passes to `provideRouter`), with each screen's access code declared once in `data.permission`. */
 import { inject } from '@angular/core';
 import type { CanMatchFn, Route, Routes, UrlSegment } from '@angular/router';
 
@@ -8,7 +8,7 @@ import { permissionGuard } from './core/auth/permission.guard';
 import { ShellComponent } from './core/layout/shell.component';
 import { NotFoundComponent } from './features/not-found/not-found.component';
 
-/** The `canMatch` predicate a lazy feature mount declares: it accepts a URL whose first segment is one of `firstSegments`, and refuses every other URL. **Why the mount needs it.** The two feature groups are siblings on. */
+/** The `canMatch` predicate a lazy feature mount declares: it accepts a URL whose first segment is one of `firstSegments`, and refuses every other URL. **Why the mount needs it.** The two feature groups are siblings on the same empty path, so a mount that accepted every URL would swallow the other group's routes: each therefore accepts only its own first segments and refuses the rest. */
 const mountsFirstSegment = (...firstSegments: readonly string[]): CanMatchFn =>
   (_route: Route, segments: readonly UrlSegment[]): boolean => {
     const first: string | undefined = segments.at(0)?.path;
@@ -64,11 +64,11 @@ export const routes: Routes = [
           breadcrumb: ['label.heading.search'],
         },
       },
-      // Last among the shell's children, so an unknown URL is matched here instead of backtracking out of the shell: a signed-in visitor keeps the navbar, the breadcrumb and the `.content-wrapper` main landmark — the.
+      // Last among the shell's children, so an unknown URL is matched here instead of backtracking out of the shell: a signed-in visitor keeps the navbar, the breadcrumb and the `.content-wrapper` main landmark — the chrome the outer catch-all, which renders outside the shell, cannot offer.
       { path: '**', component: NotFoundComponent, canMatch: [inSession] },
     ],
   },
-  // Last, and outside the guarded shell: an unknown URL renders the not-found screen for a visitor with no session — this is the branch the shell's own catch-all refuses through `inSession`, so a signed-out visitor is not.
+  // Last, and outside the guarded shell: an unknown URL renders the not-found screen for a visitor with no session — this is the branch the shell's own catch-all refuses through `inSession`, so a signed-out visitor is not admitted to the shell.
   { path: '**', component: NotFoundComponent },
 ];
 

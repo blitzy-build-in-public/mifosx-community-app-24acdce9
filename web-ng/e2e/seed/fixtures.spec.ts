@@ -1,4 +1,4 @@
-/** The harness's own tests for `e2e/seed/fixtures.ts` — the fixed AAP 0.10.1 data and the date arithmetic every parity comparison rests on: AAP 0.10.2 compares dates as day offsets from the run date, and AAP 0.10.1 defines (Rule 1 clause 2, AAP 0.10.4). */
+/** The harness's own tests for `e2e/seed/fixtures.ts` — the fixed AAP 0.10.1 data and the date arithmetic every parity comparison rests on: AAP 0.10.2 compares dates as day offsets from the run date, and AAP 0.10.1 defines the run date as the tenant's business date read from Fineract rather than the browser clock (Rule 1 clause 2, AAP 0.10.4). */
 import { describe, expect, it } from 'vitest';
 
 import {

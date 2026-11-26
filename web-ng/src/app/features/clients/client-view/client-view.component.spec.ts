@@ -25,7 +25,7 @@ import { ClientViewComponent } from './client-view.component';
 import { RecordHeaderComponent } from './record-header/record-header.component';
 import { TabStripComponent, tabDomId } from '../../../shared/tab-strip/tab-strip.component';
 
-/** Behaviour of the client record screen — `#/viewclient/:id`, the last step of the "Sign in and open a client record" flow and the entry point of workflow W3's record read (AAP 0.7.4 "Client view"; AAP 0.8.2 feature route (Rule 1 clause 8, Rule 1 clause 5, AAP 0.1.1, AAP 0.7.1). */
+/** Behaviour of the client record screen — `#/viewclient/:id`, the last step of the "Sign in and open a client record" flow and the entry point of workflow W3's record read (AAP 0.7.4 "Client view"; AAP 0.8.2 feature route; Rule 1 clause 8, Rule 1 clause 5, AAP 0.1.1, AAP 0.7.1). */
 
 /** The route that serves the record, exactly as `clients.routes.ts` declares it. */
 const ROUTES: Routes = [
@@ -158,7 +158,7 @@ interface NotificationStub {
   readonly show: Mock<(kind: NotificationKind, message: string) => void>;
 }
 
-/** The failure a read rejects with, built by the application's own mapper from the response Fineract would answer, so every case drives the message and status the interceptor hands this screen rather than an `ApiError` a (AAP 0.7.2, AAP 0.14.1). */
+/** The failure a read rejects with, built by the application's own mapper from the response Fineract would answer, so every case drives the message and status the interceptor hands this screen rather than an `ApiError` a double assembled by hand (AAP 0.7.2, AAP 0.14.1). */
 function failure(status: number, defaultUserMessage: string): ApiError {
   return toApiError(new HttpErrorResponse({ status, error: { defaultUserMessage } }));
 }
@@ -202,7 +202,7 @@ describe('ClientViewComponent', () => {
       ],
     });
 
-    // The real gate, holding exactly the codes this case names: `ALL_FUNCTIONS`, the `READ_` rule and the fail-closed answer for a list with nothing in it are `PermissionsService`'s own algebra, so the rendered visibility is (AAP 0.1.1, Rule 1 clause 3).
+    // The real gate, holding exactly the codes this case names: `ALL_FUNCTIONS`, the `READ_` rule and the fail-closed answer for a list with nothing in it are `PermissionsService`'s own algebra, so the rendered visibility is the service's own verdict (AAP 0.1.1, Rule 1 clause 3).
     TestBed.inject(PermissionsService).setPermissions(heldCodes);
 
     const harness = await RouterTestingHarness.create(url);
@@ -284,7 +284,7 @@ describe('ClientViewComponent', () => {
     return [`/client/${id}/reactivate`];
   }
 
-  /** The legacy label keys an **active** record's descriptors carry, in render order (`label.button.*` in (AAP 0.7.4). */
+  /** The legacy label keys an **active** record's descriptors carry, in render order (`label.button.*` in `app/global-translations/`; AAP 0.7.4). */
   const ACTIVE_LABEL_KEYS: readonly string[] = [
     'label.button.edit',
     'label.button.newloan',
@@ -367,7 +367,7 @@ describe('ClientViewComponent', () => {
     return instance;
   }
 
-  /** The tab strip as the screen rendered it, so a case can read the tab the screen reports as selected rather than inferring it from the body: the strip holds no tab list of its own and paints exactly the active id it is (AAP 0.7.4). */
+  /** The tab strip as the screen rendered it, so a case can read the tab the screen reports as selected rather than inferring it from the body: the strip holds no tab list of its own and paints exactly the active id it is handed (AAP 0.7.4). */
   function tabStripOf(harness: RouterTestingHarness): TabStripComponent {
     const strip = debugOf(harness).query(By.directive(TabStripComponent));
 
@@ -384,7 +384,7 @@ describe('ClientViewComponent', () => {
     return instance;
   }
 
-  /** The route each rendered action anchor names, read through the `RouterLink` directive the anchor carries rather than through its rendered `href`, so the assertion proves what the router would navigate to and the template (AAP 0.8.2, AAP 0.7.4). */
+  /** The route each rendered action anchor names, read through the `RouterLink` directive the anchor carries rather than through its rendered `href`, so the assertion proves what the router would navigate to and the template cannot drift from the descriptors the component computes (AAP 0.8.2, AAP 0.7.4). */
   function renderedRoutes(harness: RouterTestingHarness): string[] {
     return debugOf(harness)
       .queryAll(By.directive(RouterLink))
@@ -593,7 +593,7 @@ describe('ClientViewComponent', () => {
     const harness = await render(`/viewclient/${CLIENT_ID}`);
     const host = hostOf(harness);
 
-    // Exactly one banner, carrying Fineract's own text character for character: the read's failure reaches the template through `clientError`, whose message is rendered verbatim with no prefix, suffix or translation (AAP (AAP 0.7.2, Rule 1 clause 3).
+    // Exactly one banner, carrying Fineract's own text character for character: the read's failure reaches the template through `clientError`, whose message is rendered verbatim with no prefix, suffix or translation (AAP 0.7.2, Rule 1 clause 3).
     const alerts = Array.from(host.querySelectorAll<HTMLElement>('.alert.alert-danger'));
     expect(alerts).toHaveLength(1);
     expect((alerts[0].textContent ?? '').trim()).toBe(refusal);
@@ -611,7 +611,7 @@ describe('ClientViewComponent', () => {
     const harness = await render(`/viewclient/${CLIENT_ID}`);
     const host = hostOf(harness);
 
-    // The single interceptor raises the one notification a server or transport failure gets, so this screen neither notifies a second time, nor paints the message itself, nor claims an empty state in place of a record it (AAP 0.7.4, AAP 0.4.2, Rule 1 clause 9).
+    // The single interceptor raises the one notification a server or transport failure gets, so this screen neither notifies a second time, nor paints the message itself, nor claims an empty state in place of a record it never received (AAP 0.7.4, AAP 0.4.2, Rule 1 clause 9).
     expect(notifications.show).not.toHaveBeenCalled();
     expect(host.querySelector('.alert')).toBeNull();
     expect(host.querySelector('app-empty-state')).toBeNull();

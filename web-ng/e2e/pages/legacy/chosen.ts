@@ -1,4 +1,4 @@
-/** Legacy-only chosen-widget helper: legacy templates mark each dropdown with the `chosen` attribute and the plugin replaces the `<select>`, while the new app renders a native one (AAP 0.10.5 item 2), so no `pages/next/` (AAP 0.3.4). */
+/** Legacy-only chosen-widget helper: legacy templates mark each dropdown with the `chosen` attribute and the plugin replaces the `<select>`, while the new app renders a native one (AAP 0.10.5 item 2), so no `pages/next/` chosen helper exists (AAP 0.5.2, AAP 0.5.4). */
 import type { Locator, Page } from '@playwright/test';
 /** One option of the `<select>` underneath the chosen widget, so a page object can describe a dropdown. */
 export interface ChosenOption {

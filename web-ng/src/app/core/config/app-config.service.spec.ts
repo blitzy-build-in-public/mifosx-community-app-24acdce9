@@ -53,7 +53,7 @@ function responseFor(answer: FetchAnswer): Promise<Response> {
   return Promise.resolve(body as unknown as Response);
 }
 
-/** A page URL of the test's choosing. The service reads only `location.search` and `location.hash`, so the double carries those two properties; the cast is the boundary where the partial object becomes the `Document` the. */
+/** A page URL of the test's choosing. The service reads only `location.search` and `location.hash`, so the double carries those two properties; the cast is the boundary where the partial object becomes the `Document` the service reads its page URL from. */
 function fakeDocument(search: string, hash: string): Document {
   return { location: { search, hash } } as unknown as Document;
 }
@@ -81,7 +81,7 @@ function createHarness(
   return { service: TestBed.inject(AppConfigService), fetchMock };
 }
 
-/** Asserts the read happened exactly once, for the configuration path, with no second argument: a plain `fetch(url)` is a `GET` with no headers, which is what keeps the static asset request free of the tenant and (Rule 1 clause 9). */
+/** Asserts the read happened exactly once, for the configuration path, with no second argument: a plain `fetch(url)` is a `GET` with no headers, which is what keeps the static asset request free of the tenant header and the `Authorization` header (Rule 1 clause 9). */
 function expectSingleRead(harness: ConfigHarness): void {
   expect(harness.fetchMock).toHaveBeenCalledTimes(1);
   expect(harness.fetchMock).toHaveBeenCalledWith(CONFIG_URL);

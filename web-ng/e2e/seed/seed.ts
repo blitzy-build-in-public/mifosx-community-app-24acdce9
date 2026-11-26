@@ -190,7 +190,7 @@ interface EntityDatatableCheckCreateBody {
   readonly datatableName: string;
 }
 
-/** A `POST` Fineract refused. Carries the failing resource path, the status and Fineract's own `errors[].defaultUserMessage` texts, which are what the operator needs to correct the payload; it never carries the (Rule 1 clause 9). */
+/** A `POST` Fineract refused. Carries the failing resource path, the status and Fineract's own `errors[].defaultUserMessage` texts, which are what the operator needs to correct the payload; it never carries the credential the refused request was sent with (Rule 1 clause 9). */
 class SeedRequestError extends Error {
   /** Resource path below the API path, e.g. `/loanproducts`. */
   readonly path: string;
@@ -208,7 +208,7 @@ class SeedRequestError extends Error {
   }
 }
 
-/** Re-throws a failed run with every known secret masked. A {@link SeedRequestError} already carries only the resource path, the status and Fineract's own validation messages, so it passes through unchanged; every other. */
+/** Re-throws a failed run with every known secret masked. A {@link SeedRequestError} already carries only the resource path, the status and Fineract's own validation messages, so it passes through unchanged; every other error's message has the known secrets masked before it is re-thrown. */
 function redactFailure(error: unknown, secrets: readonly string[]): Error {
   if (error instanceof SeedRequestError) {
     return error;
@@ -258,7 +258,7 @@ interface SeedPostResult {
   readonly body: unknown;
 }
 
-/** Reads one positive integer id field of an accepted response. @param result Status and body of the accepted `POST`. @param field Id member to read: `resourceId` or `subResourceId`. @param path Resource path that produced. */
+/** Reads one positive integer id field of an accepted response. @param result Status and body of the accepted `POST`. @param field Id member to read: `resourceId` or `subResourceId`. @param path Resource path that produced it, named in the error message. */
 function readIdentifier(
   result: SeedPostResult,
   field: 'resourceId' | 'subResourceId',
@@ -271,7 +271,7 @@ function readIdentifier(
   throw new Error(`POST ${path} (HTTP ${result.status}) answered without a usable ${field}.`);
 }
 
-/** Reads the `resourceId` of a created entity — the id of the resource the path names. @param result Status and body of the accepted `POST`. @param path Resource path that produced it, named in the error message. @throws. */
+/** Reads the `resourceId` of a created entity — the id of the resource the path names. @param result Status and body of the accepted `POST`. @param path Resource path that produced it, named in the error message. @throws When the response carries no positive integer `resourceId`. */
 function readResourceId(result: SeedPostResult, path: string): number {
   return readIdentifier(result, 'resourceId', path);
 }
@@ -443,7 +443,7 @@ async function post(context: APIRequestContext, path: string, body: unknown): Pr
   return { status, body: parseJsonBody(text, `POST ${url} (HTTP ${status})`) };
 }
 
-/** Creates one active narration value under its code and answers the value's own id: `POST /codes/name/{codeName}/codevalues`, keyed by the code's name so the step needs no `GET /codes` lookup and no numeric code id the. */
+/** Creates one active narration value under its code and answers the value's own id: `POST /codes/name/{codeName}/codevalues`, keyed by the code's name so the step needs no `GET /codes` lookup and no numeric code id the tenant's migration assigns. */
 async function createClientActionReason(
   context: APIRequestContext,
   reason: ClientActionReasonSeed,
@@ -453,12 +453,12 @@ async function createClientActionReason(
   return { name: reason.valueName, id: readSubResourceId(created, path) };
 }
 
-/** Creates one entity and answers the id Fineract assigned: {@link post} followed by {@link readResourceId}, for the resources that answer their own `resourceId` — the staff member, both products and the charge. @param. */
+/** Creates one entity and answers the id Fineract assigned: {@link post} followed by {@link readResourceId}, for the resources that answer their own `resourceId` — the staff member, both products and the charge. @param context The request context {@link post} sends through. @param path Resource path of the `POST`, below the API path. @param body Request body that endpoint expects. */
 async function createEntity(context: APIRequestContext, path: string, body: unknown): Promise<number> {
   return readResourceId(await post(context, path, body), path);
 }
 
-/** Registers the client datatable and its entity-datatable check — the fixture the datatable gate needs before it can read anything: with no check registered, `GET /entityDatatableChecks?limit=-1` answers no rows and the (AAP 0.10.4). */
+/** Registers the client datatable and its entity-datatable check — the fixture the datatable gate needs before it can read anything: with no check registered, `GET /entityDatatableChecks?limit=-1` answers no rows and the gate has nothing to read (AAP 0.10.4). */
 async function createClientActionGate(context: APIRequestContext): Promise<SeedClientActionGate> {
   await post(context, '/datatables', clientActionDatatableCreateBody());
   const checkPath = '/entityDatatableChecks';
@@ -471,7 +471,7 @@ async function createClientActionGate(context: APIRequestContext): Promise<SeedC
   };
 }
 
-/** Removes the artefact an earlier run wrote, so no consumer can read a previous run's ids once this run has started. {@link runSeed} calls it before anything else — before the backend is vetted and before the first (AAP 0.14.2). */
+/** Removes the artefact an earlier run wrote, so no consumer can read a previous run's ids once this run has started. {@link runSeed} calls it before anything else — before the backend is vetted and before the first write this run makes (AAP 0.14.2). */
 export async function discardResultArtefact(path: string = SEED_RESULT_ARTEFACT_PATH): Promise<void> {
   await rm(path, { force: true });
 }
@@ -613,7 +613,7 @@ async function main(): Promise<void> {
   }
 }
 
-// Guarded entry: the script runs only when executed directly. Importing this module — which the Playwright loader does while collecting the suite — must stay inert, so `npx playwright test --list` exits 0 with no (AAP 0.10.3).
+// Guarded entry: the script runs only when executed directly. Importing this module — which the Playwright loader does while collecting the suite — must stay inert, so `npx playwright test --list` exits 0 with no seed request attempted while the suite is collected (AAP 0.10.3).
 const invokedPath = process.argv[1];
 if (invokedPath !== undefined && import.meta.url === pathToFileURL(invokedPath).href) {
   await main();

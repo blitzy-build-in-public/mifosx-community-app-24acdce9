@@ -1,4 +1,4 @@
-<!-- Accounts section of the individual client record's `General` tab: the read-only table of the client's loan and savings accounts (AAP 0.7.1 row `clients` — `ClientViewComponent` with `ClientAccountsComponent`; AAP 0.7.4 (Rule 1 clause 6, AAP 0.2.3). -->
+<!-- Accounts section of the individual client record's `General` tab: the read-only table of the client's loan and savings accounts (AAP 0.7.1 row `clients` — `ClientViewComponent` with `ClientAccountsComponent`; AAP 0.7.4, Rule 1 clause 6, AAP 0.2.3). -->
 <div class="panel-body" [attr.aria-busy]="loading() ? 'true' : null">
   <!-- Four mutually exclusive states, in the order a viewer meets them, and a failed read never reaches the empty state (AAP 0.2.4). -->
   @if (loading()) {
@@ -15,7 +15,7 @@
       <caption class="sr-only">{{ 'label.heading.accountdetail' | translate }}</caption>
       <thead>
         <tr>
-          <!-- `label.heading.accnum` is the key the legacy client record heads this column with ("Account Number" in `app/global-translations/locale-en.json`); no locale bundle defines a `label.heading.accountno`, so the. -->
+          <!-- `label.heading.accnum` is the key the legacy client record heads this column with ("Account Number" in `app/global-translations/locale-en.json`); no locale bundle defines a `label.heading.accountno`, so the account-number column takes the key the legacy table itself uses. -->
           <th scope="col">{{ 'label.heading.accnum' | translate }}</th>
           <th scope="col">{{ 'label.heading.product' | translate }}</th>
           <th scope="col">{{ 'label.heading.status' | translate }}</th>

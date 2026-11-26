@@ -40,7 +40,7 @@ describe('AppComponent', () => {
   let notifications: NotificationService;
   let host: HTMLElement;
 
-  /** Activates the root-relative route named by `segment` through the real router and renders whatever the outlet created, in the same two steps the application takes after a navigation: the router resolves the route, then (AAP 0.14.1). */
+  /** Activates the root-relative route named by `segment` through the real router and renders whatever the outlet created, in the same two steps the application takes after a navigation: the router resolves the route, then Angular renders the component the outlet activated (AAP 0.14.1). */
   async function navigateTo(segment: string): Promise<void> {
     await router.navigate([segment]);
     fixture.detectChanges();
@@ -48,7 +48,7 @@ describe('AppComponent', () => {
   }
 
   beforeEach(async () => {
-    // Reset first so every test starts on a fresh root injector, and therefore on a fresh `NotificationService` queue and a fresh router: a notice queued or a route activated by one test must never reach the next, and a.
+    // Reset first so every test starts on a fresh root injector, and therefore on a fresh `NotificationService` queue and a fresh router: a notice queued or a route activated by one test must never reach the next, and a fresh injector per test is what guarantees it.
     TestBed.resetTestingModule();
     await TestBed.configureTestingModule({
       imports: [AppComponent],
@@ -73,7 +73,7 @@ describe('AppComponent', () => {
 
   it('creates the component once, rendering no nested copy of itself', () => {
     expect(fixture.componentInstance).toBeInstanceOf(AppComponent);
-    // `TestBed.createComponent` mounts the component on a host element of its own rather than on the `<app-root>` `src/index.html` supplies, so this asserts the component's *output*: an `app-root` element below it would mean.
+    // `TestBed.createComponent` mounts the component on a host element of its own rather than on the `<app-root>` `src/index.html` supplies, so this asserts the component's *output*: an `app-root` element below it would mean the component rendered a nested copy of itself.
     expect(host.querySelectorAll('app-root')).toHaveLength(0);
   });
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { STATUS_KEYS, normaliseStatusCode, toStatusKey, type StatusKey } from './status-key.util';
 
-/** Behaviour of the one status vocabulary the whole application shares, and of the single mapping from a Fineract status code onto it (AAP 0.2.3 `StatusSwatch` row; AAP 0.7.2 rows `Client`, `ClientAccountSummary` (AAP 0.14.1, Rule 1 clause 8). */
+/** Behaviour of the one status vocabulary the whole application shares, and of the single mapping from a Fineract status code onto it (AAP 0.2.3 `StatusSwatch` row; AAP 0.7.2 rows `Client`, `ClientAccountSummary`, `LoanAccount`, `SavingsAccount`; AAP 0.14.1 "One direction of dependency"; Rule 1 clause 8). */
 
 /** Every status code of the three families, paired with the indicator key it must paint: the complete `ClientStatus.java` enumeration, the complete `LoanStatus.java` enumeration and the complete `SavingsAccountStatusType.java` enumeration. Every terminal state is listed separately, and the closed family is kept apart from the rejected and the withdrawn states, so a table that dropped one of them fails here instead of silently painting that record with the other terminal colour. */
 const STATUS_CASES: readonly (readonly [string, StatusKey])[] = [['clientStatusType.active', 'active'],

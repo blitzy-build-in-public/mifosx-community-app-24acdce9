@@ -20,7 +20,7 @@ import type {
 } from './client.models';
 import { ClientService, type ClientActionInput, type ClientEditInput } from './client.service';
 
-/** Contract spec for `ClientService`: the one place the clients family composes a Fineract URL and turns a model into a payload (Rule 1 clause 8; AAP 0.7.3 endpoint rows "W2 create and activate client", "Client list and (AAP 0.11.1, AAP 0.7.2, Rule 1 clause 2, AAP 0.4.2). */
+/** Contract spec for `ClientService`: the one place the clients family composes a Fineract URL and turns a model into a payload (Rule 1 clause 8; AAP 0.7.3 endpoint rows "W2 create and activate client", "Client list and edit"; AAP 0.11.1, AAP 0.7.2, Rule 1 clause 2, AAP 0.4.2). */
 
 /** The served API host and root, written as `web-ng/src/assets/config.json` ships them, so the URLs this spec expects are the URLs the deployed application produces (AAP 0.4.4 decision 5(a)) (Rule 2). */
 const API_BASE_URL = 'https://localhost:8443';
@@ -49,7 +49,7 @@ const CLIENT_DATE_TEXT = '21 November 2026';
 /** The same date in French, for the case that proves the payload follows the selected language. */
 const CLIENT_DATE_TEXT_FR = '21 novembre 2026';
 
-/** The URL the service must request for the given path segments: the API root the configuration supplies and the resource segments the service owns, joined with one separator. @param segments Resource segments, exactly as. */
+/** The URL the service must request for the given path segments: the API root the configuration supplies and the resource segments the service owns, joined with one separator. @param segments Resource segments, exactly as `client.service.ts` names them. */
 function clientUrl(...segments: readonly (string | number)[]): string {
   return [API_ROOT, ...segments].join(SEPARATOR);
 }
@@ -469,7 +469,7 @@ const ACTION_CASES: readonly {
   },
 ];
 
-/** The three commands whose reason member is posted only when a reason was chosen, each with the body a tenant that configures no narration produces: the action's own date and the date-format pair the service adds, and no (Rule 1 clause 3, AAP 0.7.4). */
+/** The three commands whose reason member is posted only when a reason was chosen, each with the body a tenant that configures no narration produces: the action's own date and the date-format pair the service adds, and no reason member at all (Rule 1 clause 3, AAP 0.7.4). */
 const UNREASONED_ACTION_CASES: readonly {
   readonly command: Extract<ClientActionCommand, 'close' | 'reject' | 'withdraw'>;
   readonly reasonKey: string;

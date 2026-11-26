@@ -13,7 +13,7 @@ import { MoneyPipe } from '../../../../shared/money/money.pipe';
 import type { LoanCharge, LoanCurrency, LoanStatus } from '../../loan.models';
 import { LoanChargesComponent } from './loan-charges.component';
 
-/** Behavioural spec for the charges section of the individual-loan record — `app-loan-charges`, the `LoanChargesComponent` row of AAP 0.7.1's loans feature, rendered inside the record's charge tab (`#/viewloanaccount/:id` (AAP 0.7.4, AAP 0.7.2, AAP 0.7.3, AAP 0.11.1). */
+/** Behavioural spec for the charges section of the individual-loan record — `app-loan-charges`, the `LoanChargesComponent` row of AAP 0.7.1's loans feature, rendered inside the record's charge tab (`#/viewloanaccount/:id`; AAP 0.7.4, AAP 0.7.2, AAP 0.7.3, AAP 0.11.1). */
 
 /** The loan every case is bound to, in the form the record binds it — `record.id`, a number. */
 const LOAN_ID = 7;
@@ -366,7 +366,7 @@ describe('LoanChargesComponent', () => {
     expect(host().querySelector('.alert')).toBeNull();
     expect(host().querySelector('.alert-danger')).toBeNull();
     expect((host().textContent ?? '').toLowerCase()).not.toContain('error');
-    // The first charge is added from the record's own action group — the single entry point to `#/addloancharge/:id` (see `loan-view.component.html`) — so an empty section offers no second control for that one route (Rule 1 (Rule 1 clause 3).
+    // The first charge is added from the record's own action group — the single entry point to `#/addloancharge/:id` (see `loan-view.component.html`) — so an empty section offers no second control for that one route (Rule 1 clause 3).
     expect(host().querySelector('a[href^="/addloancharge"]')).toBeNull();
   });
 
@@ -439,7 +439,7 @@ describe('LoanChargesComponent', () => {
       expect(waive?.style.display).toBe('none');
     }
 
-    // The gate follows the permission list: granting the code reveals the same elements, without a re-render of the section's structure, which is what makes the directive and the route guard agree at template level (AAP (AAP 0.1.1, AAP 0.14.1).
+    // The gate follows the permission list: granting the code reveals the same elements, without a re-render of the section's structure, which is what makes the directive and the route guard agree at template level (AAP 0.1.1, AAP 0.14.1).
     permissions.grant([ACTION_PERMISSION]);
     fixture.detectChanges();
 

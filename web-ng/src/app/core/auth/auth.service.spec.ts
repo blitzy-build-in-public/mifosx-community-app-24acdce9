@@ -345,7 +345,7 @@ describe('AuthService', () => {
   });
 
   it('resumes the stored legacy entry on restore, reading the user once with a bodiless GET', async () => {
-    // What a page reload, or a login on a legacy screen, leaves behind: the entry in storage and nothing in memory — the state the bootstrap initializer restores from before the router's first navigation (AAP 0.10.1 W1.
+    // What a page reload, or a login on a legacy screen, leaves behind: the entry in storage and nothing in memory — the state the bootstrap initializer restores from before the router's first navigation (AAP 0.10.1 W1; `web-ng/src/app/app.config.ts`).
     window.localStorage.setItem(COMPOSED_KEY, JSON.stringify(expectedSession()));
     expect(service.isAuthenticated()).toBe(false);
 
@@ -373,7 +373,7 @@ describe('AuthService', () => {
   });
 
   it('restores nothing when no entry is stored, and reaches no transport', async () => {
-    // A start with no entry — the first run after a logout, or a visitor arriving at the login screen — resolves `false`, so the initializer's awaited restore closes the gate instead of opening one over an empty session (AAP (AAP 0.10.1, AAP 0.7.1).
+    // A start with no entry — the first run after a logout, or a visitor arriving at the login screen — resolves `false`, so the initializer's awaited restore closes the gate instead of opening one over an empty session (AAP 0.10.1, AAP 0.7.1).
     await expect(service.restore()).resolves.toBe(false);
 
     httpMock.expectNone(() => true);
@@ -433,7 +433,7 @@ function resolvedConfig(): ResolvedConfig {
   };
 }
 
-/** The router surface the interceptor reads. A refused authentication navigates nowhere — the user is already on the login screen — so this stand-in exists for the injection to resolve, and its `url` keeps the. */
+/** The router surface the interceptor reads. A refused authentication navigates nowhere — the user is already on the login screen — so this stand-in exists for the injection to resolve, and its `url` keeps the 401 branch from navigating, because it already starts with `/login`. */
 const routerStub = {
   url: '/login',
   navigate: (): Promise<boolean> => Promise.resolve(true),

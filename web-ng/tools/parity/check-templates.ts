@@ -1,4 +1,4 @@
-// npm run check:templates — AAP 0.10.4 row 2, criterion 6. Fails on any AAP 0.7.3 template endpoint (Rule 1 clause 3) that no non-spec file under web-ng/src/app calls while holding that row's markers; the expected set is (Rule 1 clause 2, Rule 1 clause 1).
+// npm run check:templates — AAP 0.10.4 row 2, criterion 6. Fails on any AAP 0.7.3 template endpoint (Rule 1 clause 3) that no non-spec file under web-ng/src/app calls while holding that row's markers; the expected set is AAP 0.7.3's endpoint table alone, never a second hand-maintained list (Rule 1 clause 2, Rule 1 clause 1).
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveCliIntent, type CliUsage } from './lib/cli.js';

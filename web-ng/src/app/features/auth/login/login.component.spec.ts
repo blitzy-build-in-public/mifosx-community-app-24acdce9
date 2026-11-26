@@ -471,7 +471,7 @@ describe('LoginComponent', () => {
     expect(loginForm().form.controls.username.value).toBe(ACCOUNT_NAME);
     expect(loginForm().form.controls.password.value).toBe('');
     expect(host().querySelector<HTMLInputElement>('#pwd')?.value).toBe('');
-    // A refused exchange leaves the user on the form; nothing was navigated to (AAP 0.7.4).
+    // A refused exchange leaves the user on the form, and no navigation was attempted (AAP 0.7.4).
     expect(router.navigateByUrl).not.toHaveBeenCalled();
     expect(component.guard.busy()).toBe(false);
     expect(host().querySelector<HTMLInputElement>('#pwd')?.type).toBe('password');

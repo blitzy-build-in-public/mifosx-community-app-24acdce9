@@ -28,7 +28,7 @@
   }
 
   <div class="row">
-    <!-- The column holds the record's four states, so it is the region a read in flight marks busy: assistive technology is told the record's own content is being replaced rather than that the whole page is (AAP 0.7.4 state rules; AAP 0.2.4 records that the design carries no loader). -->
+    <!-- The column holds the record's four states, so it is the region a read in flight marks busy: assistive technology is told the record's own content is being replaced rather than that the whole page is busy (AAP 0.7.4 state rules; AAP 0.2.4 records that the design carries no loader). -->
     <div class="col-md-12" [attr.aria-busy]="loading() ? 'true' : null">
       @if (loading()) {
         <!-- Nothing yet: the record is not half-painted and no empty state is claimed. -->

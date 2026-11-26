@@ -177,7 +177,7 @@ function routeNumber(url: string, route: RegExp): number | null {
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
-/** The schedule lines that are repayment periods: the server's schedule opens with the loan's disbursement, which carries no period number, and a totals line carries none either, so a line without a positive period number (AAP 0.7.2). */
+/** The schedule lines that are repayment periods: the server's schedule opens with the loan's disbursement, which carries no period number, and a totals line carries none either, so a line without a positive period number is not a repayment period (AAP 0.7.2). */
 function repaymentPeriodsOf(rows: readonly ScheduleLine[]): readonly ScheduleLine[] {
   return rows.filter((row) => {
     const period = periodOf(row.period);
@@ -197,7 +197,7 @@ function outstandingOf(line: ScheduleLine | null): number | null {
   return 'outstanding' in line ? line.outstanding : figureOf(line.totalOutstandingForPeriod);
 }
 
-/** Whether a rendered transaction row is a repayment. Both screens print Fineract's own transaction type — `Repayment` — so the type text is what separates the freshly disbursed loan (a disbursement and its interest (AAP 0.10.1). */
+/** Whether a rendered transaction row is a repayment. Both screens print Fineract's own transaction type — `Repayment` — so the type text is what separates the freshly disbursed loan (a disbursement and its interest) from the repayment W6 posts (AAP 0.10.1). */
 function isRepaymentRow(line: TransactionLine): boolean {
   return /repayment/i.test(line.type);
 }
@@ -252,7 +252,7 @@ test.describe('W6 make a repayment and verify the schedule and transactions', ()
     runWorkflow,
   }) => {
     await runWorkflow('W6', async ({ page, pages, capture, runDate }) => {
-      // --- Entry: sign in, then the Parity Client's record --------------------------------- Both applications authenticate through their own login screens and share no browser state (e2e/playwright.config.ts), so W1's flow is (Rule 1 clause 9).
+      // --- Entry: sign in, then the Parity Client's record --------------------------------- Both applications authenticate through their own login screens and share no browser state (e2e/playwright.config.ts), so W1's flow is performed by each project for itself, and no credential or session crosses between the two (Rule 1 clause 9).
       const credentials = readCredentials();
       await pages.login.open();
       await pages.login.signIn(credentials.username, credentials.password);
@@ -270,7 +270,7 @@ test.describe('W6 make a repayment and verify the schedule and transactions', ()
         );
       }
 
-      // --- Select the freshly disbursed loan: the Active loan carrying no repayment --------- The chain spec may have left an Active loan that already has one repayment, so neither the first row nor the first Active row will.
+      // --- Select the freshly disbursed loan: the Active loan carrying no repayment --------- The chain spec may have left an Active loan that already has one repayment, so neither the first row nor the first Active row will be the loan this workflow repays.
       const accounts = await pages.clientView.readAccounts();
       const candidates: LoanCandidate[] = [];
 
@@ -507,7 +507,7 @@ test.describe('W6 make a repayment and verify the schedule and transactions', ()
         after.totalOutstanding,
         "the loan's outstanding balance after the repayment",
       );
-      // The AAP 0.10.1 W6 outcome, stated twice so a failure says which contract broke: the balance is what the loan expected to collect minus the instalment just paid, and it is what it was before the repayment minus that same.
+      // The AAP 0.10.1 W6 outcome, stated twice so a failure says which contract broke: the balance is what the loan expected to collect minus the instalment just paid, and it is what it was before the repayment minus that same instalment.
       expect(afterOutstanding).toBeCloseTo(expectedRepayment - firstPeriodTotalDue, 2);
       expect(afterOutstanding).toBeCloseTo(beforeOutstanding - firstPeriodTotalDue, 2);
       expect(after.transactionCount).toBe(before.transactionCount + 1);
@@ -528,7 +528,7 @@ test.describe('W6 make a repayment and verify the schedule and transactions', ()
       ).toBeDefined();
       if (repaymentRow !== undefined) {
         expect(repaymentRow.type).toMatch(/repayment/i);
-        // The row's running balance is the balance the API reports for that repayment transaction: the table prints Fineract's per-transaction `outstandingLoanBalance`, a principal-basis figure, while the loan-level (AAP 0.10.2).
+        // The row's running balance is the balance the API reports for that repayment transaction: the table prints Fineract's per-transaction `outstandingLoanBalance`, a principal-basis figure, while the loan-level `totalOutstanding` is a different figure, so the row is compared with the API's per-transaction one (AAP 0.10.2).
         expect(
           requireFigure(
             figureOf(repaymentRow.outstandingBalance),

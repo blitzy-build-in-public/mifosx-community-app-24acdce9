@@ -16,7 +16,7 @@ import {
   languagePreferenceKey,
 } from './core/i18n/language-preference.service';
 
-/** Behaviour of the composition root (AAP 0.4.3 rows 1, 4 and 7; AAP 0.8.2 "Application entry and configuration"; AAP 0.3.4 claim 9; AAP 0.11.1 row `app.config.ts`): what the application cannot do without - the. */
+/** Behaviour of the composition root (AAP 0.4.3 rows 1, 4 and 7; AAP 0.8.2 "Application entry and configuration"; AAP 0.3.4 claim 9; AAP 0.11.1 row `app.config.ts`): what the application cannot do without - the router with its hash location, the HTTP client with its one interceptor, the translation stack and the resolved configuration. */
 
 /** The configuration the stubbed `assets/config.json` serves: it differs from `DEFAULT_APP_CONFIG` in the two members the start-up read delivers, so a value read here can only have come through `AppConfigService.load()` and never from the build-time default (it carries no credential and no real tenant, Rule 1 clause 9). */
 const SERVED_CONFIG: AppConfig = {

@@ -19,7 +19,7 @@ import { EmptyStateComponent } from '../../shared/empty-state/empty-state.compon
 import { HasPermissionDirective } from '../../shared/has-permission.directive';
 import { PanelCardComponent } from '../../shared/panel-card/panel-card.component';
 
-/** The global search results screen: the destination of the signed-in navbar's search control, where a client or a loan is found by name, account number or identifier (AAP 0.7.1 Features row `search`; AAP 0.7.3 row "Shell (AAP 0.8.2, AAP 0.10.5, AAP 0.11.1, Rule 1 clause 2). */
+/** The global search results screen: the destination of the signed-in navbar's search control, where a client or a loan is found by name, account number or identifier (AAP 0.7.1 Features row `search`; AAP 0.7.3 row "Shell: global search"; AAP 0.8.2, AAP 0.10.5, AAP 0.11.1, Rule 1 clause 2). */
 @Component({
   selector: 'app-search-results',
   imports: [
@@ -88,7 +88,7 @@ export class SearchResultsComponent {
     return rendered;
   });
 
-  /** Whether the answer the screen holds was longer than legacy's own notice threshold, which is what makes the results list render the bundle's `label.search.query.matched.results.exceeds.max.length` above the blocks it (Rule 1 clause 3). */
+  /** Whether the answer the screen holds was longer than legacy's own notice threshold, which is what makes the results list render the bundle's `label.search.query.matched.results.exceeds.max.length` above the blocks it kept (Rule 1 clause 3). */
   readonly exceedsMaxLength: Signal<boolean> = computed<boolean>(
     () => this.cappedResults().exceedsMaxLength,
   );
@@ -149,7 +149,7 @@ export class SearchResultsComponent {
       return of<SearchOutcome>({ rows: [], error: null });
     }
 
-    // The request carries the three parameters legacy's own controller forwards — the text, the resource and the flag that asks for the literal string: `SearchController.js:9` calls `globalSearch.search({query, resource (AAP 0.7.2, AAP 0.7.3).
+    // The request carries the three parameters legacy's own controller forwards — the text, the resource and the flag that asks for the literal string: `SearchController.js:9` calls `globalSearch.search({query, resource, exactMatch})` (AAP 0.7.2, AAP 0.7.3).
     const params: GlobalSearchParams = {
       query: criteria.query,
       resource: criteria.scope,
@@ -225,7 +225,7 @@ interface SearchResultRow {
   readonly name: string;
   /** Whether the block prints legacy's `| #<accountNo>` segment after the name. */
   readonly printsAccountNo: boolean;
-  /** The name the block prints after the parent label: the client's office for a `CLIENT` result, the owning client for a `LOAN` result and for a client matched by an identifier, or `''` when the payload carried none — no (Rule 1 clause 3). */
+  /** The name the block prints after the parent label: the client's office for a `CLIENT` result, the owning client for a `LOAN` result and for a client matched by an identifier, or `''` when the payload carried none — no placeholder or invented word stands in for it (Rule 1 clause 3). */
   readonly parentName: string;
   /** The legacy translation key that names what {@link parentName} is for this row's family: the client's office, or the client the row belongs to. */
   readonly parentLabelKey: 'label.heading.office' | 'label.heading.client';
@@ -267,7 +267,7 @@ const LEGACY_SEARCH_NOTICE_THRESHOLD = 200;
 /** The rows legacy keeps when it cuts an answer short: `data.slice(0, 201)`, one more than the threshold (`app/scripts/controllers/main/SearchController.js:11`). */
 const LEGACY_SEARCH_ROW_CAP = 201;
 
-/** Applies legacy's own bound to the search answer. The search endpoint takes no `limit` this application sets, so the whole answer arrives and the screen decides how much of it to render — exactly the decision legacy's (Rule 1 clause 3). */
+/** Applies legacy's own bound to the search answer. The search endpoint takes no `limit` this application sets, so the whole answer arrives and the screen decides how much of it to render — exactly the decision legacy's controller took (Rule 1 clause 3). */
 function capToLegacyLimit(results: readonly SearchResult[]): SearchCap {
   return results.length > LEGACY_SEARCH_NOTICE_THRESHOLD
     ? { results: results.slice(0, LEGACY_SEARCH_ROW_CAP), exceedsMaxLength: true }

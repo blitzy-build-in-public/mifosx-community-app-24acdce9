@@ -1,4 +1,4 @@
-/** The parity harness's single source of truth: Fineract and front-end addresses, tenant, credentials, date formatting, the run date read from Fineract, and the fixed test data of AAP 0.10.1 (Parity staff/loan (AAP 0.10.3, Rule 1 clause 2). */
+/** The parity harness's single source of truth: Fineract and front-end addresses, tenant, credentials, date formatting, the run date read from Fineract, and the fixed test data of AAP 0.10.1 — the staff member, the loan product, the loan charge, the savings product and the workflow records (AAP 0.10.3, Rule 1 clause 2). */
 
 import { request } from '@playwright/test';
 import type { APIResponse } from '@playwright/test';
@@ -62,7 +62,7 @@ export interface Credentials {
   /** Fineract password, read from `E2E_PASSWORD` or else `FINERACT_PASSWORD` at call time; never logged, serialised or written. */
   readonly password: string;
 }
-/** Reads the harness credentials from the environment, consumed by {@link authenticate}: the user name from `E2E_USER` then `FINERACT_USERNAME`, the password from `E2E_PASSWORD` then `FINERACT_PASSWORD`, each first set and (AAP 0.13, Rule 1 clause 9). */
+/** Reads the harness credentials from the environment, consumed by {@link authenticate}: the user name from `E2E_USER` then `FINERACT_USERNAME`, the password from `E2E_PASSWORD` then `FINERACT_PASSWORD`, each first set one winning and a blank or absent one falling through to the next (AAP 0.13, Rule 1 clause 9). */
 export function readCredentials(): Credentials {
   const username = resolveCredential(['E2E_USER', 'FINERACT_USERNAME']);
   const password = resolveCredential(['E2E_PASSWORD', 'FINERACT_PASSWORD']);
@@ -468,7 +468,7 @@ export const SEED_LOAN_CHARGE = {
   timeType: 'specified due date',
   calculation: 'flat',
 } as const satisfies LoanChargeSeed;
-/** One narration value a client lifecycle action needs: an entry of the `narrations` list `GET /clients/template?commandParam=<close|reject|withdraw>` answers with, and the reason id the matching `POST (AAP 0.10.1, AAP 0.9.1). */
+/** One narration value a client lifecycle action needs: an entry of the `narrations` list `GET /clients/template?commandParam=<close|reject|withdraw>` answers with, and the reason id the matching `POST /clients/{id}?command=<close|reject|withdraw>` sends (AAP 0.10.1, AAP 0.9.1). */
 export interface ClientActionReasonSeed {
   /** Narration code the value belongs to, as `GET /codes` names it, e.g. `ClientClosureReason`; the seed keys its write by this name rather than by the code's numeric id, which the tenant's migration creates and this repository may not fix. */
   readonly codeName: string;

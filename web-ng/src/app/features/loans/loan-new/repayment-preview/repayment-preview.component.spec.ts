@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RepaymentPeriod, RepaymentSchedule } from '../../loan.models';
 import { RepaymentPreviewComponent } from './repayment-preview.component';
 
-/** Behavioural spec for the loan application's repayment schedule preview: the table the applicant reads after `POST /loans?command=calculateLoanSchedule` returns before anything is submitted (AAP 0.7.1 Features row (AAP 0.7.4, AAP 0.11.1, AAP 0.14.1, AAP 0.14.2). */
+/** Behavioural spec for the loan application's repayment schedule preview: the table the applicant reads after `POST /loans?command=calculateLoanSchedule` returns before anything is submitted (AAP 0.7.1 Features row `loans` — "`LoanNewComponent` (with `RepaymentPreviewComponent`)"; AAP 0.7.4 "`#/newclientloanaccount/:clientId` presents the product and terms fields from the loan template with a 'Preview schedule' action that posts `calculateLoanSchedule` and renders the returned periods as a table"; AAP 0.11.1, AAP 0.14.1, AAP 0.14.2). */
 
 /** Language the spec serves its labels in, matching `AppConfig.locale` for the fixture. */
 const SPEC_LANG = 'en';

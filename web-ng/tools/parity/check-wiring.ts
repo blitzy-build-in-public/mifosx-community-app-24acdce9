@@ -1,4 +1,4 @@
-// <reference types="node" /> npm run check:wiring — AAP 0.10.4 row 3, criteria 7 and 8 (Rule 1 clause 8, AAP 0.11.1, AAP 0.4.4, Rule 1 clause 9).
+// npm run check:wiring — AAP 0.10.4 row 3, criteria 7 and 8 (Rule 1 clause 8, AAP 0.11.1, AAP 0.4.4, Rule 1 clause 9).
 import { execFile, type ExecFileOptionsWithStringEncoding } from 'node:child_process';
 import { join, relative, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
@@ -124,7 +124,7 @@ interface Mount { specifier: string; prefix: string; line: number }
 /** Every `path:` key of a `Routes` array: the same literal `findRouteDeclarations` reads, kept with its offset. */
 const PATH_KEY = /\bpath\s*:\s*(['"`])((?:\\.|(?!\1)[^\\])*)\1/g;
 
-/** Brace depth at ascending offsets of one file, advancing a single pass through it: a route's `children` entries are written one `{` deeper than the route that owns them, which is what nests a declared path under its. */
+/** Brace depth at ascending offsets of one file, advancing a single pass through it: a route's `children` entries are written one `{` deeper than the route that owns them, which is what nests a declared path under its owning route. */
 function depthReader(text: string): (offset: number) => number {
   let cursor = 0;
   let depth = 0;
@@ -222,7 +222,7 @@ const shapeOf = (kind: string, redirectTo: string | null): string => (redirectTo
 
 const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** True when one file injects the class `name` names: through `inject(Name)`, which is how a functional interceptor and an initializer reach a dependency, or through a typed field or constructor parameter (`: Name`), which. */
+/** True when one file injects the class `name` names: through `inject(Name)`, which is how a functional interceptor and an initializer reach a dependency, or through a typed field or constructor parameter (`: Name`), which is how a class names the collaborator it injects. */
 function injectsName(text: string, name: string): boolean {
   const escaped = escapeRegExp(name);
   return new RegExp(`\\binject\\s*\\(\\s*${escaped}\\s*[,)]`).test(text)
@@ -634,7 +634,7 @@ if (intent.kind === 'run') await runCheck(CHECK, async (): Promise<CheckOutcome>
     for (const path of baseTracked) {
       judged.add(path);
     }
-    // One rule, applied per path: `web-ng/**` is the work's own tree; the two packaging files and the allowlist excuse an addition only; a path the base commit tracks stays byte-identical, so changing or removing it is a.
+    // One rule, applied per path: `web-ng/**` is the work's own tree; the two packaging files and the allowlist excuse an addition only; a path the base commit tracks stays byte-identical, so changing or removing it is a failure the gate reports.
     const judge = (path: string, status: string): void => {
       if (path === '' || isUnderWebNg(path)) return;
       judged.add(path);

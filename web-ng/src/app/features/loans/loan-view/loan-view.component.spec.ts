@@ -29,7 +29,7 @@ import { LoanScheduleComponent } from './loan-schedule/loan-schedule.component';
 import { LoanTransactionsComponent } from './loan-transactions/loan-transactions.component';
 import { LOAN_ACTIONS, LoanViewComponent } from './loan-view.component';
 
-/** Behavioural spec for the individual-loan record — `#/viewloanaccount/:id`, the screen the loan route tree mounts for its one record path (AAP 0.7.1 Features row `loans`; AAP 0.7.4's `#/viewloanaccount/:id` row; AAP (AAP 0.8.2, AAP 0.7.3, Rule 1 clause 3, AAP 0.4.2). */
+/** Behavioural spec for the individual-loan record — `#/viewloanaccount/:id`, the screen the loan route tree mounts for its one record path (AAP 0.7.1 Features row `loans`; AAP 0.7.4's `#/viewloanaccount/:id` row; AAP 0.8.2 "Feature routes, matching legacy paths exactly"; AAP 0.7.3 row "W6 repayment"; Rule 1 clause 3, AAP 0.4.2). */
 
 /** The loan every case opens, as the `:id` segment delivers it. */
 const LOAN_ID = '9';

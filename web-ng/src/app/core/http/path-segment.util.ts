@@ -1,4 +1,4 @@
-/** Validation of the two kinds of value a Fineract request writes as a path segment: a resource identifier and a datatable's registered table name. **Why a guard exists at all.** `AppConfigService.apiUrl()` joins the (Rule 1 clause 2, AAP 0.1.1, Rule 1 clause 3). */
+/** Validation of the two kinds of value a Fineract request writes as a path segment: a resource identifier and a datatable's registered table name. **Why a guard exists at all.** `AppConfigService.apiUrl()` joins the base, the API root and the caller's path with one separator at each join, so a value that escapes its own segment would address another resource on the same host (Rule 1 clause 2, AAP 0.1.1, Rule 1 clause 3). */
 
 /** The only shape a Fineract resource identifier takes: one or more ASCII digits. */
 const RESOURCE_ID_PATTERN = /^\d+$/;
@@ -6,7 +6,7 @@ const RESOURCE_ID_PATTERN = /^\d+$/;
 /** The only shape a Fineract datatable's registered table name takes: ASCII letters, digits and underscores, as in `client_extra_details`. */
 const DATATABLE_NAME_PATTERN = /^[A-Za-z0-9_]+$/;
 
-/** The sentence a refusal is reported with, one per guarded segment, each naming what the user was doing and nothing else — no rejected value, no call name, no framework concept — because a screen renders it as the. */
+/** The sentence a refusal is reported with, one per guarded segment, each naming what the user was doing and nothing else — no rejected value, no call name, no framework concept — because a screen renders it as the message the user reads. */
 const RESOURCE_ID_REFUSAL = 'The record could not be opened because its address is not valid.';
 
 const DATATABLE_NAME_REFUSAL =

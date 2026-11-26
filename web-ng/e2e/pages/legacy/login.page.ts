@@ -25,13 +25,13 @@ export interface LanguageOptionSummary {
   label: string;
 }
 
-/** What the login screen's submit control currently offers: `'absent'` when the screen renders no submit control at all, `'hidden'` when it renders one that is not visible, `'disabled'` when it is visible but cannot be. */
+/** What the login screen's submit control currently offers: `'absent'` when the screen renders no submit control at all, `'hidden'` when it renders one that is not visible, `'disabled'` when it is visible but cannot be clicked, and `'enabled'` when it can be clicked. */
 export type SubmitState = 'absent' | 'hidden' | 'disabled' | 'enabled';
 
 /** How long the login form is given to appear on a fresh navigation (AAP 0.10.1 W1). */
 const LOGIN_FORM_TIMEOUT_MS = 5_000;
 
-/** Ceiling for the translation bundle a language change loads. Legacy fetches `global-translations/locale-<code>.json` (AAP 0.3.4 claim 5) the first time a language is chosen and serves it from cache afterwards, so a miss. */
+/** Ceiling for the translation bundle a language change loads. Legacy fetches `global-translations/locale-<code>.json` (AAP 0.3.4 claim 5) the first time a language is chosen and serves it from cache afterwards, so a miss is normal and never an error. */
 const LANGUAGE_BUNDLE_TIMEOUT_MS = 2_000;
 
 /** Ceiling for the post-login landing. The page itself is small; the wait covers `GET /users/{id}`, the session restore the legacy `SessionManager` runs before the shell renders (AAP 0.3.4 claim 9). */
@@ -40,7 +40,7 @@ const LANDING_TIMEOUT_MS = 20_000;
 /** Ceiling for the navbar user menu to open, which legacy toggles on hover. */
 const USER_MENU_TIMEOUT_MS = 2_000;
 
-/** The hashes a successful login can land on: `#/clients` per AAP 0.2.1 Step 1, `#/home` because `MainController`'s `UserAuthenticationSuccessEvent` handler ends in `location.path('/home').replace()`. */
+/** The hashes a successful login can land on: `#/clients` per AAP 0.2.1 Step 1, `#/home` because `MainController`'s `UserAuthenticationSuccessEvent` handler ends in `location.path('/home').replace()` (app/scripts/controllers/main/MainController.js). */
 const LANDING_HASH_PATTERN = /#\/(?:clients|home)/;
 
 /** The translation bundle a language change loads, relative to the legacy root (AAP 0.10.4). */
@@ -131,7 +131,7 @@ export class LoginPage {
     this.page = page;
   }
 
-  /** Opens the login screen (AAP 0.10.1 W1's entry step). Two readings of the entry path are in play: AAP 0.8.2 and `tools/parity/in-scope-routes.json` name a `login` route, while AAP 0.2.1 Step 1 records the login screen at. */
+  /** Opens the login screen (AAP 0.10.1 W1's entry step). Two readings of the entry path are in play: AAP 0.8.2 and `tools/parity/in-scope-routes.json` name a `login` route, while AAP 0.2.1 Step 1 records the login screen at `#/`. */
   async open(): Promise<void> {
     await this.page.goto(this.entryUrl('#/login'));
     if (await this.waitForLoginForm()) {
@@ -198,7 +198,7 @@ export class LoginPage {
     });
   }
 
-  /** Types the credentials into the login form (AAP 0.10.1 W1). The username field's existing value is overwritten, never blanked beforehand: legacy keeps the typed username after a rejected login and clears only the (Rule 1 clause 9). */
+  /** Types the credentials into the login form (AAP 0.10.1 W1). The username field's existing value is overwritten, never blanked beforehand: legacy keeps the typed username after a rejected login and clears only the password (Rule 1 clause 9). */
   async fillCredentials(username: string, password: string): Promise<void> {
     // Both fields are resolved through the ordered chain `resolveLoginField()` documents: the legacy `name` attribute, the design's translated placeholder, the design's label, then control order.
     const usernameField = await this.resolveLoginField(

@@ -1,4 +1,4 @@
-/** Behaviour of the global search results screen: the destination of the signed-in navbar's search control (AAP 0.7.1 Features row `search`; AAP 0.7.3 row "Shell: global search"; AAP 0.8.2 route `search/:query`; AAP 0.7.4 (AAP 0.11.1, AAP 0.14.1, Rule 1 clause 8, Rule 1 clause 5). */
+/** Behaviour of the global search results screen: the destination of the signed-in navbar's search control (AAP 0.7.1 Features row `search`; AAP 0.7.3 row "Shell: global search"; AAP 0.8.2 route `search/:query`; AAP 0.7.4 states; AAP 0.11.1, AAP 0.14.1, Rule 1 clause 8, Rule 1 clause 5). */
 
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
@@ -66,7 +66,7 @@ function clientResults(count: number): SearchResult[] {
   });
 }
 
-/** The rejections that carry no text for this screen, each for a reason the screen must honour: a 5xx and a transport failure (status `0`) have already raised the interceptor's single notification, and a rejection that is (AAP 0.7.4). */
+/** The rejections that carry no text for this screen, each for a reason the screen must honour: a 5xx and a transport failure (status `0`) have already raised the interceptor's single notification, and a rejection that is not an `ApiError` never came from Fineract at all — its message is Angular's or the application's own text, which can embed the request URL (AAP 0.7.4). The fourth row is a rejection that is not even an `Error`, which carries nothing to show by definition. */
 const SILENT_FAILURES: readonly { readonly label: string; readonly failure: () => unknown }[] = [
   {
     label: 'a 5xx',
@@ -277,7 +277,7 @@ describe('SearchResultsComponent', () => {
   });
 
   it('opens the screen’s own page container around its card', () => {
-    // The shell leaves the page container to the screen: it wraps only the breadcrumb in a `.container-fluid` of its own and renders the routed view bare (`core/layout/shell.component.html:50-59`), so this screen opens the.
+    // The shell leaves the page container to the screen: it wraps only the breadcrumb in a `.container-fluid` of its own and renders the routed view bare (`core/layout/shell.component.html:50-59`), so this screen opens the same `.container-fluid > .row > .col-md-12` wrapper every sibling screen opens, with the card inside it.
     expect(
       host().querySelector('.container-fluid > .row > .col-md-12 > .panel.panel-default'),
     ).not.toBeNull();
@@ -358,7 +358,7 @@ describe('SearchResultsComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    // Legacy tests `data.length > 200` BEFORE it slices, so 201 results are both all rendered — `data.slice(0, 201)` keeps every one of them — and announced by the bundle's notice (`SearchController.js:10-12`; Rule 1 clause (Rule 1 clause 3).
+    // Legacy tests `data.length > 200` BEFORE it slices, so 201 results are both all rendered — `data.slice(0, 201)` keeps every one of them — and announced by the bundle's notice (`SearchController.js:10-12`; Rule 1 clause 3).
     expect(component.exceedsMaxLength()).toBe(true);
     expect(blocks()).toHaveLength(201);
     expect(text(blocks()[200])).toContain('Client 201');

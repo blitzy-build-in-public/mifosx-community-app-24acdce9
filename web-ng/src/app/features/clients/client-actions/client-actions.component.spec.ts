@@ -160,7 +160,7 @@ const RECORD_REQUESTS: HttpInterceptorFn = (request, next) => {
   return next(request);
 };
 
-/** The configuration-relative path of one API URL, which is how a recorded request is spelled: the host and the API path are the same for every call, so only the resource identifies it. @param url the absolute URL a. */
+/** The configuration-relative path of one API URL, which is how a recorded request is spelled: the host and the API path are the same for every call, so only the resource identifies it. @param url the absolute URL a request or a constant carries. */
 function relativeUrl(url: string): string {
   return url.slice(API_ROOT.length);
 }
@@ -314,7 +314,7 @@ describe('ClientActionsComponent', () => {
     component = fixture.componentInstance;
   }
 
-  /** Lets the load sequence finish after a response was flushed. The sequence is a chain of promises rather than a zone task, so draining one macrotask is what guarantees every continuation it queued has run before the. */
+  /** Lets the load sequence finish after a response was flushed. The sequence is a chain of promises rather than a zone task, so draining one macrotask is what guarantees every continuation it queued has run before the assertions read the signals. */
   async function settle(): Promise<void> {
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 0);
@@ -333,7 +333,7 @@ describe('ClientActionsComponent', () => {
     await settle();
   }
 
-  /** Mounts `command` and drives it to its ready form: the gate is answered first, then the reason list for the three commands that read one, which is the order the screen itself runs them in. @param command the command a. */
+  /** Mounts `command` and drives it to its ready form: the gate is answered first, then the reason list for the three commands that read one, which is the order the screen itself runs them in. @param command the command a case submits. */
   async function showReady(command: ClientActionCommand): Promise<void> {
     await show(command);
     await passGate();
@@ -515,7 +515,7 @@ describe('ClientActionsComponent', () => {
 
     expect(post.request.params.keys()).toEqual(['command']);
     expect(post.request.params.get('command')).toBe('close');
-    // The body is exactly what the service builds for a close: the pattern, the active language, the chosen day formatted in that pattern and the tenant's reason id — nothing else travels with it (AAP 0.7.2 row (Rule 1 clause 2).
+    // The body is exactly what the service builds for a close: the pattern, the active language, the chosen day formatted in that pattern and the tenant's reason id — nothing else travels with it (AAP 0.7.2 row `ClientActionRequest`; Rule 1 clause 2).
     expect(post.request.body).toEqual({
       dateFormat: PAYLOAD_DATE_FORMAT,
       locale: 'en',
@@ -629,7 +629,7 @@ describe('ClientActionsComponent', () => {
   it('renders the form only after the gate and the reason list have answered', async () => {
     await show('close');
 
-    // The command's own title is on screen from the moment the route names it, but no field is: the gate has not answered, and a form enabled against a check that never ran is the sequence the legacy controller forbids (AAP (AAP 0.7.4, AAP 0.7.3).
+    // The command's own title is on screen from the moment the route names it, but no field is: the gate has not answered, and a form enabled against a check that never ran is the sequence the legacy controller forbids (AAP 0.7.4, AAP 0.7.3).
     fixture.detectChanges();
 
     expect(panelTitle()).toBe(TRANSLATIONS['label.anchor.close']);
@@ -778,7 +778,7 @@ describe('ClientActionsComponent', () => {
       httpMock.expectOne(isCommandPost).flush({ resourceId: 2, clientId: 2 });
       await settle();
 
-      // The legacy sequence exactly — the datatable gate first, the reason list next where the command takes one, the command last — and nothing else: no second gate on submit, no second command from one click, no request the (AAP 0.7.3, AAP 0.14.1).
+      // The legacy sequence exactly — the datatable gate first, the reason list next where the command takes one, the command last — and nothing else: no second gate on submit, no second command from one click, no request the legacy screen never makes (AAP 0.7.3, AAP 0.14.1).
       expect(requestSequence()).toEqual(expectedSequence(command));
     },
   );

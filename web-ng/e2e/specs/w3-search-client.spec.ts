@@ -1,4 +1,4 @@
-/** W3 — search for a client, then view its details and accounts, from one spec text on both front ends (AAP 0.10.1 W3, AAP 0.11.1 row 52, AAP 0.7.3 rows "Shell: global search", "W3 search and view client", "Client list and (AAP 0.10.2, AAP 0.10.4, AAP 0.7.4, AAP 0.10.5). */
+/** W3 — search for a client, then view its details and accounts, from one spec text on both front ends (AAP 0.10.1 W3, AAP 0.11.1 row 52, AAP 0.7.3 rows "Shell: global search", "W3 search and view client", "Client list and edit"; AAP 0.10.2, AAP 0.10.4, AAP 0.7.4, AAP 0.10.5). */
 import type { CaptureSession, NormalizedExchange } from '../capture/network-capture';
 import { snapshotClient } from '../capture/state-snapshot';
 import type { ClientSnapshot } from '../capture/state-snapshot';
@@ -41,7 +41,7 @@ function normalize(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
 
-/** The label a search row carries. The two page objects declare different row shapes for the same table — this application's reader answers `name`, the baseline's answers `primaryText` — so the union is narrowed on the (AAP 0.10.2, Rule 1 clause 4). */
+/** The label a search row carries. The two page objects declare different row shapes for the same table — this application's reader answers `name`, the baseline's answers `primaryText` — so the union is narrowed on the member the row actually carries (AAP 0.10.2, Rule 1 clause 4). */
 function searchLabelOf(row: SearchRow): string {
   return 'name' in row ? row.name : row.primaryText;
 }
@@ -82,7 +82,7 @@ function recordReads(capture: CaptureSession): readonly NormalizedExchange[] {
   );
 }
 
-/** The client id of the record the workflow opened, read from the page's own address (AAP 0.10.2). @param url The page's absolute URL, hash included. @returns The id the `#/viewclient/:id` route names. @throws When the. */
+/** The client id of the record the workflow opened, read from the page's own address (AAP 0.10.2). @param url The page's absolute URL, hash included. @returns The id the `#/viewclient/:id` route names. @throws When the hash names no `#/viewclient/:id` record. */
 function clientIdFromUrl(url: string): number {
   const match = CLIENT_RECORD_ROUTE.exec(url);
   const id = match === null ? Number.NaN : Number(match[1]);
@@ -262,7 +262,7 @@ test.describe('W3 search for a client and view details', () => {
         header.clientNumber.trim().length,
         'the record renders a client number (the design\'s inline `Client Number` run)',
       ).toBeGreaterThan(0);
-      // `ClientSnapshot` carries no account number — `capture/state-snapshot.ts` reduces the status, activation offset, office and the three counts, and deliberately no `accountNo` — so the client number is proved where it can.
+      // `ClientSnapshot` carries no account number — `capture/state-snapshot.ts` reduces the status, activation offset, office and the three counts, and deliberately no `accountNo` — so the client number is proved where it can be observed, against the number the list row carries for the same client.
       expect(
         header.clientNumber,
         'the record shows the client number of the row the list rendered for the same client',
@@ -283,7 +283,7 @@ test.describe('W3 search for a client and view details', () => {
           'the screen shows the label',
       ).toBeGreaterThan(0);
 
-      // The status is the colour class alone on both sides (AAP 0.10.5 item 11): the baseline paints `statusactive` on the dot, this application paints `status-active`, and both are read as the one word they share so the API's.
+      // The status is the colour class alone on both sides (AAP 0.10.5 item 11): the baseline paints `statusactive` on the dot, this application paints `status-active`, and both are read as the one word they share so the API's own answer is what the assertion compares.
       expect(
         header.statusClass.toLowerCase(),
         'the record paints the active status class for a client the API reports as active',

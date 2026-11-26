@@ -16,7 +16,7 @@ const MASK: string = '***';
 /** The legacy entry URL exactly as `pages/legacy/login.page.ts` builds it — the address whose two parameter values F01 is about — before the hash a page object appends. */
 const ENTRY_URL: string = `${LEGACY_URL}/?baseApiUrl=${ENCODED_BACKEND_URL}&tenantIdentifier=${ENCODED_TENANT}`;
 
-/** The message `open()` on the legacy login page throws when neither reading of the login route renders, reproduced verbatim: it is the shape of reason every legacy-broken row carries on a host without the legacy app, and. */
+/** The message `open()` on the legacy login page throws when neither reading of the login route renders, reproduced verbatim: it is the shape of reason every legacy-broken row carries on a host without the legacy app, and the message the entry-location redaction tests mask. */
 const LOGIN_MESSAGE: string =
   'The legacy login form did not appear at either reading of the login route: ' +
   `${ENTRY_URL}#/login (AAP 0.8.2, the "login" route of in-scope-routes.json) or ` +
@@ -139,6 +139,10 @@ describe('parity-report line budget', () => {
     expect(markdown).toContain('a batch of landed work was merged over the tree the fourth trim left at 59,877 and added 242 net lines');
     expect(markdown).toContain('the narrow-viewport navbar flexbox layer with its shared link-wrap rule');
     expect(markdown).toContain('taking the tree from 59,877 to 60,119 and over AAP 0.9.3\'s ceiling again');
+    // The sixth trim: the clients list filter regression suite merged over the tree the fifth trim left, the crossing it caused and the fixed order's exhaustion.
+    expect(markdown).toContain('the clients list display filter\'s regression suite was merged over the tree the fifth trim left at 59,961 and added 92 net lines');
+    expect(markdown).toContain('the three cases that pin that filter\'s recovery from an empty match');
+    expect(markdown).toContain('taking the tree from 59,961 to 60,053 and over AAP 0.9.3\'s ceiling again');
     expect(markdown).toContain('every `BLITZY [A11Y]` rule-override note with the Rule clause and QA finding it names');
     expect(markdown).toContain('the delivered tree plus them measures 63,857');
     expect(markdown).toContain('no Must scope was dropped');

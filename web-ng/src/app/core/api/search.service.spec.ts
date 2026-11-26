@@ -7,7 +7,7 @@ import {
   SearchService, toResourceParam, type GlobalSearchParams, type SearchResult, type SearchScope, type SearchTemplate,
 } from './search.service';
 
-/** Contract spec for `SearchService`: the one place the application composes the Fineract search URLs and turns a selected scope into the `resource` parameter (Rule 1 clause 8; AAP 0.7.3 row "Shell: global search"; AAP (AAP 0.7.1). */
+/** Contract spec for `SearchService`: the one place the application composes the Fineract search URLs and turns a selected scope into the `resource` parameter (Rule 1 clause 8; AAP 0.7.3 row "Shell: global search"; AAP 0.7.1). */
 
 /** The served API host and root, written as `web-ng/src/assets/config.json` ships them. */
 const API_BASE_URL = 'https://localhost:8443';
@@ -218,7 +218,7 @@ describe('SearchService', () => {
       .expectOne(isRequest('GET', searchUrl(SEARCH_PATH)))
       .flush(refusal, { status: 500, statusText: 'Server Error' });
 
-    // One failure, no emission and no completion: the service maps nothing and swallows nothing, and the status and body it hands on are the ones Fineract sent rather than a failure re-created in the service, so the (AAP 0.4.2, AAP 0.14.2).
+    // One failure, no emission and no completion: the service maps nothing and swallows nothing, and the status and body it hands on are the ones Fineract sent rather than a failure re-created in the service, so the screen reads Fineract's own message through the `ApiError` the interceptor builds from that status and body (AAP 0.4.2, AAP 0.14.2).
     expect(failures).toHaveLength(1);
     expect(received).toEqual([]);
     expect(failures[0]?.status).toBe(500);

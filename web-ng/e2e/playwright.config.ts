@@ -11,7 +11,7 @@ const htmlReportDir = fileURLToPath(
   new URL('../playwright-report', import.meta.url),
 );
 
-/** Failure artefacts carry no credential (Rule 1 clause 9). For every failed test Playwright writes `error-context.md` into that test's output directory and attaches it to the HTML report; unless this switch is set, the (AAP 0.10.1). */
+/** Failure artefacts carry no credential (Rule 1 clause 9). For every failed test Playwright writes `error-context.md` into that test's output directory and attaches it to the HTML report; unless this switch is set, the file carries a `# Page snapshot` block — an aria rendering of the live DOM in which a filled password field prints its value in clear, which both login flows here can leave behind when a submit never lands or the landing times out (AAP 0.10.1). */
 process.env['PLAYWRIGHT_NO_COPY_PROMPT'] = '1';
 
 export default defineConfig({

@@ -1,4 +1,4 @@
-/** The harness's own tests for `e2e/capture/state-snapshot.ts` — the reducers that turn a workflow's Fineract end state into the small comparison-ready subset, and the diff that compares two of them: AAP 0.10.1 defines a (AAP 0.10.3, AAP 0.10.2, Rule 1 clause 8). */
+/** The harness's own tests for `e2e/capture/state-snapshot.ts` — the reducers that turn a workflow's Fineract end state into the small comparison-ready subset, and the diff that compares two of them: AAP 0.10.1 defines a workflow's parity outcome as the ordered API calls plus the state read back through the API (AAP 0.10.3, AAP 0.10.2, Rule 1 clause 8). */
 import { describe, expect, it } from 'vitest';
 
 import {

@@ -8,7 +8,7 @@ import {
   type DataTableGateResult, type DataTableRowSet, type EntityDatatableCheck, type EntityDatatableCheckPage,
 } from './datatable-gate.service';
 
-/** Contract and behaviour spec for `DataTableGateService`, the gate every client lifecycle action passes through before it posts (AAP 0.3.4 claim 13; AAP 0.7.3 row "Client actions: datatable gate"; AAP 0.7.1. */
+/** Contract and behaviour spec for `DataTableGateService`, the gate every client lifecycle action passes through before it posts (AAP 0.3.4 claim 13; AAP 0.7.3 row "Client actions: datatable gate"; AAP 0.7.1 supporting-services row `DataTableGateService`). */
 
 /** The served API host and root, written out exactly as `web-ng/src/assets/config.json` ships them. */
 const API_BASE_URL = 'https://localhost:8443';
@@ -189,7 +189,7 @@ describe('DataTableGateService', () => {
       expect(checksRequest.request.params.get('limit')).toBe('-1');
       expect(checksRequest.request.body).toBeNull();
 
-      // The legacy order of the two calls (`app/scripts/controllers/client/ClientActionsController.js:26-35`): the tables to read come out of the checks answer, so nothing in the datatable family may be in flight before that.
+      // The legacy order of the two calls (`app/scripts/controllers/client/ClientActionsController.js:26-35`): the tables to read come out of the checks answer, so nothing in the datatable family may be in flight before that answer has landed.
       httpMock.expectNone(isAnyDatatableRequest);
 
       const otherStatus: ClientCheckStatus = statusValue === 'CLOSE' ? 'ACTIVATE' : 'CLOSE';
@@ -293,7 +293,7 @@ describe('DataTableGateService', () => {
       expect(message).not.toBe('');
       expect(message).not.toMatch(/TypeError|undefined|Cannot read/);
 
-      // No datatable read can be issued for an answer whose tables are unknown, and `verify()` in `afterEach` would report any that was.
+      // No datatable read can be issued for an answer whose tables are unknown, and `verify()` in `afterEach` would report any that was issued anyway.
       httpMock.expectNone(isDatatableRequest(FIRST_TABLE, CLIENT_ID));
       httpMock.expectNone(isDatatableRequest(SECOND_TABLE, CLIENT_ID));
     });
@@ -350,7 +350,7 @@ describe('DataTableGateService', () => {
 
       httpMock.expectOne(isChecksRequest).flush(checksPage([checkRow(FIRST_TABLE, 'ACTIVATE')]));
 
-      // The id is part of the path, unencoded and uncoerced, so `isDatatableRequest` compares it as a whole segment: a query-parameter form of the id would not match, and neither would the value the leading-zero case would.
+      // The id is part of the path, unencoded and uncoerced, so `isDatatableRequest` compares it as a whole segment: a query-parameter form of the id would not match, and neither would the value the leading-zero case would send.
       httpMock.expectOne(isDatatableRequest(FIRST_TABLE, clientId)).flush(RESULT_SET);
     });
   }

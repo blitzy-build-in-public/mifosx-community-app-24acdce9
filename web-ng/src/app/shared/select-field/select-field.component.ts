@@ -18,7 +18,7 @@ let nextInputId = 0;
 /** Builds the next default element id. Module-private: it is not part of the contract. */
 const nextSelectFieldId = (): string => `select-field-${++nextInputId}`;
 
-/** Native `<select>` bound to a caller-owned `FormControl` — the replacement for the legacy application's jQuery `chosen` plugin (AAP 0.7.1 shared row `SelectFieldComponent`, AAP 0.2.3 row `SelectField`, AAP 0.5.2 (AAP 0.5.4, Rule 1 clause 3, AAP 0.4.4). */
+/** Native `<select>` bound to a caller-owned `FormControl` — the replacement for the legacy application's jQuery `chosen` plugin (AAP 0.7.1 shared row `SelectFieldComponent`, AAP 0.2.3 row `SelectField`, AAP 0.5.2 row `Dropdowns / selects` — GAP: legacy used chosen; the request's own harness assumes native selects — resolved in AAP 0.5.4, Rule 1 clause 3, AAP 0.4.4). */
 @Component({
   selector: 'app-select-field', imports: [ReactiveFormsModule], templateUrl: './select-field.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush, })
