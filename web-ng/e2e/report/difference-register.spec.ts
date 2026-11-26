@@ -48,11 +48,12 @@ function readingWhere(prefix: string): DifferenceRegisterReading | undefined {
 }
 
 describe('the deliberate-difference register\'s readings', () => {
-  it('holds the three readings this run takes from the plan, and no other', () => {
-    expect(DIFFERENCE_REGISTER_READINGS).toHaveLength(3);
+  it('holds the four readings this run takes from the plan, and no other', () => {
+    expect(DIFFERENCE_REGISTER_READINGS).toHaveLength(4);
     expect(readingWhere('AAP 0.10.5 item 5')).toBeDefined();
     expect(readingWhere('AAP 0.10.5 item 15')).toBeDefined();
     expect(readingWhere('AAP 0.10.1')).toBeDefined();
+    expect(readingWhere('AAP 0.10.5 — the session-expiry warning')).toBeDefined();
   });
 
   it('states all four members of every reading rather than leaving one empty', () => {
@@ -86,6 +87,17 @@ describe('the deliberate-difference register\'s readings', () => {
     expect(w2?.delivered).toContain('reads the plain client record');
     expect(w2?.delivered).toContain('the parity spec asserts the plain record read');
   });
+
+  it('records the session-expiry copy as the application\'s own, English-only, with a bundle\'s wording taking over by itself', () => {
+    const sessionExpiry = readingWhere('AAP 0.10.5 — the session-expiry warning');
+    expect(sessionExpiry?.delivered).toContain('are the application\'s own copy in `APP_OWNED_TRANSLATIONS`');
+    expect(sessionExpiry?.delivered).toContain('English-only in every one of the languages the switchers offer');
+    expect(sessionExpiry?.delivered).toContain('no bundle under the legacy `app/global-translations/` tree carries either key');
+    expect(sessionExpiry?.delivered).toContain('that bundle\'s wording wins automatically and no code changes');
+    expect(sessionExpiry?.delivered).toContain('adding the copy to a build-owned bundle per locale is the path');
+    expect(sessionExpiry?.why).toContain('AAP 0.1.1 requires the 10-second warning before logout');
+    expect(sessionExpiry?.why).toContain('Rule 1 clause 6 keeps app/ read-only');
+  });
 });
 
 describe('the rendered register', () => {
@@ -97,7 +109,8 @@ describe('the rendered register', () => {
       'The register itself is AAP 0.10.5\'s sixteen deliberate differences, and every `intentional-diff` row '
         + 'above cites one of them by number. The entries below are the ones this run reads more narrowly than '
         + 'the plan wrote them — or, at item 5, does not deliver at all, as AAP 0.9.3\'s fixed cut order required — '
-        + 'stated with what the run delivers so that the register and the specs agree.',
+        + 'or, at the session-expiry warning, carries copy of the application\'s own because no legacy bundle '
+        + 'supplies it, stated with what the run delivers so that the register and the specs agree.',
     );
   });
 

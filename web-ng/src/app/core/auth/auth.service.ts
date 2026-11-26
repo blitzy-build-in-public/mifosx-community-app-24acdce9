@@ -85,7 +85,7 @@ export class AuthService {
   /**
    * Authenticates with Fineract and puts the resulting session into effect: `POST /authentication`, the checked answer written as the legacy entry, then the restore that issues `GET /users/{id}`; an answer that cannot describe a session rejects before anything is kept (AAP 0.7.1 `login`, AAP 0.10.1 W1).
    *
-   * A restore that leaves no session in effect rejects the login with the failure that caused it — the `ApiError` the interceptor built from the failed `GET /users/{id}`, or {@link NO_SESSION_AFTER_SIGN_IN} when nothing failed — so a correct password never ends in an unexplained return to the login form once `authGuard` reads the withdrawn session. The 4xx the interceptor deliberately leaves silent is the case this closes (AAP 0.14.2 "Error handling"); a 5xx or transport fault reaches the caller as the same `ApiError` its one notification already reported. The written entry stays in either case: the 401 that ends such a session for good is the interceptor's decision, not this method's.
+   * A restore that leaves no session in effect rejects the login with the failure that caused it — the `ApiError` the interceptor built from the failed `GET /users/{id}`, or {@link NO_SESSION_AFTER_SIGN_IN} when nothing failed — so a correct password never ends in an unexplained return to the login form once `authGuard` reads the withdrawn session. The 4xx the interceptor deliberately leaves silent is the case this closes (AAP 0.14.2 "Error handling"); a 5xx or transport fault reaches the caller as the same `ApiError` its one notification already reported. The written entry stands or falls with that restore (AAP 0.4.2): status 401 removes it, and so does status 0 — the form a cross-origin 401 arrives in when the browser cannot read the answer, which a genuine transport fault is indistinguishable from — while every other failure leaves it where the interceptor's 401 branch can act on it.
    */
   async login(username: string, password: string): Promise<void> {
     const request: AuthenticationRequest = { username, password };
@@ -105,8 +105,9 @@ export class AuthService {
 
     // The cause of this call's own projection read is kept local to it, never in instance state, so two
     // logins in flight cannot read each other's failure. The reader rethrows it unchanged, which leaves
-    // `SessionService.restore()`'s `Promise<boolean>` contract alone: it still resolves `false` and still
-    // leaves the written entry where a 401 can act on it.
+    // `SessionService.restore()`'s `Promise<boolean>` contract alone: it still resolves `false`, and it
+    // removes the written entry for a refused credential (status 401, or the status 0 a cross-origin 401
+    // arrives as) while every other failure leaves that entry in place.
     const captured: { cause?: unknown } = {};
 
     const readProjection: SessionUserReader = (userId: number) =>

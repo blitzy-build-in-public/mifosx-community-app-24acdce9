@@ -6,37 +6,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DataTableComponent, type ColumnDef } from './data-table.component';
 
 /**
- * Behavioural spec for `DataTableComponent`, the generic table AAP 0.2.3's inventory requires the
- * new app to provide (row `ClientList / DataTable`; Figma node `1:3`; Rule 1 clause 8, which allows
- * no empty or boilerplate specs).
+ * Behavioural spec for `DataTableComponent`, the generic table AAP 0.2.3's inventory requires the new app to
+ * provide (row `ClientList / DataTable`; Figma node `1:3`; Rule 1 clause 8, which allows no empty or
+ * boilerplate specs).
  *
- * What it pins is what only the rendered table can say, because those are the properties a rewrite
- * would silently change:
+ * It pins what only the rendered table can say: one `<th scope="col">` per column in the caller's order from
+ * the column's already-translated label, one `<tr>` and one `<td>` per row and column, the caller's id and
+ * class list on the `<table>` inside Bootstrap's `.table-responsive` wrapper (Rule 1 clauses 3 and 6), a row
+ * opening the caller's destination as one link over the whole row with no control inside it (AAP 0.7.4), no
+ * link at all for a table given no destination, a caller's cell template rendering instead of the column
+ * text with the row, the column and its value — how Status becomes an `app-status-swatch` (AAP 0.2.3 row
+ * `StatusSwatch`; AAP 0.10.5 deliberate difference 11) — rows and order following the input tracked by the
+ * caller's key, and an empty row list rendering the header and no body row (Rule 1 clause 3).
  *
- *  1. the header prints one `<th scope="col">` per column, in the caller's order, from the column's
- *     own already-translated label — the six columns of the clients list are the caller's business,
- *     the `<th>` shape is this component's;
- *  2. the body prints one `<tr>` per row and one `<td>` per column, holding the column's own text for
- *     that row, so the table renders the caller's data and nothing else;
- *  3. the `<table>` carries the caller's id and class list inside Bootstrap's `.table-responsive`
- *     wrapper, which is what keeps the clients list's column proportions and the harness's
- *     `#client-list` handle attached to the same element (Rule 1 clauses 3 and 6);
- *  4. a row opens the destination the caller supplies, as one link over the whole row and with no
- *     control inside it — the legacy table's own affordance and the design's (AAP 0.7.4);
- *  5. a table the caller gives no destination renders no link at all: no `href`, no tab stop and no
- *     navigation, so a read-only table is not a table of dead links;
- *  6. a caller's cell template renders instead of the column's text for every cell and receives the
- *     row, the column and the column's value — which is how the clients list's Status column becomes
- *     an `app-status-swatch` (AAP 0.2.3 row `StatusSwatch`; AAP 0.10.5 deliberate difference 11);
- *  7. the rows and their order follow the input when it changes, tracked by the caller's key, so a
- *     replaced page repaints instead of keeping the rows it first painted;
- *  8. an empty row list renders the header and no body row, which is the empty state a caller paints
- *     beside it rather than a row invented here (Rule 1 clause 3).
- *
- * The two hosts below are the only place the component's generic contract is exercised from a
- * template, which is what proves it composes with a feature's own row type while `shared/` names none
- * of it (AAP 0.14.1 "`shared` never imports from `features`"). The router is provided empty because
- * no case completes a navigation: each asserts the destination the row asks the router for.
+ * The two hosts are the only place the generic contract is exercised from a template, which proves it
+ * composes with a feature's own row type while `shared/` names none of it (AAP 0.14.1 "`shared` never
+ * imports from `features`"). The router is provided empty because no case completes a navigation.
  */
 
 /** The row a host hands the table: a feature's own shape, invented for this suite. */

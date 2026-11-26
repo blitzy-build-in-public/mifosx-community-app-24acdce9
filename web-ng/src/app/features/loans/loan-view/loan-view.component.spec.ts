@@ -37,7 +37,7 @@ const LOAN_ID = '9';
 /** The second record the route is moved to in place — a second `#/viewloanaccount/{id}` the router serves with the same component instance, which is what makes the snapshot read a defect. */
 const SECOND_LOAN_ID = '12';
 
-/** The action links the fixture loan's state offers — it is an active loan (`loanStatusType.active`, 300) — in the order `LOAN_ACTIONS` lists them: the charge form, the repayment form and undo disbursal, which is exactly. */
+/** The action links the fixture loan's state offers — it is an active loan (`loanStatusType.active`, 300) — in the order `LOAN_ACTIONS` lists them: the charge form, the repayment form and undo disbursal, which is exactly the set the legacy record shows for an active loan (`ViewLoanDetailsController.js`). */
 const ACTION_PATHS: readonly string[] = [
   `/addloancharge/${LOAN_ID}`,
   `/loanaccount/${LOAN_ID}/repayment`,
@@ -93,7 +93,7 @@ const TRANSLATIONS: Readonly<Record<string, string>> = {
   'error.msg.resource.not.found': 'The requested resource is not available.',
 };
 
-/** The two-period schedule the payload of the fixture loan carries, shaped as `GET /loans/{id}?associations=all` answers it: the loan-wide totals beside the periods, and the per-period outstanding members the record's. */
+/** The two-period schedule the payload of the fixture loan carries, shaped as `GET /loans/{id}?associations=all` answers it: the loan-wide totals beside the periods, and the per-period outstanding members the record's three balances are summed from. The first period is paid and carries every member at zero; the second omits the fee and penalty members entirely, which is how the fork reports a period no fee is outstanding against. */
 const SCHEDULE: RepaymentSchedule = {
   periods: [
     {
@@ -160,7 +160,7 @@ const TRANSACTIONS: readonly LoanTransaction[] = [
   },
 ];
 
-/** The charges the fixture loan carries, shaped as the record's own `charges` member carries them — `GET /loans/{id}?associations=all` (AAP 0.7.3 row "W6 repayment"): one charge still outstanding, with a specified due. */
+/** The charges the fixture loan carries, shaped as the record's own `charges` member carries them — `GET /loans/{id}?associations=all` (AAP 0.7.3 row "W6 repayment"): one charge still outstanding, with a specified due date, and one already paid that falls due on disbursement and so carries no date at all. The settle flags are the fork's own, and `chargePayable` is false on both because neither charge is payable through an account transfer. */
 const LOAN_CHARGES: readonly LoanCharge[] = [
   {
     id: 21,
@@ -445,7 +445,7 @@ describe('LoanViewComponent', () => {
     fixture.detectChanges();
   }
 
-  /** Moves the mounted record to another URL the way the router does when only the `:id` segment changes: the same component instance stays on screen and the parameter map emits again. @param id the `:id` segment of the. */
+  /** Moves the mounted record to another URL the way the router does when only the `:id` segment changes: the same component instance stays on screen and the parameter map emits again. @param id the `:id` segment of the record the URL now names. */
   async function navigateTo(id: string): Promise<void> {
     routeParams.next(paramMapFor(id));
     await settle();
@@ -480,7 +480,7 @@ describe('LoanViewComponent', () => {
     await settle();
   }
 
-  /** The production mapping of a Fineract failure onto `ApiError`, so a rejected read reaches the component as the type it catches in the application (AAP 0.4.2; AAP 0.7.2 row `FineractError`). @param status HTTP status to. */
+  /** The production mapping of a Fineract failure onto `ApiError`, so a rejected read reaches the component as the type it catches in the application (AAP 0.4.2; AAP 0.7.2 row `FineractError`). @param status HTTP status to answer with. @param message the server's own `defaultUserMessage`. @returns the failure the service rejects with. */
   function failure(status: number, message: string): ApiError {
     return toApiError(new HttpErrorResponse({ status, error: { defaultUserMessage: message } }));
   }

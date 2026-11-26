@@ -13,58 +13,34 @@ import { LoginFormComponent, type LoginCredentials } from './login-form/login-fo
 import { LoginComponent } from './login.component';
 
 /**
- * Behaviour of the login screen at `#/login` — the entry point of workflow W1 and step 1 of the design
- * flow "Sign in and open a client record" (AAP 0.7.1 Features row `auth`; AAP 0.7.4 "Login
- * (`#/login`)", Figma node `1:5`; AAP 0.10.1 W1; Rule 1 clause 8, "no empty or boilerplate spec files;
- * every spec contains at least one `expect`").
+ * Behaviour of the login screen at `#/login` — the entry point of workflow W1 and step 1 of the design flow
+ * "Sign in and open a client record" (AAP 0.7.1 Features row `auth`; AAP 0.7.4 "Login (`#/login`)", Figma
+ * node `1:5`; AAP 0.10.1 W1; Rule 1 clause 8, "no empty or boilerplate spec files; every spec contains at
+ * least one `expect`").
  *
- * Each case states one contract the component owns:
+ * Each case states one contract the component owns: the screen rendering its two controls and its single
+ * primary submit outside the signed-in shell, with labels resolved through the translation pipe; an empty
+ * form sending nothing and marking both controls touched, legacy's only client-side rule (Rule 1 clause 3); a
+ * filled form calling `AuthService.login` once and leaving for `#/clients`, or for the `returnUrl` the auth
+ * guard left when it is an in-app path (AAP 0.7.4 "navigate to the attempted route or `#/clients`"); a
+ * rejected exchange rendering Fineract's own message verbatim in the one `.alert.alert-danger` region,
+ * keeping the account name, clearing only the credential control and navigating nowhere (workflow W7
+ * compares that text character for character), with a non-Fineract failure rendering the generic legacy
+ * message instead; the primary button disabled only while a login is in flight, a second submit issuing no
+ * second call because `POST /authentication` is not idempotent (AAP 0.14.1 "one request per click"); and the
+ * language switcher swapping the active bundle in place without navigating, a failed load reported and the
+ * switcher put back on the language in force, withdrawing only that failure and never a sign-in failure
+ * (AAP 0.7.4; AAP 0.14.2 "no `catch` swallows an error silently").
  *
- *  1. the screen renders its two controls and its single primary submit, outside the signed-in shell —
- *     no navbar, and not the application's one notification host, which lives on the app root — and the
- *     labels resolve through the translation pipe instead of reaching the user as raw keys;
- *  2. an empty form sends nothing at all and marks both controls touched, which is the legacy form's
- *     only client-side rule (Rule 1 clause 3: no rule legacy does not have);
- *  3. a filled form calls `AuthService.login` exactly once with the typed values and then leaves for
- *     `#/clients` (AAP 0.7.4 "navigate to the attempted route or `#/clients`");
- *  4. a `returnUrl` the auth guard left on the route is where the user lands instead, while a value
- *     that is not an in-app path falls back to the default landing;
- *  5. a rejected exchange renders Fineract's own message verbatim in the screen's one
- *     `.alert.alert-danger` region, keeps the account name, clears only the credential control and
- *     navigates nowhere (workflow W7 compares that text character for character);
- *  6. a failure that is not Fineract's own text renders the generic legacy message instead, so the
- *     screen never shows a raw key or an empty banner;
- *  7. the primary button is disabled only while a login is in flight — enabled before the attempt and
- *     released afterwards — and a second submit during that window issues no second call, because
- *     `POST /authentication` is not idempotent (AAP 0.14.1 "one request per click");
- *  8. the language switcher swaps the active bundle in place, navigates nowhere, and offers the
- *     application's one language list; a bundle that fails to load is reported and the switcher is put
- *     back on the language in force, while a switch that takes effect withdraws only that language
- *     failure and never a sign-in failure (AAP 0.7.4; AAP 0.14.2 "no `catch` swallows an error
- *     silently").
- *
- * **Where the state now lives.** The two credentials and their `Validators.required` belong to
- * `LoginFormComponent` (AAP 0.2.3's `LoginForm` row, `(submit: {username, password})`) and the
- * language row belongs to the shared `LanguageSwitcherComponent`, both of which have their own specs.
- * This suite drives them through the DOM and asserts what the screen itself owns: one request per
- * click, the error region's two writers, the destination and the navigation.
- *
- * **What the suite replaces, and why.** Every collaborator is a typed object literal provided at its
- * own injection token, so the unit under test is the component and nothing else:
- *
- *  - `AuthService` → one `login` spy. The screen owes exactly one call per click and a promise whose
- *    settlement it renders; the `POST /authentication` request itself, and the `GET /users/{id}`
- *    restore behind it, are the contract test in `core/auth/auth.service.spec.ts`.
- *  - `Router` → a `navigateByUrl` spy. Navigation is asserted by its argument, never performed.
- *  - `ActivatedRoute` → a stand-in whose `snapshot.queryParamMap` answers with the map the current case
- *    holds, because the component reads the `returnUrl` there at submit time.
- *  - `TranslateService` → the four members this screen actually touches, each commented at the stub.
- *    No HTTP provider exists anywhere in this file: the screen calls no Fineract endpoint itself and
- *    reaches no host at all (Rule 1 clause 5; Rule 2).
- *
- * The fixtures are synthetic — an invented account name, an invented typed value and two messages
- * quoted in the shape a real refusal arrives in — and nothing here logs, stores or prints a
- * credential (Rule 1 clause 9; AAP 0.10.4).
+ * The credentials and their `Validators.required` belong to `LoginFormComponent` (AAP 0.2.3's `LoginForm`
+ * row) and the language row to `LanguageSwitcherComponent`, both with their own specs, so this suite drives
+ * them through the DOM and asserts what the screen owns. Every collaborator is a typed object literal at its
+ * own injection token: `AuthService` a `login` spy (the `POST /authentication` request itself, and the
+ * `GET /users/{id}` restore behind it, are `core/auth/auth.service.spec.ts`'s contract test), `Router` a
+ * `navigateByUrl` spy, `ActivatedRoute` a stand-in answering `snapshot.queryParamMap`, and `TranslateService`
+ * the four members this screen touches. No HTTP provider exists anywhere in this file (Rule 1 clause 5;
+ * Rule 2), and the fixtures are synthetic: nothing logs, stores or prints a credential (Rule 1 clause 9;
+ * AAP 0.10.4).
  */
 
 /** The account name the form is typed with; obviously a test value rather than a real login. */

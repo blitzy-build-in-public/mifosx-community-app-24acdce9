@@ -5,28 +5,21 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { LoginFormComponent, type LoginCredentials } from './login-form.component';
 
 /**
- * Behaviour of the login form — the `LoginForm` row of the component inventory (AAP 0.2.3), the form
- * region of the login screen (Figma node `1:5`; AAP 0.7.4 "Login"; AAP 0.10.1 W1).
+ * Behaviour of the login form — the `LoginForm` row of the component inventory (AAP 0.2.3), the form region
+ * of the login screen (Figma node `1:5`; AAP 0.7.4 "Login"; AAP 0.10.1 W1).
  *
- * It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with
- * at least one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`). Each case states
- * one contract the component owns:
+ * It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with at least
+ * one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`). It pins the legacy screen's own
+ * two controls and one primary submit — ids, names, classes and the masked credential field the parity page
+ * objects address, every caption through the translation stack; an empty form reporting nothing while
+ * marking both controls touched, legacy's only client-side rule (Rule 1 clause 3); a valid form reporting the
+ * pair typed, once, untrimmed (AAP 0.2.3's `(submit: {username, password})`); the button disabled while
+ * `busy`, which is the whole duplicate-submission guard (AAP 0.14.1); and a refused exchange clearing the
+ * credential control and nothing else.
  *
- *  1. it renders the legacy screen's own two controls and its one primary submit — ids, names,
- *     classes and the masked credential field the parity page objects address — with every caption
- *     resolved through the translation stack;
- *  2. an empty form reports nothing at all and marks both controls touched, which is the legacy
- *     form's only client-side rule (Rule 1 clause 3: no rule legacy does not have);
- *  3. a valid form reports the pair the user typed, exactly once, untrimmed, and the report is what
- *     the screen posts (AAP 0.2.3's `(submit: {username, password})`);
- *  4. the button is disabled while `busy` and enabled otherwise, which is the whole
- *     duplicate-submission guard (AAP 0.14.1);
- *  5. a refused exchange clears the credential control and nothing else.
- *
- * The translate stack is the no-op loader plus the captions this form resolves, so no bundle is
- * requested; nothing else is provided, and there is deliberately no HTTP provider — the component
- * injects no service beyond `FormBuilder`, so a request from it would fail with NG0201 rather than
- * passing silently (Rule 1 clause 5).
+ * The translate stack is the no-op loader plus the captions this form resolves, so no bundle is requested;
+ * there is deliberately no HTTP provider, because the component injects no service beyond `FormBuilder`
+ * (Rule 1 clause 5).
  */
 
 /** The account name the form is typed with; obviously a test value rather than a real login. */

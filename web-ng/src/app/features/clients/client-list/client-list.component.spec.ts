@@ -30,67 +30,39 @@ import type { SearchResult } from '../../../core/api/search.service';
 import { FilterToolbarComponent } from './filter-toolbar/filter-toolbar.component';
 
 /**
- * Behaviour of the clients list at `#/clients` — the post-authentication landing screen, step 2 of 3
- * of the design flow "Sign in and open a client record", and the entry point of workflow W2 (its
- * "Create Client" control) and workflow W3 (a row opened onto the record) (AAP 0.7.1 Features row
- * `clients`; AAP 0.7.4 "Clients list (`#/clients`)", Figma node `1:3`; AAP 0.11.1 "unit specs beside
- * every component and service"; Rule 1 clause 8).
+ * Behaviour of the clients list at `#/clients` — the post-authentication landing screen, step 2 of 3 of the
+ * design flow "Sign in and open a client record", and the entry point of workflow W2 (its "Create Client"
+ * control) and W3 (a row opened onto the record) (AAP 0.7.1 Features row `clients`; AAP 0.7.4 "Clients list
+ * (`#/clients`)", Figma node `1:3`; AAP 0.11.1 "unit specs beside every component and service"; Rule 1 clause
+ * 8).
  *
- * What it pins is the traffic the screen produces, the state it holds and the few properties only the
- * markup can express, because those are the parts a rewrite would silently change:
+ * It pins the traffic the screen produces, the state it holds and the few properties only the markup can
+ * express, because those are the parts a rewrite would silently change: one `GET /clients` on construction
+ * carrying `offset=0`, `limit=15` and no `searchText`, the parameter set the legacy `getAllClients({offset,
+ * limit})` sends (Rule 1 clauses 2 and 3; AAP 0.7.3 row "Client list and edit"); the envelope's `pageItems`
+ * becoming the rows held, unreformatted (Rule 1 clause 3), rendered in display-name order as AngularJS 1.7.9's
+ * default comparator orders them (`app/views/clients/clients.html:63`); the two display filters costing no
+ * request, "Show Closed" hiding the `closed` code alone and the filter field comparing every text cell
+ * case-insensitively; a 4xx rendering Fineract's own message on `errorMessage` and emptying the rows while a
+ * 5xx leaves it empty and only flags the failure, the interceptor having notified once (AAP 0.7.4; workflow
+ * W7); `loading()` following the read either way; the find field's submit running `GET /search` with `query`,
+ * `resource` and the `exactMatch` flag legacy derives from the surrounding double quotes
+ * (`app/scripts/controllers/client/ClientController.js:44-62`; Rule 1 clause 2; AAP 0.7.2
+ * `GlobalSearchParams`), its answer replacing the page's rows; the card's states — the explicit empty state
+ * with no error (AAP 0.7.4), neither rows nor a "no clients" claim after a failure, a pager only for a match
+ * larger than one page; and what the table and toolbar paint — the card title, the six column headers, one row
+ * per visible client, a status cell holding the swatch and no word (AAP 0.10.5 deliberate difference 11), the
+ * row itself as the link to `#/viewclient/:id` with no nested control, and the "Create Client" gate following
+ * `CREATE_CLIENT`, hidden rather than removed when it is absent.
  *
- *  1. exactly one `GET /clients` on construction, carrying `offset=0` and `limit=15` and no
- *     `searchText` — the parameter set the legacy `getAllClients({offset, limit})` sends, and nothing
- *     the legacy list does not send (Rule 1 clauses 2 and 3; AAP 0.7.3 row "Client list and edit");
- *  2. the paged envelope's `pageItems` become the rows the screen holds, in the order the server sent
- *     them and with no reformatting (Rule 1 clause 3), while the rows the table renders are those
- *     survivors ordered by display name ascending, compared case-insensitively as AngularJS 1.7.9's
- *     default comparator compares two strings — both lower-cased, then `<`/`>` — which is what
- *     legacy's `| orderBy:'displayName':reverse` with `reverse` unset does
- *     (`app/views/clients/clients.html:63`);
- *  3. the two display filters — "Show Closed" and the filter field — narrow the rows already in hand
- *     and cost no request at all: "Show Closed" hides the `closed` status code alone, and the filter
- *     compares every cell the table prints text in — the name, the client number, the external id,
- *     the office and the staff member — case-insensitively;
- *  4. a 4xx renders Fineract's own message on `errorMessage` and empties the rows, which is the state
- *     the template shows in place of the table (AAP 0.7.4 states; workflow W7);
- *  5. a 5xx leaves `errorMessage` empty and only flags the failure, because the interceptor has
- *     already raised the single notification carrying it and reporting it twice is what the plan
- *     forbids (AAP 0.7.4);
- *  6. `loading()` is true while the read is outstanding and false once it settles either way;
- *  7. the find field's submit runs `GET /search` with `query`, `resource` and `exactMatch`, the flag
- *     derived from the field's surrounding double quotes exactly as legacy derives it
- *     (`ClientController.search()`, `app/scripts/controllers/client/ClientController.js:44-62`;
- *     Rule 1 clause 2; AAP 0.7.2 `GlobalSearchParams`), and the answer's rows replace the page's;
- *  8. the states the card must render: the explicit empty state with no error (AAP 0.7.4), no rows
- *     and no "no clients" claim after a failure, and a pager that paints only for a match larger than
- *     one page;
- *  9. what the table and the toolbar actually paint: the card title, the six column headers, one row
- *     per visible client, a status cell holding the swatch and no word (AAP 0.10.5 deliberate
- *     difference 11), the row itself as the link to `#/viewclient/:id` with no nested control, and
- *     the "Create Client" gate following `CREATE_CLIENT` — hidden, not removed, when it is absent.
- *
- * **Two levels of assertion, each for what the other cannot see.** The traffic the screen sends is
- * asserted on `HttpTestingController` and the state it holds on the component's own signals, because
- * those are what a rewrite would silently change and a signal assertion names a failure precisely.
- * The markup is asserted separately, and only where a property exists in the DOM alone: the status
- * cell that must carry no text, the row that is itself the link, the gate that hides its control
- * rather than removing it, the empty state, and the pager's links. Wording that only restates a
- * translated caption is not asserted, so re-keying the bundles cannot break this file.
- *
- * **Providers.** The configuration is loaded from a stubbed `fetch` before the component exists,
- * because every client URL is composed from it. The ngx-translate stack is registered for the
- * template's pipe. `PermissionsService` is a stub typed against the real class, because the toolbar
- * this screen renders gates "Create Client" with that directive; no session is ever assembled for a
- * spec. `NotificationService` is stubbed for the same reason from the other
- * side: `core/http/fineract.interceptor.ts` owns the single notification a 5xx raises, so a stub at
- * the token is what proves the screen raises none of its own. `provideRouter([])` supplies the router
- * the row and "Create Client" links need in order to render; the empty route table is enough because
- * no case completes a navigation — the row's click is observed at the router it asks.
- *
- * The error mapping is the one production piece the TestBed supplies itself: `core/http` owns the
- * mapping of a Fineract failure to `ApiError`, and installing it as an interceptor means the
- * rejection the component narrows is the type it narrows in the application (AAP 0.4.2).
+ * Traffic is asserted on `HttpTestingController` and state on the component's own signals; the markup is
+ * asserted only where a property exists in the DOM alone. Providers: the configuration loads from a stubbed
+ * `fetch`, the ngx-translate stack is registered for the template's pipe, and `PermissionsService` and
+ * `NotificationService` are stubs typed against the real classes — the second from the other side, because
+ * `core/http/fineract.interceptor.ts` owns the single notification a 5xx raises. `provideRouter([])` supplies
+ * the router the links need, and the error mapping is the one production piece the TestBed supplies, installed
+ * as an interceptor so the rejection the component narrows is the type it narrows in the application
+ * (AAP 0.4.2).
  */
 
 /** The configuration the stubbed transport serves: the application's own documented default shape. */

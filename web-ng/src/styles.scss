@@ -389,21 +389,18 @@ span.required {
 
 // ----------------------------------------------------------------------------- Navbar (_navbar.scss, _layout.scss) -----------------------------------------------------------------------------
 
-// AAP 0.2.1 fixes the layout rule "a fixed top navbar above a scrolling content column", and legacy
-// carries the same intent: `app/views/_topnavbar.html:1` is `<nav class="navbar navbar-default
-// navbar-fixed-top">`, with its content container pinned under the bar at `top: 52px` [_layout.scss
-// `#mifos-reskin-ui-container`]. A bar that scrolls away is therefore a departure from both.
+// AAP 0.2.1 fixes the layout rule "a fixed top navbar above a scrolling content column", and legacy carries the
+// same intent: `app/views/_topnavbar.html:1` is `<nav class="navbar navbar-default navbar-fixed-top">`, with its
+// content container pinned under the bar at `top: 52px` [_layout.scss `#mifos-reskin-ui-container`].
 //
-// Bootstrap's `.navbar-fixed-top` is deliberately not used. The bar measures 52px at 1440/1024/768 and
-// 272px at 500/375, because this application deliberately renders the full navigation at every width —
-// the template carries `.navbar-collapse` with no `.collapse` class and no hamburger (AAP 0.10.5 item
-// 8). A `position: fixed` bar with a hard-coded offset would therefore hide some 220px of the client
-// list behind the bar on a phone. Pinning the host element instead keeps the bar at the top of the
-// viewport and still reserves the bar's real height in flow at every width, so no offset is needed.
-//
-// A custom element is inline by default (measured: `display: inline`, `position: static`), so
-// `display: block` makes the host the sticky box. `$zindex-navbar-fixed` (1030) keeps the bar above the
-// routed screen it covers, while the notification container (1030 + 10) stays above the bar.
+// Bootstrap's `.navbar-fixed-top` is deliberately not used: the bar measures 52px at 1440/1024/768 and 272px at
+// 500/375, because this application renders the full navigation at every width — the template carries
+// `.navbar-collapse` with no `.collapse` class and no hamburger (AAP 0.10.5 item 8) — so a `position: fixed` bar
+// with a hard-coded offset would hide some 220px of the client list behind the bar on a phone. Pinning the host
+// element instead keeps the bar at the top of the viewport and still reserves its real height in flow at every
+// width. A custom element is inline by default (measured: `display: inline`, `position: static`), so
+// `display: block` makes the host the sticky box; `$zindex-navbar-fixed` (1030) keeps the bar above the routed
+// screen it covers, while the notification container (1030 + 10) stays above the bar.
 app-navbar {
   display: block;
   position: sticky;

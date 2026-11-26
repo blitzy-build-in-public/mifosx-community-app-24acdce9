@@ -50,16 +50,13 @@ interface ClientActionCopy {
 /**
  * The five commands' copy, keyed by the command itself.
  *
- * `satisfies Record<ClientActionCommand, ClientActionCopy>` is the point of the declaration: a
- * command added to the union without copy, or copy left behind by a command removed from it, is a
- * compile error, so the template reads the current command's labels through an exhaustive lookup and
- * no `default:` branch can quietly render another action's wording.
- *
- * The keys are the legacy client-actions template's own: the heading is the `breadcrumbName` it
- * renders as the step title (`label.anchor.*`), the date and reason labels are its `labelName` and
- * `labelNamereason` values, and the button is the `label.button.save` it shows for every one of the
- * five actions — "Submit", not a per-action verb (Rule 1 clause 3). `activate` and `reactivate` take
- * no reason, which is why their `reasonLabelKey` is empty rather than a key nothing would send.
+ * `satisfies Record<ClientActionCommand, ClientActionCopy>` is the point: a command added to the union without copy,
+ * or copy left behind by a command removed from it, is a compile error, so the template reads the current command's
+ * labels through an exhaustive lookup and no `default:` branch can quietly render another action's wording. The keys
+ * are the legacy client-actions template's own — the heading is the `breadcrumbName` it renders as the step title
+ * (`label.anchor.*`), the date and reason labels are its `labelName` and `labelNamereason`, and the button is the
+ * `label.button.save` it shows for all five, "Submit" rather than a per-action verb (Rule 1 clause 3). `activate`
+ * and `reactivate` take no reason, which is why their `reasonLabelKey` is empty.
  */
 const ACTION_COPY = {
   activate: {
@@ -143,15 +140,12 @@ function isClientActionCommand(value: string): value is ClientActionCommand {
 /**
  * Today at local midnight: the activation date a new action screen starts on.
  *
- * The one clock read in this file, and the legacy behaviour it reproduces. A form's own default date
- * follows the browser clock rather than the tenant business date, which is where this departs from
- * Rule 1 clause 2's business-date requirement on purpose: reading the business date here would add a
- * request the legacy screen never makes and register as a request difference in every parity
- * workflow, so the run date is derived where dates must be authoritative — in the E2E harness
- * (AAP 0.10.5 item 15; AAP 0.12). Local midnight rather than `new Date()` so the value is the
- * calendar day the field shows, and built part by part rather than from a `'yyyy-MM-dd'` string,
- * which `Date` would read as UTC midnight and render as the previous day anywhere west of
- * Greenwich.
+ * The one clock read in this file, and the legacy behaviour it reproduces. A form's default date follows the browser
+ * clock rather than the tenant business date, which is where this departs from Rule 1 clause 2 on purpose: reading
+ * the business date here would add a request the legacy screen never makes and register as a request difference in
+ * every parity workflow, so the run date is derived where dates must be authoritative — in the E2E harness
+ * (AAP 0.10.5 item 15; AAP 0.12). Local midnight rather than `new Date()` so the value is the calendar day the field
+ * shows, and built part by part rather than from a `'yyyy-MM-dd'` string, which `Date` reads as UTC midnight.
  *
  * @returns the browser's current calendar day at 00:00 local time.
  */
@@ -161,26 +155,21 @@ function todayAtLocalMidnight(): Date {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
-/**
- * The text a failed call paints on this screen: Fineract's own message for a 4xx, and nothing for a
- * failure the interceptor has already reported.
- *
- * `ApiError` is the interceptor's mapped failure and carries Fineract's own `defaultUserMessage` as
- * its message, which is what a screen must render verbatim (AAP 0.4.4 decision 6, workflow W7). A
- * 4xx is Fineract answering the values this form submitted, so that answer is shown and the screen
- * stays usable (AAP 0.7.4).
- *
- * Every other outcome answers `null`. `core/http/fineract.interceptor.ts` raises the single
- * notification for a failure no screen can render itself — a transport fault, which `ApiError` marks
- * with status `0`, and any status at or above 500 (AAP 0.7.4) — so painting it here as well would
- * report one problem twice, and a status-`0` failure carries Angular's own message, which embeds the
- * failed request's URL. A throw that is not an `ApiError` never carries Fineract's verdict on the
- * values this form submitted, so it paints nothing either. Nothing is logged: a client id, a reason
- * id, a body or a credential must never reach the console (Rule 1 clause 9).
- *
- * @param error the value a failed call rejected with.
- * @returns displayable text for a 4xx, or `null` when the failure must not be painted again.
- */
+  /**
+   * The text a failed call paints on this screen: Fineract's own message for a 4xx, and nothing for a failure
+   * the interceptor has already reported.
+   *
+   * `ApiError` carries Fineract's own `defaultUserMessage`, which a screen renders verbatim (AAP 0.4.4 decision
+   * 6, workflow W7) and which leaves the screen usable (AAP 0.7.4). Every other outcome answers `null`:
+   * `core/http/fineract.interceptor.ts` raises the single notification for a transport fault, which `ApiError`
+   * marks with status `0`, and for any status at or above 500 (AAP 0.7.4), so painting it here would report the
+   * same problem twice — and a status-`0` message embeds the failed request's URL. A throw that is not an
+   * `ApiError` never carries Fineract's verdict, so it paints nothing either. Nothing is logged (Rule 1
+   * clause 9).
+   *
+   * @param error the value a failed call rejected with.
+   * @returns displayable text for a 4xx, or `null` when the failure must not be painted again.
+   */
 function failureMessage(error: unknown): string | null {
   return error instanceof ApiError && error.status >= 400 && error.status < 500
     ? error.message
@@ -188,62 +177,42 @@ function failureMessage(error: unknown): string | null {
 }
 
 /**
- * The single-purpose form behind one client lifecycle action — `#/client/:id/:action` (AAP 0.8.2;
- * AAP 0.7.1 Features row `clients`).
+ * The single-purpose form behind one client lifecycle action — `#/client/:id/:action` (AAP 0.8.2; AAP 0.7.1
+ * Features row `clients`).
  *
- * **What it does, in the order legacy runs it.** It reads `:id` and `:action` from the route, refuses
- * an `:action` that is not one of the five in-scope commands, runs the datatable gate the legacy
- * `ClientActionsController` runs first, loads the reason list for the three commands that take one,
- * and only then renders the form. Submitting posts exactly one command and returns to the client
- * record. The five commands are `POST /clients/{id}?command=activate`, `=close`, `=reject`,
- * `=withdraw` and `=reactivate` (AAP 0.7.3 row "Client actions").
+ * In legacy's order: read `:id` and `:action` from the route, refuse an `:action` that is not one of the five
+ * in-scope commands, run the datatable gate the legacy `ClientActionsController` runs first, load the reason
+ * list for the three commands that take one, render the form, then post exactly one command and return to the
+ * record. The five are `POST /clients/{id}?command=activate`, `=close`, `=reject`, `=withdraw` and
+ * `=reactivate` (AAP 0.7.3 row "Client actions"), and the gate runs once per load and never again on submit:
+ * `DataTableGateService.checkClientActionGate` performs the legacy two-call sequence — the tenant's
+ * datatable-check list, then one generic-result-set read per applicable check — which this screen neither
+ * re-implements nor reorders (AAP 0.7.3 row "Client actions: datatable gate"; AAP 0.3.4 claim 13). A failed
+ * gate leaves the form unrendered and is never treated as a pass, Fineract's own message reaching the user on
+ * a 4xx and the interceptor's notification alone otherwise.
  *
- * **The gate comes first and runs once.** `DataTableGateService.checkClientActionGate` performs the
- * legacy two-call sequence — the tenant's datatable-check list, then one generic-result-set read per
- * applicable check — and this screen neither re-implements nor reorders it (AAP 0.7.3 row "Client
- * actions: datatable gate"; AAP 0.3.4 claim 13). It runs once per screen load and never again on
- * submit, because a second gate call would add requests the legacy screen never makes. A gate that
- * fails leaves the form unrendered, with Fineract's own message on screen when it answered with a
- * 4xx and with the interceptor's notification alone when it did not; a failed gate is never treated
- * as a pass.
+ * Reason ids come from the tenant, never from this file: `close`, `reject` and `withdraw` read
+ * `GET /clients/template?commandParam=<command>` and render its `narrations` in the server's order, unsorted,
+ * unfiltered and unrenamed (AAP 0.7.3 row "Client actions"), while `activate` and `reactivate` take no reason
+ * and issue no template call.
  *
- * **Reason ids come from the tenant, never from this file.** `close`, `reject` and `withdraw` read
- * `GET /clients/template?commandParam=<command>` and render its `narrations` in the server's order,
- * unsorted, unfiltered and unrenamed, because the configured reasons differ per tenant (AAP 0.7.3
- * row "Client actions"). `activate` and `reactivate` take no reason and issue no template call.
+ * No URL, no HTTP client, no configuration read and no date format here: `ClientService` composes every path
+ * and query parameter with `dateFormat` and `locale` from the resolved configuration and the active language,
+ * `DataTableGateService` owns the gate's calls, and `core/http/fineract.interceptor.ts` adds the headers and
+ * maps failures (Rule 1 clauses 2 and 5; AAP 0.7.2 "Date handling"; AAP 0.14.1). A form's default date follows
+ * the browser clock (AAP 0.10.5 item 15), so it reads no business date.
  *
- * **No URL, no HTTP, no configuration.** The family's `ClientService` composes every path and query
- * parameter and supplies `dateFormat` and `locale` from the resolved configuration and the active
- * language; `DataTableGateService` owns the gate's two calls; `core/http/fineract.interceptor.ts`
- * adds the headers and maps failures. This file therefore holds no URL literal, no HTTP client, no
- * query builder, no configuration read and no date format of its own: a form hands the command's own
- * fields and the service supplies the pair at the boundary (Rule 1 clauses 2 and 5; AAP 0.7.2 "Date
- * handling"; AAP 0.14.1). Because a form's default date follows the browser clock (AAP 0.10.5 item
- * 15) and the run date belongs to the harness, it reads no business date either.
+ * It matches legacy rather than improving it: the action date is the only validator, the reason is posted as
+ * chosen — including none at all — and Fineract's own message reaches the user, because the legacy select
+ * validates nothing and `aria-required` would state a rule the form does not enforce (Rule 1 clause 3;
+ * AAP 0.7.4; AAP 0.4.4 decision 6). The entered values survive a failure, and the screen offers no note field,
+ * confirmation dialogue, success toast or client summary, legacy offering none; the one registered difference
+ * is the native date input the shared `DateField` renders for the jQuery datepicker (AAP 0.10.5 item 1).
  *
- * **Matching legacy rather than improving it.** The only validator is the action date the server
- * requires: the reason is posted as chosen — including none at all — exactly as legacy's unvalidated
- * reason select posts it, and Fineract's own message is what reaches the user (Rule 1 clause 3;
- * AAP 0.7.4). That select carries no required marker either: legacy decorates the reason label with
- * a bare asterisk but validates nothing, and this screen reproduces what legacy does — the reason is
- * posted as chosen and Fineract's refusal is what reaches the user — so announcing a required
- * constraint in `aria-required` would state a rule the form does not enforce, which is the
- * client-side validation legacy does not perform (Rule 1 clause 3 "match legacy behavior, don't
- * improve it"; AAP 0.4.4 decision 6, which inherits the server's rules instead of adding our own).
- * No body is blocked by a rule Fineract does not state. The server's own message is rendered
- * verbatim when it answers with one, the entered values survive a failure, and the screen offers no note field, no
- * confirmation dialogue, no success toast and no client summary, because the legacy screen offers
- * none. The one registered difference is the native date input the shared `DateField` renders in
- * place of the jQuery datepicker (AAP 0.10.5 item 1).
- *
- * **One request per click.** Every submit goes through `shared/submit-guard.util.ts`, whose `busy`
- * signal disables the primary button while the call is in flight, so a double click posts once — the
- * behaviour workflow W5 asserts (AAP 0.1.1; AAP 0.10.1 W5).
- *
- * **Presentation.** The template and the global Bootstrap 3 layer in `web-ng/src/styles.scss` own
- * every visual value, which is why this file declares no stylesheet, no inline style and no colour
- * (Rule 1 clause 6; AAP 0.4.4 decision 4). Nothing is logged: no client id, reason id, body or
- * credential reaches the console (Rule 1 clause 9).
+ * Every submit goes through `shared/submit-guard.util.ts`, whose `busy` signal disables the primary button in
+ * flight, so a double click posts once — the behaviour workflow W5 asserts (AAP 0.1.1; AAP 0.10.1 W5). The
+ * template and the global Bootstrap 3 layer in `web-ng/src/styles.scss` own every visual value (Rule 1 clause
+ * 6; AAP 0.4.4 decision 4), and nothing is logged (Rule 1 clause 9).
  */
 @Component({
   selector: 'app-client-actions',
@@ -643,18 +612,15 @@ export class ClientActionsComponent {
   /**
    * Posts one command through the submit guard and returns to the client record on success.
    *
-   * The guarded callback clears the previous failure so a retry does not show a stale message while
-   * it is in flight, hands the command's own fields to `ClientService.action`, which supplies
-   * `dateFormat` and `locale` from the configuration at the boundary, and awaits the one POST. On
-   * success the screen navigates to `#/viewclient/:id` with the route's own client id, as the legacy
-   * controller does. On failure it records the message a 4xx answered with, verbatim, and keeps every
-   * entered value, so the user can correct the field the server named, while a 5xx or transport
-   * failure stays the interceptor's one notification (AAP 0.7.4); the guard releases the button in
+   * The guarded callback clears the previous failure, hands the command's own fields to
+   * `ClientService.action` — which supplies `dateFormat` and `locale` at the boundary — and awaits the one
+   * POST. Success navigates to `#/viewclient/:id` with the route's client id, as the legacy controller does;
+   * failure records the message a 4xx answered with, verbatim, keeping every entered value, while a 5xx or
+   * transport failure stays the interceptor's one notification (AAP 0.7.4). The guard releases the button in
    * either outcome.
    *
    * @param command the command being posted, which is the one the body describes.
-   * @param fields that command's own fields, as its form holds them; the date-format pair is not one
-   * of them, because the service adds it from the configuration.
+   * @param fields that command's own fields, as its form holds them; the date-format pair is not one of them.
    */
   private send(command: ClientActionCommand, fields: ClientActionInput): void {
     void this.guard.runOnce(async (): Promise<void> => {

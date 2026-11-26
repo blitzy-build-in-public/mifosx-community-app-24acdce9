@@ -1,4 +1,4 @@
-/** The deliberate-difference register: the readings this run takes more narrowly than AAP 0.10.5's own wording, carried into `parity-report.md` and `parity-report.json` so acceptance criterion 4's reader can compare them (AAP 0.10.3, AAP 0.11.1, AAP 0.3.4, Rule 1 clause 3). */
+/** The deliberate-difference register: the readings this run takes more narrowly than AAP 0.10.5's own wording, and the one copy it carries because no legacy bundle supplies it, carried into `parity-report.md` and `parity-report.json` so acceptance criterion 4's reader can compare them (AAP 0.10.3, AAP 0.11.1, AAP 0.3.4, Rule 1 clause 3). */
 
 /** One reading of AAP 0.10.5's register: the plan's own wording, what this run delivers instead, and the authority that settles the difference. */
 export interface DifferenceRegisterReading {
@@ -12,7 +12,7 @@ export interface DifferenceRegisterReading {
   readonly why: string;
 }
 
-/** The three readings this run takes from the plan's wording, in AAP order: AAP 0.10.5 item 5, the savings entry point AAP 0.9.3's fixed cut order withdrew; AAP 0.10.5 item 15, the default dates a form opens with; and AAP 0.10.1's W2 row, the client template read (AAP 0.3.4). */
+/** The four readings this run takes from the plan's wording, in AAP order: AAP 0.10.5 item 5, the savings entry point AAP 0.9.3's fixed cut order withdrew; AAP 0.10.5 item 15, the default dates a form opens with; AAP 0.10.1's W2 row, the client template read (AAP 0.3.4); and AAP 0.10.5 itself, the session-expiry copy the application owns because no legacy bundle carries a key for it. */
 export const DIFFERENCE_REGISTER_READINGS: readonly DifferenceRegisterReading[] = [
   {
     where: 'AAP 0.10.5 item 5 — the client record\'s "New Saving" entry point',
@@ -63,6 +63,27 @@ export const DIFFERENCE_REGISTER_READINGS: readonly DifferenceRegisterReading[] 
       + 'clientResource.get({clientId}) and never asks for the template — while Rule 1 clause 2 requires the '
       + 'same calls as legacy.',
   },
+  {
+    where: 'AAP 0.10.5 — the session-expiry warning\'s copy, which the register\'s sixteen differences do not cover',
+    plan:
+      'every label resolves through the legacy `app/global-translations/*.json` bundles ngx-translate loads in place '
+      + '(AAP 0.1.1, AAP 0.4.3), and the register\'s sixteen differences carry no entry for the shell\'s session-expiry '
+      + 'warning',
+    delivered:
+      'the idle warning\'s two strings — `label.message.session.expiring` and `label.button.stay.signed.in` — are the '
+      + 'application\'s own copy in `APP_OWNED_TRANSLATIONS` rather than a legacy bundle\'s, because no bundle under the '
+      + 'legacy `app/global-translations/` tree carries either key, and that copy is English-only in every one of the '
+      + 'languages the switchers offer. The handler that supplies it runs only for keys the active and fallback bundles '
+      + 'lack, so the day a legacy or build-owned per-locale bundle carries either key, that bundle\'s wording wins '
+      + 'automatically and no code changes; adding the copy to a build-owned bundle per locale is the path to a '
+      + 'translated warning.',
+    why:
+      'AAP 0.1.1 requires the 10-second warning before logout, the legacy bundles AAP 0.4.3 loads carry no key for it, '
+      + 'and Rule 1 clause 6 keeps app/ read-only, so a key invented in a legacy bundle is not available — while '
+      + 'answering the two keys with neither copy nor a bundle would put the humanised fragments "Expiring" and "In" in '
+      + 'front of the user. Rule 1 clause 3 asks every deliberate difference from legacy to be listed with its reason, '
+      + 'which is what this entry does; shell.component.html renders both strings.',
+  },
 ];
 
 /** The register table's column headings, in the order a reader compares a reading: where, plan, run, why. */
@@ -84,7 +105,8 @@ export function renderDifferenceRegister(
     'The register itself is AAP 0.10.5\'s sixteen deliberate differences, and every `intentional-diff` row '
       + 'above cites one of them by number. The entries below are the ones this run reads more narrowly than '
       + 'the plan wrote them — or, at item 5, does not deliver at all, as AAP 0.9.3\'s fixed cut order required — '
-      + 'stated with what the run delivers so that the register and the specs agree.',
+      + 'or, at the session-expiry warning, carries copy of the application\'s own because no legacy bundle '
+      + 'supplies it, stated with what the run delivers so that the register and the specs agree.',
     '',
     `| ${REGISTER_COLUMNS.join(' | ')} |`,
     `| ${REGISTER_COLUMNS.map(() => '---').join(' | ')} |`,

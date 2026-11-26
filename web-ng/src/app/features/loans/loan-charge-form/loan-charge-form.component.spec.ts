@@ -501,6 +501,29 @@ describe('LoanChargeFormComponent', () => {
     });
     expect(navigate).toHaveBeenCalledWith(['/viewloanaccount', LOAN_ID]);
   });
+  it('associates the footer control with the form so one submit event posts one charge', async () => {
+    await show(LOAN_ID);
+    component.form.controls.chargeId.setValue(DISBURSEMENT_CHARGE_ID);
+    fixture.detectChanges();
+
+    // The control lives in the card's footer, outside the form it posts, so its `form` attribute is
+    // the only thing that makes it that form's submit control — the association a browser's implicit
+    // submission needs before Enter in one of the fields dispatches anything at all.
+    expect(host().querySelectorAll('form')).toHaveLength(1);
+    const form: HTMLFormElement | null = saveButton()?.form ?? null;
+    expect(form).toBe(host().querySelector('form'));
+
+    // One submit through the form itself — the event a click on the associated control and the
+    // keyboard path both raise — posts the charge once and returns to the record once.
+    form?.requestSubmit();
+    await vi.waitFor(() => {
+      expect(navigate).toHaveBeenCalledTimes(1);
+    });
+    expect(loan.addCharge).toHaveBeenCalledTimes(1);
+    expect(loan.addCharge.mock.calls[0]?.[1]?.chargeId).toBe(DISBURSEMENT_CHARGE_ID);
+    expect(loan.chargeAction).not.toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledWith(['/viewloanaccount', LOAN_ID]);
+  });
   it('shows Fineract’s own rejection verbatim and keeps every entered value', async () => {
     const rejected = 'Charge amount must be greater than zero';
     loan.addCharge.mockReturnValue(

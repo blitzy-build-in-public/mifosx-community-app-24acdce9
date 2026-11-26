@@ -35,10 +35,10 @@ export type LoanActionInput = WithoutDateGrammar<LoanActionRequest>;
 /** What the add-charge form hands {@link LoanService.addCharge}: `LoanChargeRequest` without the format pair. */
 export type LoanChargeInput = WithoutDateGrammar<LoanChargeRequest>;
 
-/** What the pay and waive screens hand {@link LoanService.chargeAction}: `LoanChargeActionRequest` without the format pair, so a caller supplies the command and, for `pay`, the date it is recorded on, and nothing the. */
+/** What the pay and waive screens hand {@link LoanService.chargeAction}: `LoanChargeActionRequest` without the format pair, so a caller supplies the command and, for `pay`, the date it is recorded on, and nothing the endpoint refuses (see `LoanChargeActionRequest`). */
 export type LoanChargeActionInput = WithoutDateGrammar<LoanChargeActionRequest>;
 
-/** What the application and edit forms hand {@link LoanService.create}, {@link LoanService.previewSchedule} and {@link LoanService.update}: the models' `LoanApplicationRequest` — which is also `LoanEditRequest`, the same (AAP 0.7.2, AAP 0.14.1, Rule 1 clause 2). */
+/** What the application and edit forms hand {@link LoanService.create}, {@link LoanService.previewSchedule} and {@link LoanService.update}: the models' `LoanApplicationRequest` — which is also `LoanEditRequest`, the same body posted to `PUT /loans/{id}` — without its `dateFormat` and `locale` members, because this service fills both at the boundary (AAP 0.7.2, AAP 0.14.1, Rule 1 clause 2). */
 export type LoanApplicationInput = Omit<LoanApplicationRequest, 'dateFormat' | 'locale'>;
 
 /** The two members every dated loan body carries, set together so the pattern, the month names and the `locale` member cannot disagree (AAP 0.7.2 "Date handling"; Rule 1 clause 2). */
@@ -139,7 +139,7 @@ interface LoanAddChargeBody extends LoanDateWire {
   dueDate?: string | null;
 }
 
-/** `POST /loans/{id}/charges/{loanChargeId}?command=pay` as the body goes on the wire: the date the payment is recorded on and the format pair, and no amount — the endpoint pays the charge's whole outstanding portion and. */
+/** `POST /loans/{id}/charges/{loanChargeId}?command=pay` as the body goes on the wire: the date the payment is recorded on and the format pair, and no amount — the endpoint pays the charge's whole outstanding portion and refuses an `amount` member outright. */
 interface LoanChargePayBody extends LoanDateWire {
   transactionDate?: string | null;
 }
@@ -150,7 +150,7 @@ type LoanChargeWaiveBody = LoanDateWire;
 /** Every body a charge action can put on the wire. */
 type LoanChargeActionBody = LoanChargePayBody | LoanChargeWaiveBody;
 
-/** The loans family's single typed service: every individual-loan endpoint the in-scope screens use, and the only file in `features/loans/` that imports `HttpClient` or holds a Fineract path. **What it owns.** Fifteen (AAP 0.7.3, Rule 2, AAP 0.4.2, Rule 1 clause 3). */
+/** The loans family's single typed service: every individual-loan endpoint the in-scope screens use, and the only file in `features/loans/` that imports `HttpClient` or holds a Fineract path. **What it owns.** One method per endpoint row of AAP 0.7.3 — the loan application and its schedule preview, the loan edit, the approval and transaction templates, the five lifecycle commands, the repayment and the four charge calls — each composing its whole URL through `AppConfigService.apiUrl()` (AAP 0.7.3, Rule 2, AAP 0.4.2, Rule 1 clause 3). */
 @Injectable({ providedIn: 'root' })
 export class LoanService {
   private readonly http = inject(HttpClient);
@@ -170,7 +170,7 @@ export class LoanService {
     });
   }
 
-  /** `GET /charges/{id}?template=true` — one charge's own terms, which the application's charge picker reads the amount and currency from (AAP 0.7.3, "W4 loan application"). @param chargeId Charge picked on the application.. */
+  /** `GET /charges/{id}?template=true` — one charge's own terms, which the application's charge picker reads the amount and currency from (AAP 0.7.3, "W4 loan application"). @param chargeId Charge picked on the application. @returns The charge template. */
   chargeTemplate(chargeId: number | string): Observable<ChargeTemplate> {
     const params = new HttpParams().set('template', 'true');
 
@@ -245,7 +245,7 @@ export class LoanService {
     );
   }
 
-  /** `GET /loans/{id}/transactions/template?command=disburse|repayment` — the disbursement and repayment forms' seed: their payment types, default amount and default date (AAP 0.7.3, "W5 approve and disburse", "W6. */
+  /** `GET /loans/{id}/transactions/template?command=disburse|repayment` — the disbursement and repayment forms' seed: their payment types, default amount and default date (AAP 0.7.3, "W5 approve and disburse", "W6 repayment"). */
   actionTemplate(
     id: number | string,
     command: 'disburse' | 'repayment',

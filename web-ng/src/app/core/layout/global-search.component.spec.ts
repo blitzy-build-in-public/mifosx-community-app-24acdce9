@@ -8,26 +8,22 @@ import {
 } from './global-search.component';
 
 /**
- * Behaviour of the navbar's global search control — the `GlobalSearch` row of the component
- * inventory (AAP 0.2.3) and part of the clients list screen of the "Sign in and open a client
- * record" flow (Figma node `1:3`, file `DKm5TBFbXypfqyx4xUdhBw`).
+ * Behaviour of the navbar's global search control — the `GlobalSearch` row of the component inventory (AAP 0.2.3)
+ * and part of the clients list screen of the "Sign in and open a client record" flow (Figma node `1:3`, file
+ * `DKm5TBFbXypfqyx4xUdhBw`).
  *
- * It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands
- * with at least one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`, nothing
- * boilerplate). What it proves is the contract its parent depends on: the control reports one
- * trimmed query, the scope the user selected and legacy's exact-match flag when the form is
- * submitted, derives that flag from the quotes legacy stripped, reports nothing at all when there is
- * nothing to search for, never searches while the user is still typing, and changes no text the user
- * typed. It also proves the inventory's props (AAP 0.2.3 `GlobalSearch`: `query: string, scope,
- * (search)`): the two inputs seed the field and the selector, typing is not written back into them,
- * and a host that changes one re-seeds the control.
+ * It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with at least one
+ * behavioural spec") and Rule 1 clause 8 (no spec without an `expect`, nothing boilerplate). It proves the
+ * contract its parent depends on: one trimmed query, the scope the user selected and legacy's exact-match flag
+ * derived from the quotes legacy stripped on submit; nothing reported when there is nothing to search for; never
+ * a search while the user is still typing; and no text the user typed changed. It also proves the inventory's
+ * props (AAP 0.2.3 `GlobalSearch`: `query: string, scope, (search)`): the two inputs seed the field and the
+ * selector, typing is not written back into them, and a host that changes one re-seeds the control.
  *
- * Providers, and what their absence proves. The translate stack is provided because the
- * placeholder, the scope labels and the two accessible names all resolve through `TranslatePipe`;
- * `provideTranslateService()` installs the no-op loader, so no bundle is requested. Nothing else is
- * provided, and there is deliberately no HTTP provider: the component injects no service at all, so
- * any attempt to reach Fineract from it would fail with NG0201 instead of silently passing (Rule 1
- * clause 5).
+ * The translate stack is provided because the placeholder, the scope labels and the two accessible names resolve
+ * through `TranslatePipe`, and `provideTranslateService()` installs the no-op loader so no bundle is requested.
+ * There is deliberately no HTTP provider: the component injects no service at all, so reaching Fineract from it
+ * would fail with NG0201 instead of silently passing (Rule 1 clause 5).
  */
 
 /** Legacy key of the field's placeholder, and the text this spec serves for it. */

@@ -11,44 +11,24 @@ import { NotificationService } from '../notifications/notification.service';
 import { NavbarComponent } from './navbar.component';
 
 /**
- * Behavioural spec for `NavbarComponent` — the `Navbar` row of the component inventory (AAP 0.2.3)
- * and the signed-in chrome of the clients list screen in the "Sign in and open a client record"
- * flow (Figma node `1:3`, file `DKm5TBFbXypfqyx4xUdhBw`; AAP 0.7.1 `core/layout`, AAP 0.7.4).
+ * Behavioural spec for `NavbarComponent` — the `Navbar` row of the component inventory (AAP 0.2.3) and the
+ * signed-in chrome of the clients list screen in the "Sign in and open a client record" flow (Figma node
+ * `1:3`, file `DKm5TBFbXypfqyx4xUdhBw`; AAP 0.7.1 `core/layout`, AAP 0.7.4).
  *
- * It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with
- * at least one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`). Each test
- * states one contract the component owns:
+ * It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with at
+ * least one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`). It pins the five in-scope
+ * things the bar renders and the out-of-scope chrome it does not (AAP 0.10.5 items 4 and 8), the
+ * permission-gated "Clients" destination including `ALL_FUNCTIONS`, the user-menu label, a search becoming a
+ * navigation to `/search/:query` with the scope and exact-match flag, the language switch without
+ * navigation, sign-out clearing the session before it navigates (AAP 0.7.1; W1), a navigation the router
+ * refuses settled in its own words (AAP 0.14.2), the inventory's public contract (AAP 0.2.3's `Navbar`
+ * props: `searchScope`, `(langChange)`, `(signOut)`), and the menu opening and closing on the trigger and on
+ * `Escape` through Angular state rather than the Bootstrap dropdown plugin.
  *
- * - it renders the five in-scope things — the brand lockup, the "Clients" destination, the global
- *   search, the language switcher and the user menu labelled with the authenticated account name —
- *   and renders none of the out-of-scope chrome (the hamburger, the notification bell, the
- *   Accounting / Reports / Admin items and the left icon rail), which AAP 0.10.5 items 4 and 8 fix;
- * - the "Clients" destination follows the permission the clients route declares, appearing only once
- *   that permission is held and for a super user holding `ALL_FUNCTIONS` as it does in legacy;
- * - the user menu's label is the account name the signed-in shell hands in through its `userName`
- *   input, and the session's own `GET /users/{id}` projection when it hands none;
- * - a search reported by the search control becomes a navigation to `/search/:query` carrying the
- *   scope the user picked and the exact-match flag, and searches nothing itself;
- * - the language switcher changes the active translation without navigating, and the selector shows
- *   the language the service actually has active, including a switch made by another switcher;
- * - sign-out clears the session **before** it navigates, which is the order AAP 0.7.1 and the W1
- *   sequence require, and the user menu closes with it;
- * - a navigation the router refuses is settled rather than dropped: the user is told once in the
- *   rejection's own words and no unhandled rejection is left behind (AAP 0.14.2);
- * - the bar's public contract is the inventory's (AAP 0.2.3's `Navbar` props): the `searchScope`
- *   input seeds the search control's selector, `(langChange)` reports a switch that took effect and
- *   `(signOut)` reports a sign-out whose session is already cleared and whose navigation has
- *   started, while a bundle that cannot be loaded is reported in the notification channel rather
- *   than swallowed (AAP 0.14.2);
- * - the menu opens and closes on the trigger and on `Escape`, driven by Angular state rather than
- *   the Bootstrap dropdown plugin, which needs the jQuery this build does not have.
- *
- * Providers, and what their absence proves. `AuthService` and `PermissionsService` are replaced by
- * stubs typed against the real classes, so the two cannot drift and the suite never assembles a
- * session or reads storage. No HTTP provider exists anywhere in the suite: the component injects no
- * Fineract service, so an attempt to reach the backend from it would fail with NG0201 rather than
- * passing silently (Rule 1 clause 5, Rule 2). The router is the real one with an empty route table
- * and its `navigate` spied, so the assertion is what the component asked for rather than a fake.
+ * `AuthService` and `PermissionsService` are stubs typed against the real classes, so no session is
+ * assembled and no storage read. No HTTP provider exists: the component injects no Fineract service, so
+ * reaching the backend from it would fail with NG0201 rather than passing silently (Rule 1 clause 5,
+ * Rule 2). The router is the real one, its route table empty and its `navigate` spied.
  */
 
 /** The permission the clients route group declares, spelled out rather than imported from routes. */

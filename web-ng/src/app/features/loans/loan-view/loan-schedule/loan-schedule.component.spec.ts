@@ -88,7 +88,7 @@ function makeSchedule(periods: readonly RepaymentPeriod[]): RepaymentSchedule {
   };
 }
 
-/** A `RepaymentPeriod` as the wire sends the schedule's leading row: the fork's disbursement pseudo-period carries no `period` member (see `RepaymentPeriod`), so the object is built without that key rather than with a. */
+/** A `RepaymentPeriod` as the wire sends the schedule's leading row: the fork's disbursement pseudo-period carries no `period` member (see `RepaymentPeriod`), so the object is built without that key rather than with a substitute, because the model declares the member optional — the statement this helper keeps honest. */
 function makeUnnumberedPeriod(overrides: Partial<RepaymentPeriod> = {}): RepaymentPeriod {
   return makePeriod(overrides, null);
 }
@@ -135,7 +135,7 @@ describe('LoanScheduleComponent', () => {
     return bodyRows(host).map((row) => cellsOf(row).map((cell) => textOf(cell)));
   }
 
-  /** Renders the table bound to `schedule`. The input is set before the first change detection, then the fixture is stabilised and checked again: `TranslatePipe` is impure, so a header label is read through the template on. */
+  /** Renders the table bound to `schedule`. The input is set before the first change detection, then the fixture is stabilised and checked again: `TranslatePipe` is impure, so a header label is read through the template on every pass, and the assertions must follow the pass that resolves the bundle rather than the one that renders the markup. */
   async function render(schedule: RepaymentSchedule | null): Promise<ComponentFixture<LoanScheduleComponent>> {
     const fixture = TestBed.createComponent(LoanScheduleComponent);
 
@@ -217,7 +217,7 @@ describe('LoanScheduleComponent', () => {
     expect(rows[1]).toEqual(['1', '21 November 2026', '05 December 2026', '100', '10', '0', '110', '990']);
   });
 
-  /** Locks down contract-loan-period-required-false: the fork's leading disbursement pseudo-period carries no `period` member, so the model declares it optional and the table keys its rows by position — two unnumbered rows. */
+  /** Locks down contract-loan-period-required-false: the fork's leading disbursement pseudo-period carries no `period` member, so the model declares it optional and the table keys its rows by position — two unnumbered rows in one schedule would otherwise repeat the same absent key, while the period cell prints what the payload sent, which for those rows is nothing. */
   it('renders an unnumbered disbursement row with an empty period cell, one row per period', async () => {
     // Angular reports a duplicated track key through `console.warn` in dev mode and renders on, so the console is the observable a positional track has to keep quiet: `track row.period` emits NG0955 for the two unnumbered.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);

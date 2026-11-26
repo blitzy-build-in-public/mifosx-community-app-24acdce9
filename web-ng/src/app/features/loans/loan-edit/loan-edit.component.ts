@@ -24,7 +24,7 @@ import { isLoanAccount, readSelectedId } from '../loan.models';
 import type { LoanAccount, LoanCharge, LoanEditRequest } from '../loan.models';
 import { LoanService } from '../loan.service';
 import type { LoanApplicationInput } from '../loan.service';
-/** The sixteen controls of the edit form, in the order the application body carries them: `formControlName` and the rendered element's `id` are the control names themselves, because the parity page objects address the same. */
+/** The sixteen controls of the edit form, in the order the application body carries them: `formControlName` and the rendered element's `id` are the control names themselves, because the parity page objects address the same fields by id on both front ends (`#principal`, `#numberOfRepayments`, `#repaymentEvery`, `#interestRatePerPeriod`, `#expectedDisbursementDate`, `#submittedOnDate`, `#loanOfficerId`, `#fundId`). */
 interface LoanEditFormControls {
   /** `principal` — amount applied for. */
   readonly principal: FormControl<number | null>;
@@ -59,7 +59,7 @@ interface LoanEditFormControls {
   /** `fundId` — optional fund. */
   readonly fundId: FormControl<SelectValue | null>;
 }
-/** The template portion of `GET /loans/{id}?template=true&associations=…`, as this screen reads it: `LoanAccount` in `../loan.models` models the loan record and deliberately stops there, while the endpoint also answers the (Rule 1 clause 3). */
+/** The template portion of `GET /loans/{id}?template=true&associations=…`, as this screen reads it: `LoanAccount` in `../loan.models` models the loan record and deliberately stops there, while the endpoint also answers the loan form's own members — the persisted term, frequency, amortisation, interest and strategy values and their option lists — read here as a documented partial projection rather than added to the family's model module (Rule 1 clause 3). */
 interface LoanEditTemplateFields {
   /** `termFrequency` — the persisted term length, which the body posts as `loanTermFrequency`. */
   readonly termFrequency: number | null;
@@ -278,7 +278,7 @@ function chargeRow(charge: LoanCharge): LoanChargeRow {
   };
 }
 
-/** Edit form of an individual loan application: the persisted application, re-read from Fineract and posted back to the endpoint that saves it. **Two calls, and nothing else.** One read and one write: `GET (Rule 2, AAP 0.7.2, AAP 0.14.1, Rule 1 clause 3). */
+/** Edit form of an individual loan application: the persisted application, re-read from Fineract and posted back to the endpoint that saves it. **Two calls, and nothing else.** One read and one write: `GET /loans/{id}?template=true&associations=…` seeds the screen and `PUT /loans/{id}` saves it, both through `LoanService`, which owns every loans URL, so this file holds no host, path, query parameter, `dateFormat` or `locale` literal (Rule 2, AAP 0.7.2, AAP 0.14.1, Rule 1 clause 3). */
 @Component({
   selector: 'app-loan-edit',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -304,7 +304,7 @@ export class LoanEditComponent {
   /** Completes the route subscription should the screen be destroyed before it emits. */
   private readonly destroyRef = inject(DestroyRef);
 
-  /** Which load is the current one, incremented by every run of {@link load}. The router reuses this component when the URL moves from one `#/editloanaccount/{id}` to another, so an in-place move starts a second read while. */
+  /** Which load is the current one, incremented by every run of {@link load}. The router reuses this component when the URL moves from one `#/editloanaccount/{id}` to another, so an in-place move starts a second read while the first is still in flight and the superseded run returns instead of writing. */
   private loadSequence = 0;
 
   /** `true` until the read settles, which is what the template shows while the card fills. */
@@ -319,7 +319,7 @@ export class LoanEditComponent {
   /** The loaded loan, the source of the identifiers the body echoes and of the seeded values. */
   readonly account = signal<LoanAccount | null>(null);
 
-  /** The charges the loan carries, as the edit seed's `charges` member reported them — the rows the save re-posts, and the reason the load keeps that member: `PUT /loans/{id}` treats an absent or empty array as "delete every (AAP 0.7.3, AAP 0.3.4). */
+  /** The charges the loan carries, as the edit seed's `charges` member reported them — the rows the save re-posts, and the reason the load keeps that member: `PUT /loans/{id}` treats an absent or empty array as "delete every charge" (AAP 0.7.3, AAP 0.3.4). */
   readonly charges = signal<readonly LoanCharge[] | null>(null);
 
   /** The template portion of the payload: the persisted enumerations and their option lists. */

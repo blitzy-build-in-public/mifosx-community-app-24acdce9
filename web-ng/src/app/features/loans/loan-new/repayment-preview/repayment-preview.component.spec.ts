@@ -74,7 +74,7 @@ function makePeriod(
   };
 }
 
-/** A complete `RepaymentSchedule`: its ordered periods plus every total the model declares, supplied for the same reason as `makePeriod` — the totals are optional on the wire, and the preview renders none of them, so their. */
+/** A complete `RepaymentSchedule`: its ordered periods plus every total the model declares, supplied for the same reason as `makePeriod` — the totals are optional on the wire, and the preview renders none of them, so their presence here proves the table shows the periods and not a computed total. */
 function makeSchedule(periods: readonly RepaymentPeriod[]): RepaymentSchedule {
   return {
     periods,
@@ -87,7 +87,7 @@ function makeSchedule(periods: readonly RepaymentPeriod[]): RepaymentSchedule {
   };
 }
 
-/** A `RepaymentPeriod` as the wire sends the preview's leading row: the fork's disbursement pseudo-period carries no `period` member (see `RepaymentPeriod`), so the object is built without that key rather than with a. */
+/** A `RepaymentPeriod` as the wire sends the preview's leading row: the fork's disbursement pseudo-period carries no `period` member (see `RepaymentPeriod`), so the object is built without that key rather than with a substitute, because the model declares the member optional — the statement this helper keeps honest. */
 function makeUnnumberedPeriod(overrides: Partial<RepaymentPeriod> = {}): RepaymentPeriod {
   return makePeriod(overrides, null);
 }
@@ -136,7 +136,7 @@ describe('RepaymentPreviewComponent', () => {
     return host.querySelector<HTMLElement>('app-empty-state#repayment-preview-empty');
   }
 
-  /** Renders the component bound to `schedule`. The input is set before the first change detection, then the fixture is stabilised and checked again: `TranslatePipe` is impure, so a header label is read through the template. */
+  /** Renders the component bound to `schedule`. The input is set before the first change detection, then the fixture is stabilised and checked again: `TranslatePipe` is impure, so a header label is read through the template on every pass, and the assertions must follow the pass that resolves the bundle rather than the one that renders the markup. */
   async function render(
     schedule: RepaymentSchedule | null,
   ): Promise<ComponentFixture<RepaymentPreviewComponent>> {
@@ -204,7 +204,7 @@ describe('RepaymentPreviewComponent', () => {
     expect(renderedCells(hostOf(fixture)).map((cells) => cells[0])).toEqual(['3', '1', '2']);
   });
 
-  /** Locks down contract-loan-period-required-false: the fork's leading disbursement pseudo-period carries no `period` member, so the model declares it optional and the preview keys its rows by position — two unnumbered rows. */
+  /** Locks down contract-loan-period-required-false: the fork's leading disbursement pseudo-period carries no `period` member, so the model declares it optional and the preview keys its rows by position — two unnumbered rows in one schedule would otherwise repeat the same absent key, while the period cell prints what the payload sent, which for those rows is nothing. */
   it('renders an unnumbered disbursement row with an empty period cell, one row per period', async () => {
     // Angular reports a duplicated track key through `console.warn` in dev mode and renders on, so the console is the observable a positional track has to keep quiet: `track period.period` emits NG0955 for the two unnumbered.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);

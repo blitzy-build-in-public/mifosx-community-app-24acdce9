@@ -356,7 +356,7 @@ describe('LoanChargesComponent', () => {
     (_label, charge, offered) => {
       mount([charge], LOAN_ID, ACTIVE_STATUS);
 
-      // Legacy's rule, condition by condition: waive is hidden once the charge is paid or waived, once it falls due on disbursement, and whenever the loan is not active; pay is shown only for a `chargePayable` charge on an.
+      // Legacy's rule, condition by condition: waive is hidden once the charge is paid or waived, once it falls due on disbursement, and whenever the loan is not active; pay is shown only for a `chargePayable` charge on an active loan (`ViewLoanDetailsController.js:168-175`; `viewloanaccountdetails.html:865,868`).
       expect(hiddenByRule('pay', charge.id)).toBe(!offered.pay);
       expect(hiddenByRule('waive', charge.id)).toBe(!offered.waive);
     },
@@ -398,7 +398,7 @@ describe('LoanChargesComponent', () => {
     expect(revealed?.style.display).not.toBe('none');
     expect(byId(`loan-charge-waive-${CHARGE_DUE.id}`)?.style.display).not.toBe('none');
 
-    // The permission gate and the row's own eligibility are two independent conditions on the same anchor: on the settled row the directive's inline gate is wide open while the eligibility rule still hides the link, which is.
+    // The permission gate and the row's own eligibility are two independent conditions on the same anchor: on the settled row the directive's inline gate is wide open while the eligibility rule still hides the link, which is what keeps the two reasons for hiding one apart.
     const settledWaive = byId(`loan-charge-waive-${CHARGE_SETTLED.id}`);
 
     expect(settledWaive?.style.display).toBe('');

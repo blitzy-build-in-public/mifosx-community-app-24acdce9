@@ -29,55 +29,39 @@ import { GlobalSearchComponent, type GlobalSearchSubmission } from './global-sea
 const GENERIC_FAILURE_KEY = 'error.connection.failed';
 
 /**
- * The signed-in navigation bar: the `Navbar` row of the component inventory (AAP 0.2.3), part of
- * `core/layout` (AAP 0.7.1) and the chrome above the clients list of the "Sign in and open a client
- * record" flow (Figma node `1:3`, file `DKm5TBFbXypfqyx4xUdhBw`; AAP 0.7.4). The shell renders it
- * as `<app-navbar [userName]="…" />` above its breadcrumb and its `<router-outlet>`.
+ * The signed-in navigation bar: the `Navbar` row of the component inventory (AAP 0.2.3), part of `core/layout`
+ * (AAP 0.7.1) and the chrome above the clients list of the "Sign in and open a client record" flow (Figma node
+ * `1:3`, file `DKm5TBFbXypfqyx4xUdhBw`; AAP 0.7.4). The shell renders it as `<app-navbar [userName]="…" />`
+ * above its breadcrumb and its `<router-outlet>`.
  *
- * **What it renders, and nothing besides.** The brand lockup, the one in-scope destination
- * ("Clients"), the global search, the language switcher and the user menu carrying sign-out. Every
- * other control the captured screen shows belongs to a feature that keeps living on the legacy
- * application during cutover, so none of them is rendered, stubbed or linked (AAP 0.10.5 items 4 and
- * 8): no hamburger, no notification bell, no "Accounting", "Reports" or "Admin" item, no "Import
- * Clients" button and no left icon rail. A control that navigates nowhere would be the broken
- * affordance this migration exists to avoid, and legacy behaviour is reproduced rather than improved
- * (Rule 1 clause 3).
+ * It renders the brand lockup, the one in-scope destination ("Clients"), the global search, the language
+ * switcher and the user menu carrying sign-out, and nothing besides: every other control the captured screen
+ * shows belongs to a feature that keeps living on the legacy application during cutover, so none is rendered,
+ * stubbed or linked — no hamburger, notification bell, "Accounting", "Reports" or "Admin" item, "Import
+ * Clients" button or left icon rail (AAP 0.10.5 items 4 and 8), because a control that navigates nowhere would
+ * be the broken affordance this migration exists to avoid and legacy behaviour is reproduced rather than
+ * improved (Rule 1 clause 3).
  *
- * **It issues no request.** The navbar composes no URL and injects no Fineract service — not even
- * `SearchService`, which the results screen owns — so nothing here can reach the backend or hold a
- * host (Rule 1 clause 5, Rule 2). Searching is a navigation: the control reports the text, the scope
- * and legacy's exact-match flag, and this component routes to `/search/:query` carrying both
- * parameters.
+ * It issues no request and composes no URL, injecting no Fineract service — not even `SearchService`, which
+ * the results screen owns (Rule 1 clause 5, Rule 2): searching is a navigation, so the control reports the
+ * text, the scope and legacy's exact-match flag and this component routes to `/search/:query` carrying both
+ * parameters, through `Router` rather than a hash `href` or `window.location`, which keeps the hash-location
+ * strategy of `app.routes.ts` and the in-scope route list the single statement of where the application can go
+ * (Rule 1 clause 5). The user menu is Angular state, not a Bootstrap plugin: no jQuery or Bootstrap JavaScript
+ * is installed (AAP 0.6.1), so the dropdown's open state is a signal bound to Bootstrap 3's `.open` class and
+ * the global stylesheet renders the `.dropdown-menu` it reveals (AAP 0.5.1, AAP 0.5.4).
  *
- * **Navigation is the router's.** Both destinations go through `Router`, never through a hash
- * `href` or `window.location`, which keeps the hash-location strategy of `app.routes.ts` and the
- * in-scope route list the single statement of where the application can go (Rule 1 clause 5).
+ * It carries no CSS: the design's 50px height, `#FFFFFF` fill, 1px `#DFDFDF` bottom border, `#5099ED` link
+ * colour, 30px search control and the brand image's sizing are the global `.navbar`/`.navbar-brand`/
+ * `.navbar-default .navbar-nav`/`.navbar .form-control` rules of `web-ng/src/styles.scss` (AAP 0.2.1, Rule 1
+ * clause 6), so there is no `styles` or `styleUrl` here, no hex value and no dimension.
  *
- * **The user menu is Angular state, not a Bootstrap plugin.** No jQuery and no Bootstrap JavaScript
- * is installed (AAP 0.6.1), so the dropdown's open state is a signal that the template binds to
- * Bootstrap 3's `.open` class; the global stylesheet renders the `.dropdown-menu` that class reveals
- * (AAP 0.5.1, AAP 0.5.4).
- *
- * **It carries no CSS.** The design's 50px height, `#FFFFFF` fill, 1px `#DFDFDF` bottom border,
- * `#5099ED` link colour, 30px search control and the brand image's sizing are the global
- * `.navbar`/`.navbar-brand`/`.navbar-default .navbar-nav`/`.navbar .form-control` rules of
- * `web-ng/src/styles.scss` (AAP 0.2.1, Rule 1 clause 6) — so there is no `styles` or `styleUrl`
- * here, no hex value and no dimension.
- *
- * **Its public contract is the inventory's.** AAP 0.2.3's `Navbar` row names the props the bar
- * offers, and the bar provides them across the controls it composes: the account name it labels the
- * menu with (`userName`), the `searchScope` the search control is seeded with, the language list
- * and the language in force (`langs`, `currentLang`), and the three reporting channels —
- * `(search)` from the `app-global-search` control it renders (AAP 0.7.1 assigns that output to
- * `GlobalSearchComponent`, whose form is the search field the bar shows), and `(langChange)` and
- * `(signOut)` declared here. The scope is an input rather than a value buried inside the search
- * control, so a host can seed the control the user meets; the two action outputs report what the
- * bar has already done, because the bar performs the switch and the sign-out itself and no consumer
- * has to act on them.
- *
- * **Nothing is logged.** The user menu displays the authenticated account name and nothing else: no
- * authentication key, no session object and no tenant reaches the template, the console or a log
- * (Rule 1 clause 9, AAP 0.10.4's credential gate).
+ * Its public contract is the inventory's (AAP 0.2.3's `Navbar` row): `userName`, the `searchScope` the search
+ * control is seeded with, `langs` and `currentLang`, and the three reporting channels — `(search)` from the
+ * `app-global-search` control it renders (AAP 0.7.1 assigns that output to `GlobalSearchComponent`) plus
+ * `(langChange)` and `(signOut)` declared here, which report what the bar has already done. Nothing is logged:
+ * the user menu displays the authenticated account name and nothing else (Rule 1 clause 9, AAP 0.10.4's
+ * credential gate).
  */
 @Component({
   selector: 'app-navbar',
@@ -281,42 +265,36 @@ export class NavbarComponent {
   /**
    * Reports a language switch whose bundle could not be loaded.
    *
-   * The shared switcher has already put its selector back on the language in force, so the control
-   * never advertises a language the application is not rendering. What the bar adds is the report:
-   * this screen has no error region of its own, and the application's single user-facing channel is
-   * the notification widget, so the failure is raised there rather than swallowed (AAP 0.14.2). The
-   * message is legacy's own connection-failure key — the one the login screen shows for the same
-   * event — so no new wording reaches the user (Rule 1 clause 3). Nothing is logged and no bundle
-   * content is inspected (Rule 1 clause 9).
-   *
-   * This is the one place the bar adds a user-visible surface legacy did not have, and it departs
-   * from Rule 1 clause 3 (legacy parity, with every deliberate difference registered in the plan)
-   * because AAP 0.14.2 requires every HTTP call path to end in a rendered message or a notification,
-   * and the AAP outranks the rules. The surface is unreachable in the shipped application: every
-   * bundle is served, so only a broken deployment can raise it.
+   * The shared switcher has already put its selector back on the language in force, so the control never
+   * advertises a language the application is not rendering. What the bar adds is the report: this screen has no
+   * error region of its own and the application's single user-facing channel is the notification widget, so the
+   * failure is raised there rather than swallowed (AAP 0.14.2), in legacy's own connection-failure key so no new
+   * wording reaches the user (Rule 1 clause 3). Nothing is logged and no bundle content is inspected (Rule 1
+   * clause 9). This is the one user-visible surface the bar adds that legacy did not have: it departs from
+   * Rule 1 clause 3, with the difference registered in the plan, because AAP 0.14.2 requires every HTTP call path
+   * to end in a rendered message or a notification and the AAP outranks the rules. It is unreachable in the
+   * shipped application, where every bundle is served.
    */
   onLangChangeFailed(): void {
     this.notifications.show('error', this.translate.instant(GENERIC_FAILURE_KEY));
   }
 
   /**
-   * Navigates to the global search results for the submitted text (AAP 0.7.4 "Shell: global search";
-   * AAP 0.7.3 row "Shell: global search").
+   * Navigates to the global search results for the submitted text (AAP 0.7.4 "Shell: global search"; AAP 0.7.3
+   * row "Shell: global search").
    *
-   * The route is `/search/:query`, declared in `web-ng/src/app/app.routes.ts`, and the two
-   * parameters the results screen forwards to `SearchService.search` travel beside it: the `scope`
-   * the user chose and legacy's `exactMatch` flag, which `GlobalSearchComponent` derived from the
-   * text the user typed. That is the pair legacy put in its own URL —
-   * `location.path('/search/' + searchString).search({exactMatch: exactMatch, resource: …})`
-   * (`app/scripts/controllers/main/MainController.js:208-217`) — and it is what `SearchController`
-   * hands to the search resource, so both parameters have to reach the results screen. The query is
-   * a path segment rather than a parameter of this file's making: `GlobalSearchComponent` has already
-   * trimmed it, stripped its surrounding quotes and refused an empty search, and the router encodes
-   * it. Nothing is searched here — the request belongs to `SearchService` through the results screen
-   * (Rule 1 clause 5).
+   * The route is `/search/:query`, declared in `web-ng/src/app/app.routes.ts`, and the two parameters the results
+   * screen forwards to `SearchService.search` travel beside it: the `scope` the user chose and legacy's
+   * `exactMatch` flag, which `GlobalSearchComponent` derived from the text typed — the pair legacy put in its own
+   * URL, `location.path('/search/' + searchString).search({exactMatch: exactMatch, resource: …})`
+   * (`app/scripts/controllers/main/MainController.js:208-217`), which `SearchController` hands to the search
+   * resource. The query is a path segment rather than a parameter of this file's making: `GlobalSearchComponent`
+   * has already trimmed it, stripped its surrounding quotes and refused an empty search, and the router encodes
+   * it. Nothing is searched here — the request belongs to `SearchService` through the results screen (Rule 1
+   * clause 5).
    *
-   * @param submission the search text, the selected scope and the exact-match flag, as the search
-   *   control emits them.
+   * @param submission the search text, the selected scope and the exact-match flag, as the search control emits
+   *   them.
    */
   onSearch(submission: GlobalSearchSubmission): void {
     this.closeUserMenu();
@@ -334,19 +312,13 @@ export class NavbarComponent {
   /**
    * Ends the session and returns to the login screen (AAP 0.7.1 `logout(): void`; AAP 0.10.1 W1).
    *
-   * The order matters: `AuthService.logout()` clears the stored session, the in-memory session the
-   * interceptor reads and the permission list, and only then does the navigation run, so no screen
-   * can render for an instant with a session that has already ended. The interceptor's
-   * `Authorization` header disappears with that session; no request is issued and no password, key
-   * or session field is logged on the way out (Rule 1 clause 9).
-   *
-   * {@link signOut} is emitted after both steps: the session is gone and the return to the login
-   * screen has been asked for, which is what AAP 0.2.3's `(signOut)` prop reports. A navigation the
-   * router refuses is settled in the handler below, after the report, so a host reacting to the
-   * output never precedes the session being cleared or the navigation being requested.
-   *
-   * The method carries the `on` prefix because the output already bears the inventory's name
-   * `signOut`: a field and a method cannot share one, and the prop is the name AAP 0.2.3 fixes.
+   * The order matters: `AuthService.logout()` clears the stored session, the in-memory session the interceptor
+   * reads and the permission list, and only then does the navigation run, so no screen renders for an instant
+   * with a session that has already ended. No request is issued and no password, key or session field is logged
+   * on the way out (Rule 1 clause 9). {@link signOut} is emitted after both steps — the session gone and the
+   * return to the login screen requested — which is what AAP 0.2.3's `(signOut)` prop reports; a navigation the
+   * router refuses is settled in the handler below, after the report. The method carries the `on` prefix because
+   * the output already bears the inventory's name `signOut`.
    */
   onSignOut(): void {
     this.closeUserMenu();

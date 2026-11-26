@@ -1,4 +1,4 @@
-<!-- Header labels are the legacy bundle's own keys, matched column for column to the record page's schedule table (`loan-view/loan-schedule`) so the application's two schedules cannot diverge: `label.heading.no` numbers the. -->
+<!-- Header labels are the legacy bundle's own keys, matched column for column to the record page's schedule table (`loan-view/loan-schedule`) so the application's two schedules cannot diverge: `label.heading.no` numbers the period, and `label.heading.date` heads the due date because no locale bundle defines a `label.heading.duedate` key. -->
 @if (isEmpty()) {
   <app-empty-state
     id="repayment-preview-empty"
@@ -18,9 +18,9 @@
         <th scope="col">{{ 'label.heading.outstanding' | translate }}</th>
       </tr>
     </thead>
-    <!-- The server's own periods in the server's order, at the record's one date pattern (the component's `displayFormat`) and through the default `number` pipe, which is what the record page's schedule table. -->
+    <!-- The server's own periods in the server's order, at the record's one date pattern (the component's `displayFormat`) and through the default `number` pipe, which is what the record page's schedule table and legacy's own `number` filter render. -->
     <tbody>
-      <!-- Keyed by position rather than by period number: the server's order is kept as sent, never re-sorted, filtered or paginated, and the leading disbursement row carries no period number to key on — two such rows would raise. -->
+      <!-- Keyed by position rather than by period number: the server's order is kept as sent, never re-sorted, filtered or paginated, and the leading disbursement row carries no period number to key on — two such rows would raise NG0955. -->
       @for (row of rows(); track $index) {
         <tr>
           <td>{{ row.period }}</td>

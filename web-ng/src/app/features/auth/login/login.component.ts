@@ -98,19 +98,16 @@ export class LoginComponent {
   );
 
   /**
-   * Authenticates with the credentials the form reported, then continues to the interrupted route or
-   * `#/clients` (AAP 0.7.4 "navigate to the attempted route or `#/clients`"; AAP 0.10.1 W1).
+   * Authenticates with the credentials the form reported, then continues to the interrupted route or `#/clients`
+   * (AAP 0.7.4 "navigate to the attempted route or `#/clients`"; AAP 0.10.1 W1).
    *
-   * The form has already refused an invalid submission — it marks its controls touched and reports
-   * nothing in that case — so what arrives here is a complete pair of typed values, which is the
-   * legacy screen's whole rule set (Rule 1 clause 3). The request runs under this screen's
-   * `runOnce` guard, so a re-entrant submit within one click reaches the service once (AAP 0.14.1,
-   * "one request per click").
-   *
-   * A refused exchange writes the failure's message into the one error region and asks the form to
-   * clear only the credential control, then returns without navigating: the user stays on the form
-   * with the account name they typed. A successful one navigates to {@link destination}. The pair is
-   * passed straight to `AuthService.login` and is not stored, echoed or logged here (Rule 1 clause 9).
+   * The form has already refused an invalid submission, so what arrives here is a complete pair of typed values,
+   * which is the legacy screen's whole rule set (Rule 1 clause 3). The request runs under this screen's `runOnce`
+   * guard, so a re-entrant submit within one click reaches the service once (AAP 0.14.1, "one request per
+   * click"). A refused exchange writes the failure's message into the one error region, asks the form to clear
+   * only the credential control and returns without navigating; a successful one navigates to
+   * {@link destination}. The pair goes straight to `AuthService.login` and is not stored, echoed or logged here
+   * (Rule 1 clause 9).
    *
    * @param credentials the two values the form's `(submit)` output carries.
    */

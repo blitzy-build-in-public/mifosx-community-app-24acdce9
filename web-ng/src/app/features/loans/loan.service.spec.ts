@@ -69,7 +69,7 @@ const DISBURSEMENT_TEXT = '24 November 2026';
 /** The submission date in French, for the case that proves the payload follows the selected language. */
 const SUBMITTED_TEXT_FR = '21 novembre 2026';
 
-/** The URL the service must request for the given path segments: the API root the configuration supplies and the resource segments the service owns, joined with one separator. @param segments Resource segments, exactly as. */
+/** The URL the service must request for the given path segments: the API root the configuration supplies and the resource segments the service owns, joined with one separator. @param segments Resource segments, exactly as `loan.service.ts` names them. */
 function loanUrl(...segments: readonly (string | number)[]): string {
   return [API_ROOT, ...segments].join(SEPARATOR);
 }

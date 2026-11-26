@@ -23,6 +23,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** The HTTP `status` a failed request reaches the restore as, or `null` when the caught value carries none: the `ApiError` the interceptor builds declares one, a raw `HttpErrorResponse` carries one too, and anything else is a failure that was never a response — so the value is narrowed member by member rather than asserted (Rule 1 clause 4). */
+function failureStatus(cause: unknown): number | null {
+  if (!isRecord(cause)) {
+    return null;
+  }
+
+  const status = cause['status'];
+
+  return typeof status === 'number' && Number.isFinite(status) ? status : null;
+}
+
 /** The stored entry as a `SessionData`, or `null` when it is anything else: whatever a previous release of either front end wrote is input rather than a typed value, so it is parsed into `unknown` and narrowed field by field (Rule 1 clause 4, AAP 0.7.2 row `SessionData`). */
 function toSessionData(value: unknown): SessionData | null {
   if (!isRecord(value)) {
@@ -159,12 +170,23 @@ export class SessionService {
     let projection: SessionUserResponse;
     try {
       projection = await firstValueFrom(readUser(stored.userId));
-    } catch {
-      // A stored entry whose user cannot be read is not a session in effect: nothing is published, the entry stays where a 401 can act on it, and the gate is withdrawn rather than left open — unless a later session now owns the signals.
+    } catch (cause: unknown) {
+      // A stored entry whose user cannot be read is not a session in effect: nothing is published and the gate is withdrawn rather than left open — unless a later session now owns the signals.
       if (this.state() === stored) {
-        this.state.set(null);
-        this.currentUser.set(null);
-        this.permissions.clear();
+        const status = failureStatus(cause);
+
+        if (status === 401 || status === 0) {
+          // A credential the server refuses ends the session, so its entry goes with the signals instead of
+          // being left behind. That departs from Rule 1 clause 3, whose legacy `SessionManager` keeps an
+          // entry it could not validate, because AAP 0.4.2 requires a refused session to be cleared. The
+          // browser calling the API cross-origin reports this deployment's 401 as status 0 (no proxy,
+          // AAP 0.4.2), so the refusal is recognised where it is observed, not only in the interceptor.
+          this.clear();
+        } else {
+          this.state.set(null);
+          this.currentUser.set(null);
+          this.permissions.clear();
+        }
       }
       return false;
     }

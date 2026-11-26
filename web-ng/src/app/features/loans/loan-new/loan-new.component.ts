@@ -43,7 +43,7 @@ function isWireObject(value: unknown): value is Readonly<Record<string, unknown>
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** A non-empty string, or `null` for every other value. An empty string counts as absent because Fineract sends `""` for a member it has no value for, and rendering an empty label or posting an empty identifier is not the (Rule 1 clause 3). */
+/** A non-empty string, or `null` for every other value. An empty string counts as absent because Fineract sends `""` for a member it has no value for, and rendering an empty label or posting an empty identifier is not the same as leaving the field empty (Rule 1 clause 3). */
 function asText(value: unknown): string | null {
   return typeof value === 'string' && value !== '' ? value : null;
 }
@@ -112,14 +112,14 @@ function readOptionRows(value: unknown): readonly SelectOption[] {
   return rows;
 }
 
-/** Local midnight of the browser's current date. A form's own default date follows the legacy screen and comes from the browser clock; the tenant's business date is the E2E harness's business and is never read by the (AAP 0.10.5, Rule 1 clause 2). */
+/** Local midnight of the browser's current date. A form's own default date follows the legacy screen and comes from the browser clock; the tenant's business date is the E2E harness's business and is never read by the application (AAP 0.10.5, Rule 1 clause 2). */
 function today(): Date {
   const now = new Date();
 
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
-/** The individual loan application screen — `#/newclientloanaccount/:clientId` — which is workflow **W4** (submit an application after previewing its repayment schedule) and the surface workflow **W7** is proved on (a (AAP 0.7.3, AAP 0.7.4, AAP 0.10.1, Rule 1 clause 2). */
+/** The individual loan application screen — `#/newclientloanaccount/:clientId` — which is workflow **W4** (submit an application after previewing its repayment schedule) and the surface workflow **W7** is proved on (a Fineract validation error rendered verbatim) (AAP 0.7.3, AAP 0.7.4, AAP 0.10.1, Rule 1 clause 2). */
 @Component({
   selector: 'app-loan-new',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -257,7 +257,7 @@ export class LoanNewComponent {
     void this.loadTemplate(parsed);
   }
 
-  /** Clears everything the previous emission put on the screen — the form and its charge rows, every option list the template filled, the preview and the failure — so a route that names another client never shows the earlier. */
+  /** Clears everything the previous emission put on the screen — the form and its charge rows, every option list the template filled, the preview and the failure — so a route that names another client never shows the earlier client's application. */
   private reset(): void {
     this.form.reset();
     this.chargeRows.clear();
@@ -399,7 +399,7 @@ export class LoanNewComponent {
     const row = this.chargeRows.at(rowIndex);
     const selected = chargeId ?? row.controls.chargeId.value;
 
-    // The select writes its own control before this handler runs; writing the value here as well keeps the row coherent for a caller that names the charge directly, so the amount read below always belongs to the charge the.
+    // The select writes its own control before this handler runs; writing the value here as well keeps the row coherent for a caller that names the charge directly, so the amount read below always belongs to the charge the body will post.
     if (chargeId !== null && row.controls.chargeId.value !== chargeId) {
       row.controls.chargeId.setValue(chargeId);
     }
@@ -427,7 +427,7 @@ export class LoanNewComponent {
     }
   }
 
-  /** Reads the template and applies it, discarding an answer that a later read has superseded, and cancelling the read if the screen is left before it answers. @param clientId Client the application is opened for. @param. */
+  /** Reads the template and applies it, discarding an answer that a later read has superseded, and cancelling the read if the screen is left before it answers. @param clientId Client the application is opened for. @param productId Product whose defaults are wanted, absent for the first read. */
   private async loadTemplate(clientId: number, productId?: SelectValue): Promise<void> {
     const sequence = ++this.templateSequence;
     this.loading.set(true);

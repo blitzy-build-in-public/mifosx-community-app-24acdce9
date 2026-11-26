@@ -5,30 +5,20 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { PanelCardComponent } from './panel-card.component';
 
 /**
- * Behavioural spec for `PanelCardComponent`, the card every list, record and form surface is drawn
- * on (AAP 0.2.3 component inventory row `PanelCard`, Figma nodes `1:3` and `1:4`; AAP 0.5.2 row
- * "Card / panel"). It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1
- * ("each screen lands with at least one behavioural spec") and Rule 1 clause 8 (no spec without an
- * `expect`, nothing boilerplate).
+ * Behavioural spec for `PanelCardComponent`, the card every list, record and form surface is drawn on
+ * (AAP 0.2.3 component inventory row `PanelCard`, Figma nodes `1:3` and `1:4`; AAP 0.5.2 row "Card / panel").
+ * It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with at
+ * least one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`, nothing boilerplate).
  *
- * Each assertion states a contract the component owns:
- * - the host is a `div` carrying exactly `panel` by default, with no heading band, so a card without
- *   a title renders the markup the delivered screens already have (Rule 1 clause 6);
- * - a title renders the Bootstrap 3 chain `div.panel-heading > h3.panel-title` with the caller's own
- *   text as its only content, and `titleTag="h4"` moves that heading to `h4`, which is the level the
- *   record's profile card uses (AAP 0.2.3, AAP 0.10.2);
- * - `variant` adds the one modifier class of the variant the caller asks for and no other, covering
- *   the bare `.panel`, the `.panel.panel-default` and the `.panel.panel-bordered` cards of the
- *   delivered markup (AAP 0.5.2, AAP 0.5.3);
- * - an empty title renders no band either, so a band that says nothing never paints the heading
- *   rule above it;
- * - projected content arrives as the host's own children, after the band and in the caller's order,
- *   which is what lets a card hold several `.panel-body` blocks and a `.panel-footer` and what keeps
- *   `.panel > .panel-heading` matching the global rule.
+ * It pins the host as a `div` carrying exactly `panel` by default with no heading band (Rule 1 clause 6); a
+ * title rendering `div.panel-heading > h3.panel-title` with the caller's own text, and `titleTag="h4"` moving
+ * it to `h4` as the record's profile card does (AAP 0.2.3, AAP 0.10.2); `variant` adding the one modifier
+ * class asked for and no other, over the bare `.panel`, `.panel.panel-default` and `.panel.panel-bordered`
+ * cards of the delivered markup (AAP 0.5.2, AAP 0.5.3); an empty title rendering no band; and projected
+ * content arriving as the host's own children, after the band and in the caller's order.
  *
- * The card declares no stylesheet, no colour and no dimension (Rule 1 clause 6, AAP 0.5.5), so
- * nothing here asserts a computed value: every visual value belongs to `web-ng/src/styles.scss` and
- * is checked there.
+ * The card declares no stylesheet, no colour and no dimension (Rule 1 clause 6, AAP 0.5.5), so nothing here
+ * asserts a computed value: every visual value belongs to `web-ng/src/styles.scss` and is checked there.
  */
 
 /**

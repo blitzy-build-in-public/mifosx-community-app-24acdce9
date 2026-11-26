@@ -6,6 +6,7 @@ import { TestBed } from '@angular/core/testing';
 import { Subject, filter, map, of, throwError, type Observable } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AppConfigService } from '../config/app-config.service';
+import { ApiError } from '../http/api-error';
 import { PermissionsService } from './permissions.service';
 import type { SessionData, SessionUserResponse } from './session.model';
 import {
@@ -347,11 +348,40 @@ describe('SessionService', () => {
     expect(restored).toBe(false);
     expect(window.localStorage.getItem(COMPOSED_KEY)).not.toBeNull();
     expect(service.read()).toEqual(fixture);
-    // Nothing is in effect: the entry is kept for the 401 path, the signals are empty and the gate is withdrawn, so a guard reading `session()` cannot treat this as a signed-in state.
+    // Nothing is in effect: the failure carries no status, so it is no refusal and the entry stays where it was found, while the signals are empty and the gate is withdrawn, so a guard reading `session()` cannot treat this as a signed-in state.
     expect(service.session()).toBeNull();
     expect(service.user()).toBeNull();
     expect(permissions.can('READ_CLIENT')).toBe(false);
   });
+
+  it.each([{ status: 401 }, { status: 0 }])(
+    'removes the stored session when the user read is refused with status $status',
+    async ({ status }: { status: number }) => {
+      const { service, permissions } = harnessFor();
+      const fixture = legacyFixture();
+      service.write(fixture);
+      // Both spellings are seeded, so the refusal is proven to remove the entry under either key a release of the library may have written.
+      seedEntry(JSON.stringify(fixture), BARE_KEY);
+      // A list from an earlier session must not outlive the refused one.
+      permissions.setPermissions(fixture.userPermissions);
+
+      // The `ApiError` the interceptor builds from the failed read, and for status 0 the form this deployment's cross-origin 401 arrives in, since Fineract's 401 carries no CORS header (AAP 0.4.2). Awaiting without a `catch` is the assertion that it does not reject.
+      const restored = await service.restore(() =>
+        throwError(() => new ApiError('The credential was refused', status)),
+      );
+
+      expect(restored).toBe(false);
+      // A refused credential ends the session, so no entry survives it under either key (AAP 0.4.2).
+      expect(window.localStorage.getItem(COMPOSED_KEY)).toBeNull();
+      expect(window.localStorage.getItem(BARE_KEY)).toBeNull();
+      expect(window.localStorage.length).toBe(0);
+      expect(service.read()).toBeNull();
+      expect(service.session()).toBeNull();
+      expect(service.user()).toBeNull();
+      expect(service.username()).toBeNull();
+      expect(permissions.can('READ_CLIENT')).toBe(false);
+    },
+  );
 
   it('leaves a session that replaced the stored one while its user read was in flight', async () => {
     const { service, permissions } = harnessFor();
@@ -373,6 +403,32 @@ describe('SessionService', () => {
 
     await expect(restore).resolves.toBe(false);
     expect(service.session()).toEqual(replacement);
+    expect(permissions.can('READ_LOAN')).toBe(true);
+    expect(permissions.can('READ_CLIENT')).toBe(false);
+  });
+
+  it('keeps a session that replaced the stored one when the refusal arrives after it', async () => {
+    const { service, permissions } = harnessFor();
+    service.write(legacyFixture());
+
+    const pending = new Subject<SessionUserResponse>();
+    const restore = service.restore(() => pending.asObservable());
+
+    const replacement: SessionData = {
+      userId: USER_ID + 1,
+      authenticationKey: KEY_PARTS.join(''),
+      userPermissions: ['READ_LOAN'],
+    };
+    service.write(replacement);
+    permissions.setPermissions(replacement.userPermissions);
+
+    // The refusal describes the session the login replaced, so it ends nothing: the replacement keeps its entry, its signals and its permission list.
+    pending.error(new ApiError('The credential was refused', 401));
+
+    await expect(restore).resolves.toBe(false);
+    expect(service.session()).toEqual(replacement);
+    expect(service.read()).toEqual(replacement);
+    expect(window.localStorage.getItem(COMPOSED_KEY)).not.toBeNull();
     expect(permissions.can('READ_LOAN')).toBe(true);
     expect(permissions.can('READ_CLIENT')).toBe(false);
   });
@@ -570,5 +626,27 @@ describe('SessionService restore over HTTP', () => {
     expect(service.session()).toBeNull();
     expect(service.username()).toBeNull();
     expect(permissions.can('READ_CLIENT')).toBe(false);
+  });
+
+  it('removes the stored entry when the transport reports a failed user read as status 0', async () => {
+    const fixture = legacyFixture();
+    const calls: number[] = [];
+    service.write(fixture);
+    permissions.setPermissions(fixture.userPermissions);
+
+    const restored = service.restore(httpReader(handler, calls));
+
+    // A cross-origin 401 the browser cannot read reaches the application as a transport failure with no status (AAP 0.4.2, the deployment's no-proxy calling convention), which is the shape this deployment's refused credential actually arrives in.
+    httpMock.expectOne(isUsersRequest).error(new ProgressEvent('error'));
+
+    await expect(restored).resolves.toBe(false);
+    expect(window.localStorage.getItem(COMPOSED_KEY)).toBeNull();
+    expect(window.localStorage.length).toBe(0);
+    expect(service.read()).toBeNull();
+    expect(service.session()).toBeNull();
+    expect(service.username()).toBeNull();
+    expect(permissions.can('READ_CLIENT')).toBe(false);
+    // The refusal is the read's only answer: nothing retries it (Rule 1 clause 2).
+    httpMock.expectNone(isUsersRequest);
   });
 });

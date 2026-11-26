@@ -37,7 +37,7 @@ export function humaniseKey(key: string): string {
   return words.join(' ');
 }
 
-/** The application's own default copy for the strings this application introduces, keyed exactly as the templates render them. **Why the application has to carry them.** Every other label in this migration resolves through (AAP 0.4.3, AAP 0.1.1). */
+/** The application's own default copy for the strings this application introduces, keyed exactly as the templates render them. **Why the application has to carry them.** Every other label in this migration resolves through the legacy `app/global-translations/locale-*.json` bundles `translate.config.ts` loads in place (AAP 0.4.3, AAP 0.1.1), and no bundle carries a key for the 10-second idle warning AAP 0.1.1 requires, so this copy is the application's one deliberate difference from the legacy bundles: it is English-only in every language the switchers offer, and it is registered, with that limitation, in the deliberate-difference register the parity report renders (`web-ng/e2e/report/difference-register.ts`, AAP 0.10.5). A legacy or build-owned bundle carrying either key takes precedence automatically, because ngx-translate reaches this handler only for a key the active and fallback bundles both lack — which is also why no key is invented in the read-only `app/` tree (Rule 1 clause 6). */
 export const APP_OWNED_TRANSLATIONS: ReadonlyMap<string, string> = new Map<string, string>([
   ['label.message.session.expiring', 'You have been inactive and will be signed out shortly.'],
   ['label.button.stay.signed.in', 'Stay signed in'],

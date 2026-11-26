@@ -1,4 +1,4 @@
-/** The loans feature's six legacy paths, hash-root-relative, mounted by `app.routes.ts` through a pathless `loadChildren` inside the `ShellComponent` layout route, so the five screens land in the lazy loans chunk (AAP (AAP 0.8.2, AAP 0.4.4, AAP 0.10.4, AAP 0.14.1). */
+/** The loans feature's six legacy paths, hash-root-relative, mounted by `app.routes.ts` through a pathless `loadChildren` inside the `ShellComponent` layout route, so the five screens land in the lazy loans chunk, with every path spelling the legacy segment verbatim (AAP 0.8.2, AAP 0.4.4, AAP 0.10.4, AAP 0.14.1). */
 import type { Routes } from '@angular/router';
 
 import { permissionGuard } from '../../core/auth/permission.guard';

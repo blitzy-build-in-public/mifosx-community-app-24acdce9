@@ -26,7 +26,7 @@ type ChargeRow = Omit<LoanCharge, 'dueDate'> & {
   readonly canPay: boolean;
 };
 
-/** Charges section of the individual-loan record (`#/viewloanaccount/:id`): the read-only table of the charges the loan carries, with the two entry points that act on one of them (AAP 0.7.1 row `loans`, which names (AAP 0.7.2, AAP 0.7.4, AAP 0.7.3, AAP 0.4.2). */
+/** Charges section of the individual-loan record (`#/viewloanaccount/:id`): the read-only table of the charges the loan carries, with the two entry points that act on one of them (AAP 0.7.1 row `loans`, which names `LoanChargesComponent`; AAP 0.7.2, AAP 0.7.4, AAP 0.7.3, AAP 0.4.2). */
 @Component({
   selector: 'app-loan-charges',
   imports: [DatePipe, DecimalPipe, RouterLink, TranslatePipe, EmptyStateComponent, HasPermissionDirective],
@@ -40,10 +40,10 @@ export class LoanChargesComponent {
   /** The loan the charges belong to: the `:id` of `#/loanaccountcharge/:id/:action/:chargeId`, and the same record the section is rendered inside, so the two links cannot point at another loan. */
   readonly loanId = input.required<number | string>();
 
-  /** The permission the two charge actions are gated on. The record page passes `UPDATE_LOAN`, the code `loans.routes.ts` guards `loanaccountcharge/:id/:action/:chargeId` with, so the directive and the route guard cannot (AAP 0.14.1). */
+  /** The permission the two charge actions are gated on. The record page passes `UPDATE_LOAN`, the code `loans.routes.ts` guards `loanaccountcharge/:id/:action/:chargeId` with, so the directive and the route guard cannot disagree about who may act (AAP 0.14.1). */
   readonly actionPermission = input.required<string>();
 
-  /** The loan's own lifecycle status, as the record's `status` member reported it — the state legacy tests before it offers either charge action, so a charge on a loan that is not `Active` offers neither (Rule 1 clause 3. */
+  /** The loan's own lifecycle status, as the record's `status` member reported it — the state legacy tests before it offers either charge action, so a charge on a loan that is not `Active` offers neither (Rule 1 clause 3; `ViewLoanDetailsController.js:168-175`). */
   readonly loanStatus = input<LoanStatus | null>(null);
 
   /** The one date pattern the table displays, which the template passes to `DatePipe` for each parsed row date (AAP 0.7.2 "Date handling"). */

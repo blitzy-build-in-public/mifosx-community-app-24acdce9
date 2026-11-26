@@ -87,7 +87,7 @@ export class LoanRepaymentComponent {
     });
   }
 
-  /** Seeds the form for the loan the screen shows now, from an empty form, and reports what went wrong when the read fails: every run takes the next {@link loadSequence} number, empties what the previous run left — the (Rule 1 clause 3, AAP 0.7.4). */
+  /** Seeds the form for the loan the screen shows now, from an empty form, and reports what went wrong when the read fails: every run takes the next {@link loadSequence} number, empties what the previous run left — the picker's options and every entered value included — before it reads, so the previous loan's figures cannot be posted against the new one (Rule 1 clause 3, AAP 0.7.4). */
   private async load(loanId: number | string): Promise<void> {
     const load = ++this.loadSequence;
 
@@ -129,7 +129,7 @@ export class LoanRepaymentComponent {
     });
   }
 
-  /** Writes one template's seeds onto the form, once the caller knows the run that read it is still the current one: the payment types in the server's order with the first preselected — legacy's own (AAP 0.10.5, Rule 1 clause 3). */
+  /** Writes one template's seeds onto the form, once the caller knows the run that read it is still the current one: the payment types in the server's order with the first preselected — legacy's own default, which opens the select on a real option where `ng-options` renders no blank row to choose instead (AAP 0.10.5, Rule 1 clause 3). */
   private seedForm(template: LoanTransactionTemplate): void {
     const paymentTypeOptions = template.paymentTypeOptions ?? [];
     const defaultPaymentType: SelectOption | undefined = paymentTypeOptions[0];
@@ -152,7 +152,7 @@ export class LoanRepaymentComponent {
     return !this.destroyRef.destroyed && load === this.loadSequence;
   }
 
-  /** The one producer of the repayment body, built from the form's own values: `transactionDate` travels as the `Date` the field holds, which the service serialises beside the `dateFormat` and `locale` it sets; `note` is (AAP 0.7.2). */
+  /** The one producer of the repayment body, built from the form's own values: `transactionDate` travels as the `Date` the field holds, which the service serialises beside the `dateFormat` and `locale` it sets; `note` is sent only when its trimmed value carries text, so an untouched field adds no member the legacy body lacked (AAP 0.7.2). */
   private buildRequest(): RepaymentBody | null {
     const { transactionDate, transactionAmount, paymentTypeId, note } = this.form.getRawValue();
 
@@ -174,7 +174,7 @@ export class LoanRepaymentComponent {
     return body;
   }
 
-  /** Books the repayment — `POST /loans/{id}/transactions` with the `repayment` command — and returns to the loan record: every control is marked touched first so missing fields show their invalid state, an invalid form (AAP 0.1.1, AAP 0.7.4). */
+  /** Books the repayment — `POST /loans/{id}/transactions` with the `repayment` command — and returns to the loan record: every control is marked touched first so missing fields show their invalid state, an invalid form stops there — the required set is the date and the amount legacy's own form requires, and nothing else is checked client-side (AAP 0.1.1, AAP 0.7.4). */
   async submit(): Promise<void> {
     this.form.markAllAsTouched();
 

@@ -71,48 +71,35 @@ const SCOPE_LABEL_KEYS: Record<SearchScope, string> = {
 };
 
 /**
- * The signed-in navbar's global search control — the `GlobalSearch` row of the component inventory
- * (AAP 0.2.3) and part of the clients list screen in the "Sign in and open a client record" flow
- * (Figma node `1:3`, file `DKm5TBFbXypfqyx4xUdhBw`; AAP 0.7.1 `core/layout`, AAP 0.7.4).
+ * The signed-in navbar's global search control — the `GlobalSearch` row of the component inventory (AAP 0.2.3)
+ * and part of the clients list screen in the "Sign in and open a client record" flow (Figma node `1:3`, file
+ * `DKm5TBFbXypfqyx4xUdhBw`; AAP 0.7.1 `core/layout`, AAP 0.7.4).
  *
- * **It emits and never searches.** The control owns no request, no endpoint and no URL: it injects
- * no service at all — the only query it holds is a view reference to its own field — so it cannot
- * reach `SearchService` or `HttpClient` (Rule 1 clause 5), and the search itself belongs to the
- * results screen that receives this component's `search` output. Nothing here is composed from the
- * Fineract contract — no URL, no parameter spelling, no header (Rule 1 clause 2, Rule 2): the flag
- * it reports is legacy's own reading of the typed text, and the wire's parameter names stay with
- * `SearchService`.
+ * It emits and never searches: the control owns no request, endpoint or URL and injects no service at all —
+ * the only query it holds is a view reference to its own field — so it cannot reach `SearchService` or
+ * `HttpClient` (Rule 1 clause 5), and the search belongs to the results screen that receives its `search`
+ * output. Nothing here is composed from the Fineract contract (Rule 1 clause 2, Rule 2): the flag it reports
+ * is legacy's own reading of the typed text, and the wire's parameter names stay with `SearchService`.
  *
- * **Its props are the inventory's.** AAP 0.2.3's `GlobalSearch` row names `query: string`,
- * `scope` and `(search)`, so both values are inputs here and the state the user edits lives in the
- * two internal controls behind them (there is no two-way binding, so typing never writes back to
- * the input that seeded the field). A host therefore decides what the user meets — the navbar
- * seeds the scope from its own `searchScope` prop — without gaining access to the control objects
- * themselves.
+ * Its props are the inventory's: AAP 0.2.3's `GlobalSearch` row names `query: string`, `scope` and `(search)`,
+ * so both values are inputs here and the state the user edits lives in the two internal controls behind them
+ * (there is no two-way binding, so typing never writes back to the input that seeded the field), and a host
+ * decides what the user meets without gaining access to those controls.
  *
- * **It reproduces the legacy control rather than improving it.** Legacy's navbar search
- * (`app/views/_topnavbar.html:118-137`) is one text field with a scope selector beside it that
- * submits on Enter through the form's own submit handler; there is no debounce, no suggestion
- * dropdown, no recent searches and no client-side filtering, so this component has none of those
- * either (Rule 1 clause 3). The scope selector is a native `<select>`, the Angular-native
- * replacement for the jQuery `chosen` plugin the request forbids (AAP 0.10.5 item 2).
+ * It reproduces the legacy control rather than improving it: legacy's navbar search
+ * (`app/views/_topnavbar.html:118-137`) is one text field with a scope selector that submits on Enter, with no
+ * debounce, suggestion dropdown, recent searches or client-side filtering (Rule 1 clause 3), and the selector
+ * is a native `<select>`, the Angular-native replacement for the jQuery `chosen` plugin the request forbids
+ * (AAP 0.10.5 item 2). Its one keyboard affordance is legacy's own: `alt+x` focused the field
+ * (`app/scripts/controllers/main/MainController.js:330`), which is why the placeholder advertises it, so the
+ * shortcut is reproduced on the host and a placeholder promising one nothing implements is avoided
+ * (AAP 0.10.5 item 8; Rule 1 clauses 3 and 6).
  *
- * **It carries no CSS.** The design's 30px height (`space-nav-control`), 1px `#E0E0E0` border,
- * 2px radius and `#999999` placeholder are produced by the global `.navbar .form-control` and
- * `.form-control` rules in `web-ng/src/styles.scss` plus Bootstrap 3's own placeholder rule, so the
- * template names Bootstrap classes and this file defines no style, no hex value and no dimension
- * (Rule 1 clause 6, AAP 0.2.2's token manifest).
- *
- * The state the design shows is idle: an empty field with its placeholder visible and the default
- * scope selected. Typing, clearing and re-submitting are the same control's ordinary states; the
+ * It carries no CSS: the design's 30px height (`space-nav-control`), 1px `#E0E0E0` border, 2px radius and
+ * `#999999` placeholder come from the global `.navbar .form-control` and `.form-control` rules in
+ * `web-ng/src/styles.scss` plus Bootstrap 3's own placeholder rule (Rule 1 clause 6, AAP 0.2.2). The state the
+ * design shows is idle — an empty field with its placeholder visible and the default scope selected; the
  * results and empty states belong to the search screen.
- *
- * **Its one keyboard affordance is legacy's own.** Legacy bound `alt+x` to
- * `document.getElementById('search').focus()` (`app/scripts/controllers/main/MainController.js:330`),
- * which is why its field carries the placeholder "Click or press alt+x to Search". The shortcut is
- * reproduced on the element's host so the promise the placeholder makes is kept: a placeholder that
- * advertises a shortcut nothing implements would be the broken affordance this migration avoids
- * (AAP 0.10.5 item 8), and it changes nothing visually (Rule 1 clause 3, Rule 1 clause 6).
  */
 @Component({
   selector: 'app-global-search',
@@ -244,25 +231,18 @@ export class GlobalSearchComponent {
   }
 
   /**
-   * Submits the search the way legacy's `ng-submit` handler did: read the field, strip the quotes
-   * legacy stripped, and do nothing at all when there is nothing left to search for.
+   * Submits the search the way legacy's `ng-submit` handler did: read the field, strip the quotes legacy
+   * stripped, and do nothing at all when there is nothing left to search for.
    *
-   * The query is trimmed and unquoted **before** it is emitted, because that is the text that
-   * becomes a path segment of `/search/:query`, and legacy derived both of its parameters from the
-   * very same string: `searchString.replace(/(^"|"$)/g, '')` gives what is searched for, and the
-   * flag is `true` when that removal changed the text
-   * (`app/scripts/controllers/main/MainController.js:208-217`, the contract
-   * `SearchController.js:9` forwards as `exactMatch`). A query that is whitespace alone, or a pair
-   * of quotes alone, is therefore not sent at all rather than navigating to an empty search — the
-   * blank-search rule this control already applied to whitespace, and a departure from Rule 1
-   * clause 3 only for that degenerate input, where legacy would have navigated to an empty
-   * `/search/`.
-   *
-   * The field itself keeps exactly what the user typed, quotes included, so the text on screen never
-   * changes under them while they are still editing it.
-   *
-   * Nothing is sent while the user is still typing — this runs only on submit — and a second
-   * submission is a second search, as it is in legacy: there is no de-duplication to add here
+   * The query is trimmed and unquoted **before** it is emitted, because that text becomes a path segment of
+   * `/search/:query` and legacy derived both parameters from the same string:
+   * `searchString.replace(/(^"|"$)/g, '')` gives what is searched for, and the flag is `true` when that removal
+   * changed the text (`app/scripts/controllers/main/MainController.js:208-217`, the contract
+   * `SearchController.js:9` forwards as `exactMatch`). A query that is whitespace alone, or a pair of quotes
+   * alone, is therefore not sent at all rather than navigating to an empty search — a departure from Rule 1
+   * clause 3 only for that degenerate input, where legacy would have navigated to an empty `/search/`. The
+   * field keeps exactly what the user typed, quotes included, so the text on screen never changes under them.
+   * Nothing is sent while the user is still typing, and a second submission is a second search, as in legacy
    * (Rule 1 clause 3).
    */
   submit(): void {

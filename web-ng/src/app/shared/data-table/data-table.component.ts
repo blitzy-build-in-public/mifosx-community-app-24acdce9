@@ -49,37 +49,28 @@ export interface DataTableCellContext<TRow> {
 }
 
 /**
- * The bootstrap table the design's list screens paint, with its rows, its columns, the row link and
- * an optional component cell supplied by the caller (AAP 0.2.3 component inventory row
- * `ClientList / DataTable`; Figma node `1:3`, step 2 of "Sign in and open a client record").
+ * The bootstrap table the design's list screens paint, with its rows, its columns, the row link and an
+ * optional component cell supplied by the caller (AAP 0.2.3 component inventory row `ClientList / DataTable`;
+ * Figma node `1:3`, step 2 of "Sign in and open a client record").
  *
- * **Generic, because `shared` may not name a feature's model.** AAP 0.2.3 fixes the props as
- * `rows: Client[]` and `columns: ColumnDef[]`, and AAP 0.14.1 forbids `shared` importing from
- * `features` — so the component owns no row type at all and states the props over its own type
- * parameter: `rows: readonly TRow[]` and `columns: readonly ColumnDef<TRow>[]` are the inventory's
- * two props, generalised so a feature hands in its own row (`Client` on the clients list) without
- * `shared` ever naming it.
+ * Generic, because `shared` may not name a feature's model: AAP 0.2.3 fixes the props as `rows: Client[]` and
+ * `columns: ColumnDef[]`, and AAP 0.14.1 forbids `shared` importing from `features`, so the component owns no
+ * row type and states them over its own type parameter — `rows: readonly TRow[]` and
+ * `columns: readonly ColumnDef<TRow>[]` — letting a feature hand in its own row without `shared` naming it.
  *
- * **Every visual value comes from the global layer.** The header band, its 2px rule, the 34-36px
- * rows and the 1px separators are Bootstrap 3's `.table` metrics as `web-ng/src/styles.scss`
- * declares them (AAP 0.2.3 row `ClientList / DataTable`; AAP 0.2.2 `color-table-head`,
- * `color-rule`; Rule 1 clause 6), the `.table-responsive` wrapper is Bootstrap's own, and the
- * caller's {@link tableClasses} carries the screen's class — `table table-striped client-list` on
- * the clients list, whose column proportions that class sizes. This component declares no
- * stylesheet, no colour and no dimension.
+ * Every visual value comes from the global layer: the header band, its 2px rule, the 34–36px rows and the 1px
+ * separators are Bootstrap 3's `.table` metrics as `web-ng/src/styles.scss` declares them (AAP 0.2.3 row
+ * `ClientList / DataTable`; AAP 0.2.2 `color-table-head`, `color-rule`; Rule 1 clause 6), the
+ * `.table-responsive` wrapper is Bootstrap's own, and the caller's {@link tableClasses} carries the screen's
+ * class. This component declares no stylesheet, no colour and no dimension.
  *
- * **What the caller decides, and what this component refuses to decide.** The columns and their
- * order, the row key, the destination a row opens, the id and the classes of the `<table>`, and
- * whether any cell is a component: all of them are inputs. It adds no sort affordance, no row
- * action, no selection, no paging and no empty state — the callers' screens carry their own, and
- * inventing one here would be behaviour the legacy screens do not have (Rule 1 clause 3).
- *
- * **The row is the link.** When {@link rowLink} is set, every `<tr>` carries it, which is the
- * affordance the legacy tables give each cell (`data-ng-click="routeTo(client.id)"`) and the design
- * paints with no link styling, chevron or button of its own (AAP 0.7.4; Figma node `1:3`). When
- * {@link rowLink} is `null` the rows carry no link at all: `RouterLink` is bound `null`, which
- * navigates nothing, writes no `href` and adds no tab stop, so a read-only table is not a table of
- * dead links.
+ * The caller decides the columns and their order, the row key, the destination a row opens, the id and the
+ * classes of the `<table>` and whether a cell is a component; this component adds no sort affordance, row
+ * action, selection, paging or empty state, because inventing one would be behaviour the legacy screens do
+ * not have (Rule 1 clause 3). When {@link rowLink} is set every `<tr>` carries it — the affordance the legacy
+ * tables give each cell (`data-ng-click="routeTo(client.id)"`), painted with no link styling of its own
+ * (AAP 0.7.4; Figma node `1:3`) — and when it is `null` the rows carry no link at all: `RouterLink` bound
+ * `null` navigates nothing, writes no `href` and adds no tab stop.
  */
 @Component({
   selector: 'app-data-table',

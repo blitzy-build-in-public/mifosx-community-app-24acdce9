@@ -77,7 +77,7 @@ export interface LoanChargeOption extends OptionItem {
   readonly dueDate?: FineractDate;
 }
 
-/** `GET /loans/template?templateType=individual&clientId=&productId=` — the dropdown options and the defaults the new-loan form is seeded from, and the same shape the edit form is seeded from (AAP 0.7.3, "W4 loan (Rule 1 clause 3). */
+/** `GET /loans/template?templateType=individual&clientId=&productId=` — the dropdown options and the defaults the new-loan form is seeded from, and the same shape the edit form is seeded from (AAP 0.7.3, "W4 loan application"; Rule 1 clause 3: every option list comes from the template endpoint, never from a constant in this application). */
 export interface LoanTemplate {
   /** Client the loan is opened for, echoed back from the request. */
   readonly clientId?: number;
@@ -161,7 +161,7 @@ export interface LoanTimeline {
   readonly withdrawnOnDate?: FineractDate;
 }
 
-/** A loan account as `GET /loans/{id}?associations=all` returns it — the record the view screen renders — and the same body `GET /loans/{id}?template=true&associations=...` returns to seed the edit form (AAP 0.7.3, "Loan (AAP 0.7.4, AAP 0.7.2, AAP 0.3.4, Rule 1 clause 2). */
+/** A loan account as `GET /loans/{id}?associations=all` returns it — the record the view screen renders — and the same body `GET /loans/{id}?template=true&associations=...` returns to seed the edit form (AAP 0.7.3, "Loan edit"; AAP 0.7.4, AAP 0.7.2, AAP 0.3.4, Rule 1 clause 2). */
 export interface LoanAccount {
   /** Loan id, the `{id}` of every loan endpoint. */
   readonly id: number;
@@ -199,7 +199,7 @@ export interface LoanAccount {
 
 /** One row of a repayment schedule — the `periods[]` of `RepaymentSchedule`, and the rows the preview table renders after `POST /loans?command=calculateLoanSchedule` (AAP 0.7.2) (Rule 1 clause 2). */
 export interface RepaymentPeriod {
-  /** Period number, 1-based; the schedule table's first column. Optional because the fork omits the member on the disbursement pseudo-period described above: that row carries no period number, so a reader treats a missing (Rule 1 clause 3). */
+  /** Period number, 1-based; the schedule table's first column. Optional because the fork omits the member on the disbursement pseudo-period described above: that row carries no period number, so a reader treats a missing one as "not a repayment period" and the cell prints nothing rather than a substituted 0 (Rule 1 clause 3). */
   readonly period?: number;
   /** Date the period starts. */
   readonly fromDate: FineractDate;
@@ -291,7 +291,7 @@ export interface LoanTransaction {
   readonly manuallyReversed: boolean;
 }
 
-/** A charge attached to a loan, as the loan's own reads report it: the `charges` array of `GET /loans/{id}?associations=all` and of the edit seed `GET /loans/{id}?template=true&associations=charges,…` (AAP 0.7.2 row (AAP 0.7.3). */
+/** A charge attached to a loan, as the loan's own reads report it: the `charges` array of `GET /loans/{id}?associations=all` and of the edit seed `GET /loans/{id}?template=true&associations=charges,…` (AAP 0.7.2 row `LoanCharge`; AAP 0.7.3). */
 export interface LoanCharge {
   /** Charge id, the `{chargeId}` of the charge action endpoint. */
   readonly id: number;
@@ -313,7 +313,7 @@ export interface LoanCharge {
   readonly paid: boolean;
   /** Whether the charge has been waived, the fork's `LoanChargeData.waived`. */
   readonly waived: boolean;
-  /** Whether the charge may be paid through an account transfer right now, the fork's `LoanChargeData.chargePayable` — its `isChargePayable()`, which answers true when the charge's payment mode is account transfer and the. */
+  /** Whether the charge may be paid through an account transfer right now, the fork's `LoanChargeData.chargePayable` — its `isChargePayable()`, which answers true when the charge's payment mode is account transfer and the charge is neither paid nor waived. */
   readonly chargePayable: boolean;
   /** When the charge falls due, e.g. disbursement or a specified date. */
   readonly chargeTimeType: {
@@ -503,7 +503,7 @@ export interface LoanRepaymentRequest {
   transactionDate: Date | null;
   /** Amount repaid. */
   transactionAmount: number;
-  /** Payment type id, taken from the template's `paymentTypeOptions`; sent whenever the template offers a payment type, which is the ordinary case — the form preselects the first entry and the user may choose another, as the (Rule 1 clause 3, AAP 0.7.2). */
+  /** Payment type id, taken from the template's `paymentTypeOptions`; sent whenever the template offers a payment type, which is the ordinary case — the form preselects the first entry and the user may choose another, as the legacy repayment form does (Rule 1 clause 3, AAP 0.7.2). */
   paymentTypeId?: number;
   /** Free-text note recorded with the repayment. */
   note?: string;
@@ -527,7 +527,7 @@ export interface LoanChargeRequest {
   locale: string;
 }
 
-/** The body of one loan-charge action, as a discriminated union on the command `POST /loans/{id}/charges/{loanChargeId}?command=` takes (AAP 0.7.2 row `LoanChargeActionRequest`; AAP 0.7.3, "Loan charges"). **The member (AAP 0.3.4). */
+/** The body of one loan-charge action, as a discriminated union on the command `POST /loans/{id}/charges/{loanChargeId}?command=` takes (AAP 0.7.2 row `LoanChargeActionRequest`; AAP 0.7.3, "Loan charges"). **The member sets are the ones the running server accepts**: `pay` takes the booked date beside the format pair and `waive` the format pair alone (AAP 0.3.4). */
 export type LoanChargeActionRequest =
   | {
       /** Pays the charge's whole outstanding portion. */
@@ -633,7 +633,7 @@ const STATUS_BY_ID: Readonly<Partial<Record<string, StatusKey>>> = {
   '700': 'closed',
 };
 
-/** The same colours keyed by a `loanStatusType.*` message code, normalised by `normaliseStatusCode` from `web-ng/src/app/shared/status-key.util.ts` — the one normalisation all three families share: lower-cased, a leading. */
+/** The same colours keyed by a `loanStatusType.*` message code, normalised by `normaliseStatusCode` from `web-ng/src/app/shared/status-key.util.ts` — the one normalisation all three families share: lower-cased, a leading `[a-z]+statustype.` prefix removed, and every non-alphanumeric character stripped, so `loanStatusType.closed.reschedule.outstanding.amount` keys `closedrescheduleoutstandingamount`. */
 const STATUS_BY_NAME: Readonly<Partial<Record<string, StatusKey>>> = {
   submittedandpendingapproval: 'pending',
   approved: 'pending',

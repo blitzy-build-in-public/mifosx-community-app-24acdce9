@@ -24,12 +24,12 @@ export interface AuthResponse {
   isTwoFactorAuthenticationRequired?: boolean;
 }
 
-/** A partial projection of the far larger `GET /users/{id}` body the restore reads: `permissions` reconciles the stored permission list and `username` labels the user menu, and the remaining fields are intentionally unmodelled, which is how Rule 1 clause 4 is met without declaring a hundred unused members. */
+/** A partial projection of the far larger `GET /users/{id}` body the restore reads: `username` labels the user menu, `permissions` describes the wire but is never consulted — the restore publishes the stored permission list instead, as legacy does — and the remaining fields are intentionally unmodelled, which is how Rule 1 clause 4 is met without declaring a hundred unused members. */
 export interface SessionUserResponse {
   /** Fineract user id, and the `{id}` the restore reads `GET /users/{id}` with. */
   id: number;
   /** The account name the user-menu label shows, held in `SessionService`'s user signal. */
   username: string;
-  /** The tenant permission list the restore reconciles the stored `userPermissions` against; absent when the response omits it. */
+  /** The tenant permission list `GET /users/{id}` returns: received and deliberately not used, because the restore publishes the stored `SessionData.userPermissions` and never reads this member, matching legacy `SessionManager.js:41-43`, which overwrites the fetched user's permissions with the stored list; absent when the response omits it. */
   permissions?: string[];
 }

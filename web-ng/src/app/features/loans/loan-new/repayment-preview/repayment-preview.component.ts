@@ -12,7 +12,7 @@ type RepaymentPreviewRow = Omit<RepaymentPeriod, 'fromDate' | 'dueDate'> & {
   readonly dueDate: Date | null;
 };
 
-/** Repayment schedule preview of the individual-loan application: the periods `POST /loans?command=calculateLoanSchedule` returned, one table row each, in the order the server sent them (AAP 0.7.1 Features row `loans` (AAP 0.7.2, AAP 0.7.4, AAP 0.4.2, Rule 1 clause 5). */
+/** Repayment schedule preview of the individual-loan application: the periods `POST /loans?command=calculateLoanSchedule` returned, one table row each, in the order the server sent them (AAP 0.7.1 Features row `loans`, which names `LoanNewComponent` with `RepaymentPreviewComponent`; AAP 0.7.2, AAP 0.7.4, AAP 0.4.2, Rule 1 clause 5). */
 @Component({
   selector: 'app-repayment-preview',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -23,7 +23,7 @@ export class RepaymentPreviewComponent {
   /** The schedule to render, as `POST /loans?command=calculateLoanSchedule` returned it, or `null` before the applicant asks for the first preview (AAP 0.7.4). */
   readonly schedule = input<RepaymentSchedule | null>(null);
 
-  /** The one pattern the table's date cells display, bound by the template as `{{ row.dueDate | date: displayFormat }}` so a due date reads `21 November 2026` rather than a locale-defaulted `DatePipe` format (AAP 0.7.2 "Date. */
+  /** The one pattern the table's date cells display, bound by the template as `{{ row.dueDate | date: displayFormat }}` so a due date reads `21 November 2026` rather than a locale-defaulted `DatePipe` format (AAP 0.7.2 "Date handling"). */
   protected readonly displayFormat: string = DISPLAY_DATE_FORMAT;
 
   /** The table's rows: the server's periods in the order the server returned them, each carrying the period's own figures unchanged and both of its dates parsed here, once (Rule 1 clause 3). */

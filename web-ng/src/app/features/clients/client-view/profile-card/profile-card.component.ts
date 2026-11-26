@@ -20,23 +20,17 @@ export interface ProfileCardField {
 }
 
 /**
- * Right-hand profile card of the individual client record: the client name as the card
- * heading, the decorative avatar, the label/value rows supplied by the parent, the
- * performance-history sub-heading and the rows the parent supplies under it (AAP 0.2.3
- * row `ProfileCard`, AAP 0.2.1 step 3).
+ * Right-hand profile card of the individual client record: the client name as the card heading, the decorative
+ * avatar, the label/value rows supplied by the parent, the performance-history sub-heading and the rows under it
+ * (AAP 0.2.3 row `ProfileCard`, AAP 0.2.1 step 3).
  *
- * Presentational only. It issues no request, holds no state of its own and knows no
- * `Client` model: the parent resolves every value into a display string before binding
- * it, so this component never formats a date, reads the clock or alters a value it was
- * given (AAP 0.4.2, 0.7.2, 0.14.1). It carries no copy either: the sub-heading resolves
- * from the legacy `label.heading.performancehistory` key through `TranslatePipe`, so it
- * follows the active language as every other label does and no English text is inlined
- * here (AAP 0.2.1 step 3, AAP 0.10.2; Rule 1 clause 6 reads the shipped bundle in place
- * rather than copying its text).
- *
- * Figma: file `DKm5TBFbXypfqyx4xUdhBw`, frame `2:2` ("Legacy"), flow "Sign in and open a
- * client record", step 3 of 3 — Individual client view, screen `1:4` (its raster in the
- * file is node `17:9`).
+ * Presentational only: it issues no request, holds no state of its own and knows no `Client` model — the parent
+ * resolves every value into a display string, so this component never formats a date, reads the clock or alters a
+ * value it was given (AAP 0.4.2, 0.7.2, 0.14.1). It carries no copy either: the sub-heading resolves from the
+ * legacy `label.heading.performancehistory` key through `TranslatePipe`, so it follows the active language and no
+ * English text is inlined here (AAP 0.2.1 step 3, AAP 0.10.2; Rule 1 clause 6 reads the shipped bundle in place
+ * rather than copying its text). Figma: file `DKm5TBFbXypfqyx4xUdhBw`, frame `2:2` ("Legacy"), flow "Sign in and
+ * open a client record", step 3 of 3 — Individual client view, screen `1:4` (its raster is node `17:9`).
  */
 @Component({
   selector: 'app-profile-card',

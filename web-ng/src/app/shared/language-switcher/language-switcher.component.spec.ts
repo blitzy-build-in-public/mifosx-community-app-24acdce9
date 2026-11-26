@@ -4,32 +4,28 @@ import { TranslateService } from '@ngx-translate/core';
 import { Observable } from 'rxjs';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
+import {
+  LanguagePreferenceService,
+  languagePreferenceKey,
+} from '../../core/i18n/language-preference.service';
 import { LanguageSwitcherComponent } from './language-switcher.component';
 
 /**
- * Behaviour of the language switcher — the `LanguageSwitcher` row of the component inventory
- * (AAP 0.2.3), the login screen's row (Figma node `1:5`) and the navbar's (node `1:3`).
+ * Behaviour of the language switcher — the `LanguageSwitcher` row of the component inventory (AAP 0.2.3),
+ * the login screen's row (Figma node `1:5`) and the navbar's (node `1:3`).
  *
- * It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with
- * at least one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`). Each case states
- * one contract the component owns:
+ * It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with at
+ * least one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`). It pins the caller's label
+ * and id with every offered language in the application's order, the language actually in force, one
+ * `TranslateService.use()` per change reported only once the switch took effect, a bundle that cannot load
+ * reported rather than swallowed with the select written back to the language in force (AAP 0.14.2), a blank
+ * selection switching and reporting nothing, no colour or dimension of its own (AAP 0.2.3, Rule 1 clause 6),
+ * and the choice remembered in the legacy `ls.Language` entry as the switch is made
+ * (`app/scripts/controllers/main/MainController.js:343-345`; Rule 1 clause 3).
  *
- *  1. it renders the caller's label through the translation stack, the select under the caller's id,
- *     and every offered language in the order the application lists them;
- *  2. it shows the language actually in force — including one that is not the first option — so the
- *     control never advertises a language the application is not rendering;
- *  3. a change is `TranslateService.use()` called once and subscribed to, so the bundle is loaded
- *     once, and the code is reported only once the switch has taken effect;
- *  4. a bundle that cannot be loaded is reported rather than swallowed (AAP 0.14.2), and the select
- *     is written back to the language in force, because the `[value]` binding can never rewrite a
- *     control whose bound value did not change;
- *  5. a blank selection switches nothing and reports nothing;
- *  6. the component carries no colour and no dimension of its own — every visual value is the
- *     global `.language-switcher` rule's (AAP 0.2.3, Rule 1 clause 6).
- *
- * The translate stack is a typed stand-in for the four members this component and `TranslatePipe`
- * touch, so a case can make one load fail; no HTTP provider exists, because the component reaches no
- * host itself (Rule 1 clause 5).
+ * The translate stack is a typed stand-in for the four members this component and `TranslatePipe` touch, so
+ * a case can make one load fail; no HTTP provider exists, because the component reaches no host itself
+ * (Rule 1 clause 5).
  */
 
 /** The offered languages, standing in for `AVAILABLE_LANGS`. */
@@ -161,6 +157,9 @@ describe('LanguageSwitcherComponent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     TestBed.resetTestingModule();
+    // The jsdom store is shared by the whole suite, so a selection another case (or another spec
+    // file) made must not decide what this one reads back; the key string is the i18n service's.
+    window.localStorage.removeItem(languagePreferenceKey());
     translate = createTranslateStub();
 
     TestBed.configureTestingModule({
@@ -284,5 +283,31 @@ describe('LanguageSwitcherComponent', () => {
     expect(switched).toEqual([]);
     expect(failures).toBe(0);
     expect(selector().value).toBe(ACTIVE);
+  });
+
+  it('remembers the selection in the legacy entry, so the next page load starts in it', () => {
+    render();
+
+    choose(OTHER_LANG);
+
+    // The entry legacy's own `changeLang` writes (`MainController.js:344`), which the start-up in
+    // `app.config.ts` applies again on the next load.
+    expect(window.localStorage.getItem(languagePreferenceKey())).toBe(
+      JSON.stringify({ code: OTHER_LANG }),
+    );
+    expect(TestBed.inject(LanguagePreferenceService).read()).toBe(OTHER_LANG);
+  });
+
+  it('keeps a selection whose bundle failed to load, as legacy stores it beside the failing switch', () => {
+    render();
+    translate.failNextBundle();
+
+    choose(OTHER_LANG);
+
+    // Reported as a failure, and still the language the next page load starts in: it was stored
+    // before the bundle was asked for (`MainController.js:343-345`).
+    expect(switched).toEqual([]);
+    expect(failures).toBe(1);
+    expect(TestBed.inject(LanguagePreferenceService).read()).toBe(OTHER_LANG);
   });
 });

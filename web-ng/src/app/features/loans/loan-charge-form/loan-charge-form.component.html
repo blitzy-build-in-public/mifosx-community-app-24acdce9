@@ -117,7 +117,13 @@
               <div class="alert alert-danger" role="alert">{{ err.message }}</div>
             }
 
-            <form class="form-horizontal" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+            <form
+              id="loanChargeForm"
+              class="form-horizontal"
+              [formGroup]="form"
+              (ngSubmit)="submit()"
+              novalidate
+            >
               <fieldset>
                 <!--
                   The picker is add mode's alone, and it renders the template's own option list in the
@@ -210,6 +216,15 @@
                   `paymentTypeId` on either command and refuses a `transactionDate` on `waive`, so none
                   of the three is collected here. The date is the legacy pay form's own control,
                   defaulted from the browser clock (AAP 0.10.5 item 15) and editable.
+
+                  That refusal is checked against the running server rather than inferred from the
+                  command name: `?command=pay` answers HTTP 400 `error.msg.parameter.unsupported`
+                  ("The parameter amount is not supported.") for a body carrying `amount`, the same 400
+                  for `paymentTypeId`, and `?command=waive` the same 400 for `amount`, while the body
+                  this form posts clears that check and is answered on the charge's own domain grounds
+                  instead. The server takes the amount from the charge's outstanding portion itself, so
+                  neither member is a control this screen could post, and the legacy pay form collects
+                  the date alone.
                 -->
                 @if (isPayMode()) {
                   <div class="form-group">
@@ -235,9 +250,10 @@
           request and disables itself while that request is in flight, because Fineract's action
           endpoints are not idempotent and one click must send exactly one POST (AAP 0.1.1, 0.14.1;
           W5's "one POST per action"). Both are the legacy form's own ids (`cancel`, `save`). The
-          button sits in the card's footer rather than inside the form, so `(click)` is what submits
-          it — the form's `(ngSubmit)` covers the keyboard path through the fields — and the class's
-          guard makes the two paths one request.
+          button sits in the card's footer rather than inside the form, and its `form` attribute names
+          the form above, so it is that form's own submit control: a click on it and Enter in one of
+          the form's fields both dispatch that form's one `submit` event, `(ngSubmit)` serves both,
+          and the class's guard makes the two paths one request.
         -->
         @if (!notFound()) {
           <div class="panel-footer">
@@ -248,8 +264,8 @@
               id="save"
               type="submit"
               class="btn btn-primary"
+              form="loanChargeForm"
               [disabled]="guard.busy()"
-              (click)="submit()"
             >
               {{ 'label.button.submit' | translate }}
             </button>

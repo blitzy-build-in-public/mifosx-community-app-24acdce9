@@ -39,12 +39,12 @@ const SERVED_MODES = {
   repayment: true,
 } satisfies Record<ServedMode, true>;
 
-/** Whether a raw `:action` segment names a screen this application serves, using `Object.hasOwn` rather than `in` so a segment such as `toString` or `constructor` is refused instead of passing on an inherited member of the. */
+/** Whether a raw `:action` segment names a screen this application serves, using `Object.hasOwn` rather than `in` so a segment such as `toString` or `constructor` is refused instead of passing on an inherited member of the object's prototype. */
 function isServedMode(value: string): value is ServedMode {
   return Object.hasOwn(SERVED_MODES, value);
 }
 
-/** The mode a route segment selects, with the not-found outcome for anything unrecognised: a `null` segment — the route matched without an `:action` — and a word this application does not serve both resolve to (AAP 0.7.4). */
+/** The mode a route segment selects, with the not-found outcome for anything unrecognised: a `null` segment — the route matched without an `:action` — and a word this application does not serve both resolve to `'notfound'`, with no fallback mode and no redirect (AAP 0.7.4). */
 function resolveMode(segment: string | null): LoanActionMode {
   return segment === null || !isServedMode(segment) ? 'notfound' : segment;
 }
@@ -67,7 +67,7 @@ interface LoanActionCopy {
   readonly submitKey: string;
 }
 
-/** The five commands' copy, keyed by the command itself; `satisfies Record<LoanCommand, LoanActionCopy>` makes a command added without copy — or copy left behind by a removed command — a compile error, so the template. */
+/** The five commands' copy, keyed by the command itself; `satisfies Record<LoanCommand, LoanActionCopy>` makes a command added without copy — or copy left behind by a removed command — a compile error, so the template reads the current command's labels through an exhaustive lookup and no `default:` branch can render another action's wording. */
 const ACTION_COPY = {
   approve: { headingKey: 'label.heading.approveloanaccount', submitKey: 'label.button.approve' },
   undoapproval: {
@@ -171,7 +171,7 @@ export class LoanActionComponent {
   readonly notFoundHeadingKey = 'label.heading.notavailable';
   /** Legacy key of the not-found sentence, worded as the platform words a missing resource. */
   readonly notFoundMessageKey = 'error.msg.resource.not.found';
-  /** The approve form: `POST /loans/{id}?command=approve`, where `approvedOnDate` is the command's mandatory member and `approvedLoanAmount` the amount this action screen collects, so both carry `Validators.required`; the (AAP 0.4.4, Rule 1 clause 3). */
+  /** The approve form: `POST /loans/{id}?command=approve`, where `approvedOnDate` is the command's mandatory member and `approvedLoanAmount` the amount this action screen collects, so both carry `Validators.required`; the note is optional and the amount carries no `min`, `max` or `pattern`, because the product bounds the approved principal on the server and nowhere here (AAP 0.4.4, Rule 1 clause 3). */
   readonly approveForm = new FormGroup({
     approvedOnDate: new FormControl<Date | null>(today(), { validators: [Validators.required] }),
     approvedLoanAmount: new FormControl<number | null>(null, { validators: [Validators.required] }),
@@ -202,11 +202,11 @@ export class LoanActionComponent {
       this.resolve(params);
     });
   }
-  /** The one producer of the body {@link LoanService.action} posts, shaped by the resolved command: it answers `null` when the mode posts nothing of its own — the repayment form belongs to the child component and a not-found (Rule 1 clause 2). */
+  /** The one producer of the body {@link LoanService.action} posts, shaped by the resolved command: it answers `null` when the mode posts nothing of its own — the repayment form belongs to the child component and a not-found screen has no command — and when a required control holds no usable value, which {@link submit} has already refused (Rule 1 clause 2). */
   buildRequest(): LoanActionFields | null {
     return this.assembleFields();
   }
-  /** Posts the resolved command once and returns to the loan record: the current form's controls are marked touched first, so a field that is missing shows the help block the shared fields render, and an invalid form stops (Rule 1 clause 3, AAP 0.7.4). */
+  /** Posts the resolved command once and returns to the loan record: the current form's controls are marked touched first, so a field that is missing shows the help block the shared fields render, and an invalid form stops there — the required set is the commands' own and nothing else is checked client-side (Rule 1 clause 3, AAP 0.7.4). */
   async submit(): Promise<void> {
     const command = this.command();
     if (command === null || !this.markTouched(command)) {
@@ -218,7 +218,7 @@ export class LoanActionComponent {
     }
     await this.send(command, body);
   }
-  /** Resolves which screen the route's parameters select, and starts that mode's own read: an `:id` the route does not carry, a blank one, or an `:action` outside the six served modes stops here — the not-found outcome is (AAP 0.7.4, AAP 0.9.2). */
+  /** Resolves which screen the route's parameters select, and starts that mode's own read: an `:id` the route does not carry, a blank one, or an `:action` outside the six served modes stops here — the not-found outcome is recorded, no command is set and no request is made, so a URL naming no screen of this application cannot post against a loan (AAP 0.7.4, AAP 0.9.2). */
   private resolve(params: ParamMap): void {
     const loanId = params.get('id');
     const mode = resolveMode(params.get('action'));
@@ -235,7 +235,7 @@ export class LoanActionComponent {
     this.command.set(COMMAND_BY_MODE[mode]);
     void this.load(mode, loanId);
   }
-  /** Runs the resolved mode's own seed read, per mode and never one read on another mode's behalf: `approve` reads the approval template, `disburse` reads the transaction template of its own command, and `reject`, the two (AAP 0.7.3, AAP 0.7.4). */
+  /** Runs the resolved mode's own seed read, per mode and never one read on another mode's behalf: `approve` reads the approval template, `disburse` reads the transaction template of its own command, and `reject`, the two confirm views and the repayment form issue no request at all (AAP 0.7.3, AAP 0.7.4). */
   private async load(mode: ServedMode, loanId: number | string): Promise<void> {
     const load = ++this.loadSequence;
     try {
@@ -282,7 +282,7 @@ export class LoanActionComponent {
       }
     }
   }
-  /** Whether a run still speaks for the screen — it is the newest run and the screen it belongs to has not been destroyed — so a read the route or the teardown cancelled can neither seed a form, nor paint a failure, nor. */
+  /** Whether a run still speaks for the screen — it is the newest run and the screen it belongs to has not been destroyed — so a read the route or the teardown cancelled can neither seed a form, nor paint a failure, nor clear the loading state of whatever replaced it. */
   private isCurrent(load: number): boolean {
     return !this.destroyRef.destroyed && load === this.loadSequence;
   }
@@ -293,14 +293,14 @@ export class LoanActionComponent {
     }
     this.approveForm.controls.approvedLoanAmount.setValue(template.approvalAmount);
   }
-  /** Seeds the disburse form's amount from the transaction template's own `amount`; a template that sends no amount leaves the field empty and required and lets Fineract decide, because defaulting it to the principal would (Rule 1 clause 3). */
+  /** Seeds the disburse form's amount from the transaction template's own `amount`; a template that sends no amount leaves the field empty and required and lets Fineract decide, because defaulting it to the principal would be a figure the legacy screen only shows when its own template carries one (Rule 1 clause 3). */
   private seedDisbursement(template: LoanTransactionTemplate): void {
     if (template.amount === undefined) {
       return;
     }
     this.disburseForm.controls.transactionAmount.setValue(template.amount);
   }
-  /** Marks the current command's controls as touched and reports whether the form may be posted: marking first is what makes a missing required field visible instead of silently refused, and the undodisbursal view, which has. */
+  /** Marks the current command's controls as touched and reports whether the form may be posted: marking first is what makes a missing required field visible instead of silently refused, and the undodisbursal view, which has no controls, is always postable. */
   private markTouched(command: LoanCommand): boolean {
     switch (command) {
       case 'approve': {
@@ -324,7 +324,7 @@ export class LoanActionComponent {
       }
     }
   }
-  /** Assembles the resolved command's own fields from the form that belongs to it: one branch per command, so a body can only ever be shaped for the command being posted, and a required value that is somehow missing yields. */
+  /** Assembles the resolved command's own fields from the form that belongs to it: one branch per command, so a body can only ever be shaped for the command being posted, and a required value that is somehow missing yields `null` rather than a body with a hole in it. */
   private assembleFields(): LoanActionFields | null {
     switch (this.command()) {
       case 'approve': {
@@ -383,7 +383,7 @@ export class LoanActionComponent {
       }
     }
   }
-  /** Sends one command through the submit guard and returns to the loan record on success: the guarded callback clears the previous failure so a retry does not show a stale message while it is in flight, posts the body once (AAP 0.7.4). */
+  /** Sends one command through the submit guard and returns to the loan record on success: the guarded callback clears the previous failure so a retry does not show a stale message while it is in flight, posts the body once, and navigates to `#/viewloanaccount/:id` where the new status and the appended transaction are read back (AAP 0.7.4). */
   private send(command: LoanCommand, body: LoanActionInput): Promise<void> {
     return this.guard.runOnce(async (): Promise<void> => {
       this.error.set(null);

@@ -8,32 +8,22 @@ import { PermissionsService } from '../../../../core/auth/permissions.service';
 import { FilterToolbarComponent } from './filter-toolbar.component';
 
 /**
- * Behavioural spec for `FilterToolbarComponent`, the list toolbar AAP 0.2.3's inventory requires the
- * new app to provide (row `FilterToolbar`, whose props are the four outputs; Figma node `1:3`;
- * Rule 1 clause 8, which allows no empty or boilerplate specs).
+ * Behavioural spec for `FilterToolbarComponent`, the list toolbar AAP 0.2.3's inventory requires the new app
+ * to provide (row `FilterToolbar`, whose props are the four outputs; Figma node `1:3`; Rule 1 clause 8,
+ * which allows no empty or boilerplate specs).
  *
- * What it pins is what the extraction must not change, because a rewrite would silently do so:
+ * It pins what the extraction must not change: the legacy element ids, names and control names
+ * (`#filterText`, `#find`, `#showAll`) the parity page objects and the clients list's own spec address the
+ * toolbar by (Rule 1 clause 3); the legacy Bootstrap 3 structure — `.form-horizontal` > `.form-group`,
+ * `.input-group` with `.input-group-btn`, the `fa fa-search` submit, `.checkbox.form-control` and
+ * `a.btn.btn-primary.pull-right` with `fa fa-plus` (Rule 1 clause 6); each of the four outputs publishing on
+ * the interaction the inventory names; the create control's own `routerLink="/createclient"` and
+ * `CREATE_CLIENT` gate, so the navigation stays declarative and the gate fails closed; and the search button
+ * disabling while a read is in flight (AAP 0.1.1 "duplicate-submission protection").
  *
- *  1. the three controls keep the legacy element ids, names and control names — `#filterText`,
- *     `#find` and `#showAll` are what the parity page objects and the clients list's own spec address
- *     the toolbar by, and renaming one would be an unregistered difference from legacy
- *     (Rule 1 clause 3);
- *  2. the markup stays the legacy Bootstrap 3 structure — `.form-horizontal` > `.form-group`,
- *     `.input-group` with `.input-group-btn`, the `fa fa-search` submit button inside it,
- *     `.checkbox.form-control` for the boxed choice and `a.btn.btn-primary.pull-right` with
- *     `fa fa-plus` for the primary action (Rule 1 clause 6);
- *  3. each of the four outputs publishes on exactly the interaction the inventory names: the filter
- *     field's value change, the form's submission with the find field's raw text, the checkbox's
- *     change, and the create control's activation;
- *  4. the create control keeps its own `routerLink="/createclient"` and its `CREATE_CLIENT` gate, so
- *     the navigation stays declarative and the gate fails closed;
- *  5. the search button disables while a read is in flight, so one click sends one request
- *     (AAP 0.1.1 "duplicate-submission protection").
- *
- * The permission gate is supplied at its real token with a stub typed against the real service, and
- * the router is provided empty because no case completes a navigation: each asserts the destination
- * the control carries. No translation bundle is served, so a bound key renders as that key — which
- * is what makes "the legacy key is the one bound" an assertion rather than a guess.
+ * The permission gate is supplied at its real token with a stub typed against the real service, and the
+ * router is provided empty because no case completes a navigation. No translation bundle is served, so a
+ * bound key renders as that key — which makes "the legacy key is the one bound" an assertion, not a guess.
  */
 
 /** The legacy code the create control is gated on in the template. */

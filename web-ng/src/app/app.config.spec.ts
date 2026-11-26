@@ -11,6 +11,10 @@ import { SessionService } from './core/auth/session.service';
 import { DEFAULT_APP_CONFIG, type AppConfig } from './core/config/app-config.model';
 import { AppConfigService } from './core/config/app-config.service';
 import { APP_CONFIG } from './core/config/app-config.token';
+import {
+  LanguagePreferenceService,
+  languagePreferenceKey,
+} from './core/i18n/language-preference.service';
 
 /** Behaviour of the composition root (AAP 0.4.3 rows 1, 4 and 7; AAP 0.8.2 "Application entry and configuration"; AAP 0.3.4 claim 9; AAP 0.11.1 row `app.config.ts`): what the application cannot do without - the. */
 
@@ -23,6 +27,12 @@ const SERVED_CONFIG: AppConfig = {
 
 /** The authentication key a stored session carries in these tests, assembled from parts because it is a fixture and not a credential: the credential gate rejects a property named `authenticationKey` assigned a string literal (AAP 0.10.4). */
 const SPEC_AUTHENTICATION_KEY: string = ['spec', 'session', 'key'].join('-');
+
+/** The language a remembered preference names: one of the offered codes and deliberately not the configured `en`, so a language in force can only have come from the entry. */
+const REMEMBERED_LANG = 'fr';
+
+/** The bundle URL the remembered language loads, written as a literal rather than composed from the loader constants: `angular.json` maps `app/global-translations` to `global-translations`, so this is the path the browser requests (`core/i18n/translate.config.ts`). */
+const REMEMBERED_BUNDLE_URL = `global-translations/locale-${REMEMBERED_LANG}.json`;
 
 /** A `Response` stand-in carrying what `AppConfigService.fetchRawConfig` reads, so the read runs against the shape the browser's own response has; the cast is the one boundary where the partial object becomes that `Response` (Rule 1 clause 4). */
 function servedResponse(): Promise<Response> {
@@ -47,6 +57,9 @@ function configureApplication(extra: readonly Provider[] = []): void {
 
   // Every case starts as a visitor who has never signed in: the unit-test environment is one jsdom shared by the whole suite, so another spec file can leave the legacy session entry in `localStorage`, and a start-up that found one would block on the resume read only the last case answers. The store is emptied through the service that owns its key (AAP 0.3.4 claim 9).
   TestBed.inject(SessionService).clear();
+
+  // The remembered language is shared for the same reason and would otherwise decide which language a start-up applies, so its entry goes too — removed through the key derivation the i18n service owns, which is the only place the exact key string is stated (`core/i18n/language-preference.service.ts`).
+  window.localStorage.removeItem(languagePreferenceKey());
 }
 
 /** Runs the application's registered initializers in order and awaits them, as Angular does before the router's first navigation, each inside the TestBed's injection context the way `bootstrapApplication` runs it, because the initializer resolves its services with `inject()`. */
@@ -98,6 +111,28 @@ describe('appConfig', () => {
     const translate = TestBed.inject(TranslateService);
 
     expect(translate.currentLang()).toBe(DEFAULT_APP_CONFIG.locale);
+  });
+
+  it('applies the language the legacy entry remembers at start-up, so a reload continues in it', async () => {
+    configureApplication();
+
+    // What a previous visit left when the switcher changed the language: the `ls.Language` entry legacy reads back (`app/scripts/controllers/main/MainController.js:232-238, 344`).
+    TestBed.inject(LanguagePreferenceService).remember(REMEMBERED_LANG);
+
+    await runStartUp();
+
+    // Start-up did not wait for the bundle: the configured language stays in force until the bundle the
+    // remembered code names actually arrives.
+    const translate = TestBed.inject(TranslateService);
+    expect(translate.currentLang()).toBe(DEFAULT_APP_CONFIG.locale);
+
+    const request = TestBed.inject(HttpTestingController).expectOne(REMEMBERED_BUNDLE_URL);
+
+    expect(request.request.method).toBe('GET');
+
+    request.flush({ 'label.heading.clients': 'Clients' });
+
+    expect(translate.currentLang()).toBe(REMEMBERED_LANG);
   });
 
   it('locates URLs with the hash strategy the legacy route scheme needs', async () => {

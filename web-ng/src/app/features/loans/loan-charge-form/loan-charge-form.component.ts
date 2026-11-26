@@ -33,7 +33,7 @@ const SPECIFIED_DUE_DATE_CHARGE_TIME_TYPE_ID = 2;
 /** Which operation the current route parameters name, resolved from every emission before that emission's request: `'notfound'` is a resolved outcome for an action this application does not serve or a route without `:id`, and issues no request at all. */
 type LoanChargeFormMode = 'add' | 'pay' | 'waive' | 'notfound';
 
-/** The loan charge screen: it adds a charge to a loan and pays or waives one the loan already carries, mounted by `#/addloancharge/:id` and `#/loanaccountcharge/:id/:action/:chargeId`, one class serving both routes (AAP (AAP 0.7.1, AAP 0.7.3, Rule 1 clause 5, AAP 0.7.2). */
+/** The loan charge screen: it adds a charge to a loan and pays or waives one the loan already carries, mounted by `#/addloancharge/:id` and `#/loanaccountcharge/:id/:action/:chargeId`, one class serving both routes; any other `:action` is not a screen of this application, so it resolves to `'notfound'` and issues no request (AAP 0.7.1, AAP 0.7.3, Rule 1 clause 5, AAP 0.7.2). */
 @Component({
   selector: 'app-loan-charge-form',
   imports: [
@@ -148,7 +148,7 @@ export class LoanChargeFormComponent {
       });
   }
 
-  /** Clears everything the previous route put on the screen, so an emission naming another loan or another operation never shows the earlier picker, values or message: the form is reset rather than rebuilt because the (AAP 0.10.5). */
+  /** Clears everything the previous route put on the screen, so an emission naming another loan or another operation never shows the earlier picker, values or message: the form is reset rather than rebuilt because the template binds these control instances, and pay mode's date then returns to the browser clock — legacy's own default for a form's date (AAP 0.10.5). */
   private reset(mode: LoanChargeFormMode): void {
     this.notFound.set(mode === 'notfound');
     this.loading.set(true);
@@ -163,7 +163,7 @@ export class LoanChargeFormComponent {
     }
   }
 
-  /** Posts this screen's one request and returns to the loan record on success: the legacy `rc-submit` gate means an incomplete form is marked touched — which reveals each field's error — and nothing is posted; a rejected (AAP 0.1.1). */
+  /** Posts this screen's one request and returns to the loan record on success: the legacy `rc-submit` gate means an incomplete form is marked touched — which reveals each field's error — and nothing is posted; a rejected request becomes `error` and keeps every entered value, and the submit guard refuses a second click while the request is in flight (AAP 0.1.1). */
   async submit(): Promise<void> {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
@@ -185,7 +185,7 @@ export class LoanChargeFormComponent {
     });
   }
 
-  /** The body `POST /loans/{id}/charges` posts: the picked charge, the amount the form shows, and the due date only for a charge that falls due on a specified date; the amount is the form's own editable value, sent as a (AAP 0.7.2, Rule 1 clause 3). */
+  /** The body `POST /loans/{id}/charges` posts: the picked charge, the amount the form shows, and the due date only for a charge that falls due on a specified date; the amount is the form's own editable value, sent as a JSON number with no bound applied here (AAP 0.7.2, Rule 1 clause 3). */
   buildAddRequest(): LoanChargeInput {
     const charge = this.selectedCharge();
 
@@ -203,7 +203,7 @@ export class LoanChargeFormComponent {
     return body;
   }
 
-  /** The body `POST /loans/{id}/charges/{loanChargeId}?command=` posts, shaped by the resolved mode: `pay` books a money movement and carries the date it is recorded on, `waive` books none and carries the discriminating (AAP 0.7.2). */
+  /** The body `POST /loans/{id}/charges/{loanChargeId}?command=` posts, shaped by the resolved mode: `pay` books a money movement and carries the date it is recorded on, `waive` books none and carries the discriminating command alone, and neither carries an amount or a payment type, because the endpoint refuses both members on the parameter binding (AAP 0.7.2). */
   buildActionRequest(): LoanChargeActionInput {
     if (this.mode() === 'pay') {
       return { command: 'pay', transactionDate: this.transactionDateControl.value };
@@ -216,7 +216,7 @@ export class LoanChargeFormComponent {
     throw new Error(`The '${this.mode()}' screen posts no charge action, so it has no body to post.`);
   }
 
-  /** Resolves which operation the route asks for: `:chargeId` absent is the add route, present means `:action` must be `pay` or `waive`, and everything else — an unknown action, a charge-scoped route without an action, a (AAP 0.9.2). */
+  /** Resolves which operation the route asks for: `:chargeId` absent is the add route, present means `:action` must be `pay` or `waive`, and everything else — an unknown action, a charge-scoped route without an action, a route without `:id` — is `'notfound'`, so no request is made for a screen this application does not serve (AAP 0.9.2). */
   private resolveMode(params: ParamMap): LoanChargeFormMode {
     const action = params.get('action');
 
@@ -302,7 +302,7 @@ export class LoanChargeFormComponent {
     }
   }
 
-  /** `GET /loans/{id}/charges/template` — the add form's charge picker, published in the server's order with no sorting, filtering or renaming (AAP 0.7.3 row "Loan charges"; Rule 1 clause 3). @returns the payload's. */
+  /** `GET /loans/{id}/charges/template` — the add form's charge picker, published in the server's order with no sorting, filtering or renaming (AAP 0.7.3 row "Loan charges"; Rule 1 clause 3). @returns the payload's `chargeOptions`, or an empty list when the payload carries none. */
   private async loadChargeOptions(): Promise<readonly LoanChargeOption[]> {
     const template: ChargeTemplate = await firstValueFrom(
       this.loan.chargeTemplateFor(this.loanId()).pipe(takeUntilDestroyed(this.destroyRef)),
@@ -311,7 +311,7 @@ export class LoanChargeFormComponent {
     return template.chargeOptions ?? [];
   }
 
-  /** Whether a run still speaks for the screen — it is the newest run and the screen it belongs to has not been destroyed — so a read the route or the teardown cancelled can neither paint nor clear the loading state of. */
+  /** Whether a run still speaks for the screen — it is the newest run and the screen it belongs to has not been destroyed — so a read the route or the teardown cancelled can neither paint nor clear the loading state of whatever replaced it. */
   private isCurrent(load: number): boolean {
     return !this.destroyRef.destroyed && load === this.loadSequence;
   }
@@ -328,7 +328,7 @@ export class LoanChargeFormComponent {
     this.error.set(screenFailure(failure));
   }
 
-  /** Posts the one request the resolved mode makes — the charge on the add route, the command on the pay and waive ones, travelling in the query string because that is how Fineract takes it; the charge an action acts on is (AAP 0.7.3). */
+  /** Posts the one request the resolved mode makes — the charge on the add route, the command on the pay and waive ones, travelling in the query string because that is how Fineract takes it; the charge an action acts on is the route's own `:chargeId`, the loan-charge id and never the definition id the picker offers (AAP 0.7.3). */
   private async post(loanId: string): Promise<void> {
     const mode = this.mode();
 
@@ -346,7 +346,7 @@ export class LoanChargeFormComponent {
     );
   }
 
-  /** The amount the add form holds, as the number its body carries: an accessor writes whatever its input element reports, so the value is checked here and refused unless it is a finite number — the body carries a JSON. */
+  /** The amount the add form holds, as the number its body carries: an accessor writes whatever its input element reports, so the value is checked here and refused unless it is a finite number — the body carries a JSON number exactly as legacy's amount did, and a value that arrived as text must never reach the server as a string. */
   private requireAmount(): number {
     const amount: unknown = this.amountControl.value;
 

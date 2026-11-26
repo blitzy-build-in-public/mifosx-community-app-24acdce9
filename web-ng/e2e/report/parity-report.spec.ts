@@ -135,6 +135,9 @@ describe('parity-report line budget', () => {
     expect(markdown).toContain('88,418 lines at `4a13dc7`, the commit the prose trim follows');
     expect(markdown).toContain('58,799 at `c05766d`');
     expect(markdown).toContain('the tree crossed AAP 0.9.3\'s 60,000-line ceiling while the workflow screens landed');
+    // The second trim: the landed fix sets' growth, the crossing it caused and the totals it was measured against.
+    expect(markdown).toContain('four fix sets landed after the cut and added 714 net lines');
+    expect(markdown).toContain('taking the tree from 59,487 to 60,201 and over AAP 0.9.3\'s ceiling again');
     // Restoring the cut half: the fixture measures 58,643 lines and the 17 cut files carry 5,214.
     expect(markdown).toContain('the delivered tree plus them measures 63,857');
     expect(markdown).toContain('no Must scope was dropped');

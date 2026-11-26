@@ -82,77 +82,44 @@ export const CLIENT_HISTORY_LABEL_KEYS: readonly string[] = [
 ];
 
 /**
- * The individual client record — `#/viewclient/:id`, the last screen of the "Sign in and open a
- * client record" flow and the entry point of workflow W3's record read, of the lifecycle actions and
- * of the loan and edit screens this record links to (AAP 0.7.1 Features row `clients`;
- * AAP 0.7.4 "Client view (`#/viewclient/:id`)"; AAP 0.8.2 feature route `viewclient/:id`).
+ * The individual client record — `#/viewclient/:id`, the last screen of the "Sign in and open a client record"
+ * flow and the entry point of workflow W3's record read and of the actions and edits it links to (AAP 0.7.1
+ * Features row `clients`; AAP 0.7.4 "Client view (`#/viewclient/:id`)"; AAP 0.8.2 feature route
+ * `viewclient/:id`).
  *
- * **One read, owned by the family's service.** The screen issues exactly one request,
- * `ClientService.get(id)` — `GET /clients/{id}` (AAP 0.7.3 row "W3 search and view client") — and
- * hands the loaded record to the presentational blocks that already exist. The `General` tab's
- * accounts table and the `Identities` tab issue their own two reads through the same service, and
- * nothing else on this screen calls the API: this file holds no URL, host, API path, query
- * parameter, request body or HTTP client, because `ClientService` composes every one of them
- * (Rule 1 clauses 2 and 5; AAP 0.14.1 "Every URL literal lives in a service").
+ * One read, owned by the family's service: `ClientService.get(id)` — `GET /clients/{id}` (AAP 0.7.3 row "W3
+ * search and view client") — whose record the presentational blocks render, while the `General` tab's accounts
+ * table and the `Identities` tab issue their own reads through that service. This file holds no URL, host, API
+ * path, query parameter, request body or HTTP client (Rule 1 clauses 2 and 5; AAP 0.14.1 "Every URL literal
+ * lives in a service").
  *
- * **One id, one load per navigation.** The `:id` is read from `route.paramMap`, never from the
- * snapshot: the router reuses this component when the URL moves from one `#/viewclient/{id}` to
- * another, so every emission clears the previous client's record, message and selected tab and
- * re-reads the client the URL now names, exactly as `client-actions` and `loan-edit` handle the same
- * reuse. The `More` menu is not on that list: `ActionButtonGroupComponent` owns it and closes it when
- * the descriptor list below changes, so the row cannot keep a menu the earlier client opened. Because
- * two reads can then be in flight, a response that arrives after the URL
- * moved on is discarded rather than painted, so one client's record can never appear under another
- * client's URL (see {@link loadSequence}).
+ * One id, one load per navigation: the `:id` comes from `route.paramMap`, never the snapshot, because the
+ * router reuses this component between `#/viewclient/{id}` URLs as `client-actions` and `loan-edit` do, so
+ * each emission clears the previous client's record, message and selected tab and re-reads the client the URL
+ * names; a response arriving after the URL moved on is discarded rather than painted (see
+ * {@link loadSequence}).
  *
- * **Four states, and who owns each** (AAP 0.7.4 "States every list and record screen must
- * implement"). While the read is outstanding `loading` is true and nothing is painted — the design
- * carries no spinner, skeleton or placeholder (AAP 0.2.4). A 404, or a route that carries no id at
- * all (in which case no request is issued), drives `notFound`, which the template renders **in
- * place of the record** and leaves the shell usable. Any other 4xx drives `clientError`, whose
- * Fineract message the template renders verbatim, with the shell and its navigation left usable and
- * no control offered against a record the read did not return. A 5xx or transport failure
- * leaves both computeds null, because the single interceptor has already raised exactly one
- * notification for it and a second copy here would report the same problem twice (AAP 0.4.2). This
- * component therefore never calls `NotificationService`, never logs and never rethrows.
+ * Four states (AAP 0.7.4 "States every list and record screen must implement"): `loading` paints nothing, the
+ * design carrying no spinner or placeholder (AAP 0.2.4); a 404 or a route with no id drives `notFound`,
+ * rendered in place of the record; any other 4xx drives `clientError`, whose Fineract message renders
+ * verbatim; a 5xx or transport failure leaves both null, the interceptor having raised exactly one
+ * notification (AAP 0.4.2). Nothing here calls `NotificationService`, logs or rethrows.
  *
- * **Two tabs, and nothing more.** `General` renders the summary block and the accounts table,
- * `Identities` renders the identifiers tab, and the record shows no third tab: Family Members,
- * Documents, Notes and Credit Report are out of scope (AAP 0.10.5 item 6). The strip itself is
- * `TabStripComponent`, which holds no tab list of its own, so a tab the plan excludes cannot appear
- * on the screen.
+ * Two tabs and nothing more — `General` and `Identities`, painted by `TabStripComponent` from the descriptors
+ * it is given, so Family Members, Documents, Notes and Credit Report cannot appear (AAP 0.10.5 item 6). Every
+ * action is permission-gated on legacy's own code: `Edit`, `New Loan`, `Close` and the `More` menu's
+ * `Activate`, `Reject`, `Withdraw` and `Reactivate`, the last only while the record is closed (AAP 0.7.4),
+ * carrying the permissions of `app/scripts/models/clientStatus.js` on the descriptors {@link actionButtons}
+ * builds, which `ActionButtonGroupComponent` gates through `HasPermissionDirective` — the service
+ * `permissionGuard` asks — so a button cannot outlive its route (AAP 0.1.1). The action faces are posted by
+ * `client-actions.component.ts` at `#/client/:id/:action`; client charges, transfer, staff assignment,
+ * signature, avatar upload and camera are not rendered (AAP 0.10.5).
  *
- * **Every action is permission-gated, on legacy's own code.** The entry points the plan keeps are
- * `Edit`, `New Loan` and `Close`,
- * plus the `More` menu holding `Activate`, `Reject`, `Withdraw` and `Reactivate`, the last only while
- * the record is closed (AAP 0.7.4). Each
- * one carries the permission the legacy record gates it on — `UPDATE_CLIENT`, `CREATE_LOAN`,
- * `CLOSE_CLIENT`, `ACTIVATE_CLIENT`, `REJECT_CLIENT`, `WITHDRAW_CLIENT`
- * and `REACTIVATE_CLIENT` in `app/scripts/models/clientStatus.js` — on the descriptors
- * {@link actionButtons} builds, which `ActionButtonGroupComponent` renders and gates entry by entry
- * through `HasPermissionDirective`, the same service `permissionGuard` asks, so a button cannot
- * outlive the route that serves it (AAP 0.1.1 "a route guard and a template directive must agree").
- * The lifecycle commands themselves are posted by `client-actions.component.ts` at
- * `#/client/:id/:action`; this screen only links to them, so no action is dispatched, confirmed or
- * gated a second time here. Controls AAP 0.10.5 excludes — client charges, transfer, staff
- * assignment, signature, avatar upload and camera — are not rendered.
- *
- * **Dates and status.** The only date this component formats is the profile card's activation date,
- * through the one `DISPLAY_DATE_FORMAT` pattern and `fromFineractDate`/`toFineractDate`, in the locale
- * `AppConfigService.activeLocale` reports; every other date on the record belongs to the block that
- * displays it (AAP 0.7.2 "Date handling"), and nothing here reads the clock. The status is the
- * design's colour indicator and never its word: `RecordHeaderComponent` paints it through
- * `toClientStatusKey`, the family's delegate to the one mapping the whole application shares in
- * `web-ng/src/app/shared/status-key.util.ts`, and this component reads the same key once to decide
- * whether the record offers `Reactivate` (AAP 0.10.5 item 11).
- *
- * **Presentation.** The template and the global Bootstrap 3 layer in `web-ng/src/styles.scss` own
- * every visual value, which is why this component declares no stylesheet, no inline style and no
- * colour (Rule 1 clause 6; AAP 0.4.4 decision 4). The design's joined action row is
- * `ActionButtonGroupComponent`, which carries the `.btn-group > .btn` markup and the `.dropdown-menu`
- * `More` menu with Angular state for its open position, because Bootstrap's own plugin needs jQuery
- * (AAP 0.5.2 row "Dropdown menu"), and the record's card is `.panel`. Nothing is logged: no client
- * id, no record body and no credential reaches the console (Rule 1 clause 9).
+ * The profile card's activation date is the only date formatted here, through `DISPLAY_DATE_FORMAT` in the
+ * locale `AppConfigService.activeLocale` reports, and nothing reads the clock (AAP 0.7.2 "Date handling"). The
+ * status is the design's colour indicator, never its word (AAP 0.10.5 item 11). Presentation belongs to the
+ * template and the global Bootstrap 3 layer in `web-ng/src/styles.scss` (Rule 1 clause 6; AAP 0.4.4 decision
+ * 4), and nothing is logged (Rule 1 clause 9).
  */
 @Component({
   selector: 'app-client-view',

@@ -59,7 +59,7 @@ type PeriodBalance =
   | 'feeChargesOutstanding'
   | 'penaltyChargesOutstanding';
 
-/** The loan-wide balance a set of per-period outstanding members adds up to, or `null` when the schedule reports none of them — the source of the record's three balances, because the payload's `summary` object exists only (Rule 1 clause 3). */
+/** The loan-wide balance a set of per-period outstanding members adds up to, or `null` when the schedule reports none of them — the source of the record's three balances, because the payload's `summary` object exists only for some loan states, so the record sums the schedule every state carries (Rule 1 clause 3). */
 function sumPeriodBalances(
   periods: readonly RepaymentPeriod[],
   members: readonly PeriodBalance[],
@@ -356,7 +356,7 @@ export class LoanViewComponent {
       }
     }
   }
-  /** Whether a run still speaks for the screen — it is the newest run, and the screen it belongs to has not been destroyed — so a read the route or the teardown cancelled can neither paint nor clear the loading state of. */
+  /** Whether a run still speaks for the screen — it is the newest run, and the screen it belongs to has not been destroyed — so a read the route or the teardown cancelled can neither paint nor clear the loading state of whatever replaced it. */
   private isCurrent(load: number): boolean {
     return !this.destroyRef.destroyed && load === this.loadSequence;
   }
@@ -366,7 +366,7 @@ export class LoanViewComponent {
       this.activeTab.set(id);
     }
   }
-  /** The `ApiError` a failed read is reported as: the interceptor maps every `HttpErrorResponse` into an `ApiError` before rethrowing it, so the defensive branch is unreachable through the application and exists only so a. */
+  /** The `ApiError` a failed read is reported as: the interceptor maps every `HttpErrorResponse` into an `ApiError` before rethrowing it, so the defensive branch is unreachable through the application and exists only so that a future failure shape degrades into the same type instead of escaping as an unhandled value. */
   private asApiError(cause: unknown): ApiError {
     if (cause instanceof ApiError) {
       return cause;
