@@ -141,8 +141,7 @@ Open `http://localhost:4300/`: step 2 runs at container start, and the browser c
 ## Legacy assets
 
 Translations (`app/global-translations/`), images (`app/images/`) and styles (`app/styles-dev/main/**`) are
-wired through `angular.json`'s `assets` and `stylePreprocessorOptions.includePaths`, never copied. Those
-paths resolve against the workspace root `web-ng/`, so a legacy tree restored at the repository root is not
-what they read, and pointing them at it is an `angular.json` change. `Dockerfile.web-ng` copies only the
-manifest, the workspace files and `web-ng/src`, so today's image carries neither translations nor images;
-with no legacy `app/` tree here, the build compiles the in-scope rules reproduced in `src/styles.scss`.
+wired through the `assets` mappings and `stylePreprocessorOptions.includePaths` in `angular.json`, never
+copied. The workspace carries the relative link `web-ng/app -> ../app`, because the builder accepts no asset
+input outside the workspace root: the `app/...` mappings resolve to the repository-root legacy tree whenever
+it is present, and the build then emits `images/` and `global-translations/`.

@@ -33,7 +33,10 @@
          record page's schedule table (`loan-view/loan-schedule`) and legacy's own `number` filter
          render: forcing a fraction width here would print 5,000.00 beside that table's 5,000. -->
     <tbody>
-      @for (period of periods(); track period.period) {
+      <!-- Keyed by position: the server's order is kept as sent, never re-sorted, filtered or
+           paginated, and the leading disbursement row carries no period number to key on — two such
+           rows would raise NG0955. -->
+      @for (period of periods(); track $index) {
         <tr>
           <td>{{ period.period }}</td>
           <td>{{ toDate(period.fromDate) | date: displayFormat }}</td>

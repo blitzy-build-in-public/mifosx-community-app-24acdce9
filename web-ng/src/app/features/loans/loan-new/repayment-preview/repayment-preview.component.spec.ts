@@ -1,7 +1,7 @@
 import { LOCALE_ID } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { provideTranslateService, TranslateService } from '@ngx-translate/core';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { RepaymentPeriod, RepaymentSchedule } from '../../loan.models';
 import { RepaymentPreviewComponent } from './repayment-preview.component';
@@ -110,10 +110,17 @@ const TRANSLATIONS: Readonly<Record<string, string>> = {
  * monthly repayments at flat 12% per year — so a test states only the members it is about. Dates are
  * the two wire shapes a Fineract response uses: the `'yyyy-MM-dd'` string and the
  * `[year, month, day]` triple.
+ *
+ * `periodNumber` is the period the row numbers, or `null` for the disbursement pseudo-period the fork
+ * sends without a `period` member at all — the spread inside it then leaves that key out rather than
+ * supplying a substitute number for it (see `RepaymentPeriod`).
  */
-function makePeriod(overrides: Partial<RepaymentPeriod> = {}): RepaymentPeriod {
+function makePeriod(
+  overrides: Partial<RepaymentPeriod> = {},
+  periodNumber: number | null = 1,
+): RepaymentPeriod {
   return {
-    period: 1,
+    ...(periodNumber === null ? {} : { period: periodNumber }),
     fromDate: '2026-11-21',
     dueDate: [2026, 12, 21],
     principalDue: 416.67,
@@ -146,6 +153,16 @@ function makeSchedule(periods: readonly RepaymentPeriod[]): RepaymentSchedule {
     totalRepaymentExpected: 5625,
     loanTermInDays: 395,
   };
+}
+
+/**
+ * A `RepaymentPeriod` as the wire sends the preview's leading row: the fork's disbursement
+ * pseudo-period carries no `period` member (see `RepaymentPeriod`), so the object is built without
+ * that key rather than with a substitute. It is assignable as a period because the model declares the
+ * member optional, which is the statement this helper keeps honest.
+ */
+function makeUnnumberedPeriod(overrides: Partial<RepaymentPeriod> = {}): RepaymentPeriod {
+  return makePeriod(overrides, null);
 }
 
 /**
@@ -276,6 +293,44 @@ describe('RepaymentPreviewComponent', () => {
     );
 
     expect(renderedCells(hostOf(fixture)).map((cells) => cells[0])).toEqual(['3', '1', '2']);
+  });
+
+  /**
+   * Locks down contract-loan-period-required-false: the fork's leading disbursement pseudo-period
+   * carries no `period` member, so the model declares it optional and the preview keys its rows by
+   * position — two unnumbered rows in one schedule would otherwise repeat the same absent key — while
+   * the period cell prints what the payload sent, which for those rows is nothing.
+   */
+  it('renders an unnumbered disbursement row with an empty period cell, one row per period', async () => {
+    // Angular reports a duplicated track key through `console.warn` in dev mode and renders on, so the
+    // console is the observable a positional track has to keep quiet: `track period.period` emits
+    // NG0955 for the two unnumbered rows below once they are reconciled.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const periods: readonly RepaymentPeriod[] = [
+      makeUnnumberedPeriod({ dueDate: '2026-11-24' }),
+      makePeriod({ period: 1 }),
+      makeUnnumberedPeriod({ dueDate: '2026-12-24' }),
+      makePeriod({ period: 2 }),
+    ];
+    const fixture = await render(makeSchedule(periods));
+    const rows = renderedCells(hostOf(fixture));
+
+    // One row per period row the payload carried, two of which carry no period number.
+    expect(rows).toHaveLength(4);
+    // The unnumbered rows print an empty cell — no 0, no dash, no renumbering of the periods below
+    // them — and the numbered rows keep their own numbers in the server's order (Rule 1 clause 3).
+    expect(rows.map((cells) => cells[0])).toEqual(['', '1', '', '2']);
+    expect(rows.filter((cells) => cells[0] === '')).toHaveLength(2);
+
+    // The same rows handed over as a new array: the collection is reconciled, which is where a
+    // duplicated key is reported, and the table still holds one row per period.
+    fixture.componentRef.setInput('schedule', makeSchedule([...periods]));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(renderedCells(hostOf(fixture)).map((cells) => cells[0])).toEqual(['', '1', '', '2']);
+    expect(warn.mock.calls.filter((call) => String(call[0]).includes('NG0955'))).toHaveLength(0);
   });
 
   it('renders a period date as dd MMMM yyyy', async () => {

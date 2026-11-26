@@ -82,7 +82,14 @@ const DISBURSE_TEMPLATE_PATH = '/fineract-provider/api/v1/loans/{loanId}/transac
  */
 const RUN_DATE_OFFSET_TOKEN = 'd0';
 
-/** Fineract's status for an application that is submitted and not yet approved (AAP 0.10.1 W4's end state). */
+/**
+ * The word Fineract's status begins with for an application that is submitted and not yet approved — the state
+ * AAP 0.10.1 W4 leaves behind and W5 consumes. The server does not answer the bare word: this fork reports
+ * `Submitted and pending approval` (status id 100, code `loanStatusType.submitted.and.pending.approval`), so the
+ * state is matched on its leading word through {@link isSubmittedStatus} rather than by whole-string equality.
+ * No loan status begins with it — `Approved`, `Active`, `Rejected`, `Closed`, `Withdrawn by Applicant`,
+ * `Overpaid` and `Written Off` do not — so the match can never read a later state as this one.
+ */
 const SUBMITTED_STATUS = 'submitted';
 
 /** Fineract's status once the approve command has run (AAP 0.10.1 W5, first step). */
@@ -299,6 +306,21 @@ function normaliseStatus(status: string): string {
   return status.trim().toLowerCase();
 }
 
+/**
+ * Whether a snapshot's status is Fineract's submitted state — the one state W5 is entered from.
+ *
+ * The status is compared on its leading word because the server names that state `Submitted and pending approval`
+ * (code `loanStatusType.submitted.and.pending.approval`) and never answers the bare word, while
+ * {@link APPROVED_STATUS} and {@link ACTIVE_STATUS} are still matched whole against what the approve and disburse
+ * commands leave behind. Nothing else a loan can be in begins with this word, so a submitted loan cannot be
+ * mistaken for an approved or an active one, nor those for it.
+ *
+ * @param status The status a snapshot reported.
+ */
+function isSubmittedStatus(status: string): boolean {
+  return normaliseStatus(status).startsWith(SUBMITTED_STATUS);
+}
+
 test.describe('W5 approve and disburse the loan', () => {
   /**
    * Approves the loan W4 left submitted, then disburses it, asserting every call the two steps make, the count of
@@ -344,7 +366,7 @@ test.describe('W5 approve and disburse the loan', () => {
       const submitted: { readonly loanId: number; readonly snapshot: LoanSnapshot }[] = [];
       for (const candidateId of loanAccountIds(capture)) {
         const candidate = await snapshotLoan(candidateId);
-        if (normaliseStatus(candidate.status) === SUBMITTED_STATUS) {
+        if (isSubmittedStatus(candidate.status)) {
           submitted.push({ loanId: candidateId, snapshot: candidate });
         }
       }
@@ -362,10 +384,19 @@ test.describe('W5 approve and disburse the loan', () => {
         submittedLoan.snapshot.principal,
         `the submitted loan must be the application W4 posted for ${principal} (AAP 0.10.1 W4)`,
       ).toBe(principal);
+
+      // This fork reports an `approvedPrincipal` on a submitted loan as well, echoing the amount the application
+      // proposes — the same observation `w4-loan-application.spec.ts` and `chain-w2-w4-w5-w6.spec.ts` record for
+      // this `GET /loans/{id}?associations=all` read — so that member is asserted where the approve command sets
+      // it, on the approved and disbursed snapshots below, rather than as something a submission does not carry.
+      // What proves this loan unapproved is the status it was selected by above. What a loan awaiting approval
+      // cannot hold is a booked transaction: approving it books none, and the disbursement W5 posts next is this
+      // loan's first (W6 starts from it).
       expect(
-        submittedLoan.snapshot.approvedPrincipal,
-        'a loan in status Submitted carries no approved principal yet, so approving it is what W5 measures',
-      ).toBeNull();
+        submittedLoan.snapshot.transactionCount,
+        'a loan awaiting approval has booked no transaction: approving it books none, and the disbursement W5 ' +
+          'posts next is the first one this loan carries (W6 starts from it)',
+      ).toBe(0);
 
       // W5's entry point, `#/viewloanaccount/:id` (AAP 0.10.1). The id is read from the address the record opened
       // at and used as an argument only — it is never compared with a literal (AAP 0.10.2).

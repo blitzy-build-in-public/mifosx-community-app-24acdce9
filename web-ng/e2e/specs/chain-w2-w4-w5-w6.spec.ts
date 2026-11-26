@@ -43,6 +43,15 @@
  * the first period's total due. Screens are driven only through the page objects of the running side
  * (Rule 2), and screenshots are evidence rather than criteria, so none is taken here.
  *
+ * **This spec asserts no captured response status, and that is a scope decision.** The capture records the
+ * HTTP status of every exchange it observes, a POST included: `capture/network-capture.ts` assigns the
+ * response's own status in its `response` listener, and `0` is kept only for a request that never received an
+ * answer. Proving this spec's contracts through method, templated path, `?command=`, query parameters, body
+ * fields and header presence — together with the end state read back over the API after each stage — is
+ * therefore a choice this file makes about what the chain proves, not a limitation of the capture.
+ * `w5-approve-disburse.spec.ts`, `w6-repayment.spec.ts` and `w7-validation-error.spec.ts` do assert the
+ * captured status of the POSTs they issue, and a capture that recorded `0` for them would fail those specs.
+ *
  * **The one place this spec branches on the front end.** It follows AAP 0.10.5 items 1 and 2: the legacy
  * forms take the `Date` objects their jQuery datepicker reads and name their office by its label,
  * while the new app's native date input takes a `yyyy-mm-dd` string and its select takes the option's

@@ -94,7 +94,9 @@ export interface LoanSnapshot {
   readonly status: string;
   /** Principal as submitted — W4's 5,000. */
   readonly principal: number | null;
-  /** Approved principal; `null` before approval, which is itself the assertion W4 makes. */
+  /** The approved principal Fineract reports; `null` only when the payload carried none. This fork
+   * echoes the proposed amount from submission onward, so it is not a signal of whether the loan was
+   * approved — the status is, which is what W4 and W5 assert. */
   readonly approvedPrincipal: number | null;
   /** `summary.totalExpectedRepayment` — what W6's outstanding balance is measured against. */
   readonly totalExpectedRepayment: number | null;

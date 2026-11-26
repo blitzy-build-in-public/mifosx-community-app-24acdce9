@@ -21,7 +21,10 @@
       </tr>
     </thead>
     <tbody>
-      @for (row of rows(); track row.period) {
+      <!-- Keyed by position: the array is the server's own order, never re-sorted, filtered or
+           paginated, and the leading disbursement row carries no period number to key on — two such
+           rows would raise NG0955. -->
+      @for (row of rows(); track $index) {
         <tr>
           <td>{{ row.period }}</td>
           <td>{{ row.fromDate | date: displayFormat }}</td>

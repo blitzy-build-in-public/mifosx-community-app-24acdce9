@@ -451,16 +451,22 @@ export interface LoanAccount {
  * nothing.** A record's schedule sends `principalOutstanding`, `interestOutstanding`,
  * `feeChargesOutstanding`, `penaltyChargesOutstanding` and `totalOutstandingForPeriod` on every
  * period that reports an amount for them, and leaves the member out of a period that does not — the
- * `period: 0` disbursement row in particular, which carries only its due date, the principal it
- * disbursed and the fee amounts it charged. Summing one of them across the periods therefore reads
+ * disbursement row in particular, which carries only its due date, the principal it disbursed and
+ * the fee amounts it charged. Summing one of them across the periods therefore reads
  * an absent member as zero: that is the reading the fork's own `CommonLoanSummaryDataProvider`
  * applies when it totals `interestOutstanding` over the schedule, and the sums add up to the
  * schedule's `totalOutstanding` for every loan the fixture holds. Each of the five is optional for
  * that reason, and the record's summary block sums them (see `loan-view.component.ts`).
  */
 export interface RepaymentPeriod {
-  /** Period number, 1-based; the schedule table's first column. */
-  readonly period: number;
+  /**
+   * Period number, 1-based; the schedule table's first column.
+   *
+   * Optional because the fork omits the member on the disbursement pseudo-period described above: that
+   * row carries no period number, so a reader treats a missing one as "not a repayment period" and the
+   * cell prints nothing rather than a substituted 0 (Rule 1 clause 3).
+   */
+  readonly period?: number;
 
   /** Date the period starts. */
   readonly fromDate: FineractDate;

@@ -44,9 +44,10 @@
 
   Data is rendered as the server sent it. The three figures are `summary` values and are never
   recomputed from the transactions; the transaction rows keep the server's order and their own type
-  text, which is Fineract's label and is therefore never translated; and a row the server sends
-  without a running balance leaves its balance cell empty rather than showing a zero or a dash it
-  never reported (Rule 1 clause 3). Amounts go through `number` with the component's own
+  text, which is Fineract's label and is therefore never translated; a deposit or withdrawal total
+  the fork omitted because it stands at zero renders as `0`, the zero it means; and a row the server
+  sends without a running balance leaves its balance cell empty rather than showing a zero or a dash
+  it never reported (Rule 1 clause 3). Amounts go through `number` with the component's own
   `amountFormat` and no currency symbol: the record shape this screen renders is the plan's
   `SavingsAccount` (AAP 0.7.2), which declares no currency member, so a symbol taken from the
   response's own `currency` block would print a field the model does not carry and that no in-scope
@@ -128,11 +129,11 @@
                 </tr>
                 <tr>
                   <th scope="row">{{ 'label.heading.totaldeposits' | translate }}</th>
-                  <td>{{ a.summary.totalDeposits | number: amountFormat }}</td>
+                  <td>{{ (a.summary.totalDeposits ?? 0) | number: amountFormat }}</td>
                 </tr>
                 <tr>
                   <th scope="row">{{ 'label.totalwithdarawals' | translate }}</th>
-                  <td>{{ a.summary.totalWithdrawals | number: amountFormat }}</td>
+                  <td>{{ (a.summary.totalWithdrawals ?? 0) | number: amountFormat }}</td>
                 </tr>
               </tbody>
             </table>

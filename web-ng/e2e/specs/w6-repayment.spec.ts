@@ -440,6 +440,65 @@ function isRepaymentRow(line: TransactionLine): boolean {
 }
 
 /**
+ * The balance the API reports for the repayment transaction itself, read out of the record the
+ * application re-read after posting it.
+ *
+ * The transactions table prints each transaction's own `outstandingLoanBalance` — Fineract's running
+ * balance for that row — which this fork maintains on a principal basis, while the loan-level
+ * `summary.totalOutstanding` that the workflow's identities read is a principal + interest total. The
+ * two are different dimensions of the same account, so holding the row to the loan total fails a
+ * correct application; the displayed figure is held to the API's own value for that transaction
+ * instead (AAP 0.10.2, "displayed data … transaction rows"):
+ * `5000 − 416.67 = 4583.33` is the repayment's own balance while `5600 − 466.67 = 5133.33` is the
+ * loan's. The transaction is selected by the type the server reports and by the amount just paid, so
+ * an accrual, a disbursement or another loan's row can never answer for it.
+ *
+ * @param record The `GET /loans/{id}?associations=all` body the application re-read after the
+ *   repayment.
+ * @param amount The amount the repayment posted, which is the first period's total due.
+ * @throws When the record carries no repayment transaction of that amount, carries more than one, or
+ *   reports no `outstandingLoanBalance` for it — each named, because a missing figure must fail rather
+ *   than fall back to the loan total.
+ */
+function repaymentTransactionBalance(
+  record: Readonly<Record<string, NormalizedValue>> | null,
+  amount: number,
+): number {
+  const repayments = arrayOf(record, 'transactions').filter((element) => {
+    const transaction = asObject(element);
+    const paid = numberOf(transaction, 'amount');
+    if (paid === null || Math.abs(paid - amount) >= 0.005) {
+      return false;
+    }
+    const type = textOf(asObject(transaction?.['type']), 'value');
+    return type !== null && /repayment/i.test(type);
+  });
+
+  const [transaction] = repayments;
+  if (transaction === undefined) {
+    throw new Error(
+      'the loan record re-read after the repayment carries no repayment transaction of ' +
+        `${String(amount)}, so the rendered row has no API balance to be compared with.`,
+    );
+  }
+  if (repayments.length > 1) {
+    throw new Error(
+      `the loan record re-read after the repayment carries ${String(repayments.length)} repayment ` +
+        `transactions of ${String(amount)}, so the rendered row cannot be attributed to one of them.`,
+    );
+  }
+
+  const balance = numberOf(asObject(transaction), 'outstandingLoanBalance');
+  if (balance === null) {
+    throw new Error(
+      'the repayment transaction in the loan record reports no outstandingLoanBalance, which is the ' +
+        'running balance the transactions table prints for each row.',
+    );
+  }
+  return balance;
+}
+
+/**
  * A candidate account, described for a failure message. The account number is the handle the client
  * record prints, and the status is the one the API reported — no generated id is spelled out as a
  * meaning (AAP 0.10.2).
@@ -756,13 +815,20 @@ test.describe('W6 make a repayment and verify the schedule and transactions', ()
       ).toBeDefined();
       if (repaymentRow !== undefined) {
         expect(repaymentRow.type).toMatch(/repayment/i);
-        // The row's running balance is the balance the API reports for that repayment.
+        // The row's running balance is the balance the API reports for that repayment transaction: the
+        // table prints Fineract's per-transaction `outstandingLoanBalance`, a principal-basis figure,
+        // while the loan-level `summary.totalOutstanding` the identities above read is principal +
+        // interest. Different dimensions of one account, so the row is held to the API's own value for
+        // that transaction (AAP 0.10.2, "displayed data … transaction rows") rather than to the total.
         expect(
           requireFigure(
             figureOf(repaymentRow.outstandingBalance),
             "the repayment row's loan balance",
           ),
-        ).toBeCloseTo(afterOutstanding, 2);
+        ).toBeCloseTo(
+          repaymentTransactionBalance(asObject(refreshed.responseBody), firstPeriodTotalDue),
+          2,
+        );
       }
 
       const afterSchedule = await pages.loans.readScheduleRows();

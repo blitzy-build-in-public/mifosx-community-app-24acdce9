@@ -160,6 +160,20 @@ const ACTION_GROUP_SELECTOR = 'app-action-button-group';
 /** `General` tab's accounts section. */
 const ACCOUNTS_SELECTOR = 'app-client-accounts';
 
+/**
+ * The three states the accounts section paints once its own `GET /clients/{id}/accounts` has answered,
+ * and the whole of what "settled" means for it: the populated table (`#client-accounts`), the explicit
+ * empty state the section shows a client that genuinely holds no account (`app-empty-state`, the
+ * section's `id="client-accounts-empty"`), and Fineract's own refusal text for a read the interceptor
+ * does not notify (`.alert.alert-danger`, rendered for a 4xx alone). While the first response is in
+ * flight the section paints nothing at all, so none of the three is on the page and a table read at
+ * that moment answers `[]` about a section that had not arrived.
+ */
+const ACCOUNTS_SETTLED_SELECTOR =
+  `${ACCOUNTS_SELECTOR} #client-accounts, ` +
+  `${ACCOUNTS_SELECTOR} app-empty-state, ` +
+  `${ACCOUNTS_SELECTOR} .alert.alert-danger`;
+
 /** `General` tab's summary block, above the accounts section. */
 const SUMMARY_SELECTOR = 'app-client-summary';
 
@@ -645,10 +659,16 @@ export class ClientViewPage {
    * balance is the last cell's text as the screen printed it, grouping included, because display
    * formatting is a dimension the parity comparison decides on (AAP 0.10.2).
    *
-   * @returns One row per account; `[]` when the section paints its empty state or has painted nothing.
+   * The section runs its own read and paints nothing until it answers, so that read is awaited before
+   * anything is read from it ({@link awaitAccountsSettled}): a caller sees the section once it has
+   * settled into one of its three states, never its loading frame.
+   *
+   * @returns One row per account; `[]` when the section paints its empty state, when it never appeared,
+   * or when a failed read left it painting no account row.
    */
   async readAccounts(): Promise<readonly AccountRow[]> {
     const region = (await this.record()).locator(ACCOUNTS_SELECTOR).first();
+    await this.awaitAccountsSettled();
     if ((await region.count()) === 0) {
       return [];
     }
@@ -774,6 +794,33 @@ export class ClientViewPage {
    */
   private async awaitRecordSettled(): Promise<void> {
     const settled = this.root().locator(`${RECORD_HEADER_SELECTOR}, .alert.alert-danger`);
+    if ((await settled.count()) > 0) {
+      return;
+    }
+    await settled
+      .first()
+      .waitFor({ state: 'attached', timeout: SCREEN_TIMEOUT_MS })
+      .catch((): void => undefined);
+  }
+
+  /**
+   * Waits for the accounts section to reach one of the three states its template paints, and lets a
+   * section that reaches none of them be read as it stands (see {@link ACCOUNTS_SETTLED_SELECTOR}).
+   *
+   * The section fetches its own `GET /clients/{id}/accounts` and paints nothing while that read is in
+   * flight, so a read taken the moment the record settled answers `[]` about a section that simply had
+   * not arrived yet — the same answer it gives for a client that holds no account, which is why the
+   * record's accounts precondition raced the render. Waiting for one of the three states is what tells
+   * a settled section from a pending one.
+   *
+   * The wait is bounded by {@link SCREEN_TIMEOUT_MS} and its expiry is not raised, exactly as
+   * {@link awaitRecordSettled} is: a section that never appears, or whose 5xx or transport fault leaves
+   * it painting neither a table, an empty state nor a message, is read as it stands and the caller gets
+   * the empty list it always did. Raising here instead would turn a slow section into a timeout from
+   * whichever reader happened to be called first.
+   */
+  private async awaitAccountsSettled(): Promise<void> {
+    const settled = this.root().locator(ACCOUNTS_SETTLED_SELECTOR);
     if ((await settled.count()) > 0) {
       return;
     }

@@ -7,8 +7,11 @@
 # container start, through web-ng/docker/entrypoint.sh.
 #
 # The build context is the repository root (`docker build -f Dockerfile.web-ng .`), which
-# is why every COPY source is prefixed with web-ng/. Nothing from the legacy front end, its
-# test suite or the legacy root Dockerfile is read, so the legacy image builds unchanged.
+# is why most COPY sources are prefixed with web-ng/. The three legacy asset roots the
+# bundle is built from are copied in read-only so the workspace-relative mappings in
+# angular.json resolve inside the image; they are referenced, never modified. Nothing else
+# of the legacy front end — its scripts, its views, its test suite, its root Dockerfile —
+# enters the image, so the legacy app still builds and runs unchanged.
 # =============================================================================
 
 FROM node:22 AS build
@@ -29,19 +32,29 @@ RUN npm install -g npm@11.21.3
 COPY web-ng/package.json ./
 RUN npm install --no-audit --no-fund
 
-# Explicit build inputs only — the workspace files and the application source. The
-# checkout's node_modules/, dist/, .angular/, e2e/ and tools/ never enter the image. The
-# legacy translations and images reach the bundle through the asset mappings in
-# angular.json, never through this file, so the document root holds build output alone.
+# Explicit build inputs only — the workspace files, the application source and the three
+# legacy asset roots the build reads. The checkout's node_modules/, dist/, .angular/, e2e/
+# and tools/ never enter the image, and neither does anything else under the legacy app/:
+# its scripts, views, test suite and root Dockerfile stay out. The three roots are copied
+# read-only because angular.json's asset inputs name `app/global-translations` and
+# `app/images` and its Sass includePath names `app/styles-dev`, and the builder resolves
+# each against the workspace root — /src in this stage — while rejecting any input outside
+# it. The files are served verbatim: translations at global-translations/, images at images/.
 COPY web-ng/angular.json web-ng/tsconfig.json web-ng/tsconfig.app.json web-ng/tsconfig.spec.json ./
 COPY web-ng/src ./src
+COPY app/global-translations ./app/global-translations
+COPY app/images ./app/images
+COPY app/styles-dev ./app/styles-dev
 
 # The production configuration enforces strict templates and the 1.5 MB initial-budget
 # error, so a regression fails the image build rather than the deployment. Asserting the
-# emitted path in the same layer turns a workspace rename into a build failure instead of
-# an image that serves 404s from an empty document root.
+# emitted document root, one translation bundle and one image in the same layer turns a
+# workspace rename or an unread legacy root into a build failure instead of an image that
+# serves 404s from an incomplete document root.
 RUN npx ng build --configuration production \
- && test -f dist/web-ng/browser/index.html
+ && test -f dist/web-ng/browser/index.html \
+ && test -f dist/web-ng/browser/global-translations/locale-en.json \
+ && test -f dist/web-ng/browser/images/favicon.ico
 
 FROM nginx:alpine
 

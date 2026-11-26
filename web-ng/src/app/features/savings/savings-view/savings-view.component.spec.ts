@@ -137,6 +137,18 @@ const SECOND_ACCOUNT: SavingsAccount = {
   transactions: [],
 };
 
+/**
+ * An account as the fork answers one whose deposit and withdrawal totals stand at zero: the summary
+ * carries `accountBalance` and leaves both totals out altogether (`SavingsSummary`), so the record
+ * has to read each absent member as the zero it means rather than printing a blank cell.
+ */
+const BALANCE_ONLY_ACCOUNT: SavingsAccount = {
+  ...ACCOUNT,
+  accountNo: '000000045',
+  summary: { accountBalance: 1250 },
+  transactions: [],
+};
+
 /** The message a 404 answers with, quoted from Fineract's own `defaultUserMessage`. */
 const NOT_FOUND_MESSAGE = 'The requested resource is not available.';
 
@@ -465,6 +477,26 @@ describe('SavingsViewComponent', () => {
     expect(actionLinks().map((link) => link.getAttribute('href'))).toEqual(
       ACTION_SEGMENTS.map((segment) => `/savingaccount/${ACCOUNT_ID}/${segment}`),
     );
+  });
+
+  /**
+   * Locks down contract-savings-totals-required-false: the fork omits a zero `totalDeposits` and
+   * `totalWithdrawals` from the account summary, so the record reads each absent member as `0`
+   * instead of piping an absent value through `number` and painting a blank cell.
+   */
+  it('renders a deposit and withdrawal total the fork left out as 0, and the balance it sent', async () => {
+    await show(ACCOUNT_ID, () => of(BALANCE_ONLY_ACCOUNT));
+
+    expect(renderedSummary().map(([caption, value]) => [caption, value])).toEqual([
+      ['label.heading.accnum', BALANCE_ONLY_ACCOUNT.accountNo],
+      ['label.heading.product', BALANCE_ONLY_ACCOUNT.savingsProductName],
+      ['label.heading.status', ''],
+      // The balance is the figure the payload carried, so the two zeros below are the absent totals
+      // and not a cell rendering nothing at all (Rule 1 clause 3).
+      ['label.heading.currentBalance', '1,250'],
+      ['label.heading.totaldeposits', '0'],
+      ['label.totalwithdarawals', '0'],
+    ]);
   });
 
   it.each<[string, string | null]>([

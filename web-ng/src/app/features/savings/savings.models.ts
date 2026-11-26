@@ -62,17 +62,25 @@ export interface FineractCodeValue {
  *
  * Response projection of the account read: the server computes all three, and this family never
  * derives one from another — the W8 outcome (a final balance of 800 after a 1,000 deposit and a
- * 200 withdrawal) is the server's `accountBalance`, not arithmetic performed in the browser.
+ * 200 withdrawal) is the server's `accountBalance`, not arithmetic performed in the browser. The fork
+ * does omit a total that stands at zero, which the record renders as `0` — the zero the omitted member
+ * means — and never as a figure derived from the other two.
  */
 export interface SavingsSummary {
   /** Current balance of the account. */
   readonly accountBalance: number;
 
-  /** Sum of the account's deposits so far. */
-  readonly totalDeposits: number;
+  /**
+   * Sum of the account's deposits so far. Optional because the fork omits the member when the total is
+   * zero; the record reads the absent member as `0` (see `savings-view.component.html`).
+   */
+  readonly totalDeposits?: number;
 
-  /** Sum of the account's withdrawals so far. */
-  readonly totalWithdrawals: number;
+  /**
+   * Sum of the account's withdrawals so far. Optional for the same reason: the fork omits a zero total,
+   * and the record reads the absent member as `0` (see `savings-view.component.html`).
+   */
+  readonly totalWithdrawals?: number;
 }
 
 /**
