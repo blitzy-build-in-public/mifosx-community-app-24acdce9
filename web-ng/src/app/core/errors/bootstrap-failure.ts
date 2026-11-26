@@ -20,7 +20,7 @@ function failureMessage(error: unknown): string {
   return error.trim() === '' ? FALLBACK_MESSAGE : error;
 }
 
-/** Renders a failed bootstrap into the document, so a misconfigured deployment reports itself in the page instead of leaving a blank white screen. **Where it renders.** The block. */
+/** Renders a failed bootstrap into the document, so a misconfigured deployment reports itself in the page instead of leaving a blank white screen. The block goes inside the `app-root` host the page already declares, because that is the element a reader sees the application in; the host's existing children are cleared first, so a root that began rendering before the rejection cannot sit above the message and hide it; and a document that carries no `app-root` host — a page whose markup was edited, or a document built for a test — falls back to its `body`, so the message is never dropped for want of a host. */
 export function renderBootstrapFailure(error: unknown, target: Document = document): void {
   try {
     const host: Element = target.querySelector('app-root') ?? target.body;

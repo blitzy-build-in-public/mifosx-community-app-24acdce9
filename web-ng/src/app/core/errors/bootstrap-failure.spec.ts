@@ -32,7 +32,7 @@ const dangerBlock = (): Element | null => document.querySelector('.alert-danger'
 /** The paragraph carrying the message, or null when nothing was rendered. */
 const messageParagraph = (): Element | null | undefined => dangerBlock()?.querySelector('p');
 
-/** The one surface a failed bootstrap reaches a reader through: the block `web-ng/src/main.ts` renders into the `app-root` host when `bootstrapApplication`'s promise rejects, so a deployment whose configuration cannot be. */
+/** The one surface a failed bootstrap reaches a reader through: the block `web-ng/src/main.ts` renders into the `app-root` host when `bootstrapApplication`'s promise rejects, so a deployment whose configuration cannot be resolved renders that block instead of a blank page. */
 describe('renderBootstrapFailure', () => {
   beforeEach(() => {
     // Every case starts from the document the application ships — one empty `app-root` host and nothing else — so no case can pass on a block an earlier one rendered.

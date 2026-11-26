@@ -472,6 +472,30 @@ describe('ClientListComponent', () => {
     expect(anchor?.getAttribute('href')).toBe('/createclient');
   });
 
+  it('takes back the toolbar’s create activation and opens the create form through the router', async () => {
+    grantedCodes = [CREATE_CLIENT_CODE];
+
+    mount();
+    initialRead.flush(FIRST_PAGE);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    // The screen owns what the toolbar's publications do (AAP 0.2.3 row `FilterToolbar`), so the "Create Client" activation is acted on here: it is published by the toolbar and opens the create form at the same `/createclient` route the control renders as its `href` (AAP 0.7.4; AAP 0.9.1 item 1), travelled through the router because every hash-route navigation in this application goes through it rather than `location` (AAP 0.14.2; Rule 1 clause 5). The route table holds no `/createclient` route, so the navigation is observed on the router instead of performed.
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    const toolbar = fixture.debugElement.query(By.directive(FilterToolbarComponent));
+
+    if (toolbar === null) {
+      throw new Error('the screen rendered no app-filter-toolbar');
+    }
+
+    // Emitted where the control's own click emits it, so the assertion is about the binding the screen makes and not about the anchor's declarative route.
+    (toolbar.componentInstance as FilterToolbarComponent).create.emit();
+    await fixture.whenStable();
+
+    expect(navigate).toHaveBeenCalledTimes(1);
+    expect(navigate).toHaveBeenCalledWith(['/createclient']);
+  });
+
   it('renders the rows in legacy order — display name ascending — whatever order the server sent', () => {
     mount();
 
@@ -998,7 +1022,7 @@ describe('ClientListComponent', () => {
     expect(httpMock.match(isClientListRead)).toHaveLength(0);
   });
 
-  /** The QA report's own reproduction of F17, pinned at the DOM: a query that matches nothing shows the explicit empty state, and clearing the field brings the loaded page back row for row. The case above proves the empty state is painted; this one proves the screen comes back out of it without a reload (AAP 0.7.4 "an empty result set shows the explicit empty state and no error"; Rule 1 clause 3, the filter a display filter and no request). */
+  /** The reproduction pinned at the DOM: a query that matches nothing shows the explicit empty state, and clearing the field brings the loaded page back row for row. The case above proves the empty state is painted; this one proves the screen comes back out of it without a reload (AAP 0.7.4 "an empty result set shows the explicit empty state and no error"; Rule 1 clause 3, the filter a display filter and no request). */
   it('restores the loaded page when a filter that matched nothing is cleared', () => {
     mount();
     initialRead.flush(FIRST_PAGE);
@@ -1037,7 +1061,7 @@ describe('ClientListComponent', () => {
     expect(httpMock.match(isClientListRead)).toHaveLength(0);
   });
 
-  /** The QA report's second symptom of F17: a positive query that matched one row left that one stale row on screen after the field was cleared. Every row of the loaded page returns instead (AAP 0.7.4 "an empty result set shows the explicit empty state and no error", the state a cleared query has to leave; Rule 1 clause 3). */
+  /** The display filter's second symptom: a positive query that matched one row left that one stale row on screen after the field was cleared. Every row of the loaded page returns instead (AAP 0.7.4 "an empty result set shows the explicit empty state and no error", the state a cleared query has to leave; Rule 1 clause 3). */
   it('restores every visible row when a positive filter is cleared', () => {
     mount();
     initialRead.flush(FIRST_PAGE);

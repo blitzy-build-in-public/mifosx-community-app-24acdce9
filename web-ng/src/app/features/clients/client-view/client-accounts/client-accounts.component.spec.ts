@@ -159,7 +159,7 @@ describe('ClientAccountsComponent', () => {
     expect(component.loading()).toBe(true);
     expect(host().querySelector('#client-accounts')).toBeNull();
     expect(host().querySelector('app-empty-state')).toBeNull();
-    // The wrapper is the region the read marks busy; the card body belongs to the record template, not to this section (QA report F20).
+    // The wrapper is the region the read marks busy; the card body belongs to the record template, not to this section.
     expect(host().querySelector('[aria-busy="true"]')).not.toBeNull();
     read.flush(ACCOUNTS);
     await fixture.whenStable();
@@ -184,9 +184,9 @@ describe('ClientAccountsComponent', () => {
     expect(component.failed()).toBe(false);
     expect(renderedRows()).toHaveLength(3);
     expect(Array.from(host().querySelectorAll('#client-accounts thead th'))).toHaveLength(4);
-    // Inside Bootstrap 3's `.table-responsive` the table scrolls below 768px instead of pushing the card sideways (QA report F14), and
+    // Inside Bootstrap 3's `.table-responsive` the table scrolls below 768px instead of pushing the card sideways, and
     // no `.panel-body` here: the record template provides the card's body, so a second one would inset the table 15px from the
-    // anchor the record's heading, labels and tabs share (QA report F20).
+    // anchor the record's heading, labels and tabs share.
     expect(host().querySelector('#client-accounts')?.parentElement?.classList.contains('table-responsive')).toBe(true);
     expect(host().querySelector('.panel-body')).toBeNull();
   });

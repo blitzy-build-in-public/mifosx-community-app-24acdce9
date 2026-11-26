@@ -23,7 +23,7 @@ const STATUS_KEY_BY_CODE: Readonly<Partial<Record<string, StatusKey>>> = {
   prematureclosure: 'closed', matured: 'closed',
   rejected: 'other', withdraw: 'other', withdrawnbyclient: 'other', withdrawnbyapplicant: 'other', };
 
-/** The one normalisation a Fineract status code is put through before it is looked up, used by all three families and the global search screen so that one code has exactly one key: lower-cased, a leading. */
+/** The one normalisation a Fineract status code is put through before it is looked up, used by all three families and the global search screen so that one code has exactly one key: lower-cased, a leading `^[a-z]+statustype.` family prefix removed when the payload carried it, and every non-alphanumeric character stripped, so the whole remaining name is the key — never just its last dot-segment. */
 export function normaliseStatusCode(code: string): string {
   return code
     .toLowerCase()

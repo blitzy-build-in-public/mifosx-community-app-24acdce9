@@ -48,7 +48,7 @@ export class DateInputValueAccessor implements ControlValueAccessor {
   registerOnTouched(fn: () => void): void {
     this.onTouched = fn;
   }
-  /** Disables or re-enables the element. This is the only route to the design's `disabled` state: the component declares no `disabled` input and the template binds no `disabled` attribute, because a second writer of the same. */
+  /** Disables or re-enables the element. This is the only route to the design's `disabled` state: the component declares no `disabled` input and the template binds no `disabled` attribute, because a second writer of the same property would fight this one. */
   setDisabledState(isDisabled: boolean): void {
     this.host.nativeElement.disabled = isDisabled;
   }

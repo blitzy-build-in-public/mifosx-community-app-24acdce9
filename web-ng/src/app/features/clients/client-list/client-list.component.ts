@@ -8,6 +8,7 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Router } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
 import { finalize } from 'rxjs';
 
@@ -102,6 +103,9 @@ export class ClientListComponent {
 
   /** The component's own lifetime, handed to `takeUntilDestroyed` for every read, so a late response cannot write to a destroyed view. */
   private readonly destroyRef = inject(DestroyRef);
+
+  /** The router the toolbar's "Create Client" publication navigates through: this screen owns what that activation does, and it travels the hash route `/createclient` through the router rather than through `location`, as every hash-route navigation in this application does (AAP 0.14.2 "hash-route navigation through the router rather than `location`"; Rule 1 clause 5). */
+  private readonly router = inject(Router);
 
   /** The legacy bundle's key for each of the table's six captions, resolved through `shared/translated-label.util.ts` so a language switch or a late-arriving bundle repaints them (`app/views/clients/clients.html:53-60`; Rule 1 clause 3). */
   private readonly label = createTranslatedLabels();
@@ -238,6 +242,13 @@ export class ClientListComponent {
   /** Takes the "Show Closed" flag from the toolbar (AAP 0.2.3 row `FilterToolbar`): the second display filter, hiding one status code and issuing no request (Rule 1 clause 3). `@param showClosed` whether closed clients are shown. */
   protected onShowClosedChange(showClosed: boolean): void {
     this.showClosed.set(showClosed);
+  }
+
+  /**
+   * Takes the toolbar's "Create Client" activation (AAP 0.2.3 row `FilterToolbar`): the screen that owns the rows decides what each publication does, and this one opens workflow W2's create form — the same `/createclient` route the toolbar's own anchor renders as its `href` (AAP 0.7.4 "Clients list (`#/clients`)"; AAP 0.9.1 item 1), travelled through the router because every hash-route navigation in this application goes through it rather than through `location` (AAP 0.14.2; Rule 1 clause 5).
+   */
+  protected onCreate(): void {
+    void this.router.navigate(['/createclient']);
   }
 
   /** Runs the toolbar's find: the one place the find field reaches the server, driven by the toolbar's `(search)` output. Carrying text it runs as a search — `GET /search`, the call legacy makes for the same field; cleared, the list is re-read with no filter, restoring the first page, as the legacy controller does with an empty `searchText` (`ClientController.search()`). Exactly one request goes out per submit, and an empty field never sends an empty `query` (Rule 1 clauses 2 and 3). `@param text` the find field's text as the toolbar published it, trimmed here as legacy trimmed it. */

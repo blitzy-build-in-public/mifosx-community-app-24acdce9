@@ -1,4 +1,4 @@
-<!-- Accounts section of the individual client record's `General` tab: the read-only table of the client's loan and savings accounts (AAP 0.7.1 row `clients` — `ClientViewComponent` with `ClientAccountsComponent`; AAP 0.7.4; AAP 0.2.3). The section renders the content of the record card's body and never a body of its own: the record template already paints that card's `.panel-body`, so a second `.panel-body` here would inset the table 15px on every side and split the record's one content anchor — which the heading, the summary labels, the tab strip and this table all share (QA report F20). The wrapper below therefore carries the read's busy state and nothing that paints, and the table is contained by Bootstrap 3's own `.table-responsive`, inert at 768px and above and a horizontal scroll container below it, so its columns can never spill the card at any viewport width (Rule 1 clause 6; QA report F14). -->
+<!-- Accounts section of the individual client record's `General` tab: the read-only table of the client's loan and savings accounts (AAP 0.7.1 row `clients` — `ClientViewComponent` with `ClientAccountsComponent`; AAP 0.7.4; AAP 0.2.3). The section renders the content of the record card's body and never a body of its own: the record template already paints that card's `.panel-body`, so a second `.panel-body` here would inset the table 15px on every side and split the record's one content anchor — which the heading, the summary labels, the tab strip and this table all share. The wrapper below therefore carries the read's busy state and nothing that paints, and the table is contained by Bootstrap 3's own `.table-responsive`, inert at 768px and above and a horizontal scroll container below it, so its columns can never spill the card at any viewport width (Rule 1 clause 6). -->
 <div [attr.aria-busy]="loading() ? 'true' : null">
   <!-- Four mutually exclusive states, in the order a viewer meets them, and a failed read never reaches the empty state (AAP 0.2.4). -->
   @if (loading()) {
@@ -10,10 +10,10 @@
   } @else if (isEmpty()) {
     <app-empty-state id="client-accounts-empty" [message]="emptyMessageKey | translate" />
   } @else {
-    <!-- Bootstrap 3's own `.table-responsive` around the four columns: it authors no colour, size or spacing, so the table keeps the look the global layer gives it, while below 768px it scrolls inside the section instead of pushing the record card sideways (Rule 1 clause 6; QA report F14). -->
+    <!-- Bootstrap 3's own `.table-responsive` around the four columns: it authors no colour, size or spacing, so the table keeps the look the global layer gives it, while below 768px it scrolls inside the section instead of pushing the record card sideways (Rule 1 clause 6). -->
     <div class="table-responsive">
       <table class="table table-striped" id="client-accounts">
-        <!-- The table's accessible name, from the legacy bundle's own accounts heading, kept off the screen by Bootstrap's `.sr-only` (QA report F41). -->
+        <!-- The table's accessible name, from the legacy bundle's own accounts heading, kept off the screen by Bootstrap's `.sr-only`. -->
         <caption class="sr-only">{{ 'label.heading.accountdetail' | translate }}</caption>
         <thead>
           <tr>

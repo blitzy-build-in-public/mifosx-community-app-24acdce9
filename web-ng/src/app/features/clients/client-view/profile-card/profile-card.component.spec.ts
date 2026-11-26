@@ -146,7 +146,7 @@ describe('ProfileCardComponent', () => {
     fixture.detectChanges();
 
     // One key cell and one value cell per row across the whole card, so the stylesheet sets a single key width for every row: no label
-    // wraps and every value starts at one offset (QA report F09, AAP 0.2.3 row `ProfileCard`).
+    // wraps and every value starts at one offset (AAP 0.2.3 row `ProfileCard`).
     const renderedRows = [
       ...rows(fixture),
       ...Array.from(host(fixture).querySelectorAll<HTMLElement>('[data-testid="profile-history-field"]')),
