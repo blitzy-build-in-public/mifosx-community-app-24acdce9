@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import process from 'node:process';
-// The informational path every parity CLI shares (finding 406f-F02): an operator asks a command what it would do with `--help`, which prints the effect and the environment variables it reads, named and never echoed (Rule 1 clause 9).
-/** What one command says about itself when it is asked for usage (finding 406f-F02); every field is printed verbatim, a variable named and never echoed. */
+// The informational path every parity CLI shares: an operator asks a command what it would do with `--help`, which prints the effect and the environment variables it reads, named and never echoed (Rule 1 clause 9), and exits 0 without running the command.
+/** What one command says about itself when it is asked for usage; every field is printed verbatim, a variable named and never echoed. */
 export interface CliUsage {
   /** Command name as an operator invokes it, e.g. the npm script `check:endpoints`. */
   readonly name: string;
@@ -25,7 +25,7 @@ function renderUsage(usage: CliUsage): string {
     '',
   ].join('\n');
 }
-/** Decides the invocation before the command reads a file, opens a socket or writes anything (finding 406f-F02): no argument runs it, `--help`/`-h` prints the usage block at exit code 0, and any other argument is a usage error naming it at exit code 2. */
+/** Decides the invocation before the command reads a file, opens a socket or writes anything: no argument runs it, `--help`/`-h` prints the usage block at exit code 0, and any other argument is a usage error naming it at exit code 2. */
 export function resolveCliIntent(usage: CliUsage, args: readonly string[]): CliIntent {
   if (args.length === 0) {
     return { kind: 'run' };

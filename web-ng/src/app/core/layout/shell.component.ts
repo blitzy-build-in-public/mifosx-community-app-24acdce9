@@ -32,10 +32,10 @@ const IMMEDIATE_ACTIVITY_EVENTS: readonly string[] = ['keydown', 'mousedown', 't
 /** The document events that say the pointer is moving. They prove the user is present but arrive at their own rate — a trackpad emits hundreds of `mousemove` events per second — so they are counted through the throttle. */
 const POINTER_ACTIVITY_EVENTS: readonly string[] = ['mousemove', 'wheel'];
 
-/** The window in which one pointer event may re-arm the idle clock: one second (QA report F11 at `shell.component.ts:39`). */
+/** The window in which one pointer event may re-arm the idle clock: one second. */
 const ACTIVITY_THROTTLE_MS = 1_000;
 
-/** The id of the shell's content landmark, which the skip link names and {@link ShellComponent.skipToMain} focuses (QA report F14). */
+/** The id of the shell's content landmark, which the skip link names and {@link ShellComponent.skipToMain} focuses. */
 const MAIN_CONTENT_ID = 'main-content';
 
 /** Reads the breadcrumb trail a matched route declares in `data['breadcrumb']` (AAP 0.8.2, "each route declares its permission in `data.permission`"; the trail is the sibling declaration the breadcrumb renders) and (Rule 1 clause 4). */
@@ -148,7 +148,7 @@ export class ShellComponent implements OnDestroy {
       this.document.addEventListener(activity, this.onActivity, { passive: true });
     }
 
-    // Pointer movement keeps the session alive through the throttle below rather than once per event: it arrives at pointer-event rate, and each reset re-arms three timers and re-reads the configuration (QA report F11.
+    // Pointer movement keeps the session alive through the throttle below rather than once per event: it arrives at pointer-event rate, and each reset re-arms three timers and re-reads the configuration.
     for (const activity of POINTER_ACTIVITY_EVENTS) {
       this.document.addEventListener(activity, this.onPointerActivity, { passive: true });
     }
@@ -161,7 +161,7 @@ export class ShellComponent implements OnDestroy {
   }
 
   /**
-   * Moves focus into the screen's content, which is what the shell's skip link does (QA report F14; WCAG 2.4.1): the `main` landmark carries `tabindex="-1"`, so it accepts programmatic focus without becoming a
+   * Moves focus into the screen's content, which is what the shell's skip link does (WCAG 2.4.1): the `main` landmark carries `tabindex="-1"`, so it accepts programmatic focus without becoming a
    * tab stop of its own, and the next Tab continues from it into the screen's own controls rather than back through the navbar. The click's default is cancelled first and always — the application routes on the hash
    * (`withHashLocation`, Rule 1 clause 5), so letting the browser follow `#main-content` would be read as a navigation and would take the screen away — and nothing is navigated to or requested here. The parameter
    * is the click's own `MouseEvent` because this file imports the router's `Event` under that name; `@param event` the anchor's click, whose default fragment navigation is suppressed.

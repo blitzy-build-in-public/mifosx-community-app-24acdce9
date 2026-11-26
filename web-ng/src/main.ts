@@ -8,6 +8,6 @@ import { renderBootstrapFailure } from './app/core/errors/bootstrap-failure';
 bootstrapApplication(AppComponent, appConfig).catch((err: unknown): void => {
   // Bootstrap-time failure only. Never log a credential, an authentication key, a request body or a session entry here (Rule 1 clause 9).
   console.error(err);
-  // The same rejection also reaches the page: without it a deployment whose configuration cannot be resolved is a blank white screen and the only diagnostic sits in devtools (QA finding qa-config-failure-blank-page).
+  // The same rejection also reaches the page: without it a deployment whose configuration cannot be resolved is a blank white screen and the only diagnostic sits in devtools.
   renderBootstrapFailure(err);
 });

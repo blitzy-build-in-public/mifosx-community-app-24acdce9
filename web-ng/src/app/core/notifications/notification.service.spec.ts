@@ -136,7 +136,7 @@ describe('NotificationService', () => {
   });
 
   /**
-   * The lifetime every notice carries (QA F29): a notice that nobody closes must leave on its own, because the host is a sibling of the router outlet and a failure the user has already recovered from must not stay painted. Each case runs on a fake clock, so a lifetime is advanced rather than waited out.
+   * The lifetime every notice carries: a notice that nobody closes must leave on its own, because the host is a sibling of the router outlet and a failure the user has already recovered from must not stay painted. Each case runs on a fake clock, so a lifetime is advanced rather than waited out.
    */
   describe('the lifetime a notice carries', () => {
     it('dismisses the notice once NOTICE_LIFETIME_MS has elapsed, holding it until then', () => {

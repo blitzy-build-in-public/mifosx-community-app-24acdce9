@@ -39,7 +39,7 @@
         -->
         <app-record-not-found />
       } @else {
-        <!-- The card's title is the screen's own title, so the band's heading is an `h1` and the page carries exactly one; `.panel-title` keeps the design's 18px/700 box, so no pixel moves (QA report F40). -->
+        <!-- The card's title is the screen's own title, so the band's heading is an `h1` and the page carries exactly one; `.panel-title` keeps the design's 18px/700 box, so no pixel moves. -->
         <div appPanelCard [title]="headingKey() | translate" titleTag="h1">
           <!--
             Fineract's own failure text, verbatim and unmoved by any prefix or capitalisation: a refused

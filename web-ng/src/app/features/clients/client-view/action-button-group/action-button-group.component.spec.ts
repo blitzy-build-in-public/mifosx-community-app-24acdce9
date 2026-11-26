@@ -283,7 +283,7 @@ describe('ActionButtonGroupComponent', () => {
     trigger(fixture).click();
     await settle(fixture);
     expect(dropdownGroup(fixture).classList.contains('open')).toBe(true);
-    // Legacy's `More` menu was Bootstrap's dropdown, which closed on a click anywhere else on the page; the document listener the component's host block installs reproduces it without the plugin (Rule 1 clause 3, QA finding F11).
+    // Legacy's `More` menu was Bootstrap's dropdown, which closed on a click anywhere else on the page; the document listener the component's host block installs reproduces it without the plugin (Rule 1 clause 3).
     document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await settle(fixture);
     expect(dropdownGroup(fixture).classList.contains('open')).toBe(false);

@@ -359,7 +359,7 @@ describe('LoginComponent', () => {
     ).filter((element: HTMLElement): boolean => element.tabIndex >= 0);
 
     // The first Tab stop on this screen, ahead of the language select and the form, which is what
-    // makes the page bypassable (QA report F14; WCAG 2.4.1).
+    // makes the page bypassable (WCAG 2.4.1).
     expect(skip).not.toBeNull();
     expect(focusable[0]).toBe(skip);
     expect(skip?.textContent?.trim()).toBe('Skip to content');
@@ -668,7 +668,7 @@ describe('LoginComponent', () => {
     const headings = Array.from(host().querySelectorAll<HTMLElement>('h1,h2,h3,h4,h5,h6'));
 
     // The screen's own title is the invisible `<h1>` and the three footer columns are the `<h2>`s beneath it, because legacy's `<h5>`
-    // would leave the outline skipping from 1 to 5; the level is the element's and the design's size is the class's, which `styles.scss` maps to Bootstrap's h5 box (AAP 0.2.3; QA report F40; Rule 1 clause 6).
+    // would leave the outline skipping from 1 to 5; the level is the element's and the design's size is the class's, which `styles.scss` maps to Bootstrap's h5 box (AAP 0.2.3; Rule 1 clause 6).
     expect(headings.map((heading) => heading.tagName)).toEqual(['H1', 'H2', 'H2', 'H2']);
     expect(headings.map((heading) => heading.textContent?.trim())).toEqual([
       TRANSLATIONS['label.button.signin'],

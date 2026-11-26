@@ -21,7 +21,7 @@ import { NavbarComponent } from './navbar.component';
  * rather than passing silently (Rule 1 clause 5, Rule 2). The router is the real one, its route table empty and its `navigate` spied.
  *
  * The bar's groups are authored in the order the design reads them — brand, Clients, search, scope, language, user menu — which is the
- * order Tab visits them (QA finding F13), and the user menu closes on a click anywhere outside it through the same Angular state (Rule 1 clause 3).
+ * order Tab visits them, and the user menu closes on a click anywhere outside it through the same Angular state (Rule 1 clause 3).
  */
 
 /** The permission the clients route group declares, spelled out rather than imported from routes. */
@@ -204,7 +204,7 @@ describe('NavbarComponent', () => {
     // visual order the design shows and the order Tab visits the controls: the search field, the
     // scope selector attached to it, the language selector, then the user menu. Bootstrap's floats
     // put the first-authored group at the right-hand end, which ran the Tab order backwards through
-    // the design (QA finding F13).
+    // the design.
     expect(
       Array.from(host().querySelectorAll('#search, #search-scope, #navbar-language, #user-dropdown'))
         .map((element) => element.id),
@@ -479,7 +479,7 @@ describe('NavbarComponent', () => {
 
     // Legacy's user menu was Bootstrap's dropdown, which closed on a click anywhere else on the page;
     // the document listener the component's host block installs is what reproduces it without the
-    // plugin (Rule 1 clause 3, QA finding F11).
+    // plugin (Rule 1 clause 3).
     document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     fixture.detectChanges();
 
@@ -511,7 +511,7 @@ describe('NavbarComponent', () => {
 
     // The dismissal's boundary is the dropdown, not the whole bar — the element Bootstrap's plugin was
     // attached to — so moving to another control of the bar with the mouse closes it, which is what
-    // legacy did (QA finding F11). The target is the search field rather than the "Clients" link: that
+    // legacy did. The target is the search field rather than the "Clients" link: that
     // link is a `routerLink`, and a synthesised click on it would ask the router to navigate from a
     // test that is tearing its injector down.
     userMenuTrigger().click();

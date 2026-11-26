@@ -798,7 +798,7 @@ describe('ClientViewComponent', () => {
     expect(clients.get).toHaveBeenNthCalledWith(1, CLIENT_ID);
     expect(clients.get).toHaveBeenNthCalledWith(2, SECOND_CLIENT_ID);
 
-    // The record header's name is an `h1` (QA report F40), so the second client's own values are on screen from it through the profile card.
+    // The record header's name is an `h1`, so the second client's own values are on screen from it through the profile card.
     expect(moved.querySelector('app-record-header h1 strong')?.textContent?.trim()).toBe(
       SECOND_CLIENT.displayName,
     );

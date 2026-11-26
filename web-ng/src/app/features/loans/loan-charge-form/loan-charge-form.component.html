@@ -34,7 +34,7 @@
     <div class="col-md-12">
       <div appPanelCard>
         <!-- One heading per operation, from the key family the legacy controller itself switches on (`scope.title` in `LoanAccountActionsController`). The state this screen does not serve renders `shared/record-not-found`, which
-          carries the message itself, so the band is omitted rather than printing the same heading twice. It is an `h1` because it is the screen's own title where it renders, with `.panel-title` keeping the 18px/700 box the legacy heading band paints (QA report F40). -->
+          carries the message itself, so the band is omitted rather than printing the same heading twice. It is an `h1` because it is the screen's own title where it renders, with `.panel-title` keeping the 18px/700 box the legacy heading band paints. -->
         @if (!notFound()) {
           <div class="panel-heading">
             <h1 class="panel-title">

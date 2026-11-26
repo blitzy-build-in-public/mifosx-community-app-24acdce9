@@ -25,7 +25,7 @@
 @let amount = form.controls.transactionAmount;
 @let amountInvalid = amount.invalid && (amount.touched || amount.dirty);
 
-<!-- The card's title is the screen's own title, so the band's heading is an `h1` and the page carries exactly one; `.panel-title` keeps the design's 18px/700 box, so no pixel moves (QA report F40). -->
+<!-- The card's title is the screen's own title, so the band's heading is an `h1` and the page carries exactly one; `.panel-title` keeps the design's 18px/700 box, so no pixel moves. -->
 <div appPanelCard [title]="'label.heading.loanrepayments' | translate" titleTag="h1">
   @if (notFound()) {
     <!-- A 404 replaces the form rather than joining the error region: the loan the screen was opened on does not exist or is not visible to this user, so there is nothing to repay and no field worth keeping. `shared/record-not-found` is the one presentation every record screen renders, so the application has one not-found message and not two (AAP 0.7.4). -->

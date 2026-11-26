@@ -1,4 +1,8 @@
-/** The clients feature's route group — the five legacy paths that make up workflows W2 and W3, declared in full and mounted by `app.routes.ts` on the empty path, so each URL is exactly the legacy URL it cuts over (AAP (AAP 0.8.2, AAP 0.7.1, AAP 0.14.1, Rule 1 clause 3). */
+/**
+ * The clients feature's route group — the five legacy paths that make up workflows W2 and W3, declared in full and mounted by `app.routes.ts` on the empty path, so each URL is exactly the legacy URL it cuts over (AAP 0.8.2, AAP 0.7.1, AAP 0.14.1, Rule 1 clause 3).
+ *
+ * **Why the list route carries the code but not the guard.** The navbar's Clients entry carries the same `READ_CLIENT` code this route declares (`NavbarComponent.clientPermission`), so the menu item and the declaration share one code and neither can be changed alone (AAP 0.14.1). The list route itself is deliberately unguarded because it is the guard's own denial destination — `DENIED_ROUTE` in `core/auth/permission.guard.ts` — and the in-scope route list holds no access-denied screen (AAP 0.10.4), so a guard on that path would answer a denial with a second denial aimed at itself. The list stays reachable exactly as legacy's `/clients` was reachable, legacy having guarded the menu entry rather than the path (Rule 1 clause 3), and Fineract remains the enforcing layer for the list read.
+ */
 import type { Routes } from '@angular/router';
 
 import { permissionGuard } from '../../core/auth/permission.guard';
@@ -9,11 +13,12 @@ import { ClientListComponent } from './client-list/client-list.component';
 import { ClientViewComponent } from './client-view/client-view.component';
 import { CLIENT_ACTION_PERMISSIONS } from './client.models';
 
-/** The clients family's five screens under their legacy paths. Exported as the array `app.routes.ts` loads lazily, so the family's paths, its access codes and its breadcrumb keys are declared in one place and the parity. */
+/** The clients family's five screens under their legacy paths. Exported as the array `app.routes.ts` loads lazily, so the family's paths, its access codes and its breadcrumb keys are declared in one place and the parity route list has one thing to agree with. */
 export const CLIENTS_ROUTES: Routes = [
   {
     path: 'clients',
     component: ClientListComponent,
+    // Deliberately unguarded: this code gates the navbar entry, not this path, which is `permissionGuard`'s denial target — see the file header.
     data: { permission: 'READ_CLIENT', breadcrumb: ['label.anchor.clients'] },
   },
   {

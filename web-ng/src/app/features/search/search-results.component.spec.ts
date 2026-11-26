@@ -289,7 +289,7 @@ describe('SearchResultsComponent', () => {
     const heading = body?.firstElementChild;
 
     // Exactly one level-1 heading, and it opens the card, so the results sit under a page title
-    // instead of under no heading at all; `sr-only` keeps it off the screen (QA report F40).
+    // instead of under no heading at all; `sr-only` keeps it off the screen.
     expect(host().querySelectorAll('h1')).toHaveLength(1);
     expect(heading?.tagName).toBe('H1');
     expect(heading?.classList.contains('sr-only')).toBe(true);

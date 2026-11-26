@@ -21,7 +21,7 @@ export class AppComponent {
   private readonly notifications = inject(NotificationService);
 
   constructor() {
-    // The notification host is a sibling of the router outlet rather than a child of the routed screen, so its queue outlives every screen that filled it: without this subscription a notice raised on one screen stays painted over the next one, and a failure message follows the user around after the failure has recovered (QA F29). Every finished navigation therefore drops the queue — the notice has said what it had to say about the screen it belongs to, and a notice raised on the screen that just arrived is queued after it and kept.
+    // The notification host is a sibling of the router outlet rather than a child of the routed screen, so its queue outlives every screen that filled it: without this subscription a notice raised on one screen stays painted over the next one, and a failure message follows the user around after the failure has recovered. Every finished navigation therefore drops the queue — the notice has said what it had to say about the screen it belongs to, and a notice raised on the screen that just arrived is queued after it and kept.
     this.router.events
       .pipe(
         filter((event: Event): event is NavigationEnd => event instanceof NavigationEnd),

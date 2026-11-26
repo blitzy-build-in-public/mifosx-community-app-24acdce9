@@ -185,8 +185,8 @@ function readHeaderBlock(element: HTMLElement): HeaderReading {
   }
 
   let displayName = '';
-  // The record header's title is the screen's `h1` — the level the accessibility fix moved it to (QA
-  // report F40), with the name inside the `strong` the delivered markup wraps it in.
+  // The record header's title is the screen's `h1` — the level that puts the record's name in the document
+  // outline without changing how it looks — with the name inside the `strong` the delivered markup wraps it in.
   const name = element.querySelector('h1 strong') ?? element.querySelector('h1');
   if (name !== null) {
     displayName = (name.textContent ?? '').replace(/\s+/g, ' ').trim();

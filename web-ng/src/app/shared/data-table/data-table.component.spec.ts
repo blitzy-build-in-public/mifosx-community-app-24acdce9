@@ -11,7 +11,7 @@ import { DataTableComponent, type ColumnDef } from './data-table.component';
  * column, the caller's id and class list on the `<table>` inside Bootstrap's `.table-responsive` wrapper (Rule 1 clauses 3 and 6), a row opening the caller's destination as one link over the whole row with no
  * control inside it (AAP 0.7.4), no link at all for a table given no destination, a caller's cell template rendering instead of the column text with the row, the column and its value — how Status becomes an
  * `app-status-swatch` (AAP 0.2.3 row `StatusSwatch`; AAP 0.10.5 deliberate difference 11) — rows and order following the input tracked by the caller's key, an empty row list rendering the header and no body
- * row (Rule 1 clause 3), and the caller's caption becoming the table's own invisible `<caption>`, with none rendered when the caller supplies none (QA report F41). The keyboard path is the last item it pins
+ * row (Rule 1 clause 3), and the caller's caption becoming the table's own invisible `<caption>`, with none rendered when the caller supplies none. The keyboard path is the last item it pins
  * and the table's one deliberate difference from legacy: Enter or Space on a focused row opens that row's own destination exactly once, through the same router call its click makes, cancels Space's default so
  * the page cannot scroll behind it, and opens nothing — not even a default — for a row the caller gave no destination or for a key that is neither of the two (Rule 1 clause 3, which matches legacy's
  * pointer-only rows and allows a difference only where it is recorded). The two hosts are the only place the generic contract is exercised from a template, which proves it composes with a feature's own row
@@ -97,7 +97,7 @@ class DataTableHostComponent {
   /** The caller's own row class, or `null` for a row with none. */
   readonly rowClass = signal<string | null>(null);
 
-  /** The table's accessible name, or `null` — the component's default — for a table that carries none (QA report F41). */
+  /** The table's accessible name, or `null` — the component's default — for a table that carries none. */
   readonly caption = signal<string | null>(null);
 }
 
@@ -245,7 +245,7 @@ describe('DataTableComponent', () => {
     const host = await mount();
 
     // No caption of the component's own: a table whose caller supplies no name stays the unnamed
-    // table it has always been, rather than one with an empty `<caption>` (QA report F41).
+    // table it has always been, rather than one with an empty `<caption>`.
     expect(tableOf(host).querySelector('caption')).toBeNull();
 
     fixture.componentInstance.caption.set('Clients');

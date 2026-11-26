@@ -12,7 +12,7 @@
 -->
 <div class="container login-page">
   <!--
-    BLITZY [A11Y]: the screen's skip link, and its first focusable element, so a keyboard user reaches the form without tabbing the language select and the hero first (QA report F14).
+    BLITZY [A11Y]: the screen's skip link, and its first focusable element, so a keyboard user reaches the form without tabbing the language select and the hero first.
     Bootstrap 3.4.3's own `sr-only` and `sr-only-focusable` classes hide it until it takes focus, so nothing on the page moves (Rule 1 clause 6).
 
     BLITZY [I18N]: the wording is an English literal because no shipped legacy bundle carries a key for a skip link. `skipToMain` cancels the fragment navigation before moving focus, because this
@@ -26,7 +26,7 @@
       <main id="main-content" tabindex="-1" aria-label="Main content">
         <!--
           BLITZY [A11Y]: the screen's own title, painted for assistive technology and not on screen (Bootstrap 3.4.3's `sr-only`), so the page carries exactly one `h1` and its outline starts at
-          level 1 — the three footer column headings are the `h2`s beneath it (QA report F40). The caption is the sign-in button's own legacy key, so it is a real bundle entry.
+          level 1 — the three footer column headings are the `h2`s beneath it. The caption is the sign-in button's own legacy key, so it is a real bundle entry.
         -->
         <h1 class="sr-only">{{ 'label.button.signin' | translate }}</h1>
         <!--

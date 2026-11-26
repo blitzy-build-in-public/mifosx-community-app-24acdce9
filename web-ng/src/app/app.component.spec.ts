@@ -166,7 +166,7 @@ describe('AppComponent', () => {
     await navigateTo(ROUTED_PATH);
 
     expect(host.querySelector('.routed-marker')).not.toBeNull();
-    // The queue is a sibling of the outlet rather than a child of the routed screen, so a notice raised on the screen that was just left must not be painted over the next one (QA F29).
+    // The queue is a sibling of the outlet rather than a child of the routed screen, so a notice raised on the screen that was just left must not be painted over the next one.
     expect(notifications.messages()).toHaveLength(0);
     expect(host.querySelector('.notification-error')).toBeNull();
     expect(spies.map((spy) => spy.mock.calls.length)).toEqual([0, 0, 0]);

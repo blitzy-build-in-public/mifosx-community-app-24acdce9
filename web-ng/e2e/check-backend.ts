@@ -136,7 +136,7 @@ export function readBackendInfo(): BackendInfo | null {
   }
 }
 
-/** What `--help` prints (finding 406f-F02): the one request this check makes, the artefact it writes, the variables it reads — named, never valued (Rule 1 clause 9) — and how it is run. */
+/** What `--help` prints: the one request this check makes, the artefact it writes, the variables it reads — named, never valued (Rule 1 clause 9) — and how it is run. */
 const BACKEND_USAGE: CliUsage = {
   name: 'check:backend',
   summary: 'Proves the parity run is backed by Blitzy-Sandbox/blitzy-fineract built from source, and records the commit and environment it found.',
@@ -157,7 +157,7 @@ const BACKEND_USAGE: CliUsage = {
 const invokedDirectly = process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (invokedDirectly) {
-  // Usage is answered before the request, so `--help` proves no provenance and writes no artefact (finding 406f-F02); the exit code is set, never forced, so a piped line survives.
+  // Usage is answered before the request, so `--help` proves no provenance and writes no artefact; the exit code is set, never forced, so a piped line survives.
   const intent = resolveCliIntent(BACKEND_USAGE, process.argv.slice(2));
   if (intent.kind === 'handled') {
     process.exitCode = intent.exitCode;

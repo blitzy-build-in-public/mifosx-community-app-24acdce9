@@ -1024,7 +1024,7 @@ describe('ClientListComponent', () => {
     const pagers = host().querySelectorAll('nav[aria-label="Pagination"]');
 
     // One named landmark around the pager, so a screen reader can tell this navigation from the
-    // breadcrumb's, with the page list as its content (QA report F41).
+    // breadcrumb's, with the page list as its content.
     expect(pagers).toHaveLength(1);
     expect(pagers[0].querySelector('ul.pagination')).not.toBeNull();
     expect(pageLinks().map((link) => link.getAttribute('aria-current'))).toEqual([

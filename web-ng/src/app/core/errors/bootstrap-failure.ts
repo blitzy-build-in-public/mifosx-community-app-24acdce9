@@ -20,7 +20,7 @@ function failureMessage(error: unknown): string {
   return error.trim() === '' ? FALLBACK_MESSAGE : error;
 }
 
-/** Renders a failed bootstrap into the document, so a misconfigured deployment reports itself in the page instead of leaving a blank white screen (QA finding qa-config-failure-blank-page). **Where it renders.** The block. */
+/** Renders a failed bootstrap into the document, so a misconfigured deployment reports itself in the page instead of leaving a blank white screen. **Where it renders.** The block. */
 export function renderBootstrapFailure(error: unknown, target: Document = document): void {
   try {
     const host: Element = target.querySelector('app-root') ?? target.body;

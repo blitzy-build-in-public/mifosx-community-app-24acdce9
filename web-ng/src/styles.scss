@@ -459,7 +459,7 @@ app-navbar {
 // The collapse row is a flex row, which is what lets the bar's source order be its visual order and therefore the order Tab visits its groups (AAP 0.2.3
 // `Navbar`, AAP 0.7.4: brand, "Clients", the global search with its scope selector, the language switcher, the user menu). Bootstrap floats the right-hand
 // groups and lands the first-authored one at the right-hand end, so matching the design with floats meant authoring them backwards — and the Tab order with
-// them (QA finding F13). Every group is a flex item here, so the `float: right !important` `.navbar-right` pins is inert, the left-hand list's automatic right
+// them. Every group is a flex item here, so the `float: right !important` `.navbar-right` pins is inert, the left-hand list's automatic right
 // margin pushes the rest to the edge in source order, and the -15px right margin moves to the row's last group so its right edge stays flush. Below the
 // breakpoint the bar keeps Bootstrap's stacked layout, in source order.
 @media (min-width: $grid-float-breakpoint) {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { datatableName, isResourceId, resourceId } from './path-segment.util';
 
-/** Behaviour spec for `core/http/path-segment.util.ts`, the guard every Fineract path segment passes through (Rule 1 clause 8; AAP 0.14.2 "Test coverage"; review finding F05) (Rule 1 clause 2, AAP 0.1.1). */
+/** Behaviour spec for `core/http/path-segment.util.ts`, the guard every Fineract path segment passes through (Rule 1 clause 8; AAP 0.14.2 "Test coverage"; Rule 1 clause 2, AAP 0.1.1). */
 
 /** The `source` these cases pass, so the refusal's diagnostic reads against a named call. */
 const SOURCE = 'PathSegmentSpec.call';

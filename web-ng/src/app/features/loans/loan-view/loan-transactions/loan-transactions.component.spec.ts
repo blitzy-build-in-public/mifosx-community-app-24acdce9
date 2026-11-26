@@ -140,7 +140,7 @@ describe('LoanTransactionsComponent', () => {
     const host = render([DISBURSEMENT]);
     const caption = table(host).querySelector('caption');
     // The caption is the table's own naming element and Bootstrap's `.sr-only` keeps it off the screen, so the
-    // table is announced by the legacy bundle's transactions heading without a pixel moving (QA report F41).
+    // table is announced by the legacy bundle's transactions heading without a pixel moving.
     expect(caption?.textContent?.trim()).toBe('label.heading.transactions');
     expect(caption?.classList.contains('sr-only')).toBe(true);
     expect(table(host).firstElementChild).toBe(caption);

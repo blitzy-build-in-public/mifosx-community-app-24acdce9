@@ -5,7 +5,7 @@
      or spacing. The `<table>`'s class list and id are the caller's, because the screen's own class sizes its columns in the global layer and the legacy markup's id is what the harness addresses
      the table by (Rule 1 clauses 3 and 6).
   2. The accessible name — an optional `<caption class="sr-only">`, the `<table>`'s first child, when the caller supplies the `caption` input: a screen reader announces it as the table's title and
-     `.sr-only` (Bootstrap 3.4.3's own class) keeps it off the screen, so no row, column or pixel moves (QA report F41; Rule 1 clause 6); no caption is rendered when the caller supplies none.
+     `.sr-only` (Bootstrap 3.4.3's own class) keeps it off the screen, so no row, column or pixel moves (Rule 1 clause 6); no caption is rendered when the caller supplies none.
   3. The header — one `<th scope="col">` per column, in the caller's order, printing the column's already-translated label; `scope="col"` is Bootstrap 3's own table idiom and the one the legacy
      table carried (Rule 1 clause 3).
   4. The body — one `<tr>` per row, tracked by the caller's row key rather than the index, so a re-render reconciles rows instead of rebuilding them. The row carries the caller's destination as its

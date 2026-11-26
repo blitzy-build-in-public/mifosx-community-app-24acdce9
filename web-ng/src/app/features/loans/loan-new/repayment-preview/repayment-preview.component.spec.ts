@@ -50,7 +50,7 @@ const EMPTY_STATE_TEXT = 'No repayment schedule has been calculated.';
 const TRANSLATIONS: Readonly<Record<string, string>> = {
   ...COLUMN_LABELS,
   [EMPTY_STATE_KEY]: EMPTY_STATE_TEXT,
-  // The table's accessible name, from the legacy bundle's own schedule heading (QA report F41).
+  // The table's accessible name, from the legacy bundle's own schedule heading.
   'label.heading.repaymentschedule': 'Repayment Schedule',
 };
 
@@ -288,7 +288,7 @@ describe('RepaymentPreviewComponent', () => {
     const caption = tableOf(host)?.querySelector('caption');
 
     // The caption is the table's own naming element and Bootstrap's `.sr-only` keeps it off the screen, so the
-    // preview is announced by the legacy bundle's schedule heading without a pixel moving (QA report F41).
+    // preview is announced by the legacy bundle's schedule heading without a pixel moving.
     expect(textOf(caption ?? null)).toBe(TRANSLATIONS['label.heading.repaymentschedule']);
     expect(caption?.classList.contains('sr-only')).toBe(true);
     expect(tableOf(host)?.firstElementChild).toBe(caption);

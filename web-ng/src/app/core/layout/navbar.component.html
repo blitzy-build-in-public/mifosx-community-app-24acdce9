@@ -28,7 +28,7 @@
   template declares no style attribute, no colour value and no dimension, and the AAP 0.2.2 token
   each rule implements is named where the element that wears it is described.
 -->
-<!-- BLITZY [A11Y]: the bar's navigation landmark is named "Main navigation", invisibly — an English literal, because no shipped bundle carries a key for the bar's own landmark (QA report F41);
+<!-- BLITZY [A11Y]: the bar's navigation landmark is named "Main navigation", invisibly — an English literal, because no shipped bundle carries a key for the bar's own landmark;
      legacy renders `nav.navbar.navbar-default` unnamed, so this departs from Rule 1 clause 3 as the checkpoint's accessibility checks require. -->
 <nav class="navbar navbar-default" aria-label="Main navigation">
   <div class="container-fluid">
@@ -57,10 +57,11 @@
         <!--
           The single in-scope destination. `hasPermission` hides the item rather than removing it
           when the signed-in user lacks the code, which is what the legacy `has-permission`
-          directive did; the code itself (`READ_CLIENT`) is declared on the component and is the one
-          the clients route group carries in its `data.permission`, so the menu item and the route
-          guard cannot disagree (AAP 0.14.1). Navigation goes through `routerLink` — never a hash
-          `href` — so the router owns the URL (Rule 1 clause 5).
+          directive did; the code itself (`READ_CLIENT`) is the one the clients route group states in
+          its `data.permission`, so the menu item and the route's declaration share one code (AAP
+          0.14.1). The list destination is deliberately unguarded because it is `permissionGuard`'s
+          own denial target, which the route group's header states. Navigation goes through
+          `routerLink` — never a hash `href` — so the router owns the URL (Rule 1 clause 5).
         -->
         <li [hasPermission]="clientPermission">
           <a routerLink="/clients">
@@ -69,7 +70,7 @@
         </li>
       </ul>
 
-      <!-- Authored first of the three right-hand groups: the field and its scope select precede the language switcher and the user menu in source order, which is the order Tab visits them (QA report F13, AAP 0.7.4)
+      <!-- Authored first of the three right-hand groups: the field and its scope select precede the language switcher and the user menu in source order, which is the order Tab visits them (AAP 0.7.4)
            — seeded with `searchScope`, it emits the trimmed query and the selected scope and issues no request of its own (AAP 0.2.3 `GlobalSearch` `query`/`scope`/`(search)`). -->
       <app-global-search [scope]="searchScope()" (search)="onSearch($event)" />
 

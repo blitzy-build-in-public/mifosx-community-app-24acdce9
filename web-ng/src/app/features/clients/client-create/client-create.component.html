@@ -17,7 +17,7 @@
 <section class="container-fluid">
   <div class="row">
     <div class="col-md-12">
-      <!-- The card's title is the screen's own title, so the band's heading is an `h1` and the page carries exactly one; `.panel-title` keeps the design's 18px/700 box, so no pixel moves (QA report F40). -->
+      <!-- The card's title is the screen's own title, so the band's heading is an `h1` and the page carries exactly one; `.panel-title` keeps the design's 18px/700 box, so no pixel moves. -->
       <div appPanelCard [title]="'label.heading.createclient' | translate" titleTag="h1">
         <div class="panel-body">
           <!-- Fineract's own failure text, verbatim and unmoved by any prefix: a failed template read or a rejected create. `role="alert"` announces it without a focus change, and the form below keeps every entered value (AAP 0.7.4; AAP 0.14.1 "errors are values"). -->

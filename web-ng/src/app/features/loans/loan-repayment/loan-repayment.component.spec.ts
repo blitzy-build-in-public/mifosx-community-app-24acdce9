@@ -200,7 +200,7 @@ describe('LoanRepaymentComponent', () => {
     expect(selectedText(select as HTMLSelectElement)).toBe(FIRST_PAYMENT_TYPE.name);
   });
   it('opens on the browser’s today, not on the due date the template answers', async () => {
-// The finding's own reproduction: this backend answers the first unpaid instalment's due date — a month ahead of the business date on the seeded fixture — so a template-seeded form would post a future-dated repayment unchanged (AAP 0.10.5 item 15, AAP 0.12).
+    // The repayment form must open on the browser's today rather than the due date the loan's template answers: this backend answers the first unpaid instalment's due date — a month ahead of the business date on the seeded fixture — so a template-seeded form would post a future-dated repayment unchanged (AAP 0.10.5 item 15, AAP 0.12).
     const dueDate = todayAtMidnight();
     dueDate.setDate(dueDate.getDate() + 30);
     loan.actionTemplate.mockReturnValue(of({ ...TEMPLATE, date: dateTriple(dueDate) }));

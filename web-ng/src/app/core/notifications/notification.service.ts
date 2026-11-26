@@ -10,10 +10,10 @@ export interface NotificationMessage {
   readonly message: string;
 }
 
-/** How long one notice stays on screen before it removes itself, in milliseconds (QA F29). A notice must not outlive its relevance: a failure the user has already recovered from must stop being painted over the screen the recovered request produced, and a notice nobody closes must not accumulate over a working session. No legacy behaviour is being matched here — the `Notification` component is new (AAP 0.2.3) — so one lifetime serves every kind, and it is long enough to read a server message of a line or two without being dismissed mid-read. */
+/** How long one notice stays on screen before it removes itself, in milliseconds. A notice must not outlive its relevance: a failure the user has already recovered from must stop being painted over the screen the recovered request produced, and a notice nobody closes must not accumulate over a working session. No legacy behaviour is being matched here — the `Notification` component is new (AAP 0.2.3) — so one lifetime serves every kind, and it is long enough to read a server message of a line or two without being dismissed mid-read. */
 export const NOTICE_LIFETIME_MS = 8_000;
 
-/** Holds the notices until the widget renders them: the write end of one edge, whose main caller is the interceptor's error mapping and whose only reader is the shared notification component. Every notice is queued with an expiry of `NOTICE_LIFETIME_MS`, so it leaves the list on its own as well as on its close control, and `clear()` — called on every finished navigation — retires both the notices and their pending expiries (QA F29). */
+/** Holds the notices until the widget renders them: the write end of one edge, whose main caller is the interceptor's error mapping and whose only reader is the shared notification component. Every notice is queued with an expiry of `NOTICE_LIFETIME_MS`, so it leaves the list on its own as well as on its close control, and `clear()` — called on every finished navigation — retires both the notices and their pending expiries. */
 @Injectable({ providedIn: 'root' })
 export class NotificationService {
   private readonly queue = signal<readonly NotificationMessage[]>([]);

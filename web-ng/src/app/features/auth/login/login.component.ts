@@ -25,7 +25,7 @@ const GENERIC_FAILURE_KEY = 'error.connection.failed';
 /** The post-login landing screen (AAP 0.2.1 step 1, AAP 0.10.5 item 3). */
 const CLIENTS_ROUTE = '/clients';
 
-/** The id of the screen's content landmark, which the skip link names and {@link LoginComponent.skipToMain} focuses (QA report F14). */
+/** The id of the screen's content landmark, which the skip link names and {@link LoginComponent.skipToMain} focuses. */
 const MAIN_CONTENT_ID = 'main-content';
 
 /**
@@ -50,7 +50,7 @@ export class LoginComponent {
 
   private readonly translate = inject(TranslateService);
 
-  /** The document the skip link focuses its target in, injected rather than read off the global so a test dispatches to the same one (QA report F14). */
+  /** The document the skip link focuses its target in, injected rather than read off the global so a test dispatches to the same one. */
   private readonly document = inject(DOCUMENT);
 
   /**
@@ -91,7 +91,7 @@ export class LoginComponent {
   );
 
   /**
-   * Moves focus into the screen's content, which is what this page's skip link does (QA report F14; WCAG 2.4.1): the `main` landmark carries `tabindex="-1"`, so it accepts programmatic focus without becoming a tab stop of its own.
+   * Moves focus into the screen's content, which is what this page's skip link does (WCAG 2.4.1): the `main` landmark carries `tabindex="-1"`, so it accepts programmatic focus without becoming a tab stop of its own.
    * The click's default is cancelled first and always, because the application routes on the hash (`withHashLocation`, Rule 1 clause 5) and an un-cancelled `#main-content` would be read as a navigation; nothing is navigated to here and no credential is touched (Rule 1 clause 9).
    *
    * @param event the anchor's click, whose default fragment navigation is suppressed.

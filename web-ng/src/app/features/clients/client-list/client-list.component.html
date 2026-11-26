@@ -27,7 +27,7 @@
           legacy template hardcodes the same literal (`app/views/clients/clients.html:9`), so a key invented here would be one only this build defines, and
           Rule 1 clause 6 forbids copying or regenerating the legacy translation files (`label.heading.clients` is the word "Clients", which the breadcrumb
           already uses). The title is an `h1` because it is the screen's own title and no other heading is on the page; `.panel-title` keeps the design's
-          18px/700 box, so the level moves the document outline and nothing else (AAP 0.2.3 row `PanelCard`; QA report F40).
+          18px/700 box, so the level moves the document outline and nothing else (AAP 0.2.3 row `PanelCard`).
         -->
         <div class="panel-body" [attr.aria-busy]="loading() ? 'true' : null">
           <!-- Fineract's own failure text, verbatim and untranslated, above whatever the screen holds: a failed read leaves the card mounted and its toolbar usable. `role="alert"` announces it without a focus change (AAP 0.7.4; AAP 0.14.1 "errors are values"). -->
@@ -65,7 +65,7 @@
               (`app/views/clients/clients.html:64`), which the global layer paints with the pointer cursor, brand-blue fill and white text on hover
               (`_content.scss:413-417`). `app-data-table` owns both affordances a row offers: the `routerLink` a click follows and the Enter and Space activation
               bound on the same `<tr>`, which opens that row's destination and suppresses the key's default; a row with no destination stays inert. The table's
-              accessible name is the legacy bundle's `label.heading.clients`, rendered as its invisible `<caption>` (QA report F41).
+              accessible name is the legacy bundle's `label.heading.clients`, rendered as its invisible `<caption>`.
             -->
             <app-data-table
               [rows]="visibleRows()"
@@ -111,7 +111,7 @@
             statement about the rows the display filters produced (Rule 1 clause 3). The condition is the empty state's own, so the pager returns with the first match.
           -->
           @if (pageCount() > 1 && !isEmpty()) {
-            <!-- BLITZY [A11Y]: the pager is a `nav` landmark named "Pagination", and each page link carries `aria-current="page"` while its page is the one shown (QA report F41).
+            <!-- BLITZY [A11Y]: the pager is a `nav` landmark named "Pagination", and each page link carries `aria-current="page"` while its page is the one shown.
               The name is an invisible English literal, because no shipped bundle carries a key for it and `aria-label` is the only way to distinguish this navigation from the breadcrumb's (the same wording decision `client-view.component.html` records).
               The wrapper adds no box of its own and `.active` is unchanged; the pager is painted only while the filtered rows exist, so the explicit empty state stands alone. -->
             <div class="text-center">

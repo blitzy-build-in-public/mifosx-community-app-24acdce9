@@ -43,7 +43,7 @@
 <div class="container-fluid">
   <div class="row">
     <div class="col-md-12">
-      <!-- The card's title is the screen's own title, so the band's heading is an `h1` and the page carries exactly one; `.panel-title` keeps the design's 18px/700 box, so no pixel moves (QA report F40). -->
+      <!-- The card's title is the screen's own title, so the band's heading is an `h1` and the page carries exactly one; `.panel-title` keeps the design's 18px/700 box, so no pixel moves. -->
       <div appPanelCard [title]="'label.heading.editloanapplication' | translate" titleTag="h1">
         <div class="panel-body" [attr.aria-busy]="loading() ? 'true' : null">
           <!-- A loan that does not exist, or a body the model's guard rejects: `shared/record-not-found` in place of the form, with the shell still usable around it and no error banner, no retry action and no form, and the same 404 reading the same way on every record screen (AAP 0.7.4 "States every list and record screen must implement"). -->

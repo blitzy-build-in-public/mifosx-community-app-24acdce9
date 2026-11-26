@@ -334,7 +334,7 @@ describe('APP_ROUTES', () => {
     const children: readonly Route[] = shell?.children ?? [];
     const inShell = children.at(-1);
 
-    // The second placement, last among the shell's children: a signed-in visitor to an unknown URL is matched here, so the navbar, the breadcrumb and the shell's `<main class="content-wrapper">` landmark stay around the.
+    // The second placement, last among the shell's children: a signed-in visitor to an unknown URL is matched here, so the navbar, the breadcrumb and the shell's `<main class="content-wrapper">` landmark stay around the screen instead of being backtracked out of.
     expect(inShell?.path).toBe('**');
     expect(inShell?.component).toBe(NotFoundComponent);
     expect(children.filter((route: Route): boolean => route.path === '**')).toHaveLength(1);
@@ -375,6 +375,7 @@ describe('APP_ROUTES', () => {
         expect(code).toMatch(ACCESS_CODE);
       }
 
+      // Unguarded on purpose: `clients` is `permissionGuard`'s own denial destination, so the code its entry declares gates the navbar rather than this path — see the route group's header.
       if (route.path === 'clients') {
         expect(route.canActivate ?? []).not.toContain(permissionGuard);
         continue;
@@ -406,7 +407,7 @@ describe('APP_ROUTES', () => {
     const router = routerFor(true);
     TestBed.inject(PermissionsService).setPermissions(['READ_LOAN']);
 
-    // The finding's reproduction, against the real tree: the loans rows this user may read are behind this screen, so the navigation stays instead of being replaced by the clients list.
+    // Against the real tree: a user holding only the loans read code keeps a search navigation, because the loans rows that user may read are behind this screen, so the navigation stays instead of being replaced by the clients list.
     await router.navigateByUrl('/search/ada');
 
     expect(router.url).toBe('/search/ada');

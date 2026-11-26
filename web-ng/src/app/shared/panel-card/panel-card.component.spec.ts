@@ -8,7 +8,7 @@ import { PanelCardComponent } from './panel-card.component';
  * Behavioural spec for `PanelCardComponent`, the card every list, record and form surface is drawn on (AAP 0.2.3 component inventory row `PanelCard`, Figma nodes `1:3` and `1:4`; AAP 0.5.2 row "Card /
  * panel"). It discharges AAP 0.11.1, AAP 0.14.1 and Rule 1 clause 8 (no spec without an `expect`, nothing boilerplate). It pins the host as a `div` carrying exactly `panel` by default with no heading
  * band (Rule 1 clause 6); a title rendering `div.panel-heading > h3.panel-title` with the caller's own text, and `titleTag` moving it to the level it names — `h1` where the card title is the page's
- * own title, `h2` on the record's profile card, `h4` for a caller needing a fourth level — with `.panel-title` keeping the design's box on every one of them (AAP 0.2.3, AAP 0.10.2; QA report F40);
+ * own title, `h2` on the record's profile card, `h4` for a caller needing a fourth level — with `.panel-title` keeping the design's box on every one of them (AAP 0.2.3, AAP 0.10.2);
  * `variant` adding the one modifier class asked for and no other, over the bare `.panel`, `.panel.panel-default` and `.panel.panel-bordered` cards of the delivered markup (AAP 0.5.2, AAP 0.5.3); an
  * empty title rendering no band; and projected content arriving as the host's own children, after the band and in the caller's order. The card declares no stylesheet, no colour and no dimension (Rule
  * 1 clause 6, AAP 0.5.5), so nothing here asserts a computed value: every visual value belongs to `web-ng/src/styles.scss` and is checked there.
@@ -120,7 +120,7 @@ describe('PanelCardComponent', () => {
       const heading = bandOf(host).firstElementChild as HTMLElement | null;
 
       // The level is the element's; the 18px/700 card-title box stays `.panel-title`'s, so promoting a
-      // screen title to `h1` or moving the record's card to `h2` moves no pixel (QA report F40).
+      // screen title to `h1` or moving the record's card to `h2` moves no pixel.
       expect(heading?.tagName).toBe(expected);
       expect(heading?.classList.contains('panel-title')).toBe(true);
       expect(heading?.textContent?.trim()).toBe('Clients');

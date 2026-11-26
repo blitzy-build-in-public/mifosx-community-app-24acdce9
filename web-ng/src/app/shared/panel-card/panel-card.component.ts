@@ -34,7 +34,7 @@ export class PanelCardComponent {
   /**
    * The heading element of the band: `h3` by default; `h1` where the card title is the page's own title (the clients list, the client and loan forms, the lifecycle action cards);
    * `h2` for the record's profile card; `h4` for a caller that needs the fourth level. `.panel-title` carries the Bootstrap 3 box on every one of them, so the level moves the
-   * document outline and not a pixel (QA report F40; AAP 0.2.3 row `PanelCard`; Figma node `1:4`).
+   * document outline and not a pixel (AAP 0.2.3 row `PanelCard`; Figma node `1:4`).
    */
   readonly titleTag = input<'h1' | 'h2' | 'h3' | 'h4'>('h3');
 

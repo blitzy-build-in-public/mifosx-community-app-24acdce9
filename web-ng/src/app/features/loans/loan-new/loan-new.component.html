@@ -26,7 +26,7 @@
     </div>
   </div>
 } @else {
-  <!-- The card's title is the screen's own title, so the band's heading is an `h1` and the page carries exactly one; `.panel-title` keeps the design's 18px/700 box, so no pixel moves (QA report F40). -->
+  <!-- The card's title is the screen's own title, so the band's heading is an `h1` and the page carries exactly one; `.panel-title` keeps the design's 18px/700 box, so no pixel moves. -->
   <div appPanelCard variant="default" [title]="'label.heading.loanapplication' | translate" titleTag="h1">
     <div class="panel-body" [attr.aria-busy]="loading() ? 'true' : null">
       <!-- Fineract's own failure text, verbatim and unmoved by any prefix, capitalisation or translation: W7 compares it character for character with `errors[].defaultUserMessage`. `role="alert"` announces it without moving focus, and the form below keeps every entered value (AAP 0.7.4; AAP 0.14.1 "errors are values"). -->

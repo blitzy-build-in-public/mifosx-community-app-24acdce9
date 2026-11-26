@@ -251,7 +251,7 @@ describe('ClientCreateComponent', () => {
   });
   it('renders the legacy captions through the translation stack, never a raw key', () => {
     const rendered = host().textContent ?? '';
-    // The page's own heading is an `h1`, set through `PanelCard.titleTag` (QA report F40).
+    // The page's own heading is an `h1`, set through `PanelCard.titleTag`.
     expect(host().querySelector('h1.panel-title')).not.toBeNull();
     // No caption reached the user as the dotted key a bundle holds it under.
     expect(rendered).not.toContain('label.');

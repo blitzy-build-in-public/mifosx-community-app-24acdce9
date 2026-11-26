@@ -57,7 +57,7 @@
 
             @if (loan(); as record) {
               <div id="loan-view-header">
-                <!-- The status colour, then the product the loan was written on. The product is the record's `h1` — the screen's own title — and `.record-title` keeps the 24px/700 the design measures (QA report F40). -->
+                <!-- The status colour, then the product the loan was written on. The product is the record's `h1` — the screen's own title — and `.record-title` keeps the 24px/700 the design measures. -->
                 <h1 class="record-title">
                   <app-status-swatch [status]="statusKey()" variant="dot" />{{ ' ' }}<strong>{{ record.loanProductName ?? '' }}</strong>
                 </h1>

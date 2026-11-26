@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { renderBootstrapFailure } from './bootstrap-failure';
 
-/** Behaviour spec for `core/errors/bootstrap-failure.ts`, the one surface a failed bootstrap reaches a reader through (QA finding qa-config-failure-blank-page; Rule 1 clause 8, AAP 0.14.2 "Test coverage"). */
+/** Behaviour spec for `core/errors/bootstrap-failure.ts`, the one surface a failed bootstrap reaches a reader through (Rule 1 clause 8, AAP 0.14.2 "Test coverage"). */
 
 /** The sentence the block shows when the rejection carries no message of its own. */
 const FALLBACK_SENTENCE =
@@ -41,7 +41,7 @@ describe('renderBootstrapFailure', () => {
   });
 
   it('renders the message inside the app-root host, so the page carries text instead of nothing', () => {
-    // The finding's own assertion, stated the other way round first: the page is empty before.
+    // The case establishes the baseline the rendering changes, stated first: the page carries no text before the failure renders.
     expect(document.body.textContent?.trim()).toBe('');
 
     renderBootstrapFailure(new Error(CONFIG_MESSAGE));

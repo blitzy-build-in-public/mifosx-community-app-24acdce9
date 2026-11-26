@@ -300,7 +300,7 @@ async function readRoot(root: string, extensions: readonly string[], rule: strin
   }
 }
 
-/** What `--help` prints (finding 406f-F02): what the gate proves, that it writes nothing, the fact that it reads no environment variable, and how it is run. */
+/** What `--help` prints: what the gate proves, that it writes nothing, the fact that it reads no environment variable, and how it is run. */
 const WIRING_USAGE: CliUsage = {
   name: 'check:wiring',
   summary: 'Fails on a dead @Injectable, a component neither routed nor used in a template, a route the tree and in-scope-routes.json disagree on, a spec without an expect, a credential-shaped literal, and a file outside the write boundary.',
@@ -322,7 +322,7 @@ const WIRING_USAGE: CliUsage = {
   ],
 };
 
-// A usage request is answered before the gate body runs, so `--help` reads no file and proves nothing (finding 406f-F02).
+// A usage request is answered before the gate body runs, so `--help` reads no file, proves nothing and exits 0.
 const intent = resolveCliIntent(WIRING_USAGE, process.argv.slice(2));
 if (intent.kind === 'handled') {
   process.exitCode = intent.exitCode;

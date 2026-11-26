@@ -60,7 +60,7 @@ const BASE_LANG = 'en';
 /** The language a switch activates; one the application's own list offers (AAP 0.7.4). */
 const SWITCHED_LANG = 'fr';
 
-/** The window in which one pointer event may re-arm the idle clock, as `ShellComponent` documents it (QA report F11). */
+/** The window in which one pointer event may re-arm the idle clock, as `ShellComponent` documents it. */
 const POINTER_THROTTLE_MS = 1_000;
 
 /** The instant the pointer-throttle cases start their fake clock at: the epoch, so any value works. */
@@ -269,7 +269,7 @@ describe('ShellComponent', () => {
     ).filter((element: HTMLElement): boolean => element.tabIndex >= 0);
 
     // The first Tab stop on every signed-in screen, which is what makes the whole page bypassable
-    // (QA report F14; WCAG 2.4.1).
+    // (WCAG 2.4.1).
     expect(focusable[0]).toBe(skip);
     expect(skip.textContent?.trim()).toBe('Skip to content');
     expect(skip.getAttribute('href')).toBe('#main-content');

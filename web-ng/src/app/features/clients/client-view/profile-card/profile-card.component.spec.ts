@@ -61,7 +61,7 @@ describe('ProfileCardComponent', () => {
     const fixture = createCard();
 
     // The card title is an `h2`, one level under the record header's `h1`, with `.panel-title` still
-    // carrying the 18px/700 card-title box (QA report F40).
+    // carrying the 18px/700 card-title box.
     const heading = host(fixture).querySelector('h2.panel-title');
 
     expect(heading?.textContent?.trim()).toBe(DISPLAY_NAME);
@@ -99,7 +99,7 @@ describe('ProfileCardComponent', () => {
     const fixture = createCard();
 
     // An `h3` one level under the card title, with Bootstrap's own `.h5` alias keeping the 14px box
-    // the `h5` element carried, so the outline never skips a level and no pixel moves (QA report F40).
+    // the `h5` element carried, so the outline never skips a level and no pixel moves.
     const subheading = host(fixture).querySelector('h3.h5');
 
     const text = subheading?.textContent?.trim() ?? '';

@@ -12,7 +12,7 @@ const ARTEFACT_PATH: string = fileURLToPath(new URL('../.captures/seed.json', im
 /** The scratch file the stale marker goes to: this spec's own name inside the same git-ignored `.captures` directory, so the removal is exercised on a real path without overwriting — or deleting — the artefact a seed run. */
 const SCRATCH_PATH: string = fileURLToPath(new URL('../.captures/seed.spec.stale.json', import.meta.url));
 
-/** A previous run's artefact, shaped like the one the finding left behind: a `runDate` and an id that no recreated database holds, so reading it after a failed run is exactly the hazard being pinned. */
+/** A previous run's artefact, shaped like the one a failed run leaves behind: a `runDate` and an id that no recreated database holds, so reading it after a failed run is exactly the hazard being pinned. */
 const STALE_ARTEFACT: string = `${JSON.stringify(
   {
     runDate: '2020-01-01',

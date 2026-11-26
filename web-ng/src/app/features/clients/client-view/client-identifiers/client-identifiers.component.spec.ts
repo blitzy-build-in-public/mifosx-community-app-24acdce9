@@ -26,7 +26,7 @@ const NO_DATA_KEY = 'label.nodata';
 /** The same key's English wording in the shipped legacy bundle. */
 const NO_DATA_TEXT = 'No Data';
 /** The one key the tab's empty state resolves. */
-/** The table's accessible name, from the legacy bundle's own identities heading (QA report F41). */
+/** The table's accessible name, from the legacy bundle's own identities heading. */
 const IDENTITIES_HEADING_KEY = 'label.heading.identities';
 /** The message that key resolves to in the in-memory bundle. */
 const IDENTITIES_HEADING_TEXT = 'Identities';
@@ -165,7 +165,7 @@ describe('ClientIdentifiersComponent', () => {
     const caption = table?.querySelector('caption');
 
     // The caption is the table's own naming element and Bootstrap's `.sr-only` keeps it off the screen, so the
-    // tab's table is announced by the legacy bundle's identities heading without a pixel moving (QA report F41).
+    // tab's table is announced by the legacy bundle's identities heading without a pixel moving.
     expect(caption?.textContent?.trim()).toBe(IDENTITIES_HEADING_TEXT);
     expect(caption?.classList.contains('sr-only')).toBe(true);
     expect(table?.firstElementChild).toBe(caption);

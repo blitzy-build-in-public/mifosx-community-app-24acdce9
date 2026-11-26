@@ -187,10 +187,11 @@ describe('GlobalSearchComponent', () => {
   });
 
   it('names the selector for the search scope it chooses, not for the client list filter', () => {
-    // QA finding F42: the selector narrows a search, so the client list's own "Filter" label named the
-    // wrong control. The name now says what the control does, and it is a literal because no shipped
-    // bundle carries a key for the scope control itself — the shipped scope keys name the individual
-    // options — while a key invented here would raise a missing-translation warning on every render.
+    // The selector narrows a search, so it is named for the scope it chooses rather than for the
+    // client list's own "Filter", which named the wrong control. The name now says what the control
+    // does, and it is a literal because no shipped bundle carries a key for the scope control itself
+    // — the shipped scope keys name the individual options — while a key invented here would raise a
+    // missing-translation warning on every render.
     expect(selector().getAttribute('aria-label')).toBe(SCOPE_LABEL_TEXT);
     expect(selector().getAttribute('aria-label')).not.toBe('Filter');
     expect(SCOPE_LABEL_TEXT).toBe('Search scope');
