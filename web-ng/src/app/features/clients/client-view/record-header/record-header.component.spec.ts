@@ -162,8 +162,7 @@ describe('RecordHeaderComponent', () => {
     const title = titleOf(host);
     expect(host.querySelectorAll('h1')).toHaveLength(1);
     expect(host.querySelector('h3')).toBeNull();
-    // The level is the heading's and the 24px/700 record-title box stays `.record-title`'s, so the
-    // promotion from `h3` moves the document outline and no pixel.
+    // The level is the heading's and the 24px/700 record-title box stays `.record-title`'s, so the promotion from `h3` moves the document outline and no pixel.
     expect(title.classList.contains('record-title')).toBe(true);
     expect(textOf(title)).toBe('Ada Okafor');
     expect(textOf(title.querySelector('strong'))).toBe('Ada Okafor');

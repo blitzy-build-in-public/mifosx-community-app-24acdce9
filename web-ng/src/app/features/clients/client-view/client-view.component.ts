@@ -56,15 +56,10 @@ export const CLIENT_HISTORY_LABEL_KEYS: readonly string[] = [
 
 /**
  * The individual client record — `#/viewclient/:id`, the last screen of the "Sign in and open a client record" flow and the entry point of W3's record read and of the actions and edits it links to (AAP 0.7.1 Features row `clients`; AAP 0.7.4 "Client view"; AAP 0.8.2 route `viewclient/:id`). One read, owned by the family's service: `ClientService.get(id)` — `GET /clients/{id}` (AAP 0.7.3 row "W3 search and view client") — whose record the presentational blocks render, while the `General` accounts table and the `Identities` list issue their own reads through it; this file holds no URL, host, API path, query parameter, body or HTTP client (Rule 1 clauses 2 and 5; AAP 0.14.1).
- *
  * One id, one load per navigation: the `:id` comes from `route.paramMap`, never the snapshot, because the router reuses this component between records as `client-actions` and `loan-edit` do, so each emission clears the previous client's record, message and tab and re-reads the client the URL names, a late response being discarded rather than painted.
- *
  * Four states (AAP 0.7.4 "States every list and record screen must implement"): `loading` paints nothing, the design carrying no spinner (AAP 0.2.4); a 404, or a route carrying no Fineract id — `isResourceId` answers before any request is issued — drives `notFound` in place of the record with the shell usable; any other 4xx drives `clientError`, rendering Fineract's message verbatim; a 5xx or transport failure leaves both computeds null, the single interceptor having already raised exactly one notification (AAP 0.4.2).
- *
  * Two tabs and nothing more (AAP 0.10.5 item 6), every action permission-gated on legacy's own codes carried from `app/scripts/models/clientStatus.js` on the descriptors {@link actionButtons} builds, which `ActionButtonGroupComponent` gates through `HasPermissionDirective` — the service `permissionGuard` asks — so a button cannot outlive its route (AAP 0.1.1); the action faces are posted by `client-actions.component.ts` at `#/client/:id/:action`, while client charges, transfer, staff assignment, signature, avatar upload and camera are not rendered (AAP 0.10.5).
- *
  * Which actions a record offers is its status's set, exactly as legacy builds the list per state in `app/scripts/models/clientStatus.js` (Rule 1 clause 3); {@link clientLifecycleState} reads that state from the status code through `normaliseStatusCode`, never from the swatch's colour key, which paints `closed` apart from the `rejected` and `withdraw` records it keeps on screen (AAP 0.2.3); every `routerLink` is built from {@link clientId} rather than a snapshot (AAP 0.7.4).
- *
  * The profile card's activation date is the only date formatted here, through `DISPLAY_DATE_FORMAT` and `fromFineractDate`/`toFineractDate`, in `AppConfigService.activeLocale`, and nothing reads the clock (AAP 0.7.2 "Date handling"); the status is the design's colour indicator and never its word, painted by `RecordHeaderComponent` through `toClientStatusKey` (AAP 0.10.5 item 11). Presentation belongs to the template and the global Bootstrap 3 layer in `web-ng/src/styles.scss` (Rule 1 clause 6; AAP 0.4.4 decision 4): the action row is `.btn-group > .btn` with Bootstrap's `.dropdown-menu` `More` menu in Angular state, the plugin needing jQuery (AAP 0.5.2 row "Dropdown menu"), and nothing is logged (Rule 1 clause 9).
  */
 @Component({
@@ -238,7 +233,6 @@ export class ClientViewComponent {
 
   /**
    * The record's action row, as the descriptors `ActionButtonGroupComponent` renders (AAP 0.2.3 row `ActionButtonGroup`; AAP 0.7.4 "Client view"): `Edit` and `Close` in the visible row with `Activate`, `Reject` and `Withdraw` in its `More` menu for a pending record; `Edit`, `New Loan` and `Close` in the row, and no menu entry, for an active one; and `Reactivate` alone, in the menu, for a closed one. The set follows the record's own state, because legacy builds it per state in `app/scripts/models/clientStatus.js` and an entry that state does not allow could only end in the server's refusal (Rule 1 clause 3; {@link clientLifecycleState}).
-   *
    * Every field is the legacy record's own — the shipped bundle's label key, the Font Awesome 4 class the design shows, and the permission code the constants above name — so no key, glyph or code is spelled twice. Each `routerLink` is built from {@link clientId} rather than a snapshot, because the router reuses this component when the URL moves to another client: the new list tells the action group the row now belongs to another client, and it closes the `More` menu the previous record left open.
    */
   readonly actionButtons = computed<readonly ClientActionButton[]>(() => {

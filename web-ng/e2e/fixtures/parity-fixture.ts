@@ -98,7 +98,6 @@ const DEMO_HOSTNAMES: readonly string[] = [
 /** The run date already resolved for each front end. AAP 0.10.4 runs the legacy project and then the next one in a single command, so the date is memoised per project and re-read once per project: a business date that cannot change mid-run. */
 const RUN_DATES = new Map<UiProject, Promise<Date>>();
 
-/** The hostname of an origin, or `null` when the origin is not a URL this module can read. */
 function hostnameOf(origin: string): string | null {
   try {
     return new URL(origin).hostname;
@@ -187,7 +186,6 @@ function describeError(error: unknown): string {
   return redactEntryLocation(text);
 }
 
-/** The legacy baseline's four page objects, all driving one page. */
 function legacyPages(page: Page): LegacyParityPages {
   return {
     uiProject: 'legacy',

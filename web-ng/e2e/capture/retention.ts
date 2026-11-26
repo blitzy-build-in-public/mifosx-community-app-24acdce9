@@ -24,16 +24,7 @@ function isInsidePackageRoot(candidate: string, packageRoot: string): boolean {
   return step.length > 0 && step !== '..' && !step.startsWith(`..${sep}`) && !isAbsolute(step);
 }
 
-/**
- * Removes the per-run artefacts of a previous run, so no capture or report carrying client data survives into this one (AAP 0.10.2, AAP 0.10.4, Rule 1 clause 9).
- *
- * Every target is resolved and checked against `packageRoot` before any of them is deleted: a target that does not resolve inside it is refused with an error and the whole step stops with nothing removed, so a bad path can delete neither the workspace nor anything beside it. A target that is already absent is a success, because the first run on a fresh checkout has nothing to remove. Only file trees are deleted — no file is opened, parsed or printed, so the payloads the captures keep are never read here (Rule 1 clause 9).
- *
- * @param artefacts Artefacts to remove; {@link RUN_ARTEFACT_PATHS} unless a caller names its own.
- * @param packageRoot Directory every artefact must resolve inside; this module's `web-ng/` by default.
- * @returns The removed targets, resolved, in the order they were given — empty when every target was already absent.
- * @throws Error naming every refused target when one does not resolve inside `packageRoot`.
- */
+/** Removes the per-run artefacts of a previous run, answering the targets it removed; a target outside `packageRoot` is refused with nothing deleted, an absent target is a success, and no file is opened (AAP 0.10.2, AAP 0.10.4, Rule 1 clause 9). */
 export function purgeRunArtefacts(
   artefacts: readonly string[] = RUN_ARTEFACT_PATHS,
   packageRoot: string = PACKAGE_ROOT_DIR,
@@ -49,19 +40,14 @@ export function purgeRunArtefacts(
     if (!existsSync(target)) {
       continue;
     }
+    // Only file trees are deleted — no file is opened, parsed or printed, so the payloads the captures keep are never read here (Rule 1 clause 9).
     rmSync(target, { recursive: true, force: true });
     removed.push(target);
   }
   return removed;
 }
 
-/**
- * The step's entry point: purges the artefacts, prints one line per artefact it removed plus one per artefact that was already absent and a summary line, and answers the process exit code to set.
- *
- * @param artefacts Artefacts to remove; {@link RUN_ARTEFACT_PATHS} unless a caller names its own.
- * @param packageRoot Directory every artefact must resolve inside; this module's `web-ng/` by default.
- * @returns `0` when every artefact was removed or was already absent, `1` after a message on stderr when a target was refused or a deletion failed.
- */
+/** The step's entry point: purges the artefacts, prints one line per artefact plus a summary, and answers the exit code — `0` when every target was removed or absent, `1` after a stderr message on refusal or failure. */
 export function main(
   artefacts: readonly string[] = RUN_ARTEFACT_PATHS,
   packageRoot: string = PACKAGE_ROOT_DIR,

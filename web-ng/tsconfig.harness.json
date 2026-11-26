@@ -5,5 +5,5 @@
     "noEmit": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["e2e/**/*.ts", "tools/**/*.ts"]
+  "include": ["playwright.config.ts", "e2e/**/*.ts", "tools/**/*.ts"]
 }

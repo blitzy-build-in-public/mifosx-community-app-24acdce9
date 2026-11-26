@@ -671,14 +671,9 @@ describe('ClientActionsComponent', () => {
     await settle();
   });
 
-  /*
-   * The permission gate on the submit control.
-   *
-   * The screen is the third end of one decision: the record gates its lifecycle entry on the
-   * command's own code, the `client/:id/:action` route declares that same code, and the button that
-   * posts the command asks for it here (AAP 0.1.1). Legacy gated exactly this button and rendered the
-   * rest of the form regardless, so the cases below assert the button alone (Rule 1 clause 3).
-   */
+  /* The permission gate on the submit control.
+   * The screen is the third end of one decision: the record gates its lifecycle entry on the command's own code, the `client/:id/:action` route declares that same code, and the button that posts the command asks for it here (AAP 0.1.1). Legacy
+   * gated exactly this button and rendered the rest of the form regardless, so the cases below assert the button alone (Rule 1 clause 3). */
 
   it('hides the submit control from a user who does not hold the command’s code', async () => {
     await show('close', CLIENT_ID, []);
@@ -723,8 +718,7 @@ describe('ClientActionsComponent', () => {
       const dateInput = host().querySelector<HTMLInputElement>('app-date-field input[type="date"]');
       const reasonSelect = host().querySelector<HTMLSelectElement>('app-select-field select');
 
-      // Both controls carry a rule and both announce it: the date, which Fineract's validator declares `notNull`, and the reason, which the legacy template marks
-      // required — so the picker's prompt row is not a choice and the control says as much.
+      // Both controls carry a rule and both announce it: the date, which Fineract's validator declares `notNull`, and the reason, which the legacy template marks required — so the picker's prompt row is not a choice and the control says as much.
       expect(dateInput).not.toBeNull();
       expect(dateInput?.getAttribute('aria-required')).toBe('true');
       expect(reasonSelect).not.toBeNull();
@@ -751,14 +745,9 @@ describe('ClientActionsComponent', () => {
     },
   );
 
-  /*
-   * The request sequence every command issues, and the body it carries.
-   *
-   * The cases above pin the states one command reaches; these pin what all five send, because the
-   * parity harness compares the ordered traffic rather than the screen, and because the three
-   * commands that take a reason, the one that activates and the one that reactivates post different
-   * bodies through the same form.
-   */
+  /* The request sequence every command issues, and the body it carries.
+   * The cases above pin the states one command reaches; these pin what all five send, because the parity harness compares the ordered traffic rather than the screen, and because the three commands that take a reason, the one that activates and
+   * the one that reactivates post different bodies through the same form. */
 
   it.each(COMMANDS)(
     'issues the gate, then the %s command, once each and in that order',

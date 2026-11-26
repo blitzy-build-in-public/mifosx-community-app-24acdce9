@@ -101,7 +101,6 @@ async function loadData(name: string, rule: string, violations: Violation[]): Pr
   }
 }
 
-/** 1-based line of the first occurrence of `needle` in `text`, or 0 when it is not there to be pointed at. */
 function lineOf(text: string, needle: string): number {
   const at = text.indexOf(needle);
   return at < 0 ? 0 : text.slice(0, at).split('\n').length;
@@ -166,13 +165,11 @@ function parseRoutes(stripped: string, decls: readonly RouteDecl[]): ParsedRoute
   return parsed;
 }
 
-/** The shape one entry renders: a redirect, the catch-all, or a component — `loadComponent` renders one as well. */
 function kindOf(entry: ParsedRoute): RouteKind {
   if (entry.decl.redirectTo !== null) return 'redirect';
   return entry.loadComponent || entry.decl.path !== '**' ? 'component' : 'wildcard';
 }
 
-/** The prefix a lower entry's full path is joined to, or `base` when the entry opens a new top-level branch. */
 function enclosingPrefix(open: readonly { depth: number; prefix: string }[], base: string): string {
   return open.at(-1)?.prefix ?? base;
 }

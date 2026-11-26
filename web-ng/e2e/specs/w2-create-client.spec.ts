@@ -376,6 +376,9 @@ test.describe('W2 create and activate a client', () => {
 
       // --------------------------------------------------------------------------------------- 8.
       await pages.clients.open();
+      // The list holds one page of fifteen rows and a find's answer is paged in the view, so the client is reached through the screen's own find — the server search its blue button submits — by the client number the record header printed: the one value a database holding more than one run's "Parity Client" cannot share, and the value the assertion below keys on (AAP 0.7.4 "search (server)").
+      await pages.clients.findList(header.clientNumber.trim());
+      await pages.clients.submitFilter();
       const listedAfter = await pages.clients.readRows();
       const swatchClasses: readonly string[] =
         pages.uiProject === 'legacy'

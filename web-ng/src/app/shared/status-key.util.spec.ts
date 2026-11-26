@@ -52,9 +52,8 @@ describe('toStatusKey', () => {
     }, );
 });
 
-/**
- * The distinction the vocabulary exists to make on the clients list: the state its "Show Closed" checkbox hides is a different key from the states that stay visible beside it, and both are legal keys of the one indicator (AAP 0.2.3 `StatusSwatch` row; AAP 0.7.4 "Show Closed").
- */
+/** The distinction the vocabulary exists to make on the clients list: the state its "Show Closed" checkbox hides is a different key from the states that stay visible beside it, and both are legal keys of the one indicator
+ * (AAP 0.2.3 `StatusSwatch` row; AAP 0.7.4 "Show Closed"). */
 describe('the closed and rejected states', () => {
   it('paint different keys, so the state "Show Closed" hides is distinguishable from the two it keeps', () => {
     const closed = toStatusKey('clientStatusType.closed');

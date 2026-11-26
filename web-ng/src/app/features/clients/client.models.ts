@@ -7,13 +7,10 @@ import { normaliseStatusCode, toStatusKey, type StatusKey } from '../../shared/s
 /** The five lifecycle commands in scope (AAP 0.7.3): the `command` of `POST /clients/{id}` and `ClientActionRequest`'s discriminant. */
 export type ClientActionCommand = 'activate' | 'close' | 'reject' | 'withdraw' | 'reactivate';
 
-/**
- * The legacy permission each lifecycle command requires, keyed by the command it gates. `satisfies Record<ClientActionCommand, string>` makes a command added to the
- * union without a permission a compile error, and this record is the one statement of the codes both the client record's action links
- * (`client-view/client-view.component.ts`) and the action screen's submit control (`client-actions/client-actions.component.ts`) carry, so the link that opens a
- * command and the button that submits it cannot disagree (AAP 0.9.1 item 1). It sits beside the command union it is keyed on rather than in either screen, so the
- * record screen and `clients.routes.ts` read the family's models and never another screen's component file (AAP 0.14.1 "One direction of dependency").
- */
+/** The legacy permission each lifecycle command requires, keyed by the command it gates. `satisfies Record<ClientActionCommand, string>` makes a command added to the union without a permission a compile error, and this record is the one statement
+ * of the codes both the client record's action links (`client-view/client-view.component.ts`) and the action screen's submit control (`client-actions/client-actions.component.ts`) carry, so the link that opens a command and the button that
+ * submits it cannot disagree (AAP 0.9.1 item 1). It sits beside the command union it is keyed on rather than in either screen, so the record screen and `clients.routes.ts` read the family's models and never another screen's component file
+ * (AAP 0.14.1 "One direction of dependency"). */
 export const CLIENT_ACTION_PERMISSIONS = {
   activate: 'ACTIVATE_CLIENT',
   close: 'CLOSE_CLIENT',

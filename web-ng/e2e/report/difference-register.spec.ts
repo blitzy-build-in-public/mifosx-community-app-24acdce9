@@ -35,7 +35,6 @@ function minimalReport(): ParityReport {
   return { header: HEADER, workflows: [PASS_ROW], differenceRegister: DIFFERENCE_REGISTER_READINGS };
 }
 
-/** Line index of the first line equal to `line`, or `-1` when the document does not hold it. */
 function indexOfLine(lines: readonly string[], line: string): number {
   return lines.findIndex((candidate) => candidate === line);
 }
@@ -46,14 +45,15 @@ function readingWhere(prefix: string): DifferenceRegisterReading | undefined {
 }
 
 describe('the deliberate-difference register\'s readings', () => {
-  it('holds the six readings this run takes from the plan, and no other', () => {
-    expect(DIFFERENCE_REGISTER_READINGS).toHaveLength(6);
+  it('holds the seven readings this run takes from the plan, and no other', () => {
+    expect(DIFFERENCE_REGISTER_READINGS).toHaveLength(7);
     expect(readingWhere('AAP 0.10.5 item 5')).toBeDefined();
     expect(readingWhere('AAP 0.10.5 item 15')).toBeDefined();
     expect(readingWhere('AAP 0.10.1')).toBeDefined();
     expect(readingWhere('AAP 0.10.5 — the session-expiry warning')).toBeDefined();
     expect(readingWhere('AAP 0.10.5 — the bounded request')).toBeDefined();
     expect(readingWhere('AAP 0.10.5 — a credential refusal')).toBeDefined();
+    expect(readingWhere('AAP 0.10.5 — the accessibility markup')).toBeDefined();
   });
 
   it('states all six members of every reading rather than leaving one empty', () => {
@@ -74,12 +74,16 @@ describe('the deliberate-difference register\'s readings', () => {
     expect(item5?.why).toContain('The revised totals stand in the report');
   });
 
-  it('records item 15 as the template-seeded disbursement and repayment dates, with no business-date request', () => {
+  it('records item 15 as the date defaults the application itself chooses, and the payload dates a server carries', () => {
     const item15 = readingWhere('AAP 0.10.5 item 15');
-    expect(item15?.delivered).toContain('disbursement date');
-    expect(item15?.delivered).toContain('transaction date');
-    expect(item15?.delivered).toContain('are the values the Fineract template that seeds the screen carries');
+    expect(item15?.delivered).toContain('every date default the application itself chooses comes from the browser clock');
+    expect(item15?.delivered).toContain('the repayment form\'s transaction date');
+    expect(item15?.delivered).toContain('Where a server payload carries the date a form opens on');
+    expect(item15?.delivered).toContain('the client create form\'s activation date comes from the client template\'s `activationDate`');
+    expect(item15?.delivered).toContain('the loan edit form\'s two dates come from the loan\'s own `timeline`');
+    expect(item15?.delivered).toContain('No form seeds a date member from GET /loans/template');
     expect(item15?.delivered).toContain('issues no business-date request');
+    expect(item15?.why).toContain('register as a request difference in every workflow');
   });
 
   it('records the W2 row as the plain client record read the parity spec asserts', () => {
@@ -121,6 +125,16 @@ describe('the deliberate-difference register\'s readings', () => {
     expect(refusal?.why).toContain('401 sent outside its CORS filter');
     expect(refusal?.why).toContain('legacy leaves the refused key in storage and its screen blank');
   });
+
+  it('records the accessibility markup the sixteen differences do not cover, naming legacy\'s bare trail and valueless href', () => {
+    const accessibility = readingWhere('AAP 0.10.5 — the accessibility markup');
+    expect(accessibility?.plan).toContain('no markup role, landmark or tab stop among them');
+    expect(accessibility?.delivered).toContain('<nav aria-label="Breadcrumb">');
+    expect(accessibility?.delivered).toContain('role="tab"');
+    expect(accessibility?.delivered).toContain('no tab offers an open-in-new-tab that would reload the page');
+    expect(accessibility?.why).toContain('Legacy renders the bare `<ul class="breadcrumb">`');
+    expect(accessibility?.why).toContain('require every deliberate difference to be listed with its reason');
+  });
 });
 
 describe('the rendered register', () => {
@@ -133,9 +147,9 @@ describe('the rendered register', () => {
         + 'above cites one of them by number. The entries below are the ones this run states on the register\'s '
         + 'behalf: readings narrower than the plan wrote them — at item 5 a difference the run does not deliver at '
         + 'all, as AAP 0.9.3\'s fixed cut order required, and at the session-expiry warning copy of the '
-        + 'application\'s own because no legacy bundle supplies it — and the two failure behaviours this run adds '
-        + 'where the sixteen differences name none, each stated with what the run delivers so that the register and '
-        + 'the specs agree.',
+        + 'application\'s own because no legacy bundle supplies it — the two failure behaviours this run adds '
+        + 'where the sixteen differences name none, and the accessibility markup the sixteen name nowhere, each '
+        + 'stated with what the run delivers so that the register and the specs agree.',
     );
   });
 

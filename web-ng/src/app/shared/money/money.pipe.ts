@@ -36,11 +36,8 @@ export class MoneyPipe implements PipeTransform {
   /** The language whose grouping and decimal separator the figure is rendered in: the application's `LOCALE_ID`, so a money figure groups the way the dates on the same screen word their months (AAP 0.7.2 "Date handling"). */
   private readonly locale: string = inject(LOCALE_ID);
 
-  /**
-   * Formats `value` for the screen, or reports that there is no figure. @param value The figure the payload reported, or `null`/`undefined` when it reported none.
-   * @param currency The currency the payload reported for that figure, when the surface prints one. @returns The figure with the currency's symbol in front of it, or
-   * the bare figure, or `null` — which the template renders as an empty cell, never as a zero or a `NaN` the payload never carried (Rule 1 clause 3).
-   */
+  /** Formats `value` for the screen, or reports that there is no figure. @param value The figure the payload reported, or `null`/`undefined` when it reported none. @param currency The currency the payload reported for that figure, when the surface
+   * prints one. @returns The figure with the currency's symbol in front of it, or the bare figure, or `null` — which the template renders as an empty cell, never as a zero or a `NaN` the payload never carried (Rule 1 clause 3). */
   transform(value: number | null | undefined, currency?: MoneyCurrency | null): string | null {
     // A figure that is absent or not a number has no rendering: `NaN` would otherwise print as "NaN", and the four states that reach this guard are a payload that omitted the member, a `null` the API sent instead of a number, `NaN` and an infinity.
     if (value === null || value === undefined || !Number.isFinite(value)) {

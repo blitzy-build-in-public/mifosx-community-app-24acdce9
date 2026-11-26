@@ -287,8 +287,7 @@ describe('RepaymentPreviewComponent', () => {
     const host = hostOf(await render(makeSchedule([makePeriod()])));
     const caption = tableOf(host)?.querySelector('caption');
 
-    // The caption is the table's own naming element and Bootstrap's `.sr-only` keeps it off the screen, so the
-    // preview is announced by the legacy bundle's schedule heading without a pixel moving.
+    // The caption is the table's own naming element and Bootstrap's `.sr-only` keeps it off the screen, so the preview is announced by the legacy bundle's schedule heading without a pixel moving.
     expect(textOf(caption ?? null)).toBe(TRANSLATIONS['label.heading.repaymentschedule']);
     expect(caption?.classList.contains('sr-only')).toBe(true);
     expect(tableOf(host)?.firstElementChild).toBe(caption);

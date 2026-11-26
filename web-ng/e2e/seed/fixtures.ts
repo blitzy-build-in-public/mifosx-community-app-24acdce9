@@ -1,4 +1,4 @@
-/** The parity harness's single source of truth: Fineract and front-end addresses, tenant, credentials, date formatting, the run date read from Fineract, and the fixed test data of AAP 0.10.1 — the staff member, the loan product, the loan charge, the savings product and the workflow records (AAP 0.10.3, Rule 1 clause 2). */
+/** The parity harness's single source of truth: Fineract and front-end addresses, tenant, credentials, date formatting, the run date read from Fineract, and the fixed test data of AAP 0.10.1 — the staff member, the loan product, the loan charge and the workflow records; the savings product is withheld by the first step of AAP 0.9.3's fixed cut order — the Stretch cut — which is recorded in AAP 0.9.3, web-ng/README.md and the parity report (AAP 0.10.3, Rule 1 clauses 2 and 10). */
 
 import { request } from '@playwright/test';
 import type { APIResponse } from '@playwright/test';
@@ -84,7 +84,6 @@ export function readCredentials(): Credentials {
   }
   return { username, password };
 }
-/** Narrows a JSON object payload; `Array.isArray` alone would leave the elements loosely typed. */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -133,7 +132,6 @@ export interface BusinessDateResponse {
   /** The date itself: 1-based month, as Fineract sends it. */
   readonly date: readonly [number, number, number];
 }
-/** Reads a `[year, month, day]` triple, or `null` when the value is not one. */
 function readDateParts(value: unknown): readonly [number, number, number] | null {
   if (!Array.isArray(value) || value.length !== 3) {
     return null;
@@ -335,7 +333,6 @@ export function formatFineractDate(date: Date): FineractDatePayload {
   const year = String(date.getUTCFullYear()).padStart(4, '0');
   return { date: `${day} ${monthName} ${year}`, dateFormat: PAYLOAD_DATE_FORMAT, locale: LOCALE };
 }
-/** Milliseconds of a date's UTC midnight, rejecting an invalid date rather than computing `NaN`. */
 function utcMidnight(date: Date, caller: string): number {
   if (Number.isNaN(date.getTime())) {
     throw new Error(`${caller}() needs a valid Date; received ${String(date)}`);

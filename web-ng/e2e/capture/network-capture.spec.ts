@@ -59,12 +59,9 @@ interface FakeRequestOptions {
   readonly url: string;
   /** HTTP method; `get` when unset. */
   readonly method?: string;
-  /** Playwright resource type; `fetch` when unset, which the recorder accepts. */
   readonly resourceType?: string;
   readonly headers?: Record<string, string>;
-  /** Raw body text, or `null`/absent when the request carried none. */
   readonly body?: string | null;
-  /** The parsed body; omitted when the body is not JSON, which is what makes `postDataJSON` throw. */
   readonly json?: unknown;
 }
 /** A stand-in for Playwright's `Request`: the identity `startCapture` keys its exchanges on. */

@@ -4,33 +4,22 @@ import { FINERACT_URL, LEGACY_URL, TENANT_ID, formatFineractDate } from '../../s
 import { chooseOption } from './chosen';
 
 export interface LoanApplicationValues {
-  /** Visible label of the product to choose from `select#productId`, matched by `chooseOption`. */
   productName?: string;
   /** Submitted-on date, typed into `input#submittedOnDate` as `dd MMMM yyyy`. */
   submittedOnDate?: Date;
   /** Expected disbursement date, typed into `input#expectedDisbursementDate` the same way. */
   expectedDisbursementDate?: Date;
-  /** Principal the Terms step's `#principal` field receives, exactly as the caller supplied it. */
+  /** Principal the Terms step's `#principal` field receives, exactly as the caller supplied it — no client-side bound, which W7 relies on (AAP 0.10.1 W7). */
   principal?: string;
-  /** Number of repayments the Terms step's `#numberOfRepayments` field receives. */
   numberOfRepayments?: string;
-  /** Repayment interval the Terms step's `#repaymentEvery` field receives (`repaymentEvery`). */
   repaymentEvery?: string;
-  /** Visible label of `select#repaymentFrequencyType`, the Terms step's frequency option. */
   repaymentFrequency?: string;
-  /** Nominal interest rate the Terms step's `#interestRatePerPeriod` control receives. */
   interestRatePerPeriod?: string;
-  /** Visible label of `select#amortizationType` (`amortizationType`). */
   amortizationType?: string;
-  /** Visible label of `select#interestType` (`interestType`). */
   interestType?: string;
-  /** Visible label of `select#interestCalculationPeriodType`. */
   interestCalculationPeriodType?: string;
-  /** Visible label of `select#transactionProcessingStrategyId`, the processing strategy option. */
   transactionProcessingStrategy?: string;
-  /** Visible label of `select#loanOfficerId`, the officer the application is assigned to. */
   loanOfficerName?: string;
-  /** Visible label of `select#fundId`, the fund the application draws on. */
   fundName?: string;
   chargeAmounts?: string[];
 }
@@ -63,7 +52,6 @@ export interface LoanSummary {
 }
 
 export interface ScheduleRow {
-  /** Period column (`#`), the schedule period's sequence number. */
   period: string;
   fromDate: string;
   dueDate: string;
@@ -76,13 +64,11 @@ export interface ScheduleRow {
 }
 
 export interface TransactionRow {
-  /** Id column, the transaction's Fineract id. */
   id: string;
   /** Transaction-date column, formatted by the legacy `DateFormat` filter. */
   date: string;
   /** Transaction-type column: Fineract's `type.value`, without the reversal marker. */
   type: string;
-  /** Amount column, the transaction's Fineract `amount`. */
   amount: string;
   /** Principal column, Fineract's `principalPortion`. */
   principal: string;
@@ -97,10 +83,8 @@ export interface TransactionRow {
 }
 
 export interface LoanActionValues {
-  /** The form's transaction or action date control, typed as `dd MMMM yyyy`. */
   date?: Date;
   amount?: string;
-  /** The note textarea, on the forms whose legacy controller renders one. */
   note?: string;
   /** Visible label of `select#paymentTypeId`, the payment type the transaction template fills. */
   paymentType?: string;
@@ -172,11 +156,8 @@ const TRANSACTION_COLUMNS = {
   outstandingBalance: ['loan balance', 'outstanding balance', 'balance'],
 } as const;
 
-/** The legacy form control each fillable field resolves to, by label text and by element id. */
 interface FieldSpec {
-  /** Field key as the models spell it, used for the `formControlName` fallback. */
   readonly key: string;
-  /** Element id the legacy form gives the control. */
   readonly id: string;
   /** Label texts, in the legacy's own English wording (app/global-translations/locale-en.json). */
   readonly labels: readonly string[];
@@ -299,7 +280,6 @@ function resolveFieldElement(spec: FieldSpec): Element | null {
   return null;
 }
 
-/** Runs inside the legacy page: writes a value into a control and tells AngularJS and the jQuery plugins about it. */
 function applyNativeValue(element: Element, value: string): void {
   if (!(element instanceof HTMLInputElement) && !(element instanceof HTMLTextAreaElement)) return;
   element.value = value;
@@ -410,7 +390,6 @@ function setWindowHash(hash: string): void {
   window.location.hash = hash;
 }
 
-/** Runs inside the legacy page: the class of the record's rendered status indicator. */
 function readStatusIndicatorClass(): string {
   for (const icon of Array.from(document.querySelectorAll('i.fa-stop'))) {
     if (icon instanceof HTMLElement && icon.offsetParent !== null) {
@@ -428,12 +407,10 @@ function isTableGrid(value: unknown): value is TableGrid {
   return Array.isArray(candidate.rowClasses);
 }
 
-/** A grid with no columns and no rows, so a reader of an absent table answers `[]`. */
 function emptyGrid(): TableGrid {
   return { columns: [], rows: [], rowClasses: [] };
 }
 
-/** The index of the column an alias list names, or `-1` when the table carries none of them. */
 function columnIndex(grid: TableGrid, aliases: readonly string[]): number {
   for (const alias of aliases) {
     const wanted = alias.trim().toLowerCase();
@@ -445,7 +422,6 @@ function columnIndex(grid: TableGrid, aliases: readonly string[]): number {
   return -1;
 }
 
-/** One cell of a row, `''` when the row or the column is absent. */
 function cellAt(cells: readonly string[], index: number): string {
   if (index < 0 || index >= cells.length) return '';
   return (cells[index] ?? '').trim();
@@ -777,7 +753,6 @@ export class LoansPage {
     return hash === undefined ? base : `${base}#${hash}`;
   }
 
-  /** Opens one legacy hash route and waits for the locator that proves the destination rendered. */
   private async gotoHash(hash: string, ready: Locator): Promise<void> {
     await this.page.goto(this.entryUrl(hash));
     if (await this.settles(ready)) return;

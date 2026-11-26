@@ -25,7 +25,6 @@ export interface ClientSnapshot {
   readonly activationDateOffset: number | null;
   /** The seed office the client sits in — a fixed seed id (office 1, AAP 0.10.1), not a generated one. */
   readonly officeId: number | null;
-  /** The name the record screen shows, e.g. `Parity Client`. */
   readonly displayName: string;
   /** Loans in `GET /clients/{id}/accounts`; `0` when the payload held no loan list. */
   readonly loanAccountCount: number;
@@ -36,11 +35,9 @@ export interface ClientSnapshot {
 }
 /** A loan account's end state, reduced to what W4 to W7 assert: the submitted terms, the money the schedule and the balance carry, and the transactions and charges a workflow adds. */
 export interface LoanSnapshot {
-  /** Status as Fineract names it, e.g. `Submitted` or `Active`; `''` only when the payload carried none. */
   readonly status: string;
   /** Principal as submitted — W4's 5,000. */
   readonly principal: number | null;
-  /** The approved principal Fineract reports; `null` only when the payload carried none. */
   readonly approvedPrincipal: number | null;
   /** `summary.totalExpectedRepayment` — what W6's outstanding balance is measured against. */
   readonly totalExpectedRepayment: number | null;
@@ -57,7 +54,6 @@ export interface StateSnapshot {
   readonly project: 'legacy' | 'next';
   /** Workflow id the snapshot covers, e.g. `W2` or `CHAIN`. */
   readonly workflow: string;
-  /** The run date the dates were offset from, `yyyy-mm-dd`. */
   readonly runDate: string;
   readonly client?: ClientSnapshot;
   readonly loan?: LoanSnapshot;
@@ -79,16 +75,13 @@ export interface StateTargets {
 export interface StateDiff {
   /** What differs, as a value path: `client.status` or `loan.totalOutstanding`. */
   readonly field: string;
-  /** The legacy side's value; `null` when that side has no such section or the field is absent. */
   readonly legacy: NormalizedValue;
-  /** The new app's value; `null` when that side has no such section or the field is absent. */
   readonly next: NormalizedValue;
 }
 /** Raised when a snapshot read answers with anything but a usable 2xx JSON body; it carries the resource path and HTTP status (`0` when no response arrived) and deliberately no body, header or credential (Rule 1 clause 9). */
 export class StateSnapshotError extends Error {
   /** The resource the read asked for, e.g. `/loans/45?associations=all` — a path, never a host. */
   readonly endpoint: string;
-  /** HTTP status Fineract answered with, or `0` when no response arrived. */
   readonly status: number;
 
   constructor(endpoint: string, status: number, message?: string) {
@@ -104,7 +97,6 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     ? (value as Record<string, unknown>)
     : null;
 }
-/** One key of an object, or `undefined` when the object is absent or holds no such key. */
 function field(record: Record<string, unknown> | null, key: string): unknown {
   return record === null ? undefined : record[key];
 }
@@ -196,7 +188,6 @@ export function reduceLoan(raw: unknown): LoanSnapshot {
     chargeCount: asArray(field(loan, 'charges')).length,
   };
 }
-/** Query parameters of one snapshot read, in the shape Playwright's `params` option takes. */
 type QueryParameters = Readonly<Record<string, string>>;
 /** The association set the loan read asks for — `?associations=all`, which is what the record screen sends (AAP 0.7.3 W6) — passed as the request's `params` option so this module carries no URL literal. */
 const ALL_ASSOCIATIONS: QueryParameters = { associations: 'all' };

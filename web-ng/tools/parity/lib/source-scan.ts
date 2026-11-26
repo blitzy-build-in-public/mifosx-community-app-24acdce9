@@ -12,9 +12,7 @@ export interface Located { line: number; column: number }
 export interface Literal extends Located { value: string; start: number; end: number }
 /** A `path:` entry of a `Routes` array with the mechanism that decides where it leads. */
 export interface RouteDecl extends Located { path: string; kind: 'component' | 'redirect' | 'wildcard' | 'lazy'; redirectTo: string | null; lazySpecifier: string | null }
-/** An `@Injectable` class; consumed by `check:wiring` gate (a). */
 export interface InjectableDecl { name: string; line: number }
-/** A `@Component` class with its selector; consumed by `check:wiring` gate (b). */
 export interface ComponentDecl { name: string; selector: string | null; line: number }
 const DEFAULT_SKIP: readonly string[] = ['node_modules', '.git', 'dist', 'out-tsc', '.angular', 'coverage', 'playwright-report', 'test-results', '.captures'];
 const COMMENT_OR_STRING = /(['"`])(?:\\.|(?!\1)[^\\])*\1|\/\/[^\n]*|\/\*[\s\S]*?(?:\*\/|$)/g;

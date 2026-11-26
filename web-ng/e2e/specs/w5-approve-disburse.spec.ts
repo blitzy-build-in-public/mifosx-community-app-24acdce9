@@ -52,7 +52,6 @@ function asRecord(value: NormalizedValue | undefined): JsonObject | null {
   return value;
 }
 
-/** A recorded text field, or `''` when the field is absent or was not a string. */
 function asText(value: NormalizedValue | undefined): string {
   return typeof value === 'string' ? value : '';
 }

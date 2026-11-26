@@ -9,14 +9,12 @@ import { PACKAGE_ROOT_DIR, RUN_ARTEFACT_PATHS, main, purgeRunArtefacts } from '.
 /** Every temporary root this spec created, emptied after each case so a failed assertion leaves nothing behind and the real `e2e/.captures` and report files are never a target. */
 const temporaryRoots: string[] = [];
 
-/** A fresh package root in the OS temporary directory, shaped like `web-ng/` by the caller and registered for cleanup. */
 function makePackageRoot(): string {
   const root = mkdtempSync(join(tmpdir(), 'web-ng-retention-'));
   temporaryRoots.push(root);
   return root;
 }
 
-/** The three artefact paths inside one package root, in {@link RUN_ARTEFACT_PATHS} order. */
 function artefactsOf(packageRoot: string): string[] {
   return [
     join(packageRoot, 'e2e', '.captures'),
@@ -37,7 +35,6 @@ function writeOneRun(packageRoot: string): string[] {
   return artefacts;
 }
 
-/** The text every line the case printed makes together, so an assertion can read the step's output without depending on how many console methods it used. */
 function printed(spy: { mock: { calls: unknown[][] } }): string {
   return spy.mock.calls.map((call: unknown[]): string => call.join(' ')).join('\n');
 }

@@ -22,7 +22,6 @@ export interface AccountRow {
   accountType: 'loan' | 'savings' | 'other';
   accountNo: string;
   productName: string;
-  /** Raw `class` attribute of the row's status marker; the status is never read as text. */
   statusClass: string;
   balance: string;
 }
@@ -77,7 +76,6 @@ const NEW_LOAN_LABEL = 'New Loan';
 const LOAN_ACCOUNT_ROUTE = '#/viewloanaccount/';
 const NEW_LOAN_ROUTE = '#/newclientloanaccount/';
 
-/** How long a hash jump is given to take effect before the helper drives `location.hash` directly. */
 const HASH_SETTLE_TIMEOUT_MS = 2_000;
 
 function normalize(value: string): string {
@@ -372,7 +370,6 @@ export class ClientViewPage {
     throw new Error(`The legacy app did not move to ${hash}; it is showing ${shown}.`);
   }
 
-  /** Whether the page's hash has become `hash` within {@link HASH_SETTLE_TIMEOUT_MS}. */
   private async hashSettles(hash: string): Promise<boolean> {
     try {
       await this.page.waitForFunction((target: string) => window.location.hash === target, hash, {
@@ -384,7 +381,6 @@ export class ClientViewPage {
     }
   }
 
-  /** Waits until the page's hash starts with `prefix` — the route an action led to. */
   private async hashStartsWith(prefix: string): Promise<void> {
     await this.page.waitForFunction((wanted: string) => window.location.hash.startsWith(wanted), prefix);
   }
@@ -396,7 +392,6 @@ export class ClientViewPage {
     await this.selectTab(label);
   }
 
-  /** The tab strip's link whose rendered text is exactly `label`. Confirm against the running legacy app. */
   private tabLink(label: string): Locator {
     return this.page.locator(`${TAB_STRIP} a:text-is(${JSON.stringify(label)})`).first();
   }
@@ -418,12 +413,10 @@ export class ClientViewPage {
     return this.labelled(this.actionGroup(), MORE_LABEL).first();
   }
 
-  /** The visible elements of `scope` whose rendered text is exactly `label`. */
   private labelled(scope: Locator, label: string): Locator {
     return scope.getByText(label, { exact: true }).filter({ visible: true });
   }
 
-  /** The rendered text of every visible element of `scope`, trimmed, without the empty icon-only ones. */
   private async readVisibleLabels(scope: Locator): Promise<string[]> {
     const labels = await scope.filter({ visible: true }).allInnerTexts();
     return labels.map(normalize).filter((label) => label.length > 0);

@@ -67,7 +67,6 @@ const LEGACY_LANGUAGE_NAMES: ReadonlyMap<string, string> = new Map<string, strin
 /** The same codes as a lookup set, used to recognise which `<select>` is the language switcher. */
 const LEGACY_LANGUAGE_CODES: ReadonlySet<string> = new Set<string>(LEGACY_LANGUAGE_NAMES.keys());
 
-/** Runs inside the page: the value of every `<option>` of the element, in document order, or `[]` when the locator resolved to something other than a `<select>`. */
 function readOptionValues(element: HTMLElement): string[] {
   if (!(element instanceof HTMLSelectElement)) {
     return [];
@@ -307,7 +306,6 @@ export class LoginPage {
       .filter({ has: this.page.locator('ul.lang-dropdown') });
   }
 
-  /** The switcher's dropdown button, which opens the `ul.lang-dropdown` list of languages. */
   private get legacyLanguageToggle(): Locator {
     return this.legacyLanguageGroup.locator('button[uib-dropdown-toggle]').first();
   }
@@ -403,12 +401,10 @@ export class LoginPage {
       .then(() => undefined, () => undefined);
   }
 
-  /** Whether the design's login form became visible within `timeout`. */
   private async waitForLoginForm(timeout: number = LOGIN_FORM_TIMEOUT_MS): Promise<boolean> {
     return this.waitForVisible(this.loginForm, timeout);
   }
 
-  /** Whether `locator`'s first match became visible within `timeout`, without throwing on a miss. */
   private async waitForVisible(locator: Locator, timeout: number): Promise<boolean> {
     return locator
       .first()

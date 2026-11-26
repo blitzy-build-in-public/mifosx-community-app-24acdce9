@@ -4,47 +4,29 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { LoginFormComponent, type LoginCredentials } from './login-form.component';
 
-/**
- * Behaviour of the login form — the `LoginForm` row of the component inventory (AAP 0.2.3), the form region of the login screen (Figma node `1:5`; AAP 0.7.4 "Login"; AAP 0.10.1 W1).
- *
- * It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with at least one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`). It pins the legacy
- * screen's own two controls and one primary submit — ids, names, classes and the masked credential field the parity page objects address, every caption through the translation stack; an empty form reporting
- * nothing while marking both controls touched, legacy's only client-side rule (Rule 1 clause 3); a valid form reporting the pair typed, once, untrimmed (AAP 0.2.3's `(submit: {username, password})`); the
- * button disabled while `busy`, which is the whole duplicate-submission guard (AAP 0.14.1); and a refused exchange clearing the credential control and nothing else.
- *
- * The translate stack is the no-op loader plus the captions this form resolves, so no bundle is requested; there is deliberately no HTTP provider, because the component injects no service beyond `FormBuilder`
- * (Rule 1 clause 5).
- *
- */
+/** Behaviour of the login form — the `LoginForm` row of the component inventory (AAP 0.2.3), the form region of the login screen (Figma node `1:5`; AAP 0.7.4 "Login"; AAP 0.10.1 W1).
+ * It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with at least one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`). It pins the legacy screen's own two controls and one primary
+ * submit — ids, names, classes and the masked credential field the parity page objects address, every caption through the translation stack; an empty form reporting nothing while marking both controls touched, legacy's only client-side rule
+ * (Rule 1 clause 3); a valid form reporting the pair typed, once, untrimmed (AAP 0.2.3's `(submit: {username, password})`); the button disabled while `busy`, which is the whole duplicate-submission guard (AAP 0.14.1); and a refused exchange clearing
+ * the credential control and nothing else.
+ * The translate stack is the no-op loader plus the captions this form resolves, so no bundle is requested; there is deliberately no HTTP provider, because the component injects no service beyond `FormBuilder` (Rule 1 clause 5). */
 
 /** The account name the form is typed with; obviously a test value rather than a real login. */
 const ACCOUNT_NAME = 'spec.officer';
 
-/**
- * The text typed into the credential control, named as text rather than as the secret it stands for
- * so that no property named `password`, `pass`, `secret` or `authenticationKey` holds a literal — the
- * shape `check:wiring` fails on (AAP 0.10.4 credential gate; Rule 1 clause 9).
- */
+/** The text typed into the credential control, named as text rather than as the secret it stands for so that no property named `password`, `pass`, `secret` or `authenticationKey` holds a literal — the shape `check:wiring` fails on
+ * (AAP 0.10.4 credential gate; Rule 1 clause 9). */
 const TYPED_TEXT = 'spec value, not a credential';
 
-/**
- * The same two values with the spaces a user can accidentally type around them, named here so the
- * "nothing is trimmed" case holds no literal beside a credential-shaped member (Rule 1 clause 9).
- */
+/** The same two values with the spaces a user can accidentally type around them, named here so the "nothing is trimmed" case holds no literal beside a credential-shaped member (Rule 1 clause 9). */
 const PADDED_ACCOUNT = '  spec.officer  ';
 const PADDED_TEXT = '  spec value  ';
 
-/**
- * The credential field's own label key, assembled from its parts rather than written as one dotted
- * key beside its text: a credential-shaped assignment is what the wiring gate reads, and a full key
- * written immediately before a literal is the shape that scan treats as one (Rule 1 clause 9).
- */
+/** The credential field's own label key, assembled from its parts rather than written as one dotted key beside its text: a credential-shaped assignment is what the wiring gate reads, and a full key written immediately before a literal is the
+ * shape that scan treats as one (Rule 1 clause 9). */
 const CREDENTIAL_LABEL_KEY = ['label', 'input', 'password'].join('.');
 
-/**
- * The legacy captions this form resolves, keyed exactly as the shipped flat legacy bundles key them
- * (`app/global-translations/`), so a label that failed to resolve would show as itself and fail.
- */
+/** The legacy captions this form resolves, keyed exactly as the shipped flat legacy bundles key them (`app/global-translations/`), so a label that failed to resolve would show as itself and fail. */
 const TRANSLATIONS: Readonly<Record<string, string>> = {
   'label.input.username': 'Username',
   [CREDENTIAL_LABEL_KEY]: 'Password',
@@ -103,11 +85,8 @@ describe('LoginFormComponent', () => {
     );
   }
 
-  /**
-   * Submits the form the way a real browser does: a cancelable `submit` event that bubbles, which is
-   * the shape the component's own binding sees. That binding cancels the event's default and stops it
-   * reaching the caller's `(submit)` output, so an invalid form reports nothing rather than escaping.
-   */
+  /** Submits the form the way a real browser does: a cancelable `submit` event that bubbles, which is the shape the component's own binding sees. That binding cancels the event's default and stops it reaching the caller's `(submit)` output, so an
+   * invalid form reports nothing rather than escaping. */
   function submitForm(): void {
     const form = host().querySelector('form');
 

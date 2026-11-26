@@ -100,7 +100,6 @@ export interface NormalizedCapture {
   readonly project: string | null;
   /** Workflow id the capture covers, e.g. `W2` or `CHAIN`, `null` when unset. */
   readonly workflow: string | null;
-  /** The run date the dates were offset from, `yyyy-mm-dd`, or `null` when no run date was supplied. */
   readonly runDate: string | null;
   /** Exchanges in the order the page issued them — the order AAP 0.10.1 compares. */
   readonly exchanges: readonly NormalizedExchange[];
@@ -116,7 +115,6 @@ export interface CaptureOptions {
 }
 /** A running capture: `stop()` and `write()` may be called in either order, and `write()` awaits {@link CaptureSession.settle} so the file carries every body the page had fetched. */
 export interface CaptureSession {
-  /** The capture being built; its `exchanges` fills as the page makes calls and its `roles` answers for whatever has been recorded so far. */
   readonly capture: NormalizedCapture;
   stop(): NormalizedExchange[];
   /** Detaches the listeners, waits for every in-flight response body read, then freezes the records and answers with the exchanges; idempotent, and the array is the one `stop()` returned. */
@@ -126,14 +124,11 @@ export interface CaptureSession {
 /** One difference between two captures, anchored to the exchange it occurred in — by position, method and path, because AAP 0.10.2 compares the ordered API calls. */
 export interface ExchangeDiff {
   readonly index: number;
-  /** Method of the exchange the difference belongs to; the legacy side's when both exist. */
   readonly method: string;
   readonly path: string;
   /** What differs, as a value path: `method`, `path`, `query.command`, `status`, `hasTenantHeader`, `hasAuthorizationHeader`, `requestBody.principal`, `responseBody.errors[0].defaultUserMessage`, or `exchange`. */
   readonly field: string;
-  /** The legacy side's value; `null` when that side has no such value or no such exchange. */
   readonly legacy: NormalizedValue;
-  /** The new app's value; `null` when that side has no such value or no such exchange. */
   readonly next: NormalizedValue;
 }
 /** Whether a URL addresses a static asset rather than an API call — AAP 0.10.2 excludes them and the fixture's host assertion reads this same definition; an unparseable URL answers `false` instead of throwing. */
@@ -153,7 +148,6 @@ export function isStaticAssetUrl(url: string): boolean {
   return dot >= 0 && STATIC_ASSET_EXTENSIONS.includes(lastSegment.slice(dot + 1));
 }
 class RoleRegistry {
-  /** `${role}\u0000${realId}` to the token that id was given. */
   private readonly tokens = new Map<string, string>();
   /** Role to the number of distinct ids it has been given, which yields the `_2`, `_3` suffixes. */
   private readonly counts = new Map<string, number>();
@@ -191,7 +185,6 @@ const ROLE_NAMES: ReadonlyMap<string, string> = new Map<string, string>([
   ['datatables', 'dataTableId'],
   ['paymenttypes', 'paymentTypeId'],
 ]);
-/** The plural noun as a singular one (`reports` becomes `report`), leaving alone a noun already singular or ending in `us`/`ss`, as `status` and `address` do. */
 function singularise(noun: string): string {
   if (noun.endsWith('ies') && noun.length > 3) {
     return `${noun.slice(0, -3)}y`;
@@ -201,7 +194,6 @@ function singularise(noun: string): string {
   }
   return noun.endsWith('s') && noun.length > 1 ? noun.slice(0, -1) : noun;
 }
-/** The role an id segment carries, named for the collection it identifies, and `id` when the path offers none. */
 function roleForSegment(segments: readonly string[], position: number): string {
   const parent: string | undefined = position > 0 ? segments[position - 1] : undefined;
   if (parent === undefined || parent.length === 0 || /^\d+$/.test(parent)) {
@@ -241,7 +233,6 @@ function dateOffsetToken(date: Date, runDate: Date): string {
 }
 interface WalkContext {
   readonly roles: RoleRegistry;
-  /** The tenant's business date, or `null` to leave payload dates verbatim. */
   readonly runDate: Date | null;
   readonly dropAuditBlock: boolean;
 }
@@ -504,7 +495,6 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
       return merged;
     },
   };
-  /** The exchanges in record order, built once and handed out unchanged, so `stop()` and `settle()` answer with one array and `capture.exchanges` agrees with both. */
   function exchanges(): NormalizedExchange[] {
     collected ??= tracked.map((entry) => entry.record);
     return collected;
@@ -580,26 +570,21 @@ async function readsSettled(reads: readonly Promise<void>[]): Promise<boolean> {
 function summariseExchange(exchange: NormalizedExchange): NormalizedValue {
   return `${exchange.method} ${exchange.path} -> ${exchange.status}`;
 }
-/** An exchange at a position, or `undefined` past the end, so a length mismatch is a value not a throw. */
 function exchangeAt(exchanges: readonly NormalizedExchange[], index: number): NormalizedExchange | undefined {
   return index < exchanges.length ? exchanges[index] : undefined;
 }
-/** A normalised value as an array, or `null` when it is not one. */
 function asArray(value: NormalizedValue): readonly NormalizedValue[] | null {
   return Array.isArray(value) ? value : null;
 }
-/** A normalised value as an object, or `null` when it is not one. */
 function asObject(value: NormalizedValue): { [key: string]: NormalizedValue } | null {
   if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
     return value;
   }
   return null;
 }
-/** A record's field as a comparable value: `null` when the field is absent on that side. */
 function fieldValue(record: { [key: string]: NormalizedValue }, key: string): NormalizedValue {
   return Object.hasOwn(record, key) ? record[key] : null;
 }
-/** An array's element, or `null` past the end, so arrays of different lengths compare element by element. */
 function elementAt(values: readonly NormalizedValue[], index: number): NormalizedValue {
   return index < values.length ? values[index] : null;
 }

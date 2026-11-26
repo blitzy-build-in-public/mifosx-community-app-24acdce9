@@ -263,7 +263,6 @@ export class LoginPage {
     return labelled.or(menu.locator('li a').last()).first();
   }
 
-  /** The first candidate selector that resolved to an element inside `scope`, or `null` when none did. */
   private async findControl(
     selectors: readonly string[],
     scope: Locator = this.root(),

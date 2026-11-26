@@ -1,5 +1,5 @@
 /** Page object for the new Angular application's client screens — the `next` project's side of workflow **W2** (create a client and activate it), workflow **W3** (search for a client and read the list's answer), the client lifecycle actions and the validation surface workflow **W7** asserts (AAP 0.10.1, AAP 0.11.1, AAP 0.8.1, AAP 0.8.2). */
-import type { Locator, Page } from '@playwright/test';
+import type { Locator, Page, Response } from '@playwright/test';
 
 import { FINERACT_URL, NEXT_URL, TENANT_ID } from '../../seed/fixtures.js';
 
@@ -17,7 +17,6 @@ export interface ClientRow {
 }
 
 export interface StatusSwatchView {
-  /** The colour class the indicator carries, or `''` when the element carries none of the four. */
   readonly statusClass: string;
   /** The indicator's own text, which is `''` by design — never a status word read from a neighbour. */
   readonly text: string;
@@ -58,15 +57,10 @@ export interface ClientFormValues {
   /** Office to select by its id, e.g. `1`; the create form's own first field. */
   readonly officeId?: number | string;
   readonly staffId?: number | string;
-  /** First name (`#firstname`) — required by the form on the person branch. */
   readonly firstname?: string;
-  /** Last name (`#lastname`) — required by the form on the person branch. */
   readonly lastname?: string;
-  /** External identifier (`#externalId`); optional on the form. */
   readonly externalId?: string;
-  /** Mobile number (`#mobileNo`); optional on the form. */
   readonly mobileNo?: string;
-  /** `yyyy-mm-dd`, always supplied by the caller from the run date — never computed here. */
   readonly submittedOnDate?: string;
   /** `yyyy-mm-dd`; rendered only while the client is to be created active, so `active` must be set too. */
   readonly activationDate?: string;
@@ -77,6 +71,9 @@ export interface ClientFormValues {
 export type ClientAction = 'activate' | 'close' | 'reject' | 'withdraw' | 'reactivate';
 
 const LIST_ROOT = 'app-client-list';
+
+/** The find field's own read: `GET /search`, the server search legacy's `ClientController.search()` makes for the same text and the only request a find submission issues (AAP 0.7.3 row "Shell: global search"; AAP 0.7.4 "search (server)"). */
+const FIND_PATH = '/search';
 
 const CREATE_ROOT = 'app-client-create';
 
@@ -105,18 +102,19 @@ const SCREEN_TIMEOUT_MS = 30_000;
 
 const REPAINT_TIMEOUT_MS = 10_000;
 
+/** Ceiling for the create form's option lists to arrive: the screen reads `GET /clients/template` when it is constructed, so its office and staff pickers carry no option for a moment after the form paints (AAP 0.7.3 "W2 create and activate client"). */
+const TEMPLATE_TIMEOUT_MS = 30_000;
+
+const OPTION_POLL_INTERVAL_MS = 100;
+
 
 interface RowReading {
-  /** Every `td` of the row, trimmed, in document order. */
   readonly cells: readonly string[];
-  /** The colour class of the row's status indicator, or `''` when the row paints none. */
   readonly statusClass: string;
-  /** The `href` of the row's visible link, or `null` when the row offers none. */
   readonly link: string | null;
 }
 
 interface SwatchReading {
-  /** The colour class the indicator carries, or `''`. */
   readonly statusClass: string;
   readonly text: string;
 }
@@ -127,26 +125,19 @@ interface NotificationReading {
 }
 
 interface RowQuery {
-  /** Selector of the screen root the table lives in, e.g. `app-client-list`. */
   readonly rootSelector: string;
-  /** Selector of the rows, relative to that root, e.g. `table tbody tr`. */
   readonly rowSelector: string;
 }
 
 interface SearchBlockQuery {
-  /** Selector of the results screen's root, e.g. `app-search-results`. */
   readonly rootSelector: string;
-  /** Selector of one result block, relative to that root, e.g. `.blockquoteresult`. */
   readonly blockSelector: string;
 }
 
 interface SearchBlockReading {
   readonly primaryText: string;
-  /** The line beneath it, e.g. `Entity:Client | Office:Head Office`; `''` when absent. */
   readonly secondaryText: string;
-  /** The account number the block prints after its `#`, or `''` when it prints none. */
   readonly accountNo: string;
-  /** The href the block's link points at, or `null` when the link is not displayed. */
   readonly link: string | null;
 }
 
@@ -378,7 +369,6 @@ function requireRouteId(value: number | string, role: string): string {
   return text;
 }
 
-/** Reads a cell by position, answering `''` for a column the row does not render. */
 function cellAt(cells: readonly string[], index: number): string {
   return index >= 0 && index < cells.length ? cells[index] : '';
 }
@@ -411,7 +401,7 @@ export class ClientsPage {
     await this.awaitListSettled();
   }
 
-  /** Opens the create-client form, the entry point of workflow W2. */
+  /** Opens the create-client form, the entry point of workflow W2, and waits for the Fineract template that fills its office and staff pickers, so a caller reads the form's options only once they exist (AAP 0.7.3 "W2 create and activate client"). */
   async openCreateForm(): Promise<void> {
     await this.navigate('/clients');
     await this.awaitScreen(LIST_ROOT, 'the clients list');
@@ -429,6 +419,7 @@ export class ClientsPage {
     }
 
     await this.awaitScreen(CREATE_ROOT, 'the create-client form');
+    await this.awaitCreateFormFilled();
   }
 
   async searchGlobal(query: string, scope?: 'all' | 'clients' | 'loans'): Promise<void> {
@@ -497,7 +488,7 @@ export class ClientsPage {
     await find.fill(text);
   }
 
-  /** Submits the toolbar's find, the list's one server search. The blue primary control inside the find field's `.input-group` is the screen's own submit. */
+  /** Submits the toolbar's find, the list's one server search. The blue primary control inside the find field's `.input-group` is the screen's own submit. The wait ends once the screen has applied the find's answer — the `GET /search` the click issues has answered and the card's own `aria-busy` mark is gone — so a caller reads the find's rows and never the page that was in view before it (AAP 0.7.4 "search (server)"; AAP 0.14.1 "one request per click"). */
   async submitFilter(): Promise<void> {
     const button = this.page
       .locator(
@@ -510,8 +501,17 @@ export class ClientsPage {
       throw new Error(`the clients list rendered no search submit inside ${LIST_ROOT}`);
     }
 
+    const answered = this.page
+      .waitForResponse(
+        (response: Response): boolean =>
+          response.request().method() === 'GET' && response.url().includes(FIND_PATH),
+        { timeout: SCREEN_TIMEOUT_MS },
+      )
+      .catch((): null => null);
+
     await button.click();
-    await this.awaitListReplaced();
+    await answered;
+    await this.awaitListApplied();
   }
 
   /** Reads the list's column headings, in document order. The six captions are translated at run time from the legacy bundles, so they are reported as rendered and never hard-coded here: a caller compares them with the API-derived values (AAP 0.10.2) rather than with an invented English string. */
@@ -561,6 +561,7 @@ export class ClientsPage {
     );
   }
 
+  /** Opens the record of the client named `name`, the row-into-record step of workflow W3 and the precondition W4–W7 enter their record from. The list shows fifteen rows a page, so a row that is not on the page in view is looked for through the screen's own find — the server search its blue button submits — and the list is read once more; a client the find does not answer either is reported with both row counts, so a genuine absence is told apart from a paging problem (AAP 0.7.4 "search (server)"). */
   async openClient(name: string): Promise<void> {
     if (name.trim().length === 0) {
       throw new Error('a client name is required: an empty name would open the first row of the list');
@@ -570,21 +571,26 @@ export class ClientsPage {
 
     await this.awaitListSettled();
 
-    const rows = this.page.locator(`${LIST_ROOT} table tbody tr`);
-    const count: number = await rows.count();
+    const onPage: number = await this.listRows().count();
 
-    for (let index = 0; index < count; index += 1) {
-      const row = rows.nth(index);
-      const nameCell = row.locator('td').first();
-      if (pattern.test(normalizeText(await nameCell.innerText()))) {
-        await row.click();
-        await this.awaitScreen(VIEW_ROOT, `the client record the "${name}" row opens`);
-        return;
-      }
+    if (await this.clickRowMatching(pattern)) {
+      await this.awaitScreen(VIEW_ROOT, `the client record the "${name}" row opens`);
+      return;
+    }
+
+    await this.findList(name.trim());
+    await this.submitFilter();
+
+    const inFind: number = await this.listRows().count();
+
+    if (await this.clickRowMatching(pattern)) {
+      await this.awaitScreen(VIEW_ROOT, `the client record the "${name}" row opens`);
+      return;
     }
 
     throw new Error(
-      `no client row in ${LIST_ROOT} carries "${name}" in its name column; examined ${count} row(s)`,
+      `no client row in ${LIST_ROOT} carries "${name}" in its name column: the page in view held ` +
+        `${onPage} row(s) and the find for "${name}" answered ${inFind}, and none of them matches`,
     );
   }
 
@@ -827,10 +833,12 @@ export class ClientsPage {
     await this.awaitSettled(settled, 'the clients list');
   }
 
-  /** Waits until the search results have painted one of their states: the table, the empty state or the failure banner (AAP 0.7.4). @throws When none of them appears within {@link SCREEN_TIMEOUT_MS}. */
+  /** Waits until the search results have painted one of the three states the screen renders: one {@link SEARCH_RESULT_BLOCK} per resolved result, the explicit empty state when the answer matched nothing, or the failure banner a 4xx shows above the results (AAP 0.7.4). @throws When none of them appears within {@link SCREEN_TIMEOUT_MS}. */
   private async awaitSearchSettled(): Promise<void> {
     const settled = this.page
-      .locator(`${SEARCH_ROOT} table, ${SEARCH_ROOT} ${EMPTY_STATE}, ${SEARCH_ROOT} .alert`)
+      .locator(
+        `${SEARCH_ROOT} ${SEARCH_RESULT_BLOCK}, ${SEARCH_ROOT} ${EMPTY_STATE}, ${SEARCH_ROOT} .alert`,
+      )
       .first();
 
     await this.awaitSettled(settled, 'the search results');
@@ -850,12 +858,17 @@ export class ClientsPage {
     }
   }
 
-  private async awaitListReplaced(): Promise<void> {
-    const rows = this.page.locator(`${LIST_ROOT} table tbody tr`);
+  /** Waits until the list has applied the answer it just read. The card marks its body `aria-busy` for as long as a read is in flight, so the wait ends once that mark is gone; the settled state is then read as the answer itself. A read that finished between two polls leaves no mark to observe, and the state on screen is read as it stands. */
+  private async awaitListApplied(): Promise<void> {
+    const busy = this.page.locator(`${LIST_ROOT} .panel-body[aria-busy="true"]`);
+    const attempts = Math.ceil(REPAINT_TIMEOUT_MS / OPTION_POLL_INTERVAL_MS);
 
-    try {
-      await rows.first().waitFor({ state: 'detached', timeout: REPAINT_TIMEOUT_MS });
-    } catch {
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      if ((await busy.count()) === 0) {
+        break;
+      }
+
+      await this.page.waitForTimeout(OPTION_POLL_INTERVAL_MS);
     }
 
     await this.awaitListSettled();
@@ -867,6 +880,62 @@ export class ClientsPage {
     if ((await root.count()) > 0) {
       await this.awaitListSettled();
     }
+  }
+
+  /** The rows of the list's table, as the screen has painted them — one page of fifteen on a list read, or the whole answer of a find (AAP 0.7.4). */
+  private listRows(): Locator {
+    return this.page.locator(`${LIST_ROOT} table tbody tr`);
+  }
+
+  /** Clicks the row of the page in view whose name column matches `pattern`, answering whether it found and clicked one. The page in view only: a caller that needs a row from beyond it narrows the list through the screen's own find first. */
+  private async clickRowMatching(pattern: RegExp): Promise<boolean> {
+    const rows = this.listRows();
+    const count: number = await rows.count();
+
+    for (let index = 0; index < count; index += 1) {
+      const row = rows.nth(index);
+      const nameCell = row.locator('td').first();
+      if (pattern.test(normalizeText(await nameCell.innerText()))) {
+        await row.click();
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /** Waits for `GET /clients/template` to fill the open create form's pickers: the screen reads the template when it is constructed and paints each `<select>` from the answer, so the office control offers no option until that read lands (AAP 0.7.3 "W2 create and activate client"). One option settles the wait — this backend answers as few as one office, so a second option is never required — and the form's failure banner settles it at once, because a refused template never fills the list. @throws When the form shows Fineract's failure message for the read, or when the office control still offers no option after {@link TEMPLATE_TIMEOUT_MS}. */
+  private async awaitCreateFormFilled(): Promise<void> {
+    const office = await this.controlFor(
+      this.page.locator(CREATE_ROOT).first(),
+      /office/i,
+      'officeId',
+    );
+    const failure = this.page.locator(`${CREATE_ROOT} .alert.alert-danger`).first();
+    const attempts = Math.ceil(TEMPLATE_TIMEOUT_MS / OPTION_POLL_INTERVAL_MS);
+
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      if ((await failure.count()) > 0) {
+        const message: string = normalizeText(await failure.innerText().catch((): string => ''));
+        throw new Error(
+          `the create-client form reported a failed GET /clients/template, so its office list is ` +
+            `not filled: ${message.length > 0 ? message : 'it shows no message for the failure'}`,
+        );
+      }
+
+      if ((await office.locator('option').count()) > 0) {
+        return;
+      }
+
+      await this.page.waitForTimeout(OPTION_POLL_INTERVAL_MS);
+    }
+
+    const offered: number = await office.locator('option').count();
+    throw new Error(
+      `the create-client form offered no office option within ${TEMPLATE_TIMEOUT_MS} ms: its ` +
+        `GET /clients/template read left ${offered} option(s) in the office control and the form ` +
+        `shows no failure message`,
+    );
   }
 
   private async openForm(): Promise<Locator> {
@@ -926,7 +995,6 @@ export class ClientsPage {
     throw new Error(`the open client form renders no "${inputId}" control and no caption for it`);
   }
 
-  /** Selects the option carrying a Fineract id on a native `<select>`. */
   private async selectOptionById(select: Locator, id: number | string): Promise<void> {
     const wanted = String(id).trim();
 

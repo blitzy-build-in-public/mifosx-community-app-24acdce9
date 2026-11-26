@@ -5,20 +5,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DataTableComponent, type ColumnDef } from './data-table.component';
 
-/**
- * Behavioural spec for `DataTableComponent`, the generic table AAP 0.2.3's inventory requires the new app to provide (row `ClientList / DataTable`; Figma node `1:3`; Rule 1 clause 8, which allows no empty or
- * boilerplate specs). It pins what only the rendered table can say: one `<th scope="col">` per column in the caller's order from the column's already-translated label, one `<tr>` and one `<td>` per row and
- * column, the caller's id and class list on the `<table>` inside Bootstrap's `.table-responsive` wrapper (Rule 1 clauses 3 and 6), a row opening the caller's destination as one link over the whole row with no
- * control inside it (AAP 0.7.4), no link at all for a table given no destination, a caller's cell template rendering instead of the column text with the row, the column and its value — how Status becomes an
- * `app-status-swatch` (AAP 0.2.3 row `StatusSwatch`; AAP 0.10.5 deliberate difference 11) — rows and order following the input tracked by the caller's key, an empty row list rendering the header and no body
- * row (Rule 1 clause 3), and the caller's caption becoming the table's own invisible `<caption>`, with none rendered when the caller supplies none. The keyboard path is the last item it pins
- * and the table's one deliberate difference from legacy: Enter or Space on a focused row opens that row's own destination exactly once, through the same router call its click makes, cancels Space's default so
- * the page cannot scroll behind it, and opens nothing — not even a default — for a row the caller gave no destination or for a key that is neither of the two (Rule 1 clause 3, which matches legacy's
- * pointer-only rows and allows a difference only where it is recorded). The two hosts are the only place the generic contract is exercised from a template, which proves it composes with a feature's own row
- * type while `shared/` names none of it (AAP 0.14.1 "`shared` never imports from `features`"). The router is provided empty because no case completes a navigation: each asserts the destination the row asks the
- * router for.
- *
- */
+/** Behavioural spec for `DataTableComponent`, the generic table AAP 0.2.3's inventory requires the new app to provide (row `ClientList / DataTable`; Figma node `1:3`; Rule 1 clause 8, which allows no empty or boilerplate specs). It pins what only
+ * the rendered table can say: one `<th scope="col">` per column in the caller's order from the column's already-translated label, one `<tr>` and one `<td>` per row and column, the caller's id and class list on the `<table>` inside Bootstrap's
+ * `.table-responsive` wrapper (Rule 1 clauses 3 and 6), a row opening the caller's destination as one link over the whole row with no control inside it (AAP 0.7.4), no link at all for a table given no destination, a caller's cell template rendering
+ * instead of the column text with the row, the column and its value — how Status becomes an `app-status-swatch` (AAP 0.2.3 row `StatusSwatch`; AAP 0.10.5 deliberate difference 11) — rows and order following the input tracked by the caller's key, an
+ * empty row list rendering the header and no body row (Rule 1 clause 3), and the caller's caption becoming the table's own invisible `<caption>`, with none rendered when the caller supplies none. The keyboard path is the last item it pins and the
+ * table's one deliberate difference from legacy: Enter or Space on a focused row opens that row's own destination exactly once, through the same router call its click makes, cancels Space's default so the page cannot scroll behind it, and opens
+ * nothing — not even a default — for a row the caller gave no destination or for a key that is neither of the two (Rule 1 clause 3, which matches legacy's pointer-only rows and allows a difference only where it is recorded). The two hosts are the
+ * only place the generic contract is exercised from a template, which proves it composes with a feature's own row type while `shared/` names none of it (AAP 0.14.1 "`shared` never imports from `features`"). The router is provided empty because no
+ * case completes a navigation: each asserts the destination the row asks the router for. */
 
 /** The row a host hands the table: a feature's own shape, invented for this suite. */
 interface ProbeRow {
@@ -53,11 +48,7 @@ const PROBE_TABLE_CLASSES = 'table table-striped client-list';
 /** The legacy table's id, which is what the parity harness addresses the list by. */
 const PROBE_TABLE_ID = 'client-list';
 
-/**
- * A host that binds every input the way a list screen does — a destination on each row, the clients
- * list's own class list and id — with each value behind a signal so a case can change it and observe
- * the table repaint.
- */
+/** A host that binds every input the way a list screen does — a destination on each row, the clients list's own class list and id — with each value behind a signal so a case can change it and observe the table repaint. */
 @Component({
   imports: [DataTableComponent],
   template: `
@@ -101,10 +92,7 @@ class DataTableHostComponent {
   readonly caption = signal<string | null>(null);
 }
 
-/**
- * A host that supplies a cell template rendering one column as a component and every other column
- * from the context's own `value` — the shape the clients list's Status column needs.
- */
+/** A host that supplies a cell template rendering one column as a component and every other column from the context's own `value` — the shape the clients list's Status column needs. */
 @Component({
   imports: [DataTableComponent],
   template: `
@@ -244,8 +232,7 @@ describe('DataTableComponent', () => {
   it('names the table with the caller’s caption, invisibly, and renders none when none is supplied', async () => {
     const host = await mount();
 
-    // No caption of the component's own: a table whose caller supplies no name stays the unnamed
-    // table it has always been, rather than one with an empty `<caption>`.
+    // No caption of the component's own: a table whose caller supplies no name stays the unnamed table it has always been, rather than one with an empty `<caption>`.
     expect(tableOf(host).querySelector('caption')).toBeNull();
 
     fixture.componentInstance.caption.set('Clients');
@@ -254,8 +241,7 @@ describe('DataTableComponent', () => {
     const table = tableOf(host);
     const caption = table.querySelector('caption');
 
-    // The `<caption>` is the table's own first child, which is where a screen reader reads the table's
-    // name from, and `sr-only` keeps it off the screen, so no row, column or pixel moves.
+    // The `<caption>` is the table's own first child, which is where a screen reader reads the table's name from, and `sr-only` keeps it off the screen, so no row, column or pixel moves.
     expect(table.firstElementChild).toBe(caption);
     expect(caption?.textContent?.trim()).toBe('Clients');
     expect(caption?.classList.contains('sr-only')).toBe(true);
@@ -311,12 +297,8 @@ describe('DataTableComponent', () => {
     expect(bodyRowsOf(tableOf(host))).toHaveLength(0);
   });
 
-  /**
-   * The keyboard path. `RouterLink` gives a non-anchor host its tab stop and no activation of its own, so a case presses the key where a focused row receives it — on
-   * the row itself — and asserts the router call that row's own click makes. That identity is the behaviour: the keyboard and the pointer reach one destination through
-   * one path, so a key press can neither navigate twice nor reach somewhere a click would not.
-   *
-   */
+  /** The keyboard path. `RouterLink` gives a non-anchor host its tab stop and no activation of its own, so a case presses the key where a focused row receives it — on the row itself — and asserts the router call that row's own click makes. That
+   * identity is the behaviour: the keyboard and the pointer reach one destination through one path, so a key press can neither navigate twice nor reach somewhere a click would not. */
   describe('row activation from the keyboard', () => {
     /** Presses one key on a row and returns the event, so a case can read what its default became. */
     function press(row: HTMLTableRowElement, key: string): KeyboardEvent {

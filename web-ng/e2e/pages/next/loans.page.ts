@@ -32,7 +32,6 @@ export interface LoanSummaryView {
 }
 
 export interface LoanScheduleRow {
-  /** Period number from the table's first column, `null` when the cell carries no number. */
   readonly period: number | null;
   readonly fromDate: string;
   readonly dueDate: string;
@@ -67,7 +66,6 @@ export interface LoanApplicationValues {
   readonly fundId?: number | string;
   /** `yyyy-mm-dd`, always supplied by the caller from the run date — never computed here. */
   readonly expectedDisbursementDate?: string;
-  /** `yyyy-mm-dd`, always supplied by the caller from the run date — never computed here. */
   readonly submittedOnDate?: string;
 }
 
@@ -76,9 +74,7 @@ export interface LoanActionValues {
   /** `yyyy-mm-dd` approval date, typed into the approve form's date field. */
   readonly approvedOnDate?: string;
   readonly approvedPrincipal?: number | string;
-  /** `yyyy-mm-dd` rejection date, typed into the reject form's date field. */
   readonly rejectedOnDate?: string;
-  /** `yyyy-mm-dd` disbursement date, typed into the disburse form's date field. */
   readonly actualDisbursementDate?: string;
   readonly transactionAmount?: number | string;
   readonly note?: string;
@@ -86,7 +82,6 @@ export interface LoanActionValues {
 
 /** What {@link LoansPage.fillRepayment} types into the repayment form (AAP 0.7.2 `LoanRepaymentRequest`). */
 export interface LoanRepaymentValues {
-  /** `yyyy-mm-dd` transaction date, typed into the repayment form's date field. */
   readonly transactionDate?: string;
   readonly transactionAmount?: number | string;
   readonly paymentTypeId?: number | string;
@@ -159,7 +154,6 @@ const OPTION_POLL_INTERVAL_MS = 100;
 
 const TEMPLATE_BUSY_GRACE_MS = 2_000;
 
-/** One `<option>` of a native select, as the page renders it. Internal to this module. */
 interface RenderedOption {
   readonly index: number;
   /** The value the application bound, with Angular's `${position}: ` prefix removed. */
@@ -333,7 +327,6 @@ function cellAt(cells: readonly string[], index: number): string {
   return index >= 0 ? (cells[index] ?? '') : '';
 }
 
-/** Runs inside the page: every `<option>` of a select as `{ value, label }`, both trimmed, in document order. */
 function readSelectOptions(element: HTMLElement): RenderedOption[] {
   if (!(element instanceof HTMLSelectElement)) {
     return [];
@@ -763,7 +756,6 @@ export class LoansPage {
     await field.fill(String(value));
   }
 
-  /** Waits for the application form to finish applying the Fineract template a product choice started. */
   private async awaitTemplateApplied(root: Locator): Promise<void> {
     const busy = root.locator('.panel-body[aria-busy="true"]');
     const appeared = await busy

@@ -19,7 +19,6 @@ export interface ClientRow {
 
 export interface StatusSwatchSummary {
   readonly rowIndex: number;
-  /** The swatch's raw class attribute; `''` when the row carries no swatch. */
   readonly className: string;
 }
 
@@ -33,28 +32,21 @@ export interface SearchResultRow {
 }
 
 export interface SelectOptionSummary {
-  /** The `<option>` value — what the legacy form posts to Fineract. */
   readonly value: string;
   readonly label: string;
 }
 
 /** The values {@link ClientsPage.fillClientForm} writes into the client form (Rule 1 clause 3). */
 export interface ClientFormValues {
-  /** Office to select by its visible label, e.g. `Head Office`; already chosen on the edit form. */
   readonly officeName?: string;
   /** Staff to select by its visible label, e.g. `Officer, Parity` — the name Fineract composes from a staff member's last and first names, which is what the dropdown shows; a loan officer is optional. */
   readonly staffName?: string;
-  /** First name (`#firstname`) — required by the form on the person branch. */
   readonly firstName: string;
-  /** Last name (`#lastname`) — required by the form on the person branch. */
   readonly lastName: string;
-  /** External identifier (`#externalId`), optional in the legacy form. */
   readonly externalId?: string;
-  /** Mobile number (`#mobileNo`), optional in the legacy form. */
   readonly mobileNo?: string;
   /** Submission date (`#submittedon`); sent as `dd MMMM yyyy`, the legacy datepicker's own format. */
   readonly submittedDate?: Date;
-  /** Whether the client is created active (`#activeCheckbox`). */
   readonly active?: boolean;
   /** Activation date (`#activationDate`), rendered only once the active checkbox is ticked. */
   readonly activationDate?: Date;
@@ -145,9 +137,32 @@ const NOTIFICATION_SOURCES = [
 /** Where a validation message may live, from the two selectors AAP 0.7.4 fixes (`.alert.alert-danger` and `.help-block` inside `.has-error`) plus legacy's own field-level markup, `<small class="error required">` (createclient.html:60). */
 const VALIDATION_ERROR_SOURCES = ['div.alert.alert-danger', '.has-error .help-block', 'small.error'];
 
+/** The create form's own failure region: the `api-validate` directive renders Fineract's message in a `div.alert.alert-danger` above the fields (createclient.html:15), so a refused office-template read is visible there and nowhere else. */
+const FORM_FAILURE = 'div.alert.alert-danger, api-validate .alert';
+
 const OPTIONAL_NAVIGATION_TIMEOUT_MS = 10_000;
 
-/** One option of a `<select>`, as a page-side function reports it. */
+/** Ceiling for the create form's office list to arrive: the legacy controller reads the office template when the screen loads and assigns `scope.offices = data.officeOptions` from the answer, so `#officeId` carries no option for a moment after the form paints (`app/scripts/controllers/client/CreateClientController.js:5,48`; `app/views/clients/createclient.html:23-25`). */
+const TEMPLATE_TIMEOUT_MS = 30_000;
+
+const OPTION_POLL_INTERVAL_MS = 100;
+
+/** How long a row the list already holds may take to become visible: the page in view is on screen when {@link ClientsPage.openClient} starts, so this covers a repaint and not a read. */
+const LIST_ROW_TIMEOUT_MS = 5_000;
+
+/** How long the toolbar's find may take to answer: its `GET /search` round trip replaces the rows, and the client it matched has to be visible before the record is opened. */
+const SEARCH_TIMEOUT_MS = 30_000;
+
+/** The find's own request: the controller submits the toolbar box with `globalSearch.search({query, resource: 'clients,clientIdentifiers', exactMatch})`, which is `GET <api>/search` carrying those query parameters (`app/scripts/controllers/client/ClientController.js:56`; `app/scripts/services/ResourceFactoryProvider.js:275-280`). Its query string is what separates it from a `/search/template` read. */
+const SEARCH_PATH = '/search';
+
+/** How often the list is re-read while a find settles, and how many consecutive readings that agree settle a find whose answer returns the rows already in view. */
+const LIST_POLL_INTERVAL_MS = 100;
+const LIST_SETTLE_READINGS = 3;
+
+/** How long the table may take to repaint once the find has answered: the assignment it makes is a digest and not a request, so this bounds a render and never a round trip. */
+const LIST_REPAINT_TIMEOUT_MS = 5_000;
+
 interface OptionPair {
   readonly value: string;
   readonly label: string;
@@ -165,7 +180,6 @@ interface SearchRowSnapshot {
   readonly statusClass: string;
 }
 
-/** The column position of each compared field; `-1` when the table has no such column. */
 interface ColumnIndexes {
   readonly name: number;
   readonly clientNumber: number;
@@ -220,12 +234,10 @@ function dedupe(values: readonly string[]): string[] {
   return kept;
 }
 
-/** The cell at `index`, or `''` when the table has no such column or the cell is empty. */
 function cellAt(cells: readonly string[], index: number): string {
   return index < 0 ? '' : (cells[index] ?? '');
 }
 
-/** The position of the first heading matching one of `headings`, or `-1`. */
 function columnIndex(headings: readonly string[], candidates: readonly string[]): number {
   return headings.findIndex((heading) => {
     const key = headingKey(heading);
@@ -259,7 +271,6 @@ function readRowSnapshot(element: HTMLElement | SVGElement, swatchSelector: stri
   };
 }
 
-/** Runs inside the legacy page: one search result's link text, its information line and any status swatch class. */
 function readSearchRowSnapshot(element: HTMLElement | SVGElement, swatchSelector: string): SearchRowSnapshot {
   const link = element.querySelector('a');
   const lines: string[] = [];
@@ -276,7 +287,6 @@ function readSearchRowSnapshot(element: HTMLElement | SVGElement, swatchSelector
   };
 }
 
-/** Runs inside the page: the options of a `<select>`, in document order. */
 function readOptionPairs(element: HTMLElement | SVGElement): OptionPair[] {
   if (!(element instanceof HTMLSelectElement)) return [];
   return Array.from(element.options).map((option) => ({
@@ -292,7 +302,6 @@ function setNativeInputValue(element: HTMLElement | SVGElement, text: string): v
   element.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-/** Runs inside the page: a `<select>`'s tag name, lower-cased, used to report a field that resolved to something other than a dropdown. */
 function readTagName(element: HTMLElement | SVGElement): string {
   return element.tagName.toLowerCase();
 }
@@ -328,7 +337,6 @@ export class ClientsPage {
     await this.page.locator(SCREEN_ROOT).first().waitFor({ state: 'visible' });
   }
 
-  /** The first element any of `selectors` matches, tried in order. */
   private async firstOf(selectors: readonly string[]): Promise<Locator> {
     for (const selector of selectors) {
       const found = this.page.locator(selector);
@@ -341,7 +349,6 @@ export class ClientsPage {
     );
   }
 
-  /** The rendered text of every visible match of `selector`, whitespace-normalised and in document order. */
   private async visibleTexts(selector: string): Promise<string[]> {
     const matches = this.page.locator(selector);
     const total = await matches.count();
@@ -365,7 +372,6 @@ export class ClientsPage {
       );
   }
 
-  /** Clicks the first visible match of `selector`, reporting whether it found one. */
   private async clickFirstVisible(selector: string): Promise<boolean> {
     const matches = this.page.locator(selector);
     const total = await matches.count();
@@ -406,6 +412,34 @@ export class ClientsPage {
     return visible;
   }
 
+  /** What the list shows right now, as one comparable string: every visible row's text in document order plus the card's empty state, so a reading taken before a find tells the page that find's answer produced from the page that was in view (AAP 0.10.2's displayed-data comparison). */
+  private async listReading(): Promise<string> {
+    const rows = await this.visibleRows();
+    const texts: string[] = [];
+    for (const row of rows) texts.push(normaliseText(await row.innerText()));
+    return `${texts.join(' | ')}#${await this.readEmptyState()}`;
+  }
+
+  /** Waits until the list shows something other than `inView` — the find's own page, or no row with the empty state — or, when the answer was heard and the rows it returned are the ones already rendered, until {@link LIST_SETTLE_READINGS} consecutive readings agree, which is what makes a find answering the same rows safe. @throws When no search answer arrived and the table never moved, naming both waits: the rows a caller would then read are the find's predecessors, not its answer. */
+  private async awaitListAnswered(find: string, inView: string, answered: boolean): Promise<void> {
+    const attempts = Math.ceil(LIST_REPAINT_TIMEOUT_MS / LIST_POLL_INTERVAL_MS);
+    let unchanged = 0;
+
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      if ((await this.listReading()) !== inView) return;
+      unchanged = answered ? unchanged + 1 : 0;
+      if (unchanged >= LIST_SETTLE_READINGS) return;
+      await this.page.waitForTimeout(LIST_POLL_INTERVAL_MS);
+    }
+
+    throw new Error(
+      `The legacy client list still shows the page it showed before the find for "${find}": no ` +
+        `GET ${SEARCH_PATH} answer arrived within ${SEARCH_TIMEOUT_MS} ms and the table did not ` +
+        `repaint within ${LIST_REPAINT_TIMEOUT_MS} ms, so the rows read now are the find's ` +
+        'predecessors. Confirm the find against the running legacy app.',
+    );
+  }
+
   // --------------------------------------------------------------------------------------------- Client list (#/clients) — W2's entry point and W3's list half.
 
   /** Opens the client list and waits for the "List of Clients" card to render its table (AAP 0.10.1). */
@@ -431,10 +465,35 @@ export class ClientsPage {
     await field.fill(text);
   }
 
-  /** Clicks the toolbar's blue search button, which is what submits the "find" box (clients.html:27-31; AAP 0.2.3 `FilterToolbar`). */
+  /**
+   * Clicks the toolbar's blue search button, which is what submits the "find" box (clients.html:24-31; AAP 0.2.3 `FilterToolbar`), and waits for the find's own answer before it returns (AAP 0.7.4 "search (server)", Rule 1 clause 8).
+   *
+   * The wait is the whole point. Legacy empties only `scope.actualClients` when the find is submitted and assigns `scope.clients` — the collection the table renders — inside the `GET /search` callback (`ClientController.js:41,56,83`; `clients.html:64`), so the rows in view stay the previous page until that answer repaints them: a caller that read them at the click would assert on the `GET /clients?offset=0&limit=15` page it was already showing, and fail on any database holding more than one page. A blank find issues no search at all — the controller takes `scope.initPage()`'s list re-read instead (`ClientController.js:53-54,35`) — so no answer is awaited and the table's own repaint settles it.
+   */
   async submitFilter(): Promise<void> {
+    const field = await this.firstOf([LIST_FIND, '.input-group input.form-control']);
+    const find = await field.inputValue();
     const button = await this.firstOf([LIST_SEARCH_BUTTON, '.input-group-btn button']);
+    const inView = await this.listReading();
+
+    // Registered before the click, so the answer can never land between the two and be missed.
+    const answered =
+      find.length === 0
+        ? Promise.resolve(true)
+        : this.page
+            .waitForResponse(
+              (response) =>
+                response.request().method() === 'GET' &&
+                response.url().includes(`${SEARCH_PATH}?`),
+              { timeout: SEARCH_TIMEOUT_MS },
+            )
+            .then(
+              () => true,
+              () => false,
+            );
+
     await button.click();
+    await this.awaitListAnswered(find, inView, await answered);
   }
 
   /** The list's column headings, in rendered order and trimmed (AAP 0.2.1 Step 2's six columns; AAP 0.2.3 `ClientList`). */
@@ -479,16 +538,44 @@ export class ClientsPage {
     return swatches;
   }
 
-  /** Opens one client's record by clicking the row whose first cell shows `name` (AAP 0.2.1 Step 2's trigger, AAP 0.10.1 W3). */
+  /** Opens one client's record by clicking the row whose first cell shows exactly `name` (AAP 0.2.1 Step 2's trigger, AAP 0.10.1 W3). The list pages fifteen rows at a time, so a client that is not on the page in view is looked for through the toolbar's find — the server search its blue button submits — and the list is read once more; a client that find does not answer either is reported with both row counts, so a genuine absence is told apart from a paging problem. */
   async openClient(name: string): Promise<void> {
+    const onPage = (await this.visibleRows()).length;
+
+    if (await this.clickClientRow(name, LIST_ROW_TIMEOUT_MS)) return;
+
+    await this.findList(name);
+    await this.submitFilter();
+
+    if (await this.clickClientRow(name, SEARCH_TIMEOUT_MS)) return;
+
+    throw new Error(
+      `The legacy client list shows no row whose first cell is exactly "${name}": the page in ` +
+        `view held ${onPage} visible row(s) and the find for "${name}" left ` +
+        `${(await this.visibleRows()).length} visible row(s). Confirm the client against the ` +
+        `seeded database before treating this as a paging problem.`,
+    );
+  }
+
+  /** Clicks the row whose first cell shows exactly `name` once that row is visible, and confirms the `#/viewclient/` address the click opens — the row first, then the cell inside it, which is the documented fallback when the row itself does not route. Answers `false` when no such row appears within `timeoutMs`, so a caller can run its own fallback instead of waiting out a navigation that will never start. */
+  private async clickClientRow(name: string, timeoutMs: number): Promise<boolean> {
     const nameCell = this.page
       .locator(`.table tbody tr td:first-child:text-is(${JSON.stringify(name)})`)
       .first();
-    await nameCell.waitFor({ state: 'visible' });
+
+    const appeared = await nameCell
+      .waitFor({ state: 'visible', timeout: timeoutMs })
+      .then(
+        () => true,
+        () => false,
+      );
+    if (!appeared) return false;
+
     await nameCell.locator('xpath=..').click();
-    if (await this.waitForHashPrefix('#/viewclient/')) return;
+    if (await this.waitForHashPrefix('#/viewclient/')) return true;
     await nameCell.click();
     await this.page.waitForURL((url) => url.hash.startsWith('#/viewclient/'));
+    return true;
   }
 
   /** The text of the card's explicit empty state, or `''` when the screen renders none (AAP 0.5.2; AAP 0.7.4 lists the empty state as a required screen state). */
@@ -577,10 +664,37 @@ export class ClientsPage {
 
   // --------------------------------------------------------------------------------------------- Client forms (#/createclient, #/editclient/:id) — W2's create half.
 
-  /** Opens the create form and waits for its first control to render (AAP 0.8.2's `createclient` route; AAP 0.10.1 W2). */
+  /** Opens the create form and waits for its first control to render (AAP 0.8.2's `createclient` route; AAP 0.10.1 W2). It then waits for the office template that fills `#officeId`, so a caller reads the dropdown's options only once they exist (AAP 0.7.3 "W2 create and activate client"). */
   async openCreateForm(): Promise<void> {
     await this.gotoHash('#/createclient');
     await this.page.locator('.form-control:visible').first().waitFor({ state: 'visible' });
+    await this.awaitOfficeOptions();
+  }
+
+  /** Waits for the office template to fill the form's `#officeId` select: the controller assigns its `officeOptions` from that read, so the select carries no option until the answer lands (`app/scripts/controllers/client/CreateClientController.js:48`). One option settles the wait — this backend answers as few as one office, so a second option is never required — and the form's own failure region settles it at once, because a refused read never fills the list. The wait is on the `<select>`'s options, which are what the form posts, and never on its visibility: the chosen widget hides the native select and paints its own control beside it (AAP 0.10.5 item 2). @throws When the form shows Fineract's message for the read, or when `#officeId` still offers no option after {@link TEMPLATE_TIMEOUT_MS}. */
+  private async awaitOfficeOptions(): Promise<void> {
+    const office = this.page.locator('#officeId');
+    await office.waitFor({ state: 'attached', timeout: TEMPLATE_TIMEOUT_MS });
+    const attempts = Math.ceil(TEMPLATE_TIMEOUT_MS / OPTION_POLL_INTERVAL_MS);
+
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      const [failure] = await this.visibleTexts(FORM_FAILURE);
+      if (failure !== undefined) {
+        throw new Error(
+          `The legacy create form reported a failed office-template read, so its office options are ` +
+            `not filled: ${failure}`,
+        );
+      }
+      if ((await office.locator('option').count()) > 0) return;
+      await this.page.waitForTimeout(OPTION_POLL_INTERVAL_MS);
+    }
+
+    const offered = await office.locator('option').count();
+    throw new Error(
+      `The legacy create form's #officeId offered ${offered} option(s) within ` +
+        `${TEMPLATE_TIMEOUT_MS} ms of loading and the form shows no failure message. Confirm the ` +
+        `office template read against the running legacy app.`,
+    );
   }
 
   /** Fills the fields `values` supplies and leaves every other field exactly as the screen rendered it (AAP 0.10.1 W2, AAP 0.7.2's `ClientCreateRequest` and `ClientEditRequest`) (Rule 1 clause 3). */

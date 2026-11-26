@@ -1,14 +1,9 @@
 // =============================================================================
 // Mifos X — the single global stylesheet of the Angular application.
-//
-// Cascade order: (1) the product's brand overrides, declared before anything is imported so no `!default`
-// value can win; (2-3) Bootstrap 3 and Font Awesome 4.7.0 from npm, with the icon font face; (4) the legacy
-// Bootstrap 3 rules the in-scope screens need, reproduced inline because `app/styles-dev/styles.scss` is never
-// compiled (its five `../bower_components/...` imports do not exist and `app/` is read-only) and the partials
-// must not be edited. `_chosen.scss`, `_nv.d3.scss`, `_report.scss` and `_leftnav.scss` are deliberately not
-// reproduced: the select is native, dashboards and reports are out of scope and no in-scope screen renders the
-// rail. Every value below is a Bootstrap variable, a legacy partial rule, or a token measured from the design
-// and recorded in AAP 0.2.2, whose name is written beside it.
+// Cascade order: (1) the product's brand overrides, declared before anything is imported so no `!default` value can win; (2-3) Bootstrap 3 and Font Awesome 4.7.0 from npm, with the icon font face;
+// (4) the legacy Bootstrap 3 rules the in-scope screens need, reproduced inline because `app/styles-dev/styles.scss` is never compiled: its five `../bower_components/...` imports do not exist and
+// `app/` is read-only, and the partials must not be edited. `_chosen.scss`, `_nv.d3.scss`, `_report.scss` and `_leftnav.scss` are deliberately not reproduced: the select is native, dashboards and
+// reports are out of scope and no in-scope screen renders the rail. Every value below is a Bootstrap variable, a legacy partial rule, or a token measured from the design and recorded in AAP 0.2.2, whose name is written beside it.
 // =============================================================================
 
 // ----------------------------------------------------------------------------- 1. Brand overrides -----------------------------------------------------------------------------

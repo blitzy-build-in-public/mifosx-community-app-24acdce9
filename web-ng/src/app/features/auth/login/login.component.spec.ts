@@ -14,9 +14,7 @@ import { LoginComponent } from './login.component';
 
 /**
  * Behaviour of the login screen at `#/login` — the entry point of workflow W1 and step 1 of the design flow "Sign in and open a client record" (AAP 0.7.1 Features row `auth`; AAP 0.7.4 "Login (`#/login`)", Figma node `1:5`; AAP 0.10.1 W1; Rule 1 clause 8, "no empty or boilerplate spec files; every spec contains at least one `expect`").
- *
  * Each case states one contract the component owns: the screen rendering its two controls and its single primary submit outside the signed-in shell, with labels resolved through the translation pipe; an empty form sending nothing and marking both controls touched, legacy's only client-side rule (Rule 1 clause 3); a filled form calling `AuthService.login` once and leaving for `#/clients`, or for the `returnUrl` the auth guard left when it is an in-app path (AAP 0.7.4 "navigate to the attempted route or `#/clients`"); a rejected exchange rendering Fineract's own message verbatim in the one `.alert.alert-danger` region, keeping the account name, clearing only the credential control and navigating nowhere (workflow W7 compares that text character for character), with a non-Fineract failure rendering the generic legacy message instead; the primary button disabled only while a login is in flight, a second submit issuing no second call because `POST /authentication` is not idempotent (AAP 0.14.1 "one request per click"); and the language switcher swapping the active bundle in place without navigating, a failed load reported and the switcher put back on the language in force, withdrawing only that failure and never a sign-in failure (AAP 0.7.4; AAP 0.14.2 "no `catch` swallows an error silently").
- *
  * The credentials and their `Validators.required` belong to `LoginFormComponent` (AAP 0.2.3's `LoginForm` row) and the language row to `LanguageSwitcherComponent`, both with their own specs, so this suite drives them through the DOM and asserts what the screen owns. Every collaborator is a typed object literal at its own injection token: `AuthService` a `login` spy (the `POST /authentication` request itself, and the `GET /users/{id}` restore behind it, are `core/auth/auth.service.spec.ts`'s contract test), `Router` a `navigateByUrl` spy, `ActivatedRoute` a stand-in answering `snapshot.queryParamMap`, and `TranslateService` the four members this screen touches. No HTTP provider exists anywhere in this file (Rule 1 clause 5; Rule 2), and the fixtures are synthetic: nothing logs, stores or prints a credential (Rule 1 clause 9; AAP 0.10.4).
  */
 
@@ -86,13 +84,10 @@ interface RouterStub {
   readonly navigateByUrl: Mock<(url: string) => Promise<boolean>>;
 }
 
-/**
- * The ngx-translate surface this screen touches, and nothing else.
- *
- * - `currentLang` — ngx-translate 18 declares it a `Signal<Language | null>` and the component's own `currentLang` computed reads it, falling back to `FALLBACK_LANG` while it is `null`. - `use` — the shared
- *
- * `LanguageSwitcherComponent` subscribes to the observable it returns, which is where a bundle load happens and where its failure arrives; the screen reacts to the component's two reporting outputs. - `instant` — resolves the generic failure message the screen shows for a failure Fineract did not describe. - `translate` — the member `TranslatePipe.transform` resolves every `| translate` key through, so the template's labels render as text rather than as keys.
- */
+/** The ngx-translate surface this screen touches, and nothing else.
+ * - `currentLang` — ngx-translate 18 declares it a `Signal<Language | null>` and the component's own `currentLang` computed reads it, falling back to `FALLBACK_LANG` while it is `null`. - `use` — the shared `LanguageSwitcherComponent` subscribes
+ * to the observable it returns, which is where a bundle load happens and where its failure arrives; the screen reacts to the component's two reporting outputs. - `instant` — resolves the generic failure message the screen shows for a failure
+ * Fineract did not describe. - `translate` — the member `TranslatePipe.transform` resolves every `| translate` key through, so the template's labels render as text rather than as keys. */
 interface TranslateStub {
   readonly currentLang: Signal<string | null>;
 

@@ -39,14 +39,12 @@ export interface IdentifierRow {
 
 interface HeaderReading {
   readonly displayName: string;
-  /** The indicator's colour class, or `''`. */
   readonly statusClass: string;
   readonly runs: readonly { readonly label: string; readonly value: string }[];
 }
 
 interface TableRowReading {
   readonly cells: readonly string[];
-  /** The row's indicator colour class, or `''`. */
   readonly statusClass: string;
 }
 
@@ -62,7 +60,6 @@ const TAB_STRIP_SELECTOR = 'app-tab-strip';
 /** The record's joined action row, with its `More` dropdown. */
 const ACTION_GROUP_SELECTOR = 'app-action-button-group';
 
-/** `General` tab's accounts section. */
 const ACCOUNTS_SELECTOR = 'app-client-accounts';
 
 /** The three states the accounts section paints once its own `GET /clients/{id}/accounts` has answered, and the whole of what "settled" means for it: the populated table (`#client-accounts`), the explicit empty state the section shows a client that genuinely holds no account, and Fineract's own refusal text for a 4xx (`.alert.alert-danger`). */
@@ -71,10 +68,8 @@ const ACCOUNTS_SETTLED_SELECTOR =
   `${ACCOUNTS_SELECTOR} app-empty-state, ` +
   `${ACCOUNTS_SELECTOR} .alert.alert-danger`;
 
-/** `General` tab's summary block, above the accounts section. */
 const SUMMARY_SELECTOR = 'app-client-summary';
 
-/** `Identities` tab's identifiers section. */
 const IDENTIFIERS_SELECTOR = 'app-client-identifiers';
 
 /** A tab of the strip: the `role="tab"` anchor a `.nav-tabs` item holds. The strip renders no scroll chevron, because the in-scope record carries at most three tabs and a control that scrolls nothing is the broken affordance the plan refuses (AAP 0.10.5 items 6 and 8, Rule 1 clause 3). */
@@ -89,10 +84,8 @@ const TOP_LEVEL_ACTION_SELECTOR = 'a.btn.btn-primary';
 /** An entry of the action row's `More` menu, which Bootstrap hides until the `.open` class is set. */
 const MENU_ACTION_SELECTOR = '.dropdown-menu a';
 
-/** The `More` trigger. */
 const MENU_TOGGLE_SELECTOR = '.dropdown-toggle';
 
-/** The list the `More` trigger reveals. */
 const MENU_SELECTOR = '.dropdown-menu';
 
 /** The dropdown wrapper whose `.open` class reveals {@link MENU_SELECTOR}. */
@@ -149,12 +142,10 @@ function requireRouteId(value: number | string, role: string): string {
   return text;
 }
 
-/** Reads a cell by position, answering `''` for a column the row does not render. Internal here. */
 function cellAt(cells: readonly string[], index: number): string {
   return index >= 0 && index < cells.length ? cells[index] : '';
 }
 
-/** The first metadata run whose label matches a field's pattern, or `''`. */
 function valueOfRun(
   runs: readonly { readonly label: string; readonly value: string }[],
   pattern: RegExp,
@@ -185,8 +176,7 @@ function readHeaderBlock(element: HTMLElement): HeaderReading {
   }
 
   let displayName = '';
-  // The record header's title is the screen's `h1` — the level that puts the record's name in the document
-  // outline without changing how it looks — with the name inside the `strong` the delivered markup wraps it in.
+  // The record header's title is the screen's `h1` — the level that puts the record's name in the document outline without changing how it looks — with the name inside the `strong` the markup wraps it in.
   const name = element.querySelector('h1 strong') ?? element.querySelector('h1');
   if (name !== null) {
     displayName = (name.textContent ?? '').replace(/\s+/g, ' ').trim();

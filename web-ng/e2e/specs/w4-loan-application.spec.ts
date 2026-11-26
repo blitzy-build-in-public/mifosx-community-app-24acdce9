@@ -72,7 +72,6 @@ interface PrincipalBounds {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
-/** The request body of one exchange as an object, or `null` when the exchange carried none. */
 function bodyOf(exchange: NormalizedExchange): Record<string, unknown> | null {
   return isRecord(exchange.requestBody) ? exchange.requestBody : null;
 }
@@ -170,15 +169,17 @@ test.describe('W4 submit an individual loan application after previewing the sch
       await pages.login.open();
       await pages.login.signIn(credentials.username, credentials.password);
 
-      // 2. The client list, and the precondition this spec runs under: W2's client must already be there (AAP 0.10.1, AAP 0.10.4).
+      // 2. The client list, and the precondition this spec runs under: W2's client must already be there (AAP 0.10.1, AAP 0.10.4). The list holds one page of fifteen rows, so the client is looked for through the screen's own find — the server search its blue button submits — rather than on the page in view (AAP 0.7.4 "search (server)").
+      const requiredClient = SCENARIO.client.displayName;
       await pages.clients.open();
+      await pages.clients.findList(requiredClient);
+      await pages.clients.submitFilter();
       const clientRows: readonly NamedClientRow[] = await pages.clients.readRows();
       const clientNames = clientRows.map((row) => row.name.trim());
-      const requiredClient = SCENARIO.client.displayName;
       const present = clientNames.some((name) => name.toLowerCase() === requiredClient.toLowerCase());
       if (!present) {
         throw new Error(
-          `W4 needs the client "${requiredClient}" that W2 creates, and the list shows ` +
+          `W4 needs the client "${requiredClient}" that W2 creates, and the find for it answered ` +
             `${clientNames.length} row(s): ${clientNames.length === 0 ? '(none)' : clientNames.join(', ')}. ` +
             'The suite runs per project in filename order against one seeded database, so ' +
             'w2-create-client.spec.ts or chain-w2-w4-w5-w6.spec.ts must have run first.',

@@ -371,12 +371,8 @@ export class LoanService {
     }));
   }
 
-  /**
-   * One dated member of a body: the date formatted with the body's `dateFormat` and `locale`, or no member at all when the form holds no date or the value is one the parser cannot read. The formatted value is
-   * computed first and the member spread only when it exists, so no dated member of any body reaches the wire as `null`: Fineract's own required-field rule then reports the missing date, where a `null` would
-   * be a value the server has to interpret (AAP 0.7.2 "Date handling", Rule 1 clause 2).
-   *
-   */
+  /** One dated member of a body: the date formatted with the body's `dateFormat` and `locale`, or no member when the form holds no date or the value the parser cannot read. It is computed first and spread only when it exists, so no dated member
+   * reaches the wire as `null`: Fineract's required-field rule then reports the missing date, where a `null` would be a value the server must interpret (AAP 0.7.2 "Date handling", Rule 1 clause 2). */
   private dateMember<K extends string>(
     key: K,
     value: Date | null | undefined,

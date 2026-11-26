@@ -70,7 +70,6 @@ function readSingleLabel(element: HTMLElement): string {
   return label === null ? '' : (label.textContent ?? '').trim();
 }
 
-/** Runs inside the legacy page: whether the plugin has its dropdown open. */
 function isDropOpen(element: HTMLElement): boolean {
   // results_show adds `chosen-with-drop` to the container and results_hide removes it; the dropdown shows from it.
   return element.classList.contains('chosen-with-drop');

@@ -164,8 +164,7 @@ describe('ClientIdentifiersComponent', () => {
     const table = host().querySelector('table');
     const caption = table?.querySelector('caption');
 
-    // The caption is the table's own naming element and Bootstrap's `.sr-only` keeps it off the screen, so the
-    // tab's table is announced by the legacy bundle's identities heading without a pixel moving.
+    // The caption is the table's own naming element and Bootstrap's `.sr-only` keeps it off the screen, so the tab's table is announced by the legacy bundle's identities heading without a pixel moving.
     expect(caption?.textContent?.trim()).toBe(IDENTITIES_HEADING_TEXT);
     expect(caption?.classList.contains('sr-only')).toBe(true);
     expect(table?.firstElementChild).toBe(caption);

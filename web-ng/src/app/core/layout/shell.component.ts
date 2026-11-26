@@ -160,12 +160,10 @@ export class ShellComponent implements OnDestroy {
     this.idle.reset();
   }
 
-  /**
-   * Moves focus into the screen's content, which is what the shell's skip link does (WCAG 2.4.1): the `main` landmark carries `tabindex="-1"`, so it accepts programmatic focus without becoming a
-   * tab stop of its own, and the next Tab continues from it into the screen's own controls rather than back through the navbar. The click's default is cancelled first and always — the application routes on the hash
-   * (`withHashLocation`, Rule 1 clause 5), so letting the browser follow `#main-content` would be read as a navigation and would take the screen away — and nothing is navigated to or requested here. The parameter
-   * is the click's own `MouseEvent` because this file imports the router's `Event` under that name; `@param event` the anchor's click, whose default fragment navigation is suppressed.
-   */
+  /** Moves focus into the screen's content, which is what the shell's skip link does (WCAG 2.4.1): the `main` landmark carries `tabindex="-1"`, so it accepts programmatic focus without becoming a tab stop of its own, and the next Tab continues from
+   * it into the screen's own controls rather than back through the navbar. The click's default is cancelled first and always — the application routes on the hash (`withHashLocation`, Rule 1 clause 5), so letting the browser follow `#main-content`
+   * would be read as a navigation and would take the screen away — and nothing is navigated to or requested here. The parameter is the click's own `MouseEvent` because this file imports the router's `Event` under that name; `@param event` the
+   * anchor's click, whose default fragment navigation is suppressed. */
   skipToMain(event: MouseEvent): void {
     event.preventDefault();
     this.document.getElementById(MAIN_CONTENT_ID)?.focus();

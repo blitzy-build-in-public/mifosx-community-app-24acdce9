@@ -1,7 +1,6 @@
 /// <reference types="node" />
 import process from 'node:process';
-// The informational path every parity CLI shares: an operator asks a command what it would do with `--help`, which prints the effect and the environment variables it reads, named and never echoed (Rule 1 clause 9), and exits 0 without running the command.
-/** What one command says about itself when it is asked for usage; every field is printed verbatim, a variable named and never echoed. */
+/** What one command says about itself when it is asked for usage; every field is printed verbatim, a variable named and never echoed (Rule 1 clause 9), and `--help` exits 0 without running the command. */
 export interface CliUsage {
   /** Command name as an operator invokes it, e.g. the npm script `check:endpoints`. */
   readonly name: string;

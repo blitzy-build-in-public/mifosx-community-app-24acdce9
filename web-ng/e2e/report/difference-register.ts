@@ -1,4 +1,4 @@
-/** The deliberate-difference register: the readings the delivered tree takes more narrowly than AAP 0.10.5's own wording, the one copy it carries because no legacy bundle supplies it, and the two failure behaviours it adds where the register's sixteen differences name none, carried into `parity-report.md` and `parity-report.json` so acceptance criterion 4's reader can compare them (AAP 0.10.3, AAP 0.11.1, AAP 0.3.4, Rule 1 clause 3). */
+/** The deliberate-difference register: the readings the delivered tree takes more narrowly than AAP 0.10.5's own wording, the one copy it carries because no legacy bundle supplies it, and the two failure behaviours and the accessibility markup it adds where the register's sixteen differences name none, carried into `parity-report.md` and `parity-report.json` so acceptance criterion 4's reader can compare them (AAP 0.10.3, AAP 0.11.1, AAP 0.3.4, Rule 1 clause 3). */
 
 /** One reading of AAP 0.10.5's register: the plan's own wording, what this run delivers instead, and the authority that settles the difference. */
 export interface DifferenceRegisterReading {
@@ -10,7 +10,7 @@ export interface DifferenceRegisterReading {
   readonly why: string;
 }
 
-/** The six readings the delivered tree takes from the plan's wording, in AAP order: AAP 0.10.5 item 5, the savings entry point AAP 0.9.3's fixed cut order withdrew; AAP 0.10.5 item 15, the default dates a form opens with; AAP 0.10.1's W2 row, the client template read (AAP 0.3.4); AAP 0.10.5 itself, the session-expiry copy the application owns because no legacy bundle carries a key for it; and the two failure behaviours the sixteen differences name nowhere — the bounded request, and the credential refusal this deployment's browser reports as a transport failure. */
+/** The seven readings the delivered tree takes from the plan's wording, in AAP order: AAP 0.10.5 item 5, the savings entry point AAP 0.9.3's fixed cut order withdrew; AAP 0.10.5 item 15, the default dates a form opens with; AAP 0.10.1's W2 row, the client template read (AAP 0.3.4); AAP 0.10.5 itself, the session-expiry copy the application owns because no legacy bundle carries a key for it; and what the sixteen differences name nowhere — the two failure behaviours, the bounded request and the credential refusal this deployment's browser reports as a transport failure, and the accessibility markup the named breadcrumb landmark and the ARIA tab strip add. */
 export const DIFFERENCE_REGISTER_READINGS: readonly DifferenceRegisterReading[] = [
   {
     where: 'AAP 0.10.5 item 5 — the client record\'s "New Saving" entry point',
@@ -34,19 +34,24 @@ export const DIFFERENCE_REGISTER_READINGS: readonly DifferenceRegisterReading[] 
       'activation, submission, disbursement and repayment dates default from the browser clock exactly '
       + 'as legacy\'s do, and only the harness derives its run date from the tenant business date',
     delivered:
-      'the submission, activation, approve, withdraw and create-client dates default from the '
-      + 'browser clock; the loan application\'s disbursement date and the repayment form\'s transaction date '
-      + 'are the values the Fineract template that seeds the screen carries (GET /loans/template and '
-      + 'GET /loans/{id}/transactions/template?command=repayment), because a template-seeded control keeps '
-      + 'the template\'s default in both front ends. The application issues no business-date request, and no '
-      + 'form reads the browser clock where its template supplies a date.',
+      'every date default the application itself chooses comes from the browser clock: the loan application\'s '
+      + 'submission and expected disbursement dates, the approve, reject and disburse dates, the repayment form\'s '
+      + 'transaction date, the charge form\'s payment date and the due date it fills for a specified-due-date charge, '
+      + 'and the client create form\'s submission date and the activation action\'s date. Where a server payload '
+      + 'carries the date a form opens on, the form opens on that payload\'s value instead: the client create form\'s '
+      + 'activation date comes from the client template\'s `activationDate`, with the browser clock only as its '
+      + 'fallback, the loan edit form\'s two dates come from the loan\'s own `timeline`, and the client edit form\'s '
+      + 'activation date comes from the record the form edits. No form seeds a date member from GET /loans/template '
+      + 'or GET /loans/{id}/transactions/template?command=repayment: those reads seed the option lists and the other '
+      + 'defaults, and the repayment form opens on today at local midnight rather than on the template\'s `date`, '
+      + 'which this backend answers with the earliest unpaid instalment\'s due date. The application issues no '
+      + 'business-date request.',
     why:
-      'AAP 0.4.4 point 6 and Rule 1 clause 3 take a form\'s defaults and dropdown options from the same '
-      + 'template endpoints legacy uses, so overriding the two seeded controls with the browser clock would '
-      + 'show a default legacy never shows and register as a form-default difference in W4, W5 and W6, while '
-      + 'reading the business date inside the application would add a call legacy never makes — the reason '
-      + 'item 15 itself gives. The business date stays authoritative where AAP 0.10.1 and Rule 1 clause 2 '
-      + 'require it: the seed, every workflow input and every comparison.',
+      'AAP 0.10.5 item 15 keeps a form\'s default dates on the browser clock exactly as legacy\'s, and gives the '
+      + 'reason: reading the tenant business date inside the application would add a request legacy never makes and '
+      + 'register as a request difference in every workflow. The business date stays authoritative where AAP 0.10.1, '
+      + 'AAP 0.12 and Rule 1 clause 2 require it — the seed, every workflow input and every comparison, each of them '
+      + 'read from the harness\'s one business-date call.',
   },
   {
     where: 'AAP 0.10.1 — the W2 create-and-activate row',
@@ -131,6 +136,28 @@ export const DIFFERENCE_REGISTER_READINGS: readonly DifferenceRegisterReading[] 
       + 'a second. Rule 1 clause 3 asks every deliberate difference from legacy to be listed with its reason, which is '
       + 'what this entry does; legacy leaves the refused key in storage and its screen blank.',
   },
+  {
+    where: 'AAP 0.10.5 — the accessibility markup the register\'s sixteen differences do not cover',
+    plan:
+      'the register\'s sixteen differences say nothing about a named navigation landmark around a breadcrumb '
+      + 'trail, an `aria-current` marker on its current crumb, or the ARIA tab pattern over a record\'s sections; '
+      + 'they name plugins, redirects, unrendered screens, search scopes and icons, and no markup role, landmark or '
+      + 'tab stop among them',
+    delivered:
+      'the shared breadcrumb wraps the trail in `<nav aria-label="Breadcrumb">` on every screen that renders one, '
+      + 'marking the current crumb with Bootstrap 3\'s `.active` class alone; the client record wraps its own trail '
+      + 'in the same named landmark and marks its crumb `aria-current="page"`; and each tab of the record\'s strip '
+      + 'is an anchor inside a `role="tablist"` list carrying `role="tab"`, `tabindex="0"` and `aria-selected` '
+      + 'with no `href`, so the tabs are reachable and operable by their own tab stop and Enter or the space bar, '
+      + 'and no tab offers an open-in-new-tab that would reload the page as a valueless `href` does',
+    why:
+      'a trail that names where the reader is has to be a landmark assistive technology can name and jump to, with '
+      + 'its current crumb announced as the current page, and a strip whose tabs are not links has to carry the tab '
+      + 'role, a tab stop and a key handler to stay operable. Legacy renders the bare `<ul class="breadcrumb">` with '
+      + 'no landmark around it (`app/views/clients/clients.html`) and anchors its tabs with a valueless `href`, so '
+      + 'both additions depart from Rule 1 clause 3\'s "match legacy" — and AAP 0.10.5\'s preamble and Rule 1 clause 3 '
+      + 'require every deliberate difference to be listed with its reason, which is what this entry does.',
+  },
 ];
 
 const REGISTER_COLUMNS: readonly string[] = ['Where', 'The plan\'s wording', 'What the run delivers', 'Authority'];
@@ -151,9 +178,9 @@ export function renderDifferenceRegister(
       + 'above cites one of them by number. The entries below are the ones this run states on the register\'s '
       + 'behalf: readings narrower than the plan wrote them — at item 5 a difference the run does not deliver at '
       + 'all, as AAP 0.9.3\'s fixed cut order required, and at the session-expiry warning copy of the '
-      + 'application\'s own because no legacy bundle supplies it — and the two failure behaviours this run adds '
-      + 'where the sixteen differences name none, each stated with what the run delivers so that the register and '
-      + 'the specs agree.',
+      + 'application\'s own because no legacy bundle supplies it — the two failure behaviours this run adds '
+      + 'where the sixteen differences name none, and the accessibility markup the sixteen name nowhere, each '
+      + 'stated with what the run delivers so that the register and the specs agree.',
     '',
     `| ${REGISTER_COLUMNS.join(' | ')} |`,
     `| ${REGISTER_COLUMNS.map(() => '---').join(' | ')} |`,

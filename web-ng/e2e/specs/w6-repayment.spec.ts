@@ -54,7 +54,6 @@ function asObject(
 ): Readonly<Record<string, NormalizedValue>> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value : null;
 }
-/** One field of a normalised object as a finite number, or `null` when absent or another type. */
 function numberOf(body: Readonly<Record<string, NormalizedValue>> | null, key: string): number | null {
   const value = body === null ? undefined : body[key];
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
@@ -64,7 +63,6 @@ function textOf(body: Readonly<Record<string, NormalizedValue>> | null, key: str
   const value = body === null ? undefined : body[key];
   return typeof value === 'string' ? value : null;
 }
-/** One field of a normalised object as an array, or `[]` when absent or another type. */
 function arrayOf(
   body: Readonly<Record<string, NormalizedValue>> | null,
   key: string,
@@ -147,7 +145,6 @@ function figureOf(value: string | number | null): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-/** A whole count as either front end renders it, or `null` when the cell carries none. */
 function periodOf(value: string | number | null): number | null {
   if (typeof value === 'number') {
     return Number.isFinite(value) ? Math.trunc(value) : null;
@@ -241,7 +238,7 @@ function repaymentTransactionBalance(
   return balance;
 }
 
-/** A candidate account, described for a failure message. The account number is the handle the client record prints, and the status is the one the API reported — no generated id is spelled out as a meaning (AAP 0.10.2).. */
+/** A candidate account, described for a failure message. The account number is the handle the client record prints, and the status is the one the API reported — no generated id is spelled out as a meaning (AAP 0.10.2). */
 function describeCandidate(candidate: LoanCandidate): string {
   return `${candidate.accountNo} (${candidate.before.status})`;
 }

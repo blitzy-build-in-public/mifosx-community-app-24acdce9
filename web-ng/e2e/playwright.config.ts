@@ -5,7 +5,6 @@ import { fileURLToPath } from 'node:url';
 const LEGACY_URL = process.env['LEGACY_URL'] ?? 'http://localhost:9090';
 const NEXT_URL = process.env['NEXT_URL'] ?? 'http://localhost:4300';
 
-/** Absolute artefact locations, anchored at the package root above `e2e/`. */
 const outputDir = fileURLToPath(new URL('../test-results', import.meta.url));
 const htmlReportDir = fileURLToPath(
   new URL('../playwright-report', import.meta.url),

@@ -174,9 +174,8 @@ export class SessionService {
         const status = failureStatus(cause);
 
         if (status === 401 || status === 0) {
-          // A credential the server refuses ends the session, so its entry goes with the signals instead of being left behind. That departs from Rule 1 clause 3, whose legacy `SessionManager` keeps an entry it
-          // could not validate, because AAP 0.4.2 requires a refused session to be cleared. The browser calling the API cross-origin reports this deployment's 401 as status 0 (no proxy, AAP 0.4.2), so the
-          // refusal is recognised where it is observed, not only in the interceptor.
+          // A credential the server refuses ends the session, so its entry goes with the signals instead of being left behind. That departs from Rule 1 clause 3, whose legacy `SessionManager` keeps an entry it could not validate, because AAP 0.4.2
+          // requires a refused session to be cleared. The browser calling the API cross-origin reports this deployment's 401 as status 0 (no proxy, AAP 0.4.2), so the refusal is recognised where it is observed, not only in the interceptor.
           this.clear();
         } else {
           this.state.set(null);

@@ -184,9 +184,7 @@ describe('ClientAccountsComponent', () => {
     expect(component.failed()).toBe(false);
     expect(renderedRows()).toHaveLength(3);
     expect(Array.from(host().querySelectorAll('#client-accounts thead th'))).toHaveLength(4);
-    // Inside Bootstrap 3's `.table-responsive` the table scrolls below 768px instead of pushing the card sideways, and
-    // no `.panel-body` here: the record template provides the card's body, so a second one would inset the table 15px from the
-    // anchor the record's heading, labels and tabs share.
+    // Bootstrap 3's `.table-responsive` scrolls below 768px instead of pushing the card sideways, and no `.panel-body`: the record template provides the body, so a second would inset it 15px from the anchor the heading, labels and tabs share.
     expect(host().querySelector('#client-accounts')?.parentElement?.classList.contains('table-responsive')).toBe(true);
     expect(host().querySelector('.panel-body')).toBeNull();
   });

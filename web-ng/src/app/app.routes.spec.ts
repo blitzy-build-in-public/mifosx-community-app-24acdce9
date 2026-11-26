@@ -457,7 +457,7 @@ describe('permissionGuard', () => {
   /** The declaration `search/:query` states, as the guard receives it: one held code of the list admits the screen. */
   const SEARCH_DECLARATION = { any: ['READ_CLIENT', 'READ_LOAN'] };
 
-  /** The route snapshot the guard is handed for `#/client/2/<action>`. @param action the `:action` segment the URL carries. @param permission the route's `data.permission`, which defaults to the lifecycle declaration.. */
+  /** The route snapshot the guard is handed for `#/client/2/<action>`. @param action the `:action` segment the URL carries. @param permission the route's `data.permission`, which defaults to the lifecycle declaration. */
   function routeFor(action: string, permission: unknown = ACTION_DECLARATION): ActivatedRouteSnapshot {
     const route = new ActivatedRouteSnapshot();
     route.params = { id: '2', action };

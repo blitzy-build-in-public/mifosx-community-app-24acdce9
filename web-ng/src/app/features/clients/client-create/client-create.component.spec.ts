@@ -82,11 +82,8 @@ interface ClientServiceStub {
   readonly template: Mock<ClientService['template']>;
   readonly create: Mock<ClientService['create']>;
 }
-/**
- * `Router` as this screen and its cancel link use it: the two navigation entry points, each replaced by a spy so no case performs a navigation and every command list and target the screen sends is observable.
- * `navigate` is the component's own call on a successful create; `navigateByUrl` is what `RouterLink` asks for when the cancel anchor is activated.
- *
- */
+/** `Router` as this screen and its cancel link use it: the two navigation entry points, each replaced by a spy so no case performs a navigation and every command list and target the screen sends is observable. `navigate` is the component's own
+ * call on a successful create; `navigateByUrl` is what `RouterLink` asks for when the cancel anchor is activated. */
 interface RouterStub {
   readonly navigate: Mock<Router['navigate']>;
   readonly navigateByUrl: Mock<Router['navigateByUrl']>;

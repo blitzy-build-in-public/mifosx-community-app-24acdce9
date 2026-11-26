@@ -60,8 +60,7 @@ describe('ProfileCardComponent', () => {
   it('renders the supplied display name as the card heading', () => {
     const fixture = createCard();
 
-    // The card title is an `h2`, one level under the record header's `h1`, with `.panel-title` still
-    // carrying the 18px/700 card-title box.
+    // The card title is an `h2`, one level under the record header's `h1`, with `.panel-title` still carrying the 18px/700 card-title box.
     const heading = host(fixture).querySelector('h2.panel-title');
 
     expect(heading?.textContent?.trim()).toBe(DISPLAY_NAME);
@@ -98,8 +97,7 @@ describe('ProfileCardComponent', () => {
   it('renders the performance-history sub-heading as its label, never as a raw translation key', () => {
     const fixture = createCard();
 
-    // An `h3` one level under the card title, with Bootstrap's own `.h5` alias keeping the 14px box
-    // the `h5` element carried, so the outline never skips a level and no pixel moves.
+    // An `h3` one level under the card title, with Bootstrap's own `.h5` alias keeping the 14px box the `h5` element carried, so the outline never skips a level and no pixel moves.
     const subheading = host(fixture).querySelector('h3.h5');
 
     const text = subheading?.textContent?.trim() ?? '';
@@ -145,8 +143,7 @@ describe('ProfileCardComponent', () => {
     fixture.componentRef.setInput('historyFields', history);
     fixture.detectChanges();
 
-    // One key cell and one value cell per row across the whole card, so the stylesheet sets a single key width for every row: no label
-    // wraps and every value starts at one offset (AAP 0.2.3 row `ProfileCard`).
+    // One key cell and one value cell per row across the whole card, so the stylesheet sets a single key width for every row: no label wraps and every value starts at one offset (AAP 0.2.3 row `ProfileCard`).
     const renderedRows = [
       ...rows(fixture),
       ...Array.from(host(fixture).querySelectorAll<HTMLElement>('[data-testid="profile-history-field"]')),

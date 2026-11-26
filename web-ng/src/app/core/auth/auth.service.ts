@@ -102,9 +102,8 @@ export class AuthService {
 
     this.sessions.write(session);
 
-    // The cause of this call's own projection read is kept local to it, never in instance state, so two logins in flight cannot read each other's failure. The reader
-    // rethrows it unchanged, which leaves `SessionService.restore()`'s `Promise<boolean>` contract alone: it still resolves `false`, and it removes the written entry
-    // for a refused credential (status 401, or the status 0 a cross-origin 401 arrives as) while every other failure leaves that entry in place.
+    // The cause of this call's own projection read is kept local to it, never in instance state, so two logins in flight cannot read each other's failure. The reader rethrows it unchanged, which leaves `SessionService.restore()`'s `Promise<boolean>`
+    // contract alone: it still resolves `false`, and it removes the written entry for a refused credential (status 401, or the status 0 a cross-origin 401 arrives as) while every other failure leaves that entry in place.
     const captured: { cause?: unknown } = {};
 
     const readProjection: SessionUserReader = (userId: number) =>
@@ -119,11 +118,10 @@ export class AuthService {
       return;
     }
 
-    // No session is in effect, so the login did not happen: resolving would navigate a screen an empty session then sends straight back here with nothing said — what a silent 4xx made indistinguishable from a
-    // refused credential (AAP 0.14.2 "Error handling": every HTTP call path ends in a rendered message). The status the failure arrived with is kept, so a 4xx is painted inline by the screen and a 5xx or
-    // transport fault is left to the interceptor's one notification. The no-cause case carries status 200 like the malformed-answer refusal above, the marker this codebase uses for a locally raised error that
-    // no HTTP answer explains. This is a deliberate difference from legacy, which shows the user nothing on this path (Rule 1 clause 3): AAP 0.14.2 requires a rendered failure, and the sign-in form's one error
-    // region is where it is rendered.
+    // No session is in effect, so the login did not happen: resolving would navigate a screen an empty session then sends straight back here with nothing said — what a silent 4xx made indistinguishable from a refused credential
+    // (AAP 0.14.2 "Error handling": every HTTP call path ends in a rendered message). The status the failure arrived with is kept, so a 4xx is painted inline by the screen and a 5xx or transport fault is left to the interceptor's one notification.
+    // The no-cause case carries status 200 like the malformed-answer refusal above, the marker this codebase uses for a locally raised error that no HTTP answer explains. This is a deliberate difference from legacy, which shows the user nothing on
+    // this path (Rule 1 clause 3): AAP 0.14.2 requires a rendered failure, and the sign-in form's one error region is where it is rendered.
     throw 'cause' in captured
       ? toDisplayableFailure(captured.cause)
       : new ApiError(NO_SESSION_AFTER_SIGN_IN, 200);

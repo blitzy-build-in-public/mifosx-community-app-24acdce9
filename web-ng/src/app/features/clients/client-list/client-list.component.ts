@@ -77,7 +77,6 @@ export class ClientListCellDirective {
 
   /**
    * The clients list (`#/clients`) — the signed-in landing screen, W2's "Create Client" entry point and W3's row-into-record step (AAP 0.7.1 Features row `clients`; AAP 0.7.4; AAP 0.8.2 route `clients`; AAP 0.11.1). It composes `app-panel-card` (AAP 0.2.3), `app-filter-toolbar` and `app-data-table` with the legacy ids, classes and captions unchanged (Rule 1 clauses 3 and 6), and reads through the families' typed callers, so this file composes no URL, sets no header and injects no HTTP client (Rule 1 clause 5; AAP 0.14.1; AAP 0.4.2): `ClientService.list()` for one page of `GET /clients` with `offset` and `limit` only, and `SearchService.search()` for the legacy find `GET /search` with `query`, `resource=clients,clientIdentifiers` and `exactMatch` (AAP 0.7.3 "Shell: global search"; AAP 0.10.5 item 9; `app/scripts/controllers/client/ClientController.js:44-62`).
-   *
    * The two display filters and the rendered order are client-side and send no query parameter (Rule 1 clauses 2 and 3): {@link visibleRows} reproduces legacy's `| orderBy:'displayName':reverse` with `reverse` unset (`app/views/clients/clients.html:63`), and paging is legacy's fifteen rows a read (`app/views/clients/clients.html:79-82`; AAP 0.5.4 styles `.pagination`). Nothing is improved on the legacy screen (Rule 1 clause 3): no rows-per-page selector, spinner or skeleton (AAP 0.2.4), no textual status (AAP 0.10.5 item 11), no "Import Clients", left icon rail, Accounting/Reports/Admin navigation, hamburger or bell (AAP 0.9.2; AAP 0.10.5 items 4 and 8). Rows are projected at receipt, once per response, into {@link ClientListRow}. States: loaded renders the table, loading paints nothing invented, an empty result set renders `app-empty-state` with no error and withholds the pager, and a failed read leaves the screen usable — a 4xx rendering Fineract's own message (AAP 0.7.4).
    */
 @Component({
@@ -266,7 +265,6 @@ export class ClientListComponent {
 
   /**
    * Moves the table to another page — the pager's only entry point, and the one place the two reads part company. A page of the list belongs to the server: the page moves and {@link load} asks for that page's `offset`, the call the legacy controller's `getResultsPage` makes when its `searchText` is empty (`app/scripts/controllers/client/ClientController.js:22-28`). A find's answer does not: the search endpoint returns the whole match, so the page moves and nothing is read — {@link visibleRows} cuts the answer in hand to the page in view, as that same legacy function does when `scope.searchText` is set (Rule 1 clauses 2 and 3).
-   *
    * The activation is a read, never a navigation: the anchor carries no `href`, so the default is suppressed and the hash route cannot change. A `keydown` for any key other than Enter or Space returns first, while Enter or Space pages as a click does; `tabindex="0"` keeps it a tab stop. A page outside 1..{@link pageCount}, or the page already shown, is a no-op, so a second click cannot send a second read (AAP 0.1.1). `@param page` the 1-based page the user picked.
    */
   goToPage(event: Event, page: number): void {

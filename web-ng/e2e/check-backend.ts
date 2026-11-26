@@ -23,11 +23,9 @@ export function detectBackendEnvironment(): BackendEnvironment {
   const codespaces = (process.env['CODESPACES'] ?? '').trim().toLowerCase();
   return codespaces.length > 0 && codespaces !== '0' && codespaces !== 'false' ? 'codespaces' : 'mac';
 }
-/** Narrows a JSON object; `Array.isArray` alone would leave array elements loosely typed. */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
-/** Reads a dotted field path, answering `undefined` wherever the payload along the way is no object. */
 function at(value: unknown, path: string): unknown {
   return path.split('.').reduce<unknown>((node, key) => (isRecord(node) ? node[key] : undefined), value);
 }

@@ -23,11 +23,9 @@ import {
 } from './fixtures';
 import { resolveCliIntent, type CliUsage } from '../../tools/parity/lib/cli';
 
-/** One entity the seed created: the name the plan fixes and the id Fineract assigned it. */
+/** One entity the seed created: the name the AAP 0.10.1 table and the workflows give it, and the id Fineract assigned it. */
 export interface SeedEntityResult {
-  /** Display name of the entity, as the AAP 0.10.1 table and the workflows name it. */
   readonly name: string;
-  /** Primary key Fineract returned for it, which the page objects read back through the API. */
   readonly id: number;
 }
 
@@ -75,7 +73,6 @@ export interface SeedResult {
   readonly clientActionGate: SeedClientActionGate;
 }
 
-/** Response statuses `POST` accepts: Fineract answers 200 or 201 for every resource this seed creates. */
 const SUCCESS_STATUSES: readonly number[] = [200, 201];
 
 const RESULT_ARTEFACT_URL = new URL('../.captures/seed.json', import.meta.url);
@@ -194,7 +191,6 @@ interface EntityDatatableCheckCreateBody {
 class SeedRequestError extends Error {
   /** Resource path below the API path, e.g. `/loanproducts`. */
   readonly path: string;
-  /** HTTP status Fineract answered with. */
   readonly status: number;
   /** Fineract's validation messages, empty when it answered without any. */
   readonly validationMessages: readonly string[];
@@ -217,12 +213,10 @@ function redactFailure(error: unknown, secrets: readonly string[]): Error {
   return new Error(redactAuthentication(message, secrets));
 }
 
-/** Narrows a parsed JSON payload to an object, which is the only shape Fineract's resources return. */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** Reads a non-empty string field, or `null` when the field is absent or not a string. */
 function readText(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
@@ -250,7 +244,6 @@ function collectValidationMessages(body: unknown): string[] {
   return messages;
 }
 
-/** One accepted `POST`: the status Fineract answered with and its parsed body, unread. */
 interface SeedPostResult {
   /** Status Fineract answered with; one of {@link SUCCESS_STATUSES}. */
   readonly status: number;

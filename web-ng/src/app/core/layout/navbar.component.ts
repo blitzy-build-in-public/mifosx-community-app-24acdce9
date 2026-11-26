@@ -22,9 +22,7 @@ import { AVAILABLE_LANGS, FALLBACK_LANG } from '../i18n/translate.config';
 import { NotificationService } from '../notifications/notification.service';
 import { GlobalSearchComponent, type GlobalSearchSubmission } from './global-search.component';
 
-/**
- * Legacy key of the message a failure that is not Fineract's own text is reported with — the login screen's key for the same purpose (Rule 1 clause 3).
- */
+/** Legacy key of the message a failure that is not Fineract's own text is reported with — the login screen's key for the same purpose (Rule 1 clause 3). */
 const GENERIC_FAILURE_KEY = 'error.connection.failed';
 
 /**
@@ -50,80 +48,64 @@ export class NavbarComponent {
   /** The login and logout entry point; its `username` signal labels the user menu. */
   private readonly auth = inject(AuthService);
 
-  /**
-   * The source of the language in force — read for the switcher's `current` — and of the legacy wording a failed bundle load is reported with. The switch itself belongs to the shared `LanguageSwitcherComponent`, which owns the single `use()` call both screens share.
-   */
+  /** The source of the language in force — read for the switcher's `current` — and of the legacy wording a failed bundle load is reported with. The switch itself belongs to the shared `LanguageSwitcherComponent`, which owns the single `use()` call
+   * both screens share. */
   private readonly translate = inject(TranslateService);
 
   /** Route navigation for the search and the sign-out; no `window.location` anywhere in this file. */
   private readonly router = inject(Router);
 
-  /**
-   * The application's single user-facing channel, for the two failures this component can suffer: a navigation the router refuses, and a language switch whose bundle could not be loaded (AAP 0.14.2 — neither is swallowed). It issues no request, so the navbar still reaches no backend and composes no URL (Rule 1 clause 5).
-   */
+  /** The application's single user-facing channel, for the two failures this component can suffer: a navigation the router refuses, and a language switch whose bundle could not be loaded (AAP 0.14.2 — neither is swallowed). It issues no request, so
+   * the navbar still reaches no backend and composes no URL (Rule 1 clause 5). */
   private readonly notifications = inject(NotificationService);
 
-  /**
-   * The permission the "Clients" destination requires, which `features/clients/clients.routes.ts` declares as its group's `data.permission` — the code the legacy template carries on the same link (`has-permission='READ_CLIENT'`, `app/views/_topnavbar.html`). The route table remains the only route declaration (AAP 0.14.1).
-   */
+  /** The permission the "Clients" destination requires, which `features/clients/clients.routes.ts` declares as its group's `data.permission` — the code the legacy template carries on the same link
+   * (`has-permission='READ_CLIENT'`, `app/views/_topnavbar.html`). The route table remains the only route declaration (AAP 0.14.1). */
   readonly clientPermission = 'READ_CLIENT';
 
-  /**
-   * The languages the switcher offers — `AVAILABLE_LANGS`, the single language list of the application, shared with the login screen's switcher (AAP 0.7.4; `core/i18n/translate.config.ts`).
-   */
+  /** The languages the switcher offers — `AVAILABLE_LANGS`, the single language list of the application, shared with the login screen's switcher (AAP 0.7.4; `core/i18n/translate.config.ts`). */
   readonly langs: readonly string[] = AVAILABLE_LANGS;
 
-  /**
-   * The scope the global search control is seeded with — AAP 0.2.3's `Navbar` prop `searchScope: 'clients' | 'loans' | 'all'`: the default `all` searches both in-scope resource families at once, which is what legacy's scope list put first (AAP 0.10.5 item 9), and the user's own selection travels back out through `(search)`.
-   */
+  /** The scope the global search control is seeded with — AAP 0.2.3's `Navbar` prop `searchScope: 'clients' | 'loans' | 'all'`: the default `all` searches both in-scope resource families at once, which is what legacy's scope list put first
+   * (AAP 0.10.5 item 9), and the user's own selection travels back out through `(search)`. */
   readonly searchScope = input<SearchScope>('all');
 
-  /**
-   * The authenticated account name the user menu is labelled with — `mifos` after a login as `mifos` — or `null` before a session restore has resolved one: `SessionService.username` through `AuthService`, the projection of `GET /users/{id}`'s `username`. The label shows the account name only; the session, the authentication key and the permission list are deliberately not exposed to the template (Rule 1 clause 9).
-   */
+  /** The authenticated account name the user menu is labelled with — `mifos` after a login as `mifos` — or `null` before a session restore has resolved one: `SessionService.username` through `AuthService`, the projection of `GET /users/{id}`'s
+   * `username`. The label shows the account name only; the session, the authentication key and the permission list are deliberately not exposed to the template (Rule 1 clause 9). */
   readonly username: Signal<string | null> = this.auth.username;
 
-  /**
-   * The account name the signed-in shell hands in, when it has one of its own (AAP 0.7.1's `ShellComponent` input chain, through {@link displayName}). Optional and `null` by default, so the navbar keeps working when nothing supplies it; a name supplied here wins over the session projection.
-   */
+  /** The account name the signed-in shell hands in, when it has one of its own (AAP 0.7.1's `ShellComponent` input chain, through {@link displayName}). Optional and `null` by default, so the navbar keeps working when nothing supplies it; a name
+   * supplied here wins over the session projection. */
   readonly userName = input<string | null>(null);
 
-  /**
-   * The text the user menu is labelled with: the {@link userName} input when the shell supplied one, and the authenticated account name {@link username} otherwise, the value legacy printed from `currentSession.user.name` in the same place (AAP 0.7.4). `null` only when no name was supplied and no session restore has resolved a projection; the authentication key, the session object and the permission list are never exposed to the template (Rule 1 clause 9).
-   */
+  /** The text the user menu is labelled with: the {@link userName} input when the shell supplied one, and the authenticated account name {@link username} otherwise, the value legacy printed from `currentSession.user.name` in the same place
+   * (AAP 0.7.4). `null` only when no name was supplied and no session restore has resolved a projection; the authentication key, the session object and the permission list are never exposed to the template (Rule 1 clause 9). */
   readonly displayName: Signal<string | null> = computed(
     (): string | null => this.userName() ?? this.username(),
   );
 
-  /**
-   * The active language, for the native `<select>` the switcher renders. It reads ngx-translate's own `currentLang` signal rather than keeping a copy, so the selector always shows the language whose bundle is actually loaded (ngx-translate 18.1.0, `use()`).
-   */
+  /** The active language, for the native `<select>` the switcher renders. It reads ngx-translate's own `currentLang` signal rather than keeping a copy, so the selector always shows the language whose bundle is actually loaded
+   * (ngx-translate 18.1.0, `use()`). */
   readonly currentLang: Signal<string> = computed(
     (): string => this.translate.currentLang() ?? FALLBACK_LANG,
   );
 
-  /**
-   * Whether the user menu's dropdown is open. Angular state instead of the Bootstrap dropdown plugin, which needs jQuery and is therefore not installed (AAP 0.5.1, AAP 0.5.4): the template binds it to the `.open` class the global stylesheet reacts to.
-   */
+  /** Whether the user menu's dropdown is open. Angular state instead of the Bootstrap dropdown plugin, which needs jQuery and is therefore not installed (AAP 0.5.1, AAP 0.5.4): the template binds it to the `.open` class the global stylesheet reacts
+   * to. */
   readonly userMenuOpen = signal(false);
 
-  /**
-   * The user menu's trigger, referenced so the menu can hand focus back to it when it closes: the panel is hidden the moment the state changes, and focus would otherwise be left on an element no longer displayed.
-   */
+  /** The user menu's trigger, referenced so the menu can hand focus back to it when it closes: the panel is hidden the moment the state changes, and focus would otherwise be left on an element no longer displayed. */
   private readonly userMenuTrigger = viewChild<ElementRef<HTMLElement>>('userMenuTrigger');
 
-  /** The user menu's own list item — trigger and panel — which is the boundary an outside click is
-   * measured against, as Bootstrap measured it against the element its plugin was attached to. */
+  /** The user menu's own list item — trigger and panel — which is the boundary an outside click is measured against, as Bootstrap measured it against the element its plugin was attached to. */
   private readonly userMenu = viewChild<ElementRef<HTMLElement>>('userMenu');
 
-  /**
-   * Reports a language switch that has taken effect — AAP 0.2.3's `(langChange)` prop of the `Navbar` row, and the bar's report of something it has already done: the shared switcher performs the switch, so no consumer has to act on this for the language to change. It exists because the inventory names it as part of the delivered contract.
-   */
+  /** Reports a language switch that has taken effect — AAP 0.2.3's `(langChange)` prop of the `Navbar` row, and the bar's report of something it has already done: the shared switcher performs the switch, so no consumer has to act on this for the
+   * language to change. It exists because the inventory names it as part of the delivered contract. */
   readonly langChange = output<string>();
 
-  /**
-   * Reports that the user has signed out — AAP 0.2.3's `(signOut)` prop of the `Navbar` row — emitted once the session is cleared and the return to the login screen has been started. Like {@link langChange} it reports what the bar has already done: the sign-out remains this component's own work (AAP 0.7.1's `logout(): void`, W1).
-   */
+  /** Reports that the user has signed out — AAP 0.2.3's `(signOut)` prop of the `Navbar` row — emitted once the session is cleared and the return to the login screen has been started. Like {@link langChange} it reports what the bar has already done:
+   * the sign-out remains this component's own work (AAP 0.7.1's `logout(): void`, W1). */
   readonly signOut = output<void>();
 
   /** Opens the user menu, or closes it when it is already open — one click toggles, as the legacy dropdown's toggle did. */
@@ -131,9 +113,8 @@ export class NavbarComponent {
     this.userMenuOpen.update((open: boolean): boolean => !open);
   }
 
-  /**
-   * Closes the user menu: the template calls it on the menu's own `Escape` binding and this component calls it whenever an entry it contains is activated, since the menu must not stay painted over the screen the navigation just produced. Closing returns focus to the trigger, without which a keyboard user who pressed Escape from inside the menu would be dropped onto the document body.
-   */
+  /** Closes the user menu: the template calls it on the menu's own `Escape` binding and this component calls it whenever an entry it contains is activated, since the menu must not stay painted over the screen the navigation just produced. Closing
+   * returns focus to the trigger, without which a keyboard user who pressed Escape from inside the menu would be dropped onto the document body. */
   closeUserMenu(): void {
     if (!this.userMenuOpen()) {
       return;
@@ -143,10 +124,8 @@ export class NavbarComponent {
     this.userMenuTrigger()?.nativeElement.focus();
   }
 
-  /** Closes the user menu when a click that reached the document landed outside it — legacy's Bootstrap
-   * dropdown dismissal, driven by the `host` document listener (Rule 1 clause 3). Not through
-   * {@link closeUserMenu}, which would take back the focus the outside click already placed.
-   * @param event The click event Angular reports for the document, whose target decides the outcome. */
+  /** Closes the user menu when a click that reached the document landed outside it — legacy's Bootstrap dropdown dismissal, driven by the `host` document listener (Rule 1 clause 3). Not through {@link closeUserMenu}, which would take back the focus
+   * the outside click already placed. @param event The click event Angular reports for the document, whose target decides the outcome. */
   dismissUserMenuOnOutsideClick(event: Event): void {
     if (!this.userMenuOpen()) {
       return;
@@ -161,9 +140,8 @@ export class NavbarComponent {
     this.userMenuOpen.set(false);
   }
 
-  /**
-   * Reports a language switch that has taken effect (AAP 0.2.3's `(langChange)` prop). The switch belongs to the shared `LanguageSwitcherComponent`, which owns the single `TranslateService.use()` and reconciles its selector with the language in force, so nothing navigates or reloads (AAP 0.7.4). @param code the language code the switcher reports.
-   */
+  /** Reports a language switch that has taken effect (AAP 0.2.3's `(langChange)` prop). The switch belongs to the shared `LanguageSwitcherComponent`, which owns the single `TranslateService.use()` and reconciles its selector with the language in
+   * force, so nothing navigates or reloads (AAP 0.7.4). @param code the language code the switcher reports. */
   onLangChange(code: string): void {
     this.langChange.emit(code);
   }

@@ -261,9 +261,8 @@ describe('AuthService', () => {
   ])(
     'rejects the login with the user projection failure for a $status answer',
     async ({ status, message }: { status: number; message: string }) => {
-      // The post-login read is the login's own last step, so a failure there is a failed sign-in: the entry stays written, no session is in effect, and the caller is
-      // told why instead of navigating into a guard that sends the user straight back to this form with nothing said. The 403 is the status the interceptor
-      // deliberately leaves silent; the 500 arrives on top of its one notification, and both reject the same way (AAP 0.14.2).
+      // The post-login read is the login's own last step, so a failure there is a failed sign-in: the entry stays written, no session is in effect, and the caller is told why instead of navigating into a guard that sends the user straight back to
+      // this form with nothing said. The 403 is the status the interceptor deliberately leaves silent; the 500 arrives on top of its one notification, and both reject the same way (AAP 0.14.2).
       const login = service.login(USERNAME, submittedPassword());
 
       httpMock.expectOne(byMethodAndUrl('POST', AUTHENTICATION_URL)).flush(authResponse());

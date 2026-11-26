@@ -128,7 +128,6 @@ async function routeIdOf(
   return id;
 }
 
-/** The most recent exchange a run recorded for one endpoint, or `null` when it recorded none. */
 function latestCall(
   capture: CaptureSession,
   method: string,

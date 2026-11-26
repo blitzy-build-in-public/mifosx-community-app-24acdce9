@@ -11,16 +11,12 @@ import {
   languagePreferenceKey,
 } from './language-preference.service';
 
-/**
- * Behaviour of `LanguagePreferenceService` — the owner of the `ls.Language` entry the legacy application keeps the chosen language in (`app/scripts/controllers/main/MainController.js:343-345` writes it,
- * `:232-238` reads it back), and the proof that a full page load continues in the language the user picked (Rule 1 clause 3). It discharges AAP 0.11.1 (a unit spec beside every service), AAP 0.10.3 criterion 2
- * (the suite runs headless) and Rule 1 clause 8 (no spec without an `expect`). It pins the key as the exact string the legacy storage wrapper produces — its `'ls'` prefix with the period the wrapper appends,
- * derived in one place — a remembered code written in the legacy JSON shape and read back, `null` for nothing stored and for a value that is not JSON, a JSON value that is not an object or an object without a
- * usable `code`, `null` and no bundle load for a stored code the application offers no bundle for, a store the browser refuses neither throwing out of `read()` nor out of `remember()`, `restore()` applying the code through `TranslateService.use()` and doing nothing when nothing is
- * remembered, and a bundle that cannot be loaded leaving `restore()` silent so start-up never fails over a preference. The translate stack is a typed stand-in for the one member this service touches, so a case
- * can make one bundle load fail; no HTTP provider exists, because the service reaches no host itself (Rule 1 clause 5).
- *
- */
+/** Behaviour of `LanguagePreferenceService` — the owner of the `ls.Language` entry the legacy application keeps the chosen language in (`app/scripts/controllers/main/MainController.js:343-345` writes it, `:232-238` reads it back), and the proof that
+ * a full page load continues in the language the user picked (Rule 1 clause 3). It discharges AAP 0.11.1 (a unit spec beside every service), AAP 0.10.3 criterion 2 (the suite runs headless) and Rule 1 clause 8 (no spec without an `expect`). It pins
+ * the key as the exact string the legacy storage wrapper produces — its `'ls'` prefix with the period the wrapper appends, derived in one place — a remembered code written in the legacy JSON shape and read back, `null` for nothing stored and for a
+ * value that is not JSON, a JSON value that is not an object or an object without a usable `code`, `null` and no bundle load for a stored code the application offers no bundle for, a store the browser refuses neither throwing out of `read()` nor
+ * out of `remember()`, `restore()` applying the code through `TranslateService.use()` and doing nothing when nothing is remembered, and a bundle that cannot be loaded leaving `restore()` silent so start-up never fails over a preference. The
+ * translate stack is a typed stand-in for the one member this service touches, so a case can make one bundle load fail; no HTTP provider exists, because the service reaches no host itself (Rule 1 clause 5). */
 
 /** The language every fixture stores: one of the offered codes, deliberately not the configured `en`, so a value read back can only have come from the entry. */
 const REMEMBERED_LANG = 'fr';
