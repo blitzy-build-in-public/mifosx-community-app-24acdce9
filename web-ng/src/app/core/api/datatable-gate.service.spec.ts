@@ -26,7 +26,8 @@ import {
  * Each test below pins one contract, against the shapes the legacy controller actually reads:
  * - the checks call is a `GET` carrying `limit=-1` and no other parameter, and its answer is the paged
  *   envelope `{totalFilteredRecords, pageItems}` — not a bare row list, because
- *   `app/scripts/controllers/client/ClientActionsController.js:27` reads `response.pageItems`;
+ *   `app/scripts/controllers/client/ClientActionsController.js:27` reads `response.pageItems` — and no
+ *   table is read before that envelope arrives;
  * - the action selects the check status through `CLIENT_ACTION_CHECK_STATUS`, and the filter compares
  *   the check's `status.value` (a Fineract enum's name, :28) with it: a check of another entity, of
  *   another status, or with the right name in another case is never read;
@@ -80,6 +81,13 @@ const ENTITY_CHECKS_URL = API_ROOT + SEPARATOR + ENTITY_CHECKS_PATH;
 const CLIENT_ID = 7;
 const FIRST_TABLE = 'client_extra_details';
 const SECOND_TABLE = 'client_family_members';
+
+/**
+ * A client id in the zero-padded form the legacy client list shows it in. The segment is written as
+ * given, so a value that is turned into a number — `+('000000002')` is `2` — would read another
+ * client's table, and the case below fails on the path instead of passing on a coerced one.
+ */
+const LEADING_ZERO_CLIENT_ID = '000000002';
 
 /**
  * The numeric ids of the check statuses these fixtures use, from Fineract's `StatusEnum`: `ACTIVATE` is
@@ -217,6 +225,15 @@ function isDatatableRequest(table: string, clientId: number | string) {
     request.method === 'GET' && request.url === datatableUrl(table, clientId);
 }
 
+/**
+ * Matches any read in the datatable family, whichever table and client id it names. Used where the
+ * expectation is that *no* table has been read — before the checks have answered, and for an answer
+ * that names no table — so the assertion cannot be satisfied by a request the fixtures happen to miss.
+ */
+function isAnyDatatableRequest(request: HttpRequest<unknown>): boolean {
+  return request.method === 'GET' && request.url.startsWith(`${API_ROOT}${SEPARATOR}datatables${SEPARATOR}`);
+}
+
 describe('DataTableGateService', () => {
   let service: DataTableGateService;
   let httpMock: HttpTestingController;
@@ -255,6 +272,12 @@ describe('DataTableGateService', () => {
       expect(checksRequest.request.params.keys()).toEqual(['limit']);
       expect(checksRequest.request.params.get('limit')).toBe('-1');
       expect(checksRequest.request.body).toBeNull();
+
+      // The legacy order of the two calls (`app/scripts/controllers/client/ClientActionsController.js:26-35`):
+      // the tables to read come out of the checks answer, so nothing in the datatable family may be in
+      // flight before that answer arrives. Asserted while the checks call is still unanswered, because
+      // after the flush a datatable read is exactly what is expected.
+      httpMock.expectNone(isAnyDatatableRequest);
 
       // Three rows the action must ignore — another entity, another status, and the right status for a
       // different entity — beside the one it must read.
@@ -308,9 +331,14 @@ describe('DataTableGateService', () => {
     expect(emissions[0]?.[1]?.resultSet).toBe(RESULT_SET);
   });
 
-  it('emits an empty array and reads no table when no check applies to the action', () => {
+  it('emits an empty array, completes and reads no table when no check applies to the action', () => {
     const emissions: DataTableGateResult[][] = [];
-    service.checkClientActionGate(CLIENT_ID, 'close').subscribe((results) => emissions.push(results));
+    let completed = false;
+
+    service.checkClientActionGate(CLIENT_ID, 'close').subscribe({
+      next: (results) => emissions.push(results),
+      complete: () => (completed = true),
+    });
 
     httpMock
       .expectOne(isChecksRequest)
@@ -323,10 +351,12 @@ describe('DataTableGateService', () => {
       );
 
     expect(emissions).toEqual([[]]);
-    // Nothing to read means nothing was read: `verify()` in `afterEach` would report any datatable
-    // request, and naming the fixtures' tables states the same expectation where it matters.
-    httpMock.expectNone(isDatatableRequest(FIRST_TABLE, CLIENT_ID));
-    httpMock.expectNone(isDatatableRequest(SECOND_TABLE, CLIENT_ID));
+    // The gate answers with one empty emission and then finishes, so a caller awaiting it through
+    // `firstValueFrom` resolves instead of hanging on a stream that never completes.
+    expect(completed).toBe(true);
+    // Nothing to read means nothing was read: no request in the datatable family exists at all, which is
+    // stricter than naming the fixtures' two tables and cannot be satisfied by a read of a third.
+    httpMock.expectNone(isAnyDatatableRequest);
   });
 
   it('reads no table when the tenant has no check at all', () => {
@@ -336,7 +366,7 @@ describe('DataTableGateService', () => {
     httpMock.expectOne(isChecksRequest).flush({ totalFilteredRecords: 0, pageItems: [] });
 
     expect(emissions).toEqual([[]]);
-    httpMock.expectNone(isDatatableRequest(FIRST_TABLE, CLIENT_ID));
+    httpMock.expectNone(isAnyDatatableRequest);
   });
 
   for (const [description, answer] of UNREADABLE_ANSWERS) {
@@ -440,7 +470,7 @@ describe('DataTableGateService', () => {
     expect(emissions).toEqual([]);
   });
 
-  for (const clientId of [CLIENT_ID, String(CLIENT_ID)] as const) {
+  for (const clientId of [CLIENT_ID, String(CLIENT_ID), LEADING_ZERO_CLIENT_ID] as const) {
     it(`uses the client id ${JSON.stringify(clientId)} as a raw path segment`, () => {
       service
         .checkClientActionGate(clientId, 'activate')
@@ -448,8 +478,9 @@ describe('DataTableGateService', () => {
 
       httpMock.expectOne(isChecksRequest).flush(checksPage([checkRow(FIRST_TABLE, 'ACTIVATE')]));
 
-      // The id is part of the path, unencoded, so `isDatatableRequest` compares it as a whole segment
-      // and a query-parameter form of the id would not match.
+      // The id is part of the path, unencoded and uncoerced, so `isDatatableRequest` compares it as a
+      // whole segment: a query-parameter form of the id would not match, and neither would the value
+      // the leading-zero case would carry if the segment were turned into a number.
       httpMock.expectOne(isDatatableRequest(FIRST_TABLE, clientId)).flush(RESULT_SET);
     });
   }
