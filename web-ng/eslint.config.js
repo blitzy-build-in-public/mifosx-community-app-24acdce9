@@ -22,10 +22,12 @@
  * URL and needs no `HttpClient`.
  *
  * Template accessibility rules are deliberately not enabled. These screens reproduce the
- * legacy Bootstrap 3 markup and look as they are, so the semantics they do carry — the record
- * tab strip's `role="tablist"`/`role="tab"`/`tabindex`/key handlers, the breadcrumb's
- * navigation landmark and `aria-current` — are written by hand where a control needs them,
- * rather than enforced by a blanket lint rule over markup the migration must preserve.
+ * legacy Bootstrap 3 markup and look as they are, so the semantics they carry are legacy's own —
+ * a bare `.breadcrumb` list whose last item is `.active`, the record tab strip's plain
+ * `ul.nav.nav-tabs` of `li` and `a`, the pager's `<a href="">` inside `.pagination` — and no ARIA
+ * scaffolding is layered on top of it (Rule 1 clause 3; AAP 0.10.5 registers no such difference).
+ * That is a per-template decision, not something a blanket lint rule over preserved markup can
+ * express.
  */
 import tseslint from 'typescript-eslint';
 import angular from 'angular-eslint';

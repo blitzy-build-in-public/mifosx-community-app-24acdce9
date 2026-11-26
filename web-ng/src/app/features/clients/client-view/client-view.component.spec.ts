@@ -519,9 +519,9 @@ describe('ClientViewComponent', () => {
     );
     expect(renderedText(host)).toContain(`Client Number: ${CLIENT.accountNo}`);
 
-    const tabLabels = Array.from(host.querySelectorAll('app-tab-strip li[role="presentation"] a')).map(
-      (tab) => (tab.textContent ?? '').trim(),
-    );
+    const tabLabels = Array.from(
+      host.querySelectorAll('app-tab-strip ul.nav-tabs > li > a'),
+    ).map((tab) => (tab.textContent ?? '').trim());
 
     // Two tabs and no third: Family Members, Documents, Notes and Credit Report are out of scope
     // (AAP 0.10.5 item 6).

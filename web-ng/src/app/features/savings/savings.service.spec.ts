@@ -790,11 +790,13 @@ describe('SavingsService', () => {
     // beside it) — because `defer` keeps the invalid segment from being an exception thrown out of a
     // `switchMap` projection.
     const crafted = '../../../users';
-    const messages: string[] = [];
+    const refusals: Error[] = [];
     let emissions = 0;
 
     const record = (failure: unknown): void => {
-      messages.push(failure instanceof Error ? failure.message : String(failure));
+      if (failure instanceof Error) {
+        refusals.push(failure);
+      }
     };
 
     service.get(crafted).subscribe({ next: () => (emissions += 1), error: record });
@@ -804,12 +806,17 @@ describe('SavingsService', () => {
     });
 
     expect(emissions).toBe(0);
-    expect(messages).toHaveLength(2);
-    for (const message of messages) {
-      expect(message).toContain(`'${crafted}'`);
+    expect(refusals).toHaveLength(2);
+    // Each refusal's message is the guard's fixed sentence, so neither the rejected value nor the
+    // call that composed the segment is in the text a screen renders; both are in `cause` instead.
+    for (const refusal of refusals) {
+      expect(refusal.message).not.toContain(crafted);
+      expect(String(refusal.cause)).toContain(`'${crafted}'`);
     }
-    expect(messages[0]).toContain('SavingsService.get');
-    expect(messages[1]).toContain('SavingsService.transaction');
+    expect(refusals[0].message).not.toContain('SavingsService.get');
+    expect(String(refusals[0].cause)).toContain('SavingsService.get');
+    expect(refusals[1].message).not.toContain('SavingsService.transaction');
+    expect(String(refusals[1].cause)).toContain('SavingsService.transaction');
     // Nothing was sent, on either path or in any other shape; the teardown's `verify()` says the same
     // for the whole case.
     httpMock.expectNone(isRequest('GET', savingsUrl('savingsaccounts', crafted)));

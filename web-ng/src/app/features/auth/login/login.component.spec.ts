@@ -30,8 +30,12 @@ import { LoginComponent } from './login.component';
  *  5. a rejected exchange renders Fineract's own message verbatim in the screen's one
  *     `.alert.alert-danger` region, keeps the account name, clears only the credential control and
  *     navigates nowhere (workflow W7 compares that text character for character);
- *  6. a failure that is not Fineract's own text renders the generic legacy message instead, so the
- *     screen never shows a raw key or an empty banner;
+ *  6. a 5xx or transport failure is left to the one notification `fineractInterceptor` raises for it,
+ *     so the region stays empty and the failure is reported exactly once, while a rejection that is
+ *     not an HTTP answer — `AuthService.login`'s own refusal of a response that cannot describe a
+ *     session, or any other fault — still reports itself in that region, so the screen never shows a
+ *     raw key and never leaves a failed attempt unreported (AAP 0.14.2 "no `catch` swallows an error
+ *     silently");
  *  7. the primary button is disabled only while a login is in flight — enabled before the attempt and
  *     released afterwards — and a second submit during that window issues no second call, because
  *     `POST /authentication` is not idempotent (AAP 0.14.1 "one request per click");
@@ -454,6 +458,28 @@ describe('LoginComponent', () => {
     expect(failureText()).toBe(GENERIC_MESSAGE);
     expect(router.navigateByUrl).not.toHaveBeenCalled();
   });
+
+  it.each([500, 0])(
+    'leaves a %i failure to the interceptor’s one notification, painting nothing inline',
+    async (status: number) => {
+      auth.login.mockRejectedValue(new ApiError(FINERACT_MESSAGE, status));
+      typeCredentials();
+
+      await component.submit();
+      fixture.detectChanges();
+
+      // `fineractInterceptor` has already raised this failure's one notification, so the screen paints
+      // no second copy of it and the user stays on the form to retry: one failure, one surface.
+      expect(failureBanner()).toBeNull();
+      expect(component.error()).toBeNull();
+      expect(router.navigateByUrl).not.toHaveBeenCalled();
+      // The attempt itself is unchanged: the account name survives and only the credential control is
+      // cleared, so an empty region reads as the interceptor's notification doing its job rather than
+      // as a half-reset form.
+      expect(component.form.controls.username.value).toBe(ACCOUNT_NAME);
+      expect(component.form.controls.password.value).toBe('');
+    },
+  );
 
   it('disables the primary button only while a login is in flight', async () => {
     const pending = deferredLogin();

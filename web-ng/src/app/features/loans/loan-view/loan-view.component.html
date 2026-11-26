@@ -101,9 +101,11 @@
   would notice none of them: dropping one silently breaks a selector, so they stay where they are.
 
   The three sections are tabs of one record page, not three blocks stacked at once: that arrangement
-  is what `app-tab-strip` with the component's `activeTab`, `showSchedule` and `showTransactions`
-  signals define, and what the spec asserts when it switches tabs and finds exactly one section
-  component mounted. Each section therefore carries its id only while its own tab is the active one.
+  is what `app-tab-strip` with the component's `activeTab`, `showSchedule`, `showTransactions` and
+  `showCharges` signals define, and what the spec asserts when it switches tabs and finds exactly one
+  section component mounted. Each branch tests the signal of the tab it renders, so the branch and the
+  tab id keep one home in the component, and each section carries its id only while its own tab is the
+  active one.
 -->
 <div class="container-fluid">
   <div class="row">
@@ -197,11 +199,12 @@
                 <div id="loan-transactions-section">
                   <app-loan-transactions [transactions]="record.transactions ?? []" />
                 </div>
-              } @else if (charges() !== null) {
+              } @else if (showCharges()) {
                 <div id="loan-charges-section">
                   <app-loan-charges
                     [charges]="charges() ?? []"
                     [loanId]="record.id"
+                    [loanStatus]="record.status"
                     [actionPermission]="actionPermission"
                   />
                 </div>

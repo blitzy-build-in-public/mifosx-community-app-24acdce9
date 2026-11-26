@@ -17,15 +17,14 @@ import { SearchService } from '../../core/api/search.service';
 import { ApiError } from '../../core/http/api-error';
 import { EmptyStateComponent } from '../../shared/empty-state/empty-state.component';
 import { HasPermissionDirective } from '../../shared/has-permission.directive';
-import { toStatusKey, type StatusKey } from '../../shared/status-key.util';
-import { StatusSwatchComponent } from '../../shared/status-swatch/status-swatch.component';
 
 /**
  * The global search results screen: the destination of the signed-in navbar's search control, where
  * a client or a loan is found by name, account number or identifier (AAP 0.7.1 Features row `search`;
  * AAP 0.7.3 row "Shell: global search"; AAP 0.8.2 route `search/:query`; AAP 0.10.5 item 9;
  * AAP 0.11.1 row for this folder; Figma's flow covers the three in-scope screens and not this one,
- * so the look is the legacy Bootstrap 3 card and table the rest of the migration reuses).
+ * so the look is the legacy results list `app/views/search/glresults.html` renders: a Bootstrap 3
+ * card whose body holds one `.blockquoteresult` block per result).
  *
  * **One call per parameter set, and the URL lives elsewhere.** Results arrive through
  * `SearchService.search()` — the only caller of the endpoint and the only file that composes its URL
@@ -66,10 +65,13 @@ import { StatusSwatchComponent } from '../../shared/status-swatch/status-swatch.
  * **What it deliberately does not do** (Rule 1 clause 3, AAP 0.7.4). No spinner, skeleton or
  * placeholder — the design carries no loader asset (AAP 0.2.4); no sorting, filtering, paging or
  * reconciliation of the server's rows, which are rendered in the order received; no scope control,
- * no filter toolbar and no export affordance, because the navbar owns the search and this screen
- * renders its answer; no textual status anywhere, because the indicator is a colour swatch and a word
- * would be an improvement the migration may not make (AAP 0.10.5 item 11); and no link to any
- * out-of-scope module (AAP 0.9.2).
+ * no filter toolbar, no card title and no export affordance, because the navbar owns the search and
+ * the legacy results list renders none of them (`app/views/search/glresults.html`); no status field
+ * of any kind, which legacy never displayed on a result; and no link to any out-of-scope module
+ * (AAP 0.9.2). The one bound it keeps is legacy's own, applied beside {@link rows}: an answer longer
+ * than {@link LEGACY_SEARCH_NOTICE_THRESHOLD} results is cut to its first
+ * {@link LEGACY_SEARCH_ROW_CAP} and the legacy bundle's own notice is shown above them (Rule 1
+ * clause 3).
  *
  * **States.** Nothing painted before the first response; the rows once they arrive; the explicit
  * empty state — and no error — when a completed search matched nothing (AAP 0.7.4); Fineract's
@@ -82,7 +84,6 @@ import { StatusSwatchComponent } from '../../shared/status-swatch/status-swatch.
     RouterLink,
     TranslatePipe,
     EmptyStateComponent,
-    StatusSwatchComponent,
     HasPermissionDirective,
   ],
   templateUrl: './search-results.component.html',
@@ -145,11 +146,29 @@ export class SearchResultsComponent {
   /** The validated scope the screen is showing, one of the three the control offers. */
   readonly scope: Signal<SearchScope> = this.currentScope.asReadonly();
 
-  /** The rows to render: every result mapped to the table's own view model, in the server's order. */
+  /**
+   * The answer the results list renders, with legacy's own bound applied.
+   *
+   * Legacy's controller keeps an answer of up to 200 results whole and, above that, its first 201 —
+   * `if (data.length > 200) { scope.searchResults = data.slice(0, 201); scope.showMsg = true }`
+   * (`app/scripts/controllers/main/SearchController.js:10-18`) — and shows the bundle's
+   * `label.search.query.matched.results.exceeds.max.length` beside them
+   * (`app/views/search/glresults.html:5`). The cut is applied to the raw answer, before projection,
+   * so a result of a kind this screen does not model is dropped after it exactly as legacy renders
+   * after its own slice (Rule 1 clause 3).
+   */
+  private readonly cappedResults: Signal<SearchCap> = computed<SearchCap>(() =>
+    capToLegacyLimit(this.results()),
+  );
+
+  /**
+   * The results to render: every result of the bounded answer mapped to the results list's own view
+   * model, in the server's order.
+   */
   readonly rows: Signal<readonly SearchResultRow[]> = computed<readonly SearchResultRow[]>(() => {
     const rendered: SearchResultRow[] = [];
 
-    for (const result of this.results()) {
+    for (const result of this.cappedResults().results) {
       const row = this.toRow(result);
       if (row !== null) {
         rendered.push(row);
@@ -158,6 +177,21 @@ export class SearchResultsComponent {
 
     return rendered;
   });
+
+  /**
+   * Whether the answer the screen holds was longer than legacy's own notice threshold, which is what
+   * makes the results list render the bundle's
+   * `label.search.query.matched.results.exceeds.max.length` above the blocks it kept
+   * (`app/scripts/controllers/main/SearchController.js:12`; `app/views/search/glresults.html:5`).
+   *
+   * It follows the answer rather than the query: an answer of 200 results or fewer, and a blank query
+   * that answered with nothing, both leave it `false`, while an answer of 201 already raises it —
+   * legacy tests `data.length > 200` before it slices, so 201 results are all kept and still
+   * announced. A failed attempt leaves it standing beside the results it kept (Rule 1 clause 3).
+   */
+  readonly exceedsMaxLength: Signal<boolean> = computed<boolean>(
+    () => this.cappedResults().exceedsMaxLength,
+  );
 
   /**
    * The message to render for the last attempt: Fineract's own text for a 4xx, verbatim and
@@ -180,14 +214,14 @@ export class SearchResultsComponent {
   );
 
   /**
-   * The legacy translation key that names each row's family, so the Entity column carries a
+   * The legacy translation key that names each row's family, so the `Entity:` line carries a
    * translated word rather than the untranslated discriminator the API sends (`CLIENT`, `LOAN`).
    *
-   * The two keys are the legacy bundle's own, and naming the family is what the legacy results screen
-   * did on its `<Entity>: CLIENT | Office: …` line; no key for a results heading exists in those
-   * bundles, so this screen adds no wording of its own (Rule 1 clauses 3 and 6). The record is
-   * exhaustive over the two kinds the table renders, so a third kind would be a compile error rather
-   * than an empty cell.
+   * The two keys are the legacy bundle's own, and naming the family is what the legacy results list
+   * did on the same `<Entity>: … | <Office|Client>: …` line (`app/views/search/glresults.html:57-64`);
+   * no key for a results heading exists in those bundles, so this screen adds no wording of its own
+   * (Rule 1 clauses 3 and 6). The record is exhaustive over the two kinds the list renders, so a
+   * third kind would be a compile error rather than an empty cell.
    */
   protected readonly entityLabelKey: Readonly<Record<SearchResultRow['kind'], string>> = {
     client: 'label.heading.client',
@@ -254,8 +288,9 @@ export class SearchResultsComponent {
   /**
    * Issues the search, or answers immediately with nothing to search for.
    *
-   * An empty or whitespace-only query is never sent: the screen empties its table and shows the
-   * empty state instead (the navbar reports no empty query either, so this guards a hand-typed URL).
+   * An empty or whitespace-only query is never sent: the screen empties its results list and shows
+   * the empty state instead (the navbar reports no empty query either, so this guards a hand-typed
+   * URL).
    * A failure is caught here and returned as a value, so the parameter subscription survives it and
    * the next search still runs (AAP 0.14.1).
    *
@@ -287,23 +322,25 @@ export class SearchResultsComponent {
   }
 
   /**
-   * Projects one result of the search envelope onto the table's row.
+   * Projects one result of the search envelope onto the block the results list renders.
    *
    * The three entity types the in-scope scopes can return are read by their own fields, with the
-   * discriminator the service declares and no cast and no `any` (Rule 1 clause 4). What each row
-   * carries, and why, follows the payload the backend actually builds (verified in the running
-   * fork's search query):
+   * discriminator the service declares and no cast and no `any` (Rule 1 clause 4). What each block
+   * carries, and why, follows both the payload the backend builds (verified in the running fork's
+   * search query) and the line legacy prints for that family
+   * (`app/views/search/glresults.html:11-64`):
    *
-   *   - a `CLIENT` row names the client in `entityName` and its account in `entityAccountNo`; that
-   *     payload's `parentName` is the client's **office**, not a client, so it is deliberately not
-   *     rendered as the row's client;
+   *   - a `CLIENT` row names the client in `entityName`, its account in `entityAccountNo`, and its
+   *     **office** in `parentName` — which is why the block's parent label is `label.heading.office`
+   *     and its account segment is printed;
    *   - a `CLIENTIDENTIFIER` row is a client matched by one of its identifiers: `parentId` is the
    *     client's id and `parentName` its display name, so the row opens that client exactly as the
-   *     legacy screen's `#/viewclient/{parentId}` did, and its own `entityName` is the identifier
-   *     value that matched;
+   *     legacy list's `#/viewclient/{parentId}` did, its own `entityName` is the identifier value
+   *     that matched, its parent label is `label.heading.client`, and no account segment is printed
+   *     because legacy prints none on that row;
    *   - a `LOAN` row's `entityName` is the loan **product**'s name, `parentName` the owning client
-   *     and `entityAccountNo` the loan account, so `name` and `product` carry the same string and the
-   *     table renders it once, as the row's own label.
+   *     and `entityAccountNo` the loan account, so the block prints the account segment and names the
+   *     parent with `label.heading.client`.
    *
    * @param result One element of the search answer, discriminated by its `entityType`.
    * @returns The row to render, or `null` for a row the union does not describe — a discriminator the
@@ -317,9 +354,9 @@ export class SearchResultsComponent {
           kind: 'client',
           accountNo: result.entityAccountNo ?? '',
           name: result.entityName,
-          clientName: '',
-          product: '',
-          status: toStatusKey(result.entityStatus?.code),
+          printsAccountNo: true,
+          parentName: result.parentName ?? '',
+          parentLabelKey: 'label.heading.office',
           link: this.router.createUrlTree(['/viewclient', String(result.entityId)]),
           permission: 'READ_CLIENT',
         };
@@ -332,9 +369,9 @@ export class SearchResultsComponent {
           kind: 'client',
           accountNo: result.entityAccountNo ?? '',
           name: result.entityName,
-          clientName: result.parentName ?? '',
-          product: '',
-          status: toStatusKey(result.entityStatus?.code),
+          printsAccountNo: false,
+          parentName: result.parentName ?? '',
+          parentLabelKey: 'label.heading.client',
           link: this.router.createUrlTree(['/viewclient', String(clientId)]),
           permission: 'READ_CLIENT',
         };
@@ -346,9 +383,9 @@ export class SearchResultsComponent {
           kind: 'loan',
           accountNo: result.entityAccountNo ?? '',
           name: result.entityName,
-          clientName: result.parentName ?? '',
-          product: result.entityName,
-          status: toStatusKey(result.entityStatus?.code),
+          printsAccountNo: true,
+          parentName: result.parentName ?? '',
+          parentLabelKey: 'label.heading.client',
           link: this.router.createUrlTree(['/viewloanaccount', String(result.entityId)]),
           permission: 'READ_LOAN',
         };
@@ -360,11 +397,11 @@ export class SearchResultsComponent {
 }
 
 /**
- * One rendered row of the results table: the fields the table binds, resolved once per row rather
- * than once per change-detection pass.
+ * One rendered block of the results list: the fields the template binds, resolved once per row
+ * rather than once per change-detection pass.
  *
  * Module-local and deliberately not exported: nothing outside this screen has a use for a projection
- * of the search envelope, so no other file can come to depend on the shape of this table.
+ * of the search envelope, so no other file can come to depend on the shape of this list.
  */
 interface SearchResultRow {
   /**
@@ -375,7 +412,7 @@ interface SearchResultRow {
 
   /**
    * Which family the row came from. A client matched by an identifier is still a client row: it
-   * opens the client's record, and the status it paints is the client's.
+   * opens the client's record and prints the client family's wording.
    */
   readonly kind: 'client' | 'loan';
 
@@ -385,21 +422,26 @@ interface SearchResultRow {
   /** The row's own label: a client's display name, or the loan product's name for a loan row. */
   readonly name: string;
 
-  /** Display name of the client the row belongs to, or `''` when the row is the client itself. */
-  readonly clientName: string;
-
-  /** The loan product's name for a loan row; `''` for a client row, which has no product. */
-  readonly product: string;
+  /**
+   * Whether the block prints legacy's `| #<accountNo>` segment after the name. True for a `CLIENT`
+   * result and for a `LOAN` result, false for a client matched by one of its identifiers, which
+   * legacy prints with no account number at all (`app/views/search/glresults.html:11-43`).
+   */
+  readonly printsAccountNo: boolean;
 
   /**
-   * The status indicator's colour key for this row, mapped once by {@link toStatusKey} — the single
-   * mapping the whole application shares, from `web-ng/src/app/shared/status-key.util.ts`. The
-   * vocabulary and its mapping are shared declarations, which is why this screen reads them from
-   * `shared/` and not from a feature model: a feature may depend on `core` and `shared` and never on
-   * another feature (AAP 0.14.1), and one code therefore has exactly one colour here and on the
-   * clients list.
+   * The name the block prints after the parent label: the client's office for a `CLIENT` result, the
+   * owning client for a `LOAN` result and for a client matched by an identifier, or `''` when the
+   * payload carried none — no placeholder or invented word stands in for it (Rule 1 clause 3).
    */
-  readonly status: StatusKey;
+  readonly parentName: string;
+
+  /**
+   * The legacy translation key that names what {@link parentName} is for this row's family: the
+   * client's office, or the client the row belongs to. Legacy picks the same label per family, and
+   * both keys are its own (`app/views/search/glresults.html:57-64`).
+   */
+  readonly parentLabelKey: 'label.heading.office' | 'label.heading.client';
 
   /** The record the row opens: the client's or the loan's own in-scope route. */
   readonly link: UrlTree;
@@ -437,6 +479,54 @@ interface SearchOutcome {
    * that is not an `ApiError`, all of which are the interceptor's to report.
    */
   readonly error: string | null;
+}
+
+/**
+ * The answer as the results list renders it, with legacy's own bound applied: the results to project,
+ * and whether the answer was long enough for legacy's own notice to be shown above them.
+ */
+interface SearchCap {
+  /** The results to project: the answer unchanged, or its first {@link LEGACY_SEARCH_ROW_CAP} rows. */
+  readonly results: readonly SearchResult[];
+
+  /** Whether the answer held more than {@link LEGACY_SEARCH_NOTICE_THRESHOLD} results. */
+  readonly exceedsMaxLength: boolean;
+}
+
+/**
+ * The answer length above which legacy shows its notice: its controller tests `data.length > 200`
+ * before it cuts anything (`app/scripts/controllers/main/SearchController.js:10`).
+ */
+const LEGACY_SEARCH_NOTICE_THRESHOLD = 200;
+
+/**
+ * The rows legacy keeps when it cuts an answer short: `data.slice(0, 201)`, one more than the
+ * threshold (`app/scripts/controllers/main/SearchController.js:11`).
+ */
+const LEGACY_SEARCH_ROW_CAP = 201;
+
+/**
+ * Applies legacy's own bound to the search answer.
+ *
+ * The search endpoint takes no `limit` this application sets, so the whole answer arrives and the
+ * screen decides how much of it to render — exactly the decision legacy's controller took:
+ * `if (data.length > 200) { scope.searchResults = data.slice(0, 201); scope.showMsg = true } else {
+ * scope.searchResults = data }` (`app/scripts/controllers/main/SearchController.js:10-18`), with
+ * `label.search.query.matched.results.exceeds.max.length` ("This query shows only the first 200
+ * records.") rendered above the rows it kept (`app/views/search/glresults.html:5`;
+ * `app/global-translations/locale-en.json:678`). The threshold is tested before the cut, exactly as
+ * legacy tests it, so an answer of 200 results or fewer comes back unchanged with no notice, an answer
+ * of 201 comes back whole and already announced, and a longer one comes back cut to 201 and announced.
+ * That is also what keeps the flag off for an ordinary search and for the empty answer a blank query
+ * produces (Rule 1 clause 3).
+ *
+ * @param results The answer as `GET /search` returned it, in the server's order.
+ * @returns The results to project, and whether the answer was long enough to raise the notice.
+ */
+function capToLegacyLimit(results: readonly SearchResult[]): SearchCap {
+  return results.length > LEGACY_SEARCH_NOTICE_THRESHOLD
+    ? { results: results.slice(0, LEGACY_SEARCH_ROW_CAP), exceedsMaxLength: true }
+    : { results, exceedsMaxLength: false };
 }
 
 /**

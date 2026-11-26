@@ -26,10 +26,10 @@
  * boundary Rule 1 clause 4 allows (the numeric member and the two message members are the only parts
  * read). The envelope Fineract returns for this refusal carries a generic top-level
  * `defaultUserMessage` (`"Validation errors exist."`) beside the field-level message in
- * `errors[].defaultUserMessage`. The application's `core/http/api-error.ts` chooses the top-level
- * message first and the field-level one when the top level carries none, so the comparison below
- * takes the same order: the message the screen is contractually showing is what is compared, and the
- * presence of the field-level `errors[].defaultUserMessage` is asserted on its own. Anything else
+ * `errors[].defaultUserMessage`. The application's `core/http/api-error.ts` chooses the field-level
+ * message first and the top-level one only when no field-level entry carries text, so the comparison
+ * below takes the same order: the message the screen is contractually showing is what is compared, and
+ * the presence of the field-level `errors[].defaultUserMessage` is asserted on its own. Anything else
  * would compare the screen with a string the application never renders.
  *
  * Nothing here reads, prints or stores a credential (Rule 1 clause 9): the page objects sign in
@@ -87,7 +87,7 @@ const BANNER_TIMEOUT_MS = 15_000;
  * One refusal, reduced to the two strings the workflow compares.
  */
 interface ServerErrorEnvelope {
-  /** The message the application renders: its own `defaultUserMessage`, else the first field-level one. */
+  /** The message the application renders: the first field-level `defaultUserMessage`, else its top-level one. */
   readonly rendered: string;
   /** The non-empty `errors[].defaultUserMessage` entries, in the server's order. */
   readonly fieldMessages: readonly string[];
@@ -211,9 +211,9 @@ function carriesDefaultUserMessage(value: unknown): value is { readonly defaultU
  * Reads a Fineract refusal into the message the screen renders and the field-level messages that
  * accompany it.
  *
- * The precedence is the application's own (`core/http/api-error.ts`): the envelope's
- * `defaultUserMessage` first, then the first `errors[].defaultUserMessage` carrying text, both
- * collapsed for formatting only. A blank entry counts as absent, so a generic empty string never
+ * The precedence is the application's own (`core/http/api-error.ts`): the first
+ * `errors[].defaultUserMessage` carrying text, then the envelope's top-level `defaultUserMessage`,
+ * both collapsed for formatting only. A blank entry counts as absent, so a generic empty string never
  * wins over the field-level message the applicant has to act on.
  *
  * @param body The refused response's body, `unknown` by design (Rule 1 clause 4).
@@ -238,11 +238,13 @@ function readErrorEnvelope(body: unknown): ServerErrorEnvelope {
         .filter((message) => message.length > 0)
     : [];
 
-  const rendered = declared.length > 0 ? declared : (fieldMessages[0] ?? '');
+  // The field-level text first, the envelope's generic one only when no entry carries text: the same
+  // order the application applies, so the comparison uses the string the screen is showing.
+  const rendered = fieldMessages[0] ?? declared;
   if (rendered.length === 0) {
     throw new Error(
-      'the refused POST to the loan collection carried neither a top-level defaultUserMessage nor ' +
-        'an errors[].defaultUserMessage, so the screen had no server text to show',
+      'the refused POST to the loan collection carried neither an errors[].defaultUserMessage nor ' +
+        'a top-level defaultUserMessage, so the screen had no server text to show',
     );
   }
 

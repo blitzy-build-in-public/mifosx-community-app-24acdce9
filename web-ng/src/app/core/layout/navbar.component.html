@@ -12,13 +12,15 @@
   No Bootstrap JavaScript is loaded (jQuery is forbidden in this build), so no dropdown-plugin
   attribute appears here: the menu is opened by the `.open` class bound to the component's signal.
 
+  The `<nav>` element already maps to the navigation landmark role, so its `role` is not repeated.
+
   Every visual value — the bar's height and surface, its bottom rule, the nav link colour, the search
   control's height, the language switcher's label size over its native select, and the brand image's
   sizing — is a global rule in web-ng/src/styles.scss and on the Bootstrap classes named below; this
   template declares no style attribute, no colour value and no dimension, and the AAP 0.2.2 token
   each rule implements is named where the element that wears it is described.
 -->
-<nav class="navbar navbar-default" role="navigation">
+<nav class="navbar navbar-default">
   <div class="container-fluid">
     <!--
       The brand lockup, served in place from the legacy tree through the `images/` asset mapping:

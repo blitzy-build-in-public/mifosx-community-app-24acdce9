@@ -12,7 +12,7 @@ import { ActivatedRoute, Router, type ParamMap } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
 
-import { screenFailure, toDisplayableFailure } from '../../../core/http/api-error';
+import { navigationFailure, screenFailure } from '../../../core/http/api-error';
 import { DateFieldComponent } from '../../../shared/date-field/date-field.component';
 import {
   SelectFieldComponent,
@@ -366,16 +366,19 @@ export class SavingsNewComponent {
    */
   cancel(): void {
     const clientId = this.clientId();
+    const destination = clientId === null ? 'client list' : 'client record';
 
     // The navigation's promise is settled rather than dropped, so a navigation the router refuses
     // cannot surface as an unhandled rejection (AAP 0.14.2). It reports through this screen's own
     // failure text rather than `screenFailure`: a refused navigation is no HTTP answer, so the
     // interceptor has raised no notification for it and nothing else would tell the user that the
-    // return to the client record did not happen.
+    // return to the client record did not happen. The text is the navigation sentence naming the
+    // destination the user was heading for, because the refusal carries no server text and the
+    // router's own wording names nothing an operator acts on (`api-error.ts` `navigationFailure`).
     void this.router
       .navigate(clientId === null ? ['/clients'] : ['/viewclient', clientId])
       .catch((cause: unknown) => {
-        this.error.set(toDisplayableFailure(cause).message);
+        this.error.set(navigationFailure(cause, destination).message);
       });
   }
 

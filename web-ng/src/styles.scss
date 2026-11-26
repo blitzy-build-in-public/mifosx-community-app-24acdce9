@@ -40,7 +40,10 @@
 // The four partials the plan deliberately excludes stay excluded: _leftnav.scss (the left
 // icon rail is not rendered — every destination behind it is an out-of-scope module),
 // _chosen.scss (chosen is replaced by a native <select>), _nv.d3.scss (dashboards) and
-// _report.scss (reports).
+// _report.scss (reports). The one rule the in-scope search screen needs from _report.scss —
+// .blockquoteresult, the results list's own block spacing — is reproduced inline in the product
+// layer below, which is what AAP 0.4.4 section 4 allows for exactly the rules an in-scope screen
+// needs and what the partial is named for.
 //
 // Three kinds of rule live in the product layer:
 //
@@ -338,6 +341,19 @@ hr.section-rule {
   > thead > tr > th:last-child {
     width: 8.5%;
   }
+}
+
+// -----------------------------------------------------------------------------
+// The search results list (_report.scss:154, reproduced inline)
+// -----------------------------------------------------------------------------
+
+// Legacy spaces each search result as a block: `.blockquoteresult { margin: 0 0 20px;
+// padding: 10px 15px; }` [app/styles-dev/main/components/_report.scss:154-157]. That partial
+// belongs to reports and is deliberately not imported, so the one rule the in-scope search screen
+// needs is reproduced here value for value, and none of the partial's other rules are.
+.blockquoteresult {
+  margin: 0 0 20px;
+  padding: 10px 15px;
 }
 
 // -----------------------------------------------------------------------------

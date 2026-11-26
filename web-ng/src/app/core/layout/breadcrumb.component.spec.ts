@@ -43,20 +43,21 @@ describe('BreadcrumbComponent', () => {
     expect(host().querySelector('li a')).toBeNull();
   });
 
-  it('renders the trail in input order and marks the last crumb as the current page', () => {
+  it('renders the trail in input order and marks the last crumb active, as legacy does', () => {
     fixture.componentRef.setInput('items', [{ label: 'Head Office' }, { label: 'Clients' }]);
     fixture.detectChanges();
 
     const crumbs = host().querySelectorAll('li');
-    const landmark = host().querySelector('nav[aria-label="Breadcrumb"]');
 
     expect(crumbs).toHaveLength(2);
     expect(Array.from(crumbs, (crumb) => crumb.textContent?.trim())).toEqual(['Head Office', 'Clients']);
     expect(crumbs[0].classList.contains('active')).toBe(false);
     expect(crumbs[1].classList.contains('active')).toBe(true);
-    expect(landmark).not.toBeNull();
-    expect(landmark?.querySelector('ol.breadcrumb')).toBeTruthy();
-    expect(crumbs[0].getAttribute('aria-current')).toBeNull();
-    expect(crumbs[1].getAttribute('aria-current')).toBe('page');
+    expect(host().querySelector('ol.breadcrumb')).not.toBeNull();
+    // The list is the whole markup: legacy writes a bare `<ul class="breadcrumb">`, and AAP 0.10.5
+    // registers no accessibility difference for this component, so neither a landmark nor an ARIA
+    // state may be added on top of it (Rule 1 clause 3).
+    expect(host().querySelector('nav')).toBeNull();
+    expect(Array.from(crumbs, (crumb) => crumb.getAttribute('aria-current'))).toEqual([null, null]);
   });
 });

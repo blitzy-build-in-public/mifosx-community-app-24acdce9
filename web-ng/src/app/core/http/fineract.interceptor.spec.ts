@@ -13,15 +13,16 @@
  *   route, while a 401 on the authentication request and a 401 while the login screen is showing leave
  *   both alone;
  * - that return to the login screen is settled rather than dropped: when the router refuses it, the user
- *   is told once in the rejection's own words — an `ApiError`, a Fineract response and another `Error`
- *   each reaching the notice as the text they carry, and anything else as the shared sentence — and no
- *   unhandled rejection is left behind (AAP 0.14.2);
+ *   is told once — an `ApiError` and a Fineract response in the text they carry, and every other
+ *   refusal, a plain `Error` and a non-error rejection included, in one fixed sentence naming the login
+ *   screen instead of the router's own wording — and no unhandled rejection is left behind (AAP 0.14.2);
  * - exactly one notification is raised for a transport failure or a 5xx, and none for a 4xx, which
  *   reaches the caller alone;
  * - every `HttpErrorResponse` becomes the `ApiError` the caller renders: the message is the envelope's
- *   top-level `defaultUserMessage`, else its first field-level one, else the response's own text, with
- *   the field-level failures kept in the server's order, and a body of another shape costs the caller
- *   only the message it did not carry;
+ *   first field-level `defaultUserMessage`, else its top-level one, else the shared sentence — never
+ *   Angular's own `message`, which names the API host and the request's path — with the field-level
+ *   failures kept in the server's order, and a body of another shape costs the caller only the
+ *   message it did not carry;
  * - an error that is not an HTTP response is rethrown unchanged, and nothing about a failed exchange
  *   reaches the console (Rule 1 clause 9).
  *
@@ -82,6 +83,15 @@ const KEY_PARTS = ['Zm9v', 'YmFy', 'OnNlY3JldA'];
 
 /** The server's own validation text, which a screen must render verbatim (workflow W7). */
 const SERVER_MESSAGE = 'The maximum allowed principal is 10,000';
+
+/**
+ * The generic sentence Fineract puts in the envelope's top-level `defaultUserMessage` beside a
+ * validation failure's own field-level text; it must never displace that text (AAP 0.4.4 decision 6).
+ */
+const GENERIC_MESSAGE = 'Validation errors exist.';
+
+/** The sentence `api-error.ts` shows for a failure whose body carries no message of its own. */
+const UNMAPPED_FAILURE_TEXT = 'The request could not be completed.';
 
 /** The resolved configuration the interceptor reads, with only the tenant exercised. */
 function configFixture(): AppConfig {
@@ -175,8 +185,11 @@ async function rejectionOf(observable: Observable<unknown>): Promise<unknown> {
   throw new Error('the request was expected to fail, but the interceptor let it through');
 }
 
-/** The text a refusing router rejects its navigation with; it is what the user must be shown. */
+/** The text a refusing router rejects its navigation with; it is never what the user must be shown. */
 const NAVIGATION_FAILURE = 'Navigation cancelled because a guard returned false';
+
+/** The sentence a refused return to the login screen is reported with: it names the screen. */
+const LOGIN_SCREEN_MESSAGE = 'The login screen did not open. Reload the page and try again.';
 
 /**
  * The promise a refusing router rejects its navigation with, counting the rejection handlers the
@@ -294,19 +307,25 @@ describe('fineractInterceptor', () => {
     expect(request.headers.has(AUTHORIZATION_HEADER)).toBe(false);
   });
 
-  it('maps a Fineract validation failure to ApiError carrying the server text, and notifies nothing', async () => {
+  it('maps a Fineract validation failure to ApiError carrying the field-level server text, and notifies nothing', async () => {
     const { run, session, clear, router, notifications } = harnessFor();
     session.set(sessionFixture());
-    const body = { defaultUserMessage: SERVER_MESSAGE, errors: [{ defaultUserMessage: SERVER_MESSAGE }] };
+    const body = {
+      defaultUserMessage: GENERIC_MESSAGE,
+      errors: [{ defaultUserMessage: SERVER_MESSAGE }],
+    };
 
     const error = await rejectionOf(
       run(new HttpRequest('POST', CLIENTS_URL, {}), failing(400, body)),
     );
 
     expect(error).toBeInstanceOf(ApiError);
+    // The actionable field-level text wins over the envelope's generic summary (AAP 0.4.4 decision 6).
     expect((error as ApiError).message).toBe(SERVER_MESSAGE);
+    expect((error as ApiError).message).not.toBe(GENERIC_MESSAGE);
     expect((error as ApiError).status).toBe(400);
     expect((error as ApiError).validationErrors).toHaveLength(1);
+    expect((error as ApiError).validationErrors[0]?.defaultUserMessage).toBe(SERVER_MESSAGE);
     // A 4xx is the screen's to render; only a 5xx or transport failure is also notified (AAP 0.7.4).
     expect(notifications.messages()).toHaveLength(0);
     expect(clear).not.toHaveBeenCalled();
@@ -339,7 +358,7 @@ describe('fineractInterceptor', () => {
     ['a null body', null],
     ['an errors list whose entries carry no message', { errors: [null, 42] }],
   ])(
-    'falls back to the response\'s own text for %s, reporting no field-level failure',
+    'answers %s with the shared sentence, reporting no field-level failure',
     async (_label, body) => {
       const { run, notifications } = harnessFor();
       const response = new HttpErrorResponse({
@@ -356,9 +375,17 @@ describe('fineractInterceptor', () => {
         ),
       );
 
+      // Angular's own text is what used to reach the screen, and it names the request's URL, so the
+      // assertions below fail if that text ever comes back (Rule 1 clause 3).
+      expect(response.message).toContain(CLIENTS_URL);
+
       expect(error).toBeInstanceOf(ApiError);
-      expect((error as ApiError).message).toBe(response.message);
+      expect((error as ApiError).message).toBe(UNMAPPED_FAILURE_TEXT);
       expect((error as ApiError).message).not.toBe('');
+      expect((error as ApiError).message).not.toBe(response.message);
+      // Neither the request's path nor the host behind it reaches the text a screen renders.
+      expect((error as ApiError).message).not.toContain(CLIENTS_URL);
+      expect((error as ApiError).message).not.toContain(API_ROOT);
       expect((error as ApiError).validationErrors).toHaveLength(0);
       // A 4xx is the screen's to render, whatever shape its body arrived in.
       expect(notifications.messages()).toHaveLength(0);
@@ -416,10 +443,13 @@ describe('fineractInterceptor', () => {
 
     // The navigation's promise is settled — one rejection handler, attached by the interceptor...
     expect(navigation.rejectionHandlers).toBe(1);
-    // ...the user is told once, in the rejection's own words...
+    // ...the user is told once, in the fixed sentence naming the screen that did not open...
     expect(notifications.messages()).toHaveLength(1);
     expect(notifications.messages()[0]?.kind).toBe('error');
-    expect(notifications.messages()[0]?.message).toBe(NAVIGATION_FAILURE);
+    expect(notifications.messages()[0]?.message).toBe(LOGIN_SCREEN_MESSAGE);
+    // ...and not in the router's own wording, which names navigation ids and guards and leaves an
+    // operator nothing to act on...
+    expect(notifications.messages()[0]?.message).not.toContain(NAVIGATION_FAILURE);
     // ...and nothing from the request or the session reaches that text (Rule 1 clause 9).
     expect(notifications.messages()[0]?.message).not.toContain(fixture.authenticationKey);
     // The 401 still reaches the caller as the mapped ApiError the case above asserts.
@@ -461,7 +491,7 @@ describe('fineractInterceptor', () => {
     expect(notifications.messages()[0]?.message).toBe(SERVER_MESSAGE);
   });
 
-  it('reports a refused return carrying no message of its own with the shared sentence', async () => {
+  it('reports a refused return carrying no message of its own with the sentence naming the login screen', async () => {
     const { run, session, router, notifications } = harnessFor();
     session.set(sessionFixture());
     router.url = ATTEMPTED_URL;
@@ -473,8 +503,9 @@ describe('fineractInterceptor', () => {
 
     expect(notifications.messages()).toHaveLength(1);
     expect(notifications.messages()[0]?.kind).toBe('error');
-    // The sentence `api-error.ts` shows for a failure that carries no text of its own.
-    expect(notifications.messages()[0]?.message).toBe('The request could not be completed.');
+    expect(notifications.messages()[0]?.message).toBe(LOGIN_SCREEN_MESSAGE);
+    // The request sentence is for a failure that made a request, and a refused navigation made none.
+    expect(notifications.messages()[0]?.message).not.toBe(UNMAPPED_FAILURE_TEXT);
   });
 
   it('leaves the session and the route alone when the authentication request itself is refused', async () => {

@@ -156,8 +156,10 @@ interface ClientListToolbarValues {
  * it and {@link rows} keeps the order the server answered with.
  *
  * **What it deliberately does not do, per Rule 1 clause 3 (match legacy, do not improve it).**
- * Paging is legacy's own and nothing more: the server is asked for fifteen rows at a time and the
- * pager appears only when the match spans more than one page, which is what the legacy
+ * Paging is legacy's own and nothing more: a page read asks the server for fifteen rows at a time, a
+ * find's answer is paged client-side out of the rows already in hand
+ * (`getResultsPage` slices `actualClients`, `app/scripts/controllers/client/ClientController.js:15-19`),
+ * and the pager appears only when the match spans more than one page, which is what the legacy
  * `dir-pagination-controls` does and why the design's five-client capture paints none
  * (`app/views/clients/clients.html:79-82`; AAP 0.5.4 has `.pagination` supply the styling). No
  * rows-per-page selector and no infinite scroll: legacy carries neither, and the "Rows" control the
@@ -268,6 +270,17 @@ export class ClientListComponent {
   readonly errorMessage = signal<string | null>(null);
 
   /**
+   * Whether the rows in hand are a find's answer rather than one page the server read.
+   *
+   * A find is answered with the whole match at once, so this screen pages it the way legacy does: the
+   * answer is kept whole, {@link totalRecords} counts it, and {@link visibleRows} cuts the page in
+   * view out of the matched rows without asking the server again
+   * (`app/scripts/controllers/client/ClientController.js:15-19,66-85`). A page read and a failed read
+   * both clear it, which puts the server's own paging back in charge (Rule 1 clause 3).
+   */
+  private readonly findAnswer = signal<boolean>(false);
+
+  /**
    * The filter control's text as a signal. It must be a signal rather than a read of
    * `toolbar.controls.filter.value` inside the computed below: this view is zoneless and `OnPush`,
    * so a plain property read would leave the computed holding its first verdict for ever.
@@ -304,6 +317,14 @@ export class ClientListComponent {
    * Both filters are client-side and issue no request (Rule 1 clause 3), and {@link rows} keeps the
    * order the server answered with: it is this rendered view, not the held data, that legacy's
    * `orderBy` reorders.
+   *
+   * Over a find's answer one more step follows the three above: the matched rows are cut to the page
+   * in view, fifteen at a time, because legacy pages a search answer client-side out of the rows it
+   * already holds — `getResultsPage` slices `actualClients` with no request
+   * (`app/scripts/controllers/client/ClientController.js:15-19`) and the find keeps the first fifteen
+   * of the same rows on screen (`:81-83`). A page the display filters have emptied is clamped to the
+   * last page that still holds a match, so the table never stands empty while the answer has one
+   * (Rule 1 clause 3).
    */
   readonly visibleRows = computed<readonly ClientListRow[]>(() => {
     const needle = this.filterText().trim().toLowerCase();
@@ -336,7 +357,19 @@ export class ClientListComponent {
       return left < right ? -1 : left > right ? 1 : 0;
     });
 
-    return visible;
+    if (!this.findAnswer()) {
+      return visible;
+    }
+
+    // Legacy's client-side page over a find's answer: the matched rows cut to the page in view,
+    // fifteen at a time. A page the display filters have emptied is clamped to the last page that
+    // still holds a match, so the table never stands empty while the answer has one
+    // (`app/scripts/controllers/client/ClientController.js:15-19,81-83`; Rule 1 clause 3).
+    const lastPage: number = Math.max(1, Math.ceil(visible.length / this.pageLimit));
+    const pageInSlice: number = Math.min(this.page(), lastPage);
+    const start: number = (pageInSlice - 1) * this.pageLimit;
+
+    return visible.slice(start, start + this.pageLimit);
   });
 
   /**
@@ -369,12 +402,13 @@ export class ClientListComponent {
   readonly page = signal(1);
 
   /**
-   * How many rows the last read matched across every page, as the envelope's
-   * `totalFilteredRecords` reports them — the only member that can say how many pages exist, which
-   * is why {@link ClientListPage} models it rather than flattening the envelope to its rows.
-   *
-   * `0` after a find, because a search answer is not paged and its own count is not a page count,
-   * and `0` after a failed read, because nothing measured the match then.
+   * How many rows the last read matched, which is what the pager counts its pages with: the paged
+   * envelope's `totalFilteredRecords` after a page read — the only member that can say how many
+   * pages exist, which is why {@link ClientListPage} models it rather than flattening the envelope
+   * to its rows — and the size of the answer after a find, exactly as legacy sets
+   * `scope.totalClients = actualClients.length` over the rows it already holds
+   * (`app/scripts/controllers/client/ClientController.js:81-83`). It stays `0` after a failed read,
+   * because nothing measured the match then.
    */
   readonly totalRecords = signal(0);
 
@@ -425,7 +459,9 @@ export class ClientListComponent {
 
     if (query === '') {
       // Clearing the find returns to the start of the unfiltered list rather than to whatever page
-      // the user had paged to, because the search that replaced the rows was never paged.
+      // the user had paged to, because the rows it replaces came from a find rather than from the
+      // page the pager had moved the list to (`app/scripts/controllers/client/ClientController.js:15-27,53-55`:
+      // an empty field re-reads the page).
       this.page.set(1);
       this.load();
       return;
@@ -435,12 +471,18 @@ export class ClientListComponent {
   }
 
   /**
-   * Moves the table to another page of the same read — the pager's only entry point.
+   * Moves the table to another page — the pager's only entry point.
    *
-   * The click is a read, never a navigation: `href` exists only so the control is a focusable,
+   * The click is never a navigation: `href` exists only so the control is a focusable,
    * Enter-activatable link, and the default is always prevented so the hash route cannot change.
    * A page outside 1..{@link pageCount}, or the page already shown, is a no-op, so a second click on
    * the current page cannot send a second read (AAP 0.1.1 duplicate-submission protection).
+   *
+   * Over a find's answer the move costs no request at all: the answer is already in hand and legacy
+   * pages it by slicing the rows it holds (`app/scripts/controllers/client/ClientController.js:15-19`),
+   * so only {@link page} changes and {@link visibleRows} cuts the new page out of the same rows. Over
+   * one page the server read, it asks the server for that page's `offset` as it always has
+   * (Rule 1 clause 3).
    *
    * @param event the anchor's click event, whose default navigation is suppressed.
    * @param page the 1-based page the user picked.
@@ -453,6 +495,11 @@ export class ClientListComponent {
     }
 
     this.page.set(page);
+
+    if (this.findAnswer()) {
+      return;
+    }
+
     this.load();
   }
 
@@ -475,6 +522,10 @@ export class ClientListComponent {
     this.loading.set(true);
     this.failed.set(false);
     this.errorMessage.set(null);
+    // A page read is the server's paging again: whatever a find left in hand is replaced by the page
+    // this read asks for, so the client-side page over the find's answer ends here — which is what
+    // legacy does when the field is cleared (`ClientController.js:15-27,53-55`).
+    this.findAnswer.set(false);
 
     const params: ClientListParams = {
       offset: (this.page() - 1) * this.pageLimit,
@@ -523,15 +574,25 @@ export class ClientListComponent {
    * lifetime, `loading` cleared by `finalize` on either outcome, and a failure turned into state
    * through the same {@link onFailure} the page read uses.
    *
+   * The answer is one whole match, not a page, so it is held as it arrived and paged here: legacy
+   * counts it (`scope.totalClients = actualClients.length`), paints its first fifteen rows
+   * (`scope.clients = scope.actualClients.slice(0, scope.clientsPerPage)`) and answers the pager's
+   * later pages by slicing the same array without a request
+   * (`app/scripts/controllers/client/ClientController.js:15-19,66-85`). {@link findAnswer} marks the
+   * rows as that answer, {@link totalRecords} carries its size, and {@link visibleRows} cuts the page
+   * in view (Rule 1 clause 3).
+   *
    * @param query the trimmed find text; never empty, because an empty field re-reads the page.
    */
   private search(query: string): void {
     this.loading.set(true);
     this.failed.set(false);
     this.errorMessage.set(null);
-    // The find replaces the rows with a search answer, which is not a page of the list: the pager
-    // starts again at the view's first page and is not offered over an answer that carries no count.
+    // The find replaces the rows with a search answer, which is one whole match rather than a page of
+    // the list: the view starts at its first page, and the rows are marked as a find's answer so the
+    // pager pages them client-side (ClientController.js:15-19,66-85).
     this.page.set(1);
+    this.findAnswer.set(true);
     this.totalRecords.set(0);
 
     // Legacy's own derivation, kept verbatim: only a quote at either end is removed, and the flag is
@@ -546,7 +607,14 @@ export class ClientListComponent {
         finalize(() => this.loading.set(false)),
       )
       .subscribe({
-        next: (results) => this.rows.set(toSearchRows(results)),
+        next: (results) => {
+          const answer: readonly ClientListRow[] = toSearchRows(results);
+          this.rows.set(answer);
+          // Legacy's own count for the find — `scope.totalClients = actualClients.length` — which is
+          // what gives the pager its pages over an answer the server never paged
+          // (`app/scripts/controllers/client/ClientController.js:81-83`).
+          this.totalRecords.set(answer.length);
+        },
         error: (error: unknown) => this.onFailure(error),
       });
   }
@@ -566,7 +634,9 @@ export class ClientListComponent {
   private onFailure(error: unknown): void {
     this.rows.set([]);
     this.failed.set(true);
-    // Nothing measured the match, so the pager must not claim a page count from a failed read.
+    // Nothing measured the match, so the pager must not claim a page count from a failed read, and a
+    // failed read is no find's answer to page client-side either (Rule 1 clause 3).
+    this.findAnswer.set(false);
     this.totalRecords.set(0);
 
     if (error instanceof ApiError && error.status >= 400 && error.status < 500) {

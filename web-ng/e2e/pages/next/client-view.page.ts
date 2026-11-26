@@ -181,13 +181,15 @@ const SUMMARY_SELECTOR = 'app-client-summary';
 const IDENTIFIERS_SELECTOR = 'app-client-identifiers';
 
 /**
- * A tab of the strip: the anchor of a `role="presentation"` item. The two decorative chevrons the
- * strip renders are `<li aria-hidden="true">` with no anchor, so they never appear as a label.
+ * A tab of the strip: the anchor of a `.nav-tabs` item. The two decorative chevrons the strip
+ * renders are `<li aria-hidden="true">` with no anchor, so they never appear as a label. The list,
+ * item and anchor carry no role of their own — the strip is the plain Bootstrap 3 markup legacy's
+ * tabset renders, which is all AAP 0.5.2 maps and all AAP 0.10.5 registers (Rule 1 clause 3).
  */
-const TAB_LINK_SELECTOR = `.nav-tabs li[role="presentation"] > a`;
+const TAB_LINK_SELECTOR = `.nav-tabs li > a`;
 
 /** The strip's whole items, used only if a template stops rendering an anchor inside a tab item. */
-const TAB_ITEM_SELECTOR = `.nav-tabs li[role="presentation"]`;
+const TAB_ITEM_SELECTOR = `.nav-tabs li`;
 
 /** The tab item the screen currently shows — the target the active class moves to on a switch. */
 const ACTIVE_TAB_SELECTOR = '.nav-tabs li.active > a';

@@ -33,8 +33,9 @@ import { NavbarComponent } from './navbar.component';
  *   the language the service actually has active, including a switch made by another switcher;
  * - sign-out clears the session **before** it navigates, which is the order AAP 0.7.1 and the W1
  *   sequence require, and the user menu closes with it;
- * - a navigation the router refuses is settled rather than dropped: the user is told once in the
- *   rejection's own words and no unhandled rejection is left behind (AAP 0.14.2);
+ * - a navigation the router refuses is settled rather than dropped: the user is told once, in one
+ *   fixed sentence naming the screen that did not open rather than in the router's own wording, and
+ *   no unhandled rejection is left behind (AAP 0.14.2);
  * - the menu opens and closes on the trigger and on `Escape`, driven by Angular state rather than
  *   the Bootstrap dropdown plugin, which needs the jQuery this build does not have.
  *
@@ -62,8 +63,14 @@ const ACCOUNT_NAME = 'mifos';
 /** The account name the signed-in shell hands in through the `userName` input, distinct from the above. */
 const SUPPLIED_NAME = 'supplied-by-shell';
 
-/** The text a refusing router rejects the sign-out navigation with; it is what the user must be shown. */
+/** The text a refusing router rejects the sign-out navigation with; never what the user is shown. */
 const SIGN_OUT_NAVIGATION_FAILURE = 'Navigation cancelled because a guard returned false';
+
+/** The sentence a refused sign-out is reported with: it names the screen that did not open. */
+const LOGIN_SCREEN_MESSAGE = 'The login screen did not open. Reload the page and try again.';
+
+/** The sentence a refused search navigation is reported with: it names the screen that did not open. */
+const SEARCH_RESULTS_MESSAGE = 'The search results did not open. Reload the page and try again.';
 
 /**
  * Stand-in for the shipped bundles: one distinct value per key, so an assertion can tell which key
@@ -303,6 +310,33 @@ describe('NavbarComponent', () => {
     });
   });
 
+  it('reports a refused search navigation once, in the sentence naming the results screen', async () => {
+    // The two texts a refused navigation used to leave the operator with: Angular's own sentence
+    // about navigation ids, and the request-flavoured fallback for a navigation that made no request.
+    const routerWording = 'Navigation ID 3 is not equal to the current navigation id 2';
+    const requestSentence = 'The request could not be completed.';
+    const notifications = TestBed.inject(NotificationService);
+    navigate.mockImplementation(() => Promise.reject(new Error(routerWording)));
+
+    const field = find<HTMLInputElement>('#search');
+    field.value = 'ada okafor';
+    field.dispatchEvent(new Event('input'));
+    find<HTMLFormElement>('app-global-search form').dispatchEvent(new Event('submit'));
+    // Crosses a macrotask, so the handler the component attached has run and the notification it
+    // raises is queued: that handler is what keeps the rejection from surfacing unhandled.
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    fixture.detectChanges();
+
+    expect(navigate).toHaveBeenCalledTimes(1);
+    expect(notifications.messages()).toHaveLength(1);
+    expect(notifications.messages()[0]?.kind).toBe('error');
+    expect(notifications.messages()[0]?.message).toBe(SEARCH_RESULTS_MESSAGE);
+    expect(notifications.messages()[0]?.message).not.toContain(routerWording);
+    expect(notifications.messages()[0]?.message).not.toBe(requestSentence);
+  });
+
   it('switches the active language without navigating', () => {
     const use = vi.spyOn(translate, 'use').mockReturnValue(of({}));
     const selector = languageSelector();
@@ -365,7 +399,9 @@ describe('NavbarComponent', () => {
     );
     expect(notifications.messages()).toHaveLength(1);
     expect(notifications.messages()[0]?.kind).toBe('error');
-    expect(notifications.messages()[0]?.message).toBe(SIGN_OUT_NAVIGATION_FAILURE);
+    expect(notifications.messages()[0]?.message).toBe(LOGIN_SCREEN_MESSAGE);
+    // The router's own sentence names navigation ids and guards, so it is not what an operator reads.
+    expect(notifications.messages()[0]?.message).not.toContain(SIGN_OUT_NAVIGATION_FAILURE);
   });
 
   it('opens the user menu on its trigger and closes it on Escape, returning focus to the trigger', () => {

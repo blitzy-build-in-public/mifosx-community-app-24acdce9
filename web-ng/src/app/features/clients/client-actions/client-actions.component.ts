@@ -15,6 +15,7 @@ import { firstValueFrom } from 'rxjs';
 import { DataTableGateService } from '../../../core/api/datatable-gate.service';
 import { ApiError } from '../../../core/http/api-error';
 import { DateFieldComponent } from '../../../shared/date-field/date-field.component';
+import { HasPermissionDirective } from '../../../shared/has-permission.directive';
 import {
   SelectFieldComponent,
   type SelectOption,
@@ -91,6 +92,30 @@ const ACTION_COPY = {
     reasonLabelKey: '',
   },
 } satisfies Record<ClientActionCommand, ClientActionCopy>;
+
+/**
+ * The permission code each lifecycle command is gated on, keyed by the command itself.
+ *
+ * This is the **one** declaration of a command's code, and the three ends of the workflow all read
+ * it: `clients.routes.ts` declares the code the `:action` segment names as the route's
+ * `data.permission`, this screen binds the current command's entry on its submit control, and
+ * `client-view.component.ts` gates the record's entry that opens this screen on the same entry. That
+ * is what AAP 0.1.1 requires — "a route guard and a template directive must agree, or a user reaches
+ * a screen they cannot act on" — and it is one statement instead of three that could drift apart. The
+ * codes are Fineract's own, and each is the code legacy gated the same command's submit button on
+ * (`scope.taskPermissionName` in `app/scripts/controllers/client/ClientActionsController.js`, bound
+ * as `has-permission='{{taskPermissionName}}'` in `app/views/clients/clientactions.html`).
+ *
+ * `satisfies Record<ClientActionCommand, string>` is the point of the declaration: a command added to
+ * the union without a code is a compile error, so no command can reach this screen ungated.
+ */
+export const CLIENT_ACTION_PERMISSIONS = {
+  activate: 'ACTIVATE_CLIENT',
+  close: 'CLOSE_CLIENT',
+  reject: 'REJECT_CLIENT',
+  withdraw: 'WITHDRAW_CLIENT',
+  reactivate: 'REACTIVATE_CLIENT',
+} satisfies Record<ClientActionCommand, string>;
 
 /**
  * The five in-scope commands as a lookup, so the `:action` segment can be validated against the
@@ -180,6 +205,17 @@ function failureMessage(error: unknown): string | null {
  * record. The five commands are `POST /clients/{id}?command=activate`, `=close`, `=reject`,
  * `=withdraw` and `=reactivate` (AAP 0.7.3 row "Client actions").
  *
+ * **The submit is gated on the command's own code.** {@link CLIENT_ACTION_PERMISSIONS} is the one
+ * declaration of each command's code, and the template binds the current command's entry on the
+ * primary button, reproducing legacy's `has-permission='{{taskPermissionName}}'`
+ * (`app/views/clients/clientactions.html`). The same map is what the `client/:id/:action` route
+ * declares and what the client record gates the entry that opens this screen on, so the route guard,
+ * the record's directive and this submit enforce one code and cannot disagree — the agreement AAP
+ * 0.1.1 requires ("a route guard and a template directive must agree, or a user reaches a screen they
+ * cannot act on"). Only the submit is gated, never the fields or the cancel link: legacy renders the
+ * form and gates its button, and this screen reproduces that rather than adding a gate legacy lacks
+ * (Rule 1 clause 3).
+ *
  * **The gate comes first and runs once.** `DataTableGateService.checkClientActionGate` performs the
  * legacy two-call sequence — the tenant's datatable-check list, then one generic-result-set read per
  * applicable check — and this screen neither re-implements nor reorders it (AAP 0.7.3 row "Client
@@ -229,7 +265,14 @@ function failureMessage(error: unknown): string | null {
  */
 @Component({
   selector: 'app-client-actions',
-  imports: [ReactiveFormsModule, RouterLink, TranslatePipe, DateFieldComponent, SelectFieldComponent],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    TranslatePipe,
+    DateFieldComponent,
+    SelectFieldComponent,
+    HasPermissionDirective,
+  ],
   templateUrl: './client-actions.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -416,6 +459,22 @@ export class ClientActionsComponent {
    * renders the select from this, so a command that takes no reason cannot show an empty picker.
    */
   readonly reasonLabelKey = computed<string>(() => this.copy()?.reasonLabelKey ?? '');
+
+  /**
+   * The code the current command's submit control is gated on, or `''` while the route names no
+   * command.
+   *
+   * It is read from {@link CLIENT_ACTION_PERMISSIONS}, the declaration the `client/:id/:action`
+   * route's guard and the record's action entry read as well, so the three ends enforce one code
+   * (AAP 0.1.1). The empty answer is the fail-closed one: `HasPermissionDirective` hides an element
+   * whose code names nothing, and an `:action` segment outside the five commands renders no form for
+   * it to gate.
+   */
+  readonly actionPermission = computed<string>(() => {
+    const command = this.command();
+
+    return command === null ? '' : CLIENT_ACTION_PERMISSIONS[command];
+  });
 
   /**
    * Reads the route's two segments and drives the screen's one load sequence.

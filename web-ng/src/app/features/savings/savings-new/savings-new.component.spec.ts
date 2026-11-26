@@ -85,6 +85,16 @@ const REJECTED_MESSAGE = 'The savings product is not active for the submitted da
 /** The text a 5xx answers with; the interceptor turns it into that failure's one notification. */
 const SERVER_FAILURE_MESSAGE = 'The request could not be processed because an internal error occurred.';
 
+/** The sentence cancel reports when the router refuses the return to the client record it names. */
+const CLIENT_RECORD_NAVIGATION_MESSAGE =
+  'The client record did not open. Reload the page and try again.';
+
+/** The sentence cancel reports when the router refuses the return to the client list it names. */
+const CLIENT_LIST_NAVIGATION_MESSAGE = 'The client list did not open. Reload the page and try again.';
+
+/** The text a refusing router rejects a cancel navigation with; never what the user is shown. */
+const ROUTER_REFUSAL = 'Navigation cancelled because a guard returned false';
+
 /** The day the application is submitted on in the cases that fill the form. */
 const SUBMITTED_ON = new Date(2026, 10, 24);
 
@@ -529,9 +539,8 @@ describe('SavingsNewComponent', () => {
     expect(savings.template.mock.calls).toHaveLength(1);
   });
 
-  it('tells the user when the router refuses the cancel navigation, leaving no rejection unhandled', async () => {
-    const refused = 'Navigation cancelled because a guard returned false';
-    router.navigate.mockImplementation(() => Promise.reject(new Error(refused)));
+  it('tells the user the client record did not open when the router refuses the cancel navigation, leaving no rejection unhandled', async () => {
+    router.navigate.mockImplementation(() => Promise.reject(new Error(ROUTER_REFUSAL)));
 
     await render(OFFICERS_TEMPLATE);
 
@@ -544,8 +553,30 @@ describe('SavingsNewComponent', () => {
     });
     fixture.detectChanges();
 
-    expect(component.error()).toBe(refused);
-    expect(host().querySelector('.alert.alert-danger')?.textContent?.trim()).toBe(refused);
+    const alert = host().querySelector<HTMLElement>('.alert.alert-danger');
+    expect(component.error()).toBe(CLIENT_RECORD_NAVIGATION_MESSAGE);
+    expect(alert?.textContent?.trim()).toBe(CLIENT_RECORD_NAVIGATION_MESSAGE);
+    // The router's own sentence names navigation ids and guards, so it is not what an operator reads.
+    expect(component.error()).not.toContain(ROUTER_REFUSAL);
+    expect(alert?.textContent ?? '').not.toContain(ROUTER_REFUSAL);
+  });
+
+  it('tells the user the client list did not open when the router refuses the cancel out of a route naming no client', async () => {
+    router.navigate.mockImplementation(() => Promise.reject(new Error(ROUTER_REFUSAL)));
+
+    // A segment that names no client puts the screen in its not-found state, from which cancel has no
+    // record to return to and leaves for the client list.
+    await renderOn('abc', OFFICERS_TEMPLATE);
+
+    component.cancel();
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    fixture.detectChanges();
+
+    expect(router.navigate).toHaveBeenCalledWith(['/clients']);
+    expect(component.error()).toBe(CLIENT_LIST_NAVIGATION_MESSAGE);
+    expect(component.error()).not.toContain(ROUTER_REFUSAL);
   });
 
   it('re-reads the template for a second client, clearing the first client’s application', async () => {

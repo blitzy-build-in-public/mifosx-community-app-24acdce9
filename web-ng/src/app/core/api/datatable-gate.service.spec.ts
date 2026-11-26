@@ -509,18 +509,25 @@ describe('DataTableGateService', () => {
     // comes before every request, including the id-less checks call.
     const crafted = '../../../users';
     const emissions: DataTableGateResult[][] = [];
-    const messages: string[] = [];
+    const refusals: Error[] = [];
 
     service.checkClientActionGate(crafted, 'activate').subscribe({
       next: (results) => emissions.push(results),
-      error: (failure: unknown) =>
-        messages.push(failure instanceof Error ? failure.message : String(failure)),
+      error: (failure: unknown) => {
+        if (failure instanceof Error) {
+          refusals.push(failure);
+        }
+      },
     });
 
     expect(emissions).toEqual([]);
-    expect(messages).toHaveLength(1);
-    expect(messages[0]).toContain(`'${crafted}'`);
-    expect(messages[0]).toContain('DataTableGateService.checkClientActionGate');
+    expect(refusals).toHaveLength(1);
+    // The message is the guard's fixed sentence, which names neither the rejected value nor the call:
+    // that sentence is the text a screen renders, so the diagnostic travels in `cause` instead.
+    expect(refusals[0].message).not.toContain(crafted);
+    expect(refusals[0].message).not.toContain('DataTableGateService.checkClientActionGate');
+    expect(String(refusals[0].cause)).toContain(`'${crafted}'`);
+    expect(String(refusals[0].cause)).toContain('DataTableGateService.checkClientActionGate');
     httpMock.expectNone(isChecksRequest);
     httpMock.expectNone(() => true);
   });
@@ -531,20 +538,27 @@ describe('DataTableGateService', () => {
     // could leave the datatable family, and the gate must fail rather than report a table it never read.
     const crafted = '../../../users';
     const emissions: DataTableGateResult[][] = [];
-    const messages: string[] = [];
+    const refusals: Error[] = [];
 
     service.checkClientActionGate(CLIENT_ID, 'activate').subscribe({
       next: (results) => emissions.push(results),
-      error: (failure: unknown) =>
-        messages.push(failure instanceof Error ? failure.message : String(failure)),
+      error: (failure: unknown) => {
+        if (failure instanceof Error) {
+          refusals.push(failure);
+        }
+      },
     });
 
     httpMock.expectOne(isChecksRequest).flush(checksPage([checkRow(crafted, 'ACTIVATE')]));
 
     expect(emissions).toEqual([]);
-    expect(messages).toHaveLength(1);
-    expect(messages[0]).toContain(`'${crafted}'`);
-    expect(messages[0]).toContain('DataTableGateService.checkClientActionGate');
+    expect(refusals).toHaveLength(1);
+    // Same two channels as the case above: the server-supplied name and the composing call are in
+    // `cause`, and the sentence a screen renders names neither of them.
+    expect(refusals[0].message).not.toContain(crafted);
+    expect(refusals[0].message).not.toContain('DataTableGateService.checkClientActionGate');
+    expect(String(refusals[0].cause)).toContain(`'${crafted}'`);
+    expect(String(refusals[0].cause)).toContain('DataTableGateService.checkClientActionGate');
     httpMock.expectNone(isDatatableRequest(crafted, CLIENT_ID));
     httpMock.expectNone(() => true);
   });

@@ -674,6 +674,36 @@ export interface LoanCharge {
   /** Amount still outstanding, which the pay and waive forms act on. */
   readonly amountOutstanding: number;
 
+  /**
+   * Whether the charge has been paid in full, the fork's `LoanChargeData.paid`.
+   *
+   * The fork's `LoanChargeData` always sends it, and it is one half of the legacy record's settle
+   * test: the record's controller marks a charge `actionFlag` once it is paid, and the charges tab
+   * hides its waive action on that flag
+   * (`app/scripts/controllers/loanAccount/ViewLoanDetailsController.js:168-175`).
+   */
+  readonly paid: boolean;
+
+  /**
+   * Whether the charge has been waived, the fork's `LoanChargeData.waived`.
+   *
+   * The fork's `LoanChargeData` always sends it, and it is the other half of the same legacy settle
+   * test: a waived charge sets `actionFlag`, so the charges tab hides its waive action too.
+   */
+  readonly waived: boolean;
+
+  /**
+   * Whether the charge may be paid through an account transfer right now, the fork's
+   * `LoanChargeData.chargePayable` — its `isChargePayable()`, which answers true when the charge's
+   * payment mode is account transfer and the charge is neither paid nor waived.
+   *
+   * The fork's `LoanChargeData` always sends it. Legacy offers the record's pay action only for a
+   * charge whose `chargePayable` is true on an `Active` loan
+   * (`app/views/loans/viewloanaccountdetails.html:868`, the `charge.chargePayable && status=='Active'`
+   * condition), which is the decision the loan record's charge section reproduces.
+   */
+  readonly chargePayable: boolean;
+
   /** When the charge falls due, e.g. disbursement or a specified date. */
   readonly chargeTimeType: {
     readonly id: number;

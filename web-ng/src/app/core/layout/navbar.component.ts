@@ -12,7 +12,7 @@ import {
 import { Router, RouterLink } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
-import { toDisplayableFailure } from '../../core/http/api-error';
+import { navigationFailure } from '../../core/http/api-error';
 import { HasPermissionDirective } from '../../shared/has-permission.directive';
 import { AuthService } from '../auth/auth.service';
 import { AVAILABLE_LANGS, FALLBACK_LANG } from '../i18n/translate.config';
@@ -247,12 +247,15 @@ export class NavbarComponent {
     this.closeUserMenu();
     // Settled rather than dropped: a navigation the router refuses would otherwise be an unhandled
     // rejection, and the user is told the results screen did not open instead of being left in place.
+    // The text is the navigation sentence naming that screen, because a refused navigation carries
+    // no server text, and the router's own wording names nothing an operator acts on
+    // (`api-error.ts` `navigationFailure`).
     void this.router
       .navigate(['/search', submission.query], {
         queryParams: { scope: submission.scope, exactMatch: submission.exactMatch },
       })
       .catch((cause: unknown) => {
-        this.notifications.show('error', toDisplayableFailure(cause).message);
+        this.notifications.show('error', navigationFailure(cause, 'search results').message);
       });
   }
 
@@ -270,9 +273,11 @@ export class NavbarComponent {
     this.auth.logout();
     // Settled rather than dropped: a navigation the router refuses would otherwise be an unhandled
     // rejection, and the user is told the return to the login screen did not happen. The session is
-    // already cleared above, so the message is the only thing left to report.
+    // already cleared above, so the message is the only thing left to report; it is the navigation
+    // sentence naming that screen, because a refused navigation carries no server text and the
+    // router's own wording names nothing an operator acts on (`api-error.ts` `navigationFailure`).
     void this.router.navigate(['/login']).catch((cause: unknown) => {
-      this.notifications.show('error', toDisplayableFailure(cause).message);
+      this.notifications.show('error', navigationFailure(cause, 'login screen').message);
     });
   }
 }

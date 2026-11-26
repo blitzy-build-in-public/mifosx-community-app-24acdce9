@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ALL_FUNCTIONS, PermissionsService } from '../../../../core/auth/permissions.service';
 import { DISPLAY_DATE_FORMAT } from '../../../../shared/date-format.util';
 import { EmptyStateComponent } from '../../../../shared/empty-state/empty-state.component';
-import type { LoanCharge } from '../../loan.models';
+import type { LoanCharge, LoanStatus } from '../../loan.models';
 import { LoanChargesComponent } from './loan-charges.component';
 
 /**
@@ -30,15 +30,19 @@ import { LoanChargesComponent } from './loan-charges.component';
  *     error");
  *  3. each charge's `pay` and `waive` entry points are links to the charge form's route,
  *     `#/loanaccountcharge/:id/:action/:chargeId`, built from the `loanId` the record binds and the
- *     row's own id, so one row's action can never name another loan or another charge. Both links are
- *     rendered for every row, including a charge with nothing outstanding: the section leaves a step's
- *     legality to the server, exactly as the record's action group treats its own commands, so no case
- *     here withholds a link for a settled charge (Rule 1 clause 3 — match legacy, do not improve it);
- *  4. those two links are gated by `HasPermissionDirective` on the single code the record passes
- *     down, and the gate **hides without removing**: the anchors stay in the document, `display`
- *     alone changes, and it follows the permission list in both directions (AAP 0.1.1, "a route
- *     guard and a template directive must agree"; AAP 0.14.1);
- *  5. a charge that carries no due date leaves its cell empty — no dash, no `N/A`, no `null`, no
+ *     row's own id, so one row's action can never name another loan or another charge;
+ *  4. each link is offered per row exactly as the legacy record offers it: waive for a charge that is
+ *     neither paid nor waived, does not fall due on disbursement, and belongs to a loan that is
+ *     `Active`, and pay for a charge the server reports `chargePayable` on a loan that is `Active`
+ *     (`app/views/loans/viewloanaccountdetails.html:865` and `:868`;
+ *     `app/scripts/controllers/loanAccount/ViewLoanDetailsController.js:168-175`). The ineligible
+ *     link is hidden with Bootstrap's global `.hidden` utility and never removed, so the row keeps
+ *     both anchors in the document (Rule 1 clause 3; AAP 0.10.5 registers no difference here);
+ *  5. those two links are also gated by `HasPermissionDirective` on the single code the record passes
+ *     down — an independent condition that likewise **hides without removing**: the anchors stay in
+ *     the document, the inline `display` alone changes, and it follows the permission list in both
+ *     directions (AAP 0.1.1, "a route guard and a template directive must agree"; AAP 0.14.1);
+ *  6. a charge that carries no due date leaves its cell empty — no dash, no `N/A`, no `null`, no
  *     `Invalid Date` — because the payload sent no date and nothing here invents one (Rule 1
  *     clause 3).
  *
@@ -133,11 +137,22 @@ const DUE_DATE = new Date(2026, 2, 14);
 
 /** Status values a charge's type members carry; the table renders neither, it only passes them by. */
 const SPECIFIED_DUE_DATE = { id: 2, value: 'Specified due date' };
+const DISBURSEMENT = { id: 1, value: 'Disbursement' };
 const FLAT = { id: 1, value: 'Flat' };
 
 /**
- * A charge that falls due on a given date and is still wholly outstanding: the row whose every cell
- * carries a value.
+ * The loan state both charge actions require: Fineract's `LoanStatus.ACTIVE`, as
+ * `GET /loans/{id}` reports it. Every case that binds no other status runs against this one.
+ */
+const ACTIVE_STATUS: LoanStatus = {
+  id: 300,
+  code: 'loanStatusType.active',
+  value: 'Active',
+};
+
+/**
+ * A charge that falls due on a given date, is still wholly outstanding and is payable through an
+ * account transfer: the row whose every cell carries a value and which legacy offers both actions on.
  */
 const CHARGE_DUE: LoanCharge = {
   id: 11,
@@ -148,16 +163,19 @@ const CHARGE_DUE: LoanCharge = {
   amountPaid: 0,
   amountWaived: 0,
   amountOutstanding: 25,
+  paid: false,
+  waived: false,
+  chargePayable: true,
   chargeTimeType: SPECIFIED_DUE_DATE,
   chargeCalculationType: FLAT,
   dueDate: [2026, 3, 14],
 };
 
 /**
- * A charge that carries no due date and nothing outstanding, with a figure large enough to prove the
- * thousands grouping. Its absent `dueDate` is the state case 5 asserts an empty cell for. Its zero
- * outstanding deliberately withholds no action: both links render for every row and only the
- * permission gate decides their visibility.
+ * The same charge settled: paid in full, which is why it is neither payable nor waivable. It carries
+ * no due date and a figure large enough to prove the thousands grouping; its absent `dueDate` is the
+ * state case 6 asserts an empty cell for, and its paid flag is the state the waive rule (and the pay
+ * rule, through `chargePayable`) hides both actions on.
  */
 const CHARGE_SETTLED: LoanCharge = {
   id: 12,
@@ -168,12 +186,67 @@ const CHARGE_SETTLED: LoanCharge = {
   amountPaid: 1250.5,
   amountWaived: 0,
   amountOutstanding: 0,
+  paid: true,
+  waived: false,
+  chargePayable: false,
   chargeTimeType: SPECIFIED_DUE_DATE,
   chargeCalculationType: FLAT,
 };
 
+/**
+ * The same outstanding charge with a regular payment mode: Fineract's `isChargePayable()` answers
+ * false for it, because paying it means paying through an account transfer, so the record offers
+ * waive and withholds pay.
+ */
+const CHARGE_NOT_PAYABLE: LoanCharge = { ...CHARGE_DUE, id: 13, chargePayable: false };
+
+/** The same charge waived: its charge is settled, so the record withholds both actions. */
+const CHARGE_WAIVED: LoanCharge = {
+  ...CHARGE_DUE,
+  id: 14,
+  amountWaived: 25,
+  amountOutstanding: 0,
+  waived: true,
+  chargePayable: false,
+};
+
+/**
+ * The same charge taken at disbursement: legacy sets its `actionFlag` on
+ * `chargeTimeType.value == 'Disbursement'`, so the record never offers to waive it, while a payable
+ * charge still offers pay.
+ */
+const CHARGE_AT_DISBURSEMENT: LoanCharge = {
+  ...CHARGE_DUE,
+  id: 15,
+  chargeTimeType: DISBURSEMENT,
+};
+
 /** The two rows every table case renders, in the order the payload lists them. */
 const CHARGES: readonly LoanCharge[] = [CHARGE_DUE, CHARGE_SETTLED];
+
+/**
+ * The loan states in which the record offers neither charge action, by the fork's own
+ * `LoanStatus` ids — every state but `300` — plus the state a payload that reports no status leaves.
+ * The whole set is covered because legacy's rule is `loan.status.value != 'Active'`: any state other
+ * than `Active` withholds both links, not just the two an application passes through on its way to
+ * disbursement.
+ */
+const NOT_ACTIVE_STATUSES: readonly (readonly [string, LoanStatus | null])[] = [
+  [
+    'submitted and pending approval',
+    { id: 100, code: 'loanStatusType.submitted.and.pending.approval', value: 'Submitted and pending approval' },
+  ],
+  ['approved', { id: 200, code: 'loanStatusType.approved', value: 'Approved' }],
+  [
+    'withdrawn by client',
+    { id: 400, code: 'loanStatusType.withdrawn.by.client', value: 'Withdrawn by client' },
+  ],
+  [
+    'closed with obligations met',
+    { id: 600, code: 'loanStatusType.closed.obligations.met', value: 'Closed (obligations met)' },
+  ],
+  ['reported no status at all', null],
+];
 
 /**
  * The half of `PermissionsService` the `hasPermission` directive asks, carrying the legacy algebra
@@ -212,19 +285,22 @@ describe('LoanChargesComponent', () => {
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
 
   /**
-   * Mounts the section for one loan with the charges the record hands it.
+   * Mounts the section for one loan with the charges the record hands it, on the loan status the
+   * record reports — `Active` unless a case is about the state that withholds both actions.
    *
-   * Both inputs are bound before the first change detection: `loanId` and `actionPermission` are
-   * required inputs, so the first pass would throw without them, and the gate's answer is read during
-   * that same pass.
+   * Every input is bound before the first change detection: `loanId` and `actionPermission` are
+   * required inputs, so the first pass would throw without them, and the gate's answer and the rows'
+   * eligibility both come out of that same pass.
    */
   function mount(
     charges: readonly LoanCharge[],
     loanId: number | string = LOAN_ID,
+    loanStatus: LoanStatus | null = ACTIVE_STATUS,
   ): ComponentFixture<LoanChargesComponent> {
     fixture = TestBed.createComponent(LoanChargesComponent);
     fixture.componentRef.setInput('charges', charges);
     fixture.componentRef.setInput('loanId', loanId);
+    fixture.componentRef.setInput('loanStatus', loanStatus);
     fixture.componentRef.setInput('actionPermission', ACTION_PERMISSION);
     fixture.detectChanges();
 
@@ -256,6 +332,21 @@ describe('LoanChargesComponent', () => {
     chargeId: number,
   ): string {
     return `/loanaccountcharge/${loanId}/${action}/${chargeId}`;
+  }
+
+  /**
+   * Whether the row's action link is hidden by the section's own eligibility rule — Bootstrap's
+   * global `.hidden` utility — rather than removed.
+   *
+   * The anchor must be in the document in either case: the section hides an ineligible link, it never
+   * drops it, which is what keeps the row's DOM stable and the permission gate independent.
+   */
+  function hiddenByRule(action: 'pay' | 'waive', chargeId: number): boolean {
+    const anchor = byId(`loan-charge-${action}-${chargeId}`);
+
+    expect(anchor).not.toBeNull();
+
+    return anchor?.classList.contains('hidden') ?? false;
   }
 
   beforeEach(async () => {
@@ -355,10 +446,13 @@ describe('LoanChargesComponent', () => {
       const pay = byId(`loan-charge-pay-${CHARGE_DUE.id}`);
       const waive = byId(`loan-charge-waive-${CHARGE_DUE.id}`);
 
+      // The row is payable and unsettled on an active loan, so the section offers both links…
       expect(pay).not.toBeNull();
       expect(waive).not.toBeNull();
-      // The anchor names the loan it belongs to and the charge the row carries, so one row's action
-      // can never point at another loan or another charge. `app.config.ts` adds
+      expect(pay?.classList.contains('hidden')).toBe(false);
+      expect(waive?.classList.contains('hidden')).toBe(false);
+      // …and the anchor names the loan it belongs to and the charge the row carries, so one row's
+      // action can never point at another loan or another charge. `app.config.ts` adds
       // `withHashLocation()`, so in the application these render as `#/loanaccountcharge/7/pay/11`;
       // this suite's router uses the default path strategy, which is why the bare path is asserted.
       expect(pay?.getAttribute('href')).toBe(chargeUrl(loanId, 'pay', CHARGE_DUE.id));
@@ -367,6 +461,47 @@ describe('LoanChargesComponent', () => {
       expect(waive?.textContent?.trim()).toBe(TRANSLATIONS['label.button.waivecharge']);
     }
   });
+
+  it.each<[string, LoanCharge, { readonly pay: boolean; readonly waive: boolean }]>([
+    ['a payable charge that is unsettled', CHARGE_DUE, { pay: true, waive: true }],
+    [
+      'a charge that is not payable through an account transfer',
+      CHARGE_NOT_PAYABLE,
+      { pay: false, waive: true },
+    ],
+    ['a charge that has been paid', CHARGE_SETTLED, { pay: false, waive: false }],
+    ['a charge that has been waived', CHARGE_WAIVED, { pay: false, waive: false }],
+    [
+      'a charge that falls due on disbursement',
+      CHARGE_AT_DISBURSEMENT,
+      { pay: true, waive: false },
+    ],
+  ])(
+    'offers exactly the actions legacy offers on an active loan for %s',
+    (_label, charge, offered) => {
+      mount([charge], LOAN_ID, ACTIVE_STATUS);
+
+      // Legacy's rule, condition by condition: waive is hidden once the charge is paid or waived,
+      // once it falls due on disbursement, and whenever the loan is not active; pay is shown only for
+      // a `chargePayable` charge on an active loan
+      // (`ViewLoanDetailsController.js:168-175`; `viewloanaccountdetails.html:865,868`).
+      expect(hiddenByRule('pay', charge.id)).toBe(!offered.pay);
+      expect(hiddenByRule('waive', charge.id)).toBe(!offered.waive);
+    },
+  );
+
+  it.each(NOT_ACTIVE_STATUSES)(
+    'hides both actions for a charge on a loan that is %s',
+    (_label, loanStatus) => {
+      mount([CHARGE_DUE], LOAN_ID, loanStatus);
+
+      // `charge.chargePayable && status=='Active'` and `actionFlag`'s own
+      // `loan.status.value != 'Active'`: on any state but Active the record offers neither action,
+      // whatever the charge's own flags say.
+      expect(hiddenByRule('pay', CHARGE_DUE.id)).toBe(true);
+      expect(hiddenByRule('waive', CHARGE_DUE.id)).toBe(true);
+    },
+  );
 
   it('hides the two action links without removing them when the charge permission is not held', () => {
     permissions.grant([]);
@@ -395,6 +530,14 @@ describe('LoanChargesComponent', () => {
     expect(revealed).not.toBeNull();
     expect(revealed?.style.display).not.toBe('none');
     expect(byId(`loan-charge-waive-${CHARGE_DUE.id}`)?.style.display).not.toBe('none');
+
+    // The permission gate and the row's own eligibility are two independent conditions on the same
+    // anchor: on the settled row the directive's inline gate is wide open while the eligibility rule
+    // still hides the link, which is what keeps the two reasons for hiding one apart.
+    const settledWaive = byId(`loan-charge-waive-${CHARGE_SETTLED.id}`);
+
+    expect(settledWaive?.style.display).toBe('');
+    expect(settledWaive?.classList.contains('hidden')).toBe(true);
 
     // Withdrawing it hides them again, still in place.
     permissions.grant([]);

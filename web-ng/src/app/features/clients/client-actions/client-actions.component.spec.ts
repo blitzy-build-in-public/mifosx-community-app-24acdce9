@@ -17,6 +17,7 @@ import { provideTranslateService, TranslateService } from '@ngx-translate/core';
 import { catchError, of, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
+import { PermissionsService } from '../../../core/auth/permissions.service';
 import { DEFAULT_APP_CONFIG } from '../../../core/config/app-config.model';
 import { AppConfigService } from '../../../core/config/app-config.service';
 import { toApiError } from '../../../core/http/api-error';
@@ -26,7 +27,7 @@ import type {
   SelectValue,
 } from '../../../shared/select-field/select-field.component';
 import type { ClientActionCommand } from '../client.models';
-import { ClientActionsComponent } from './client-actions.component';
+import { CLIENT_ACTION_PERMISSIONS, ClientActionsComponent } from './client-actions.component';
 
 /**
  * Behaviour of the client lifecycle action screen at `#/client/:id/:action` — the five commands
@@ -69,19 +70,28 @@ import { ClientActionsComponent } from './client-actions.component';
  * 12. `activate` posts its activation date alone and `reactivate` its reactivation date alone: the
  *     form holds a `Date`, the service formats it with the payload's own pattern and locale at the
  *     boundary, and no reason member travels with either command (AAP 0.7.2 "Date handling").
+ * 13. the submit control is gated on the command's own code — the code the `client/:id/:action` route
+ *     declares and the code the record gates the entry that opens this screen with — so a user who
+ *     lacks it sees the form and no control that posts it, and another command's code reveals
+ *     nothing (AAP 0.1.1; Rule 1 clause 3, reproducing legacy's `has-permission` on that one button).
  *
  * **The request sequence is asserted without a render.** What this screen does — the gate's order,
  * the reason list, one command per click and the body it carries — lives entirely in the component
  * and the services it calls, so those cases mount the screen and read its signals and the recorded
- * traffic rather than a fixture. Three cases do render, to pin what only the template can show: the
- * form appears only after the gate — and, for a reason-taking command, the reason list — has
+ * traffic rather than a fixture. The cases that render exist to pin what only the template can show:
+ * the form appears only after the gate — and, for a reason-taking command, the reason list — has
  * answered, with its primary button disabled while a command is in flight (AAP 0.7.4; AAP 0.1.1);
- * the required marker the reason select and the date field do or do not carry in `aria-required`; and
- * the one failure region, which shows a failed gate's own message above no form at all.
+ * the required marker the reason select and the date field do or do not carry in `aria-required`;
+ * the permission gate on that button, which hides it from a user who does not hold the command's own
+ * code while leaving the fields and the cancel link in place (AAP 0.1.1); and the one failure region,
+ * which shows a failed gate's own message above no form at all.
  *
  * **Providers.** Each case mounts the screen for its own URL, so the module is reset first and the
  * route stub is the one provider a case supplies: `ActivatedRoute.paramMap` emits the two segments
- * the case is about. The configuration is loaded from a stubbed `fetch` before the component exists,
+ * the case is about. The permission list is set on the real `PermissionsService` before the component
+ * exists — the mounted command's own code, unless the case is about the gate itself — so the control
+ * the directive gates answers as it does in the application rather than from a stub. The
+ * configuration is loaded from a stubbed `fetch` before the component exists,
  * because every URL is composed from it, and the ngx-translate stack is registered with the legacy
  * captions the screen's copy resolves. The router is a spy over `navigate` — the screen owes the
  * router one navigation per landed command — and the two interceptors are the production error
@@ -395,15 +405,38 @@ describe('ClientActionsComponent', () => {
   }
 
   /**
-   * Mounts the screen for one `#/client/:id/:action` URL.
+   * The codes a user must hold to see the mounted command's submit control: the command's own code,
+   * or none when the `:action` segment names no command.
+   *
+   * Read from the component's own declaration rather than restated, so a case cannot pass by holding
+   * a code the screen does not actually gate on.
+   *
+   * @param action the `:action` segment the route delivers.
+   * @returns the codes that release the mounted command's submit control.
+   */
+  function commandCodes(action: string): readonly string[] {
+    const command = COMMANDS.find((entry): boolean => entry === action);
+
+    return command === undefined ? [] : [CLIENT_ACTION_PERMISSIONS[command]];
+  }
+
+  /**
+   * Mounts the screen for one `#/client/:id/:action` URL as a signed-in user holding the mounted
+   * command's code.
    *
    * The component's constructor resolves the segments and starts the gate, so the request a case
    * expects is already in flight when this returns.
    *
    * @param action the `:action` segment the route delivers.
    * @param id the `:id` segment the route delivers.
+   * @param granted the codes to hold instead of the mounted command's own, `[]` included — which is a
+   * signed-in user holding nothing and is how a case proves the submit gate.
    */
-  async function show(action: string, id: string = CLIENT_ID): Promise<void> {
+  async function show(
+    action: string,
+    id: string = CLIENT_ID,
+    granted?: readonly string[],
+  ): Promise<void> {
     // Every case mounts the screen for its own URL, so the module is reset first: a module left
     // instantiated by the previous case cannot take a new route stub.
     TestBed.resetTestingModule();
@@ -421,6 +454,10 @@ describe('ClientActionsComponent', () => {
         { provide: ActivatedRoute, useValue: { paramMap: of(paramsFor(action, id)) } },
       ],
     });
+
+    // The submit control is gated on the command's own code, so the permission list is what decides
+    // whether the rendered form is the one a permitted operator sees.
+    TestBed.inject(PermissionsService).setPermissions(granted ?? commandCodes(action));
 
     await TestBed.inject(AppConfigService).load();
 
@@ -812,6 +849,51 @@ describe('ClientActionsComponent', () => {
 
     httpMock.expectOne(isCommandPost).flush({ resourceId: 2, clientId: 2 });
     await settle();
+  });
+
+  /*
+   * The permission gate on the submit control.
+   *
+   * The screen is the third end of one decision: the record gates its lifecycle entry on the
+   * command's own code, the `client/:id/:action` route declares that same code, and the button that
+   * posts the command asks for it here (AAP 0.1.1). Legacy gated exactly this button and rendered the
+   * rest of the form regardless, so the cases below assert the button alone (Rule 1 clause 3).
+   */
+
+  it('hides the submit control from a user who does not hold the command’s code', async () => {
+    // A signed-in user holding no code at all: the form, its fields and the way back render, and the
+    // one control that posts the command does not.
+    await show('close', CLIENT_ID, []);
+    await passGate();
+    await answerTemplate('close');
+    fixture.detectChanges();
+
+    expect(host().querySelectorAll('form')).toHaveLength(1);
+    expect(host().querySelector('#cancel')).not.toBeNull();
+    expect(saveButton()?.style.display).toBe('none');
+  });
+
+  it('shows the submit control to a user who holds the command’s code', async () => {
+    await show('close');
+    await passGate();
+    await answerTemplate('close');
+    fixture.detectChanges();
+
+    // Visible and enabled: the gate withholds the control rather than disabling it, which is what
+    // legacy's `has-permission` does to the same button.
+    expect(saveButton()?.style.display).toBe('');
+    expect(saveButton()?.disabled).toBe(false);
+  });
+
+  it('does not reveal the submit control with another command’s code', async () => {
+    // The code of a command this screen is not showing: the record would offer that entry on its own
+    // action, and holding it says nothing about a closure (AAP 0.1.1).
+    await show('close', CLIENT_ID, [CLIENT_ACTION_PERMISSIONS.activate]);
+    await passGate();
+    await answerTemplate('close');
+    fixture.detectChanges();
+
+    expect(saveButton()?.style.display).toBe('none');
   });
 
   it.each(['close', 'reject', 'withdraw'] as const)(

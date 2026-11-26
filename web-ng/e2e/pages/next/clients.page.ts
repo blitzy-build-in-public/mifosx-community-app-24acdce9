@@ -63,8 +63,9 @@
  * markup that exists rather than the sketch, and each says so at its method: the list's columns are
  * name, client number, external id, status, office and staff, so the office and staff values are the
  * row's two trailing cells; a notification is a `.notification` element, not a Bootstrap `.alert`; the
- * results table renders five columns and no product column, so {@link SearchResultRow.product} is
- * answered as `''` rather than invented; and the office, staff and date controls are not wrapped in a
+ * search results render legacy's block per result rather than a table, so {@link SearchResultRow}
+ * carries that block's name, account segment and entity line and answers `product` as `''` rather
+ * than inventing one; and the office, staff and date controls are not wrapped in a
  * `.form-group` of their own, so a field is located through its `.control-label`'s `for` target.
  *
  * **Security (Rule 1 clause 9).** Nothing is logged, printed or captured: client numbers, account
@@ -115,27 +116,38 @@ export interface NotificationView {
   readonly text: string;
 }
 
-/** One row of the global search results (`#/search/:query`, AAP 0.7.3 "Shell: global search"). */
+/**
+ * One result of the global search (`#/search/:query`, AAP 0.7.3 "Shell: global search").
+ *
+ * Legacy's results list renders a block per result — the name as the link, an optional `| #account`
+ * segment after it, and the `Entity: … | <Office|Client>: …` line beneath (`glresults.html:9-65`) —
+ * and this application renders the same blocks, so the reading carries those pieces rather than the
+ * cells of a table. `statusClass` is always `''`: neither list paints a status indicator on a result.
+ */
 export interface SearchResultRow {
-  /** The row's label — a client's display name, or a loan product's name; the cell the link sits in. */
+  /** The result's label — a client's display name, or a loan product's name; the block's link text. */
   readonly name: string;
-  /** The account number the row carries, or `''`. */
+  /** The account number the block prints after its `#`, or `''` when the block prints none. */
   readonly accountNo: string;
   /**
-   * The row's product, or `''`.
+   * The line beneath the name, e.g. `Entity:Client | Office:Head Office`, or `''` when absent.
    *
-   * The results table renders five columns — type, name, account number, client name and status — and
-   * none of them is a product column, so this answers `''` instead of inventing a value or repeating
-   * the name. The field stays because one spec text reads both projects' page objects, and the legacy
-   * results list does print a product.
+   * The parent label is the family's own — `Office` for a client, `Client` for a loan or for a client
+   * matched by one of its identifiers — exactly as legacy prints it.
+   */
+  readonly secondaryText: string;
+  /**
+   * The result's product, or `''`.
+   *
+   * No result line names a product in either application — a loan result's name is its product's
+   * name — so this answers `''` instead of inventing a value or repeating the name. The field stays
+   * because one spec text reads both projects' page objects.
    */
   readonly product: string;
-  /** The row's status colour class, in the same vocabulary as {@link ClientRow.statusClass}. */
+  /** The result's status colour class; always `''`, because a result carries no swatch. */
   readonly statusClass: string;
-  /** The hash path the row's link points at, e.g. `#/viewclient/2`; `null` when no visible link is offered. */
+  /** The hash path the block's link points at, e.g. `#/viewclient/2`; `null` when no link is shown. */
   readonly link: string | null;
-  /** Every cell of the row, trimmed, in column order. */
-  readonly cells: readonly string[];
 }
 
 /** One option of a native `<select>`, in the order the Fineract template returned it. */
@@ -202,13 +214,20 @@ const VIEW_ROOT = 'app-client-view';
 /** The global search results' root. */
 const SEARCH_ROOT = 'app-search-results';
 
+/**
+ * One result of the global search: the block legacy renders per result — `div.blockquoteresult` in
+ * `app/views/search/glresults.html:10-11` — whose class the product stylesheet reproduces because the
+ * partial that declares it is not imported (`web-ng/src/styles.scss`, `_report.scss:154`).
+ */
+const SEARCH_RESULT_BLOCK = '.blockquoteresult';
+
 /** The navbar's global search control. */
 const GLOBAL_SEARCH_ROOT = 'app-global-search';
 
 /** The application's single notification host, rendered by the root component on every route. */
 const NOTIFICATION_HOST = 'app-notification';
 
-/** The shared status indicator, on the list, the record header and the results table. */
+/** The shared status indicator, on the list and on the record header. */
 const STATUS_SWATCH = 'app-status-swatch';
 
 /** The shared explicit empty state. */
@@ -263,6 +282,26 @@ interface RowQuery {
   readonly rowSelector: string;
 }
 
+/** The arguments a search-results read carries into the document. */
+interface SearchBlockQuery {
+  /** Selector of the results screen's root, e.g. `app-search-results`. */
+  readonly rootSelector: string;
+  /** Selector of one result block, relative to that root, e.g. `.blockquoteresult`. */
+  readonly blockSelector: string;
+}
+
+/** One search result as the document renders it, before projection. */
+interface SearchBlockReading {
+  /** The block's link text: the name the result carries. */
+  readonly primaryText: string;
+  /** The line beneath it, e.g. `Entity:Client | Office:Head Office`; `''` when absent. */
+  readonly secondaryText: string;
+  /** The account number the block prints after its `#`, or `''` when it prints none. */
+  readonly accountNo: string;
+  /** The href the block's link points at, or `null` when the link is not displayed. */
+  readonly link: string | null;
+}
+
 /**
  * Runs inside the page: reads every row of a table as its cells, its status colour and its link.
  *
@@ -276,8 +315,8 @@ interface RowQuery {
  * page, so a nested helper would fail the whole evaluation with `__name is not defined` before a single
  * cell was read. Every loop below is therefore written out in place.
  *
- * Text is read through `innerText` rather than `textContent`: the results table renders a
- * permission-gated link and a hidden plain-text twin of the same label in one cell, and only the
+ * Text is read through `innerText` rather than `textContent`: the search results and the client list
+ * each render a permission-gated link and a hidden plain-text twin of the same label, and only the
  * rendered one may be counted. A link is reported only while it is actually displayed, so a row whose
  * action a permission hides answers `null` instead of an href the user was never offered.
  *
@@ -333,6 +372,86 @@ function readRowsInPage(query: RowQuery): RowReading[] {
     }
 
     readings.push({ cells, statusClass, link });
+  }
+
+  return readings;
+}
+
+/**
+ * Runs inside the page: reads every result block of the search results as the name line, the line
+ * beneath it and the account segment the name line carries.
+ *
+ * Legacy's results list renders blocks rather than a table (`glresults.html:9-65`) and this
+ * application renders the same blocks, so there are no cells to read: the block's `innerText` holds
+ * the name and its `#account` segment on one line and the entity line after the `<br>`. `innerText`
+ * rather than `textContent`, because the permission gate keeps a `display: none` twin of the name
+ * beside the link and only the rendered one may be counted. The body declares no nested function and
+ * uses no callback, for the reason {@link readRowsInPage} records.
+ *
+ * @param query The screen root and the block selector, both resolved inside the document.
+ * @returns One reading per block, in document order; `[]` when the root or its blocks are absent.
+ */
+function readSearchBlocksInPage(query: SearchBlockQuery): SearchBlockReading[] {
+  const readings: SearchBlockReading[] = [];
+  const root = document.querySelector(query.rootSelector);
+
+  if (root === null) {
+    return readings;
+  }
+
+  const blocks: Element[] = Array.from(root.querySelectorAll(query.blockSelector));
+
+  for (const block of blocks) {
+    const anchor: Element | null = block.querySelector('a');
+    const rendered: string = (block as HTMLElement).innerText;
+    const raw: string = typeof rendered === 'string' ? rendered : (block.textContent ?? '');
+    const lines: string[] = raw.split('\n');
+    let head = '';
+    let tail = '';
+
+    for (let index = 0; index < lines.length; index += 1) {
+      const line: string = lines[index].replace(/\s+/g, ' ').trim();
+
+      if (line.length === 0) {
+        continue;
+      }
+
+      if (head === '') {
+        head = line;
+      } else if (tail === '') {
+        tail = line;
+      }
+    }
+
+    let accountNo = '';
+    const hash: number = head.indexOf('#');
+
+    if (hash !== -1) {
+      const after: string = head.slice(hash + 1);
+      let digits = '';
+
+      for (const character of after) {
+        if (character < '0' || character > '9') {
+          break;
+        }
+        digits += character;
+      }
+
+      accountNo = digits;
+    }
+
+    let link: string | null = null;
+
+    if (anchor !== null) {
+      const box: DOMRect = anchor.getBoundingClientRect();
+      if (box.width > 0 && box.height > 0) {
+        link = anchor.getAttribute('href');
+      }
+    }
+
+    const primaryText: string = head.split('|')[0].replace(/\s+/g, ' ').trim();
+
+    readings.push({ primaryText, secondaryText: tail, accountNo, link });
   }
 
   return readings;
@@ -624,29 +743,47 @@ export class ClientsPage {
   }
 
   /**
-   * Reads the search results' rows (workflow W3's search half).
+   * Opens the global search results for a query by its own route.
    *
-   * The table's five columns are type, name, account number, client name and status, and the row's
-   * label is the second of them: the first column is the row's family word and is never a name. A
-   * client matched by one of its identifiers renders in the same shape, because the application
-   * projects both client kinds onto one row (AAP 0.7.3 "Shell: global search").
+   * The route segment is percent-encoded, because a query carrying a space or an accented name would
+   * otherwise resolve to a different route than the one asked for. The results screen reads the query
+   * back from the URL and performs the search itself, so nothing is requested here.
+   *
+   * @param query The query to address, e.g. a client's display name.
+   */
+  async openSearchResults(query: string): Promise<void> {
+    await this.navigate(`/search/${encodeURIComponent(query)}`);
+    await this.awaitScreen(SEARCH_ROOT, 'the search results');
+  }
+
+  /**
+   * Reads the search results (workflow W3's search half).
+   *
+   * One block per result, exactly as legacy renders it: the name as the link, the `#account` segment
+   * the block prints when its family carries one, and the entity and parent line beneath
+   * (`app/views/search/glresults.html:9-65`). A client matched by one of its identifiers renders in
+   * the same shape with no account segment, and its parent line names the client rather than an
+   * office (AAP 0.7.3 "Shell: global search").
    */
   async readSearchResults(): Promise<readonly SearchResultRow[]> {
     await this.awaitSearchSettled();
 
-    const readings: readonly RowReading[] = await this.page.evaluate(readRowsInPage, {
-      rootSelector: SEARCH_ROOT,
-      rowSelector: 'table tbody tr',
-    });
+    const readings: readonly SearchBlockReading[] = await this.page.evaluate(
+      readSearchBlocksInPage,
+      {
+        rootSelector: SEARCH_ROOT,
+        blockSelector: SEARCH_RESULT_BLOCK,
+      },
+    );
 
     return readings.map(
-      (reading: RowReading): SearchResultRow => ({
-        name: cellAt(reading.cells, 1),
-        accountNo: cellAt(reading.cells, 2),
+      (reading: SearchBlockReading): SearchResultRow => ({
+        name: reading.primaryText,
+        accountNo: reading.accountNo,
+        secondaryText: reading.secondaryText,
         product: '',
-        statusClass: reading.statusClass,
+        statusClass: '',
         link: reading.link,
-        cells: reading.cells,
       }),
     );
   }

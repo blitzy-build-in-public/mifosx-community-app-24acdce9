@@ -28,16 +28,6 @@ const OUT_OF_SCOPE_LABELS: readonly string[] = [
   'Credit Report',
 ];
 
-/**
- * The keys the template's two `keydown` bindings listen for, as `KeyboardEvent.key` reports them:
- * `keydown.enter` matches `Enter`, and `keydown.space` matches a single space because Angular's
- * `KeyEventsPlugin` lower-cases the key before comparing and maps `' '` to `space`.
- */
-const ACTIVATION_KEYS: readonly { readonly key: string; readonly binding: string }[] = [
-  { key: 'Enter', binding: 'keydown.enter' },
-  { key: ' ', binding: 'keydown.space' },
-];
-
 describe('TabStripComponent', () => {
   // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines
   // this spec's only cast to one line and keeps the assertions type-checked (Rule 1 clause 4).
@@ -120,33 +110,30 @@ describe('TabStripComponent', () => {
     expect(activeLabels(fixture)).toEqual(['Identities']);
   });
 
-  it('exposes each tab as a keyboard-reachable tab, selects the active one, and follows a changed id', () => {
+  it('keeps legacy’s tab markup, with `.active` on the `li` as the strip’s only state', () => {
     const fixture = createStrip('general');
-    const selectedLabels = (): (string | undefined)[] =>
-      tabLinks(fixture)
-        .filter((link) => link.getAttribute('aria-selected') === 'true')
-        .map((link) => link.textContent?.trim());
+    const lists = host(fixture).querySelectorAll('ul.nav-tabs');
+
+    // One plain list, as legacy's tabset renders: no tablist role, no tab-stop attribute, no
+    // selection state and no key handler on top of the markup AAP 0.5.2 maps (Rule 1 clause 3;
+    // AAP 0.10.5 registers no accessibility difference here).
+    expect(lists).toHaveLength(1);
+    expect(Array.from(lists, (list) => list.hasAttribute('role'))).toEqual([false]);
+    expect(Array.from(lists, (list) => list.hasAttribute('aria-label'))).toEqual([false]);
 
     for (const link of tabLinks(fixture)) {
-      expect(link.getAttribute('role')).toBe('tab');
-      expect(link.getAttribute('tabindex')).toBe('0');
+      // The anchor is legacy's own link — uib-tab 1.3.2 renders `<a href ng-click="select($event)">`
+      // — so the valueless `href` stays, which is what puts the tab in the tab order and lets a real
+      // Enter activate it; and the ARIA scaffolding an earlier change removed stays out.
+      expect(link.getAttribute('href')).toBe('');
+      expect(link.tabIndex).toBe(0);
+      expect(link.hasAttribute('role')).toBe(false);
+      expect(link.hasAttribute('tabindex')).toBe(false);
+      expect(link.hasAttribute('aria-selected')).toBe(false);
     }
 
-    expect(host(fixture).querySelectorAll('ul.nav-tabs[role="tablist"]')).toHaveLength(1);
-    expect(tabLinks(fixture).map((link) => link.getAttribute('aria-selected'))).toEqual([
-      'true',
-      'false',
-    ]);
-    expect(selectedLabels()).toEqual(['General']);
-
-    fixture.componentRef.setInput('activeId', 'identities');
-    fixture.detectChanges();
-
-    expect(tabLinks(fixture).map((link) => link.getAttribute('aria-selected'))).toEqual([
-      'false',
-      'true',
-    ]);
-    expect(selectedLabels()).toEqual(['Identities']);
+    expect(host(fixture).querySelectorAll('li.active')).toHaveLength(1);
+    expect(activeLabels(fixture)).toEqual(['General']);
   });
 
   it('reports an inactive tab’s id once when it is clicked', () => {
@@ -167,19 +154,25 @@ describe('TabStripComponent', () => {
     expect(emitted).toEqual([]);
   });
 
-  it.each(ACTIVATION_KEYS)(
-    'reports an inactive tab’s id once, and cancels the key’s default, when $binding fires on it',
-    ({ key }) => {
-      const fixture = createStrip('general');
-      const emitted = recordChanges(fixture);
-      const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+  /**
+   * A tab click selects, it never navigates: the anchor's valueless `href` — legacy's own — would
+   * otherwise reload the current URL and drop the hash route, so the default is cancelled on every
+   * click, the already-active tab included (Rule 1 clause 3 — choosing a tab is no navigation; the
+   * pager's `goToPage` cancels its own for the same reason).
+   */
+  it.each([
+    { outcome: 'an inactive tab', label: 'Identities', expected: ['identities'] },
+    { outcome: 'the tab already shown', label: 'General', expected: [] as string[] },
+  ])('cancels the click’s default on $outcome, emitting $expected', ({ label, expected }) => {
+    const fixture = createStrip('general');
+    const emitted = recordChanges(fixture);
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true });
 
-      tabLink(fixture, 'Identities').dispatchEvent(event);
+    tabLink(fixture, label).dispatchEvent(click);
 
-      expect(event.defaultPrevented).toBe(true);
-      expect(emitted).toEqual(['identities']);
-    },
-  );
+    expect(emitted).toEqual(expected);
+    expect(click.defaultPrevented).toBe(true);
+  });
 
   it('renders both chevrons as inert decoration that cannot change the active tab', () => {
     const fixture = createStrip('general');

@@ -17,6 +17,7 @@ import { catchError, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PermissionsService } from '../../../core/auth/permissions.service';
+import type { SearchResult } from '../../../core/api/search.service';
 import { DEFAULT_APP_CONFIG } from '../../../core/config/app-config.model';
 import { AppConfigService } from '../../../core/config/app-config.service';
 import { toApiError } from '../../../core/http/api-error';
@@ -61,8 +62,10 @@ import { ClientListComponent } from './client-list.component';
  *     (`ClientController.search()`, `app/scripts/controllers/client/ClientController.js:44-62`;
  *     Rule 1 clause 2; AAP 0.7.2 `GlobalSearchParams`), and the answer's rows replace the page's;
  *  8. the states the card must render: the explicit empty state with no error (AAP 0.7.4), no rows
- *     and no "no clients" claim after a failure, and a pager that paints only for a match larger than
- *     one page;
+ *     and no "no clients" claim after a failure, and a pager that paints for a match larger than one
+ *     page — over the server's own pages and over a find's answer alike, because legacy pages a find
+ *     client-side out of the rows it already holds
+ *     (`app/scripts/controllers/client/ClientController.js:15-19,66-85`);
  *  9. what the table and the toolbar actually paint: the card title, the six column headers, one row
  *     per visible client, a status cell holding the swatch and no word (AAP 0.10.5 deliberate
  *     difference 11), the row itself as the link to `#/viewclient/:id` with no nested control, and
@@ -233,6 +236,29 @@ const LARGE_MATCH_SECOND_PAGE = {
   totalFilteredRecords: 31,
   pageItems: [PENDING_CLIENT],
 } as const;
+
+/**
+ * A find's answer carrying `count` clients, named by ordinal so a case can name the row each page of
+ * the client-side pager holds: legacy keeps the whole answer in `actualClients`, counts it into
+ * `totalClients` and slices the page in view out of those rows without asking the server again
+ * (`app/scripts/controllers/client/ClientController.js:15-19,66-85`).
+ *
+ * @param count how many clients the find answers with.
+ */
+function findAnswer(count: number): SearchResult[] {
+  return Array.from({ length: count }, (_, index): SearchResult => {
+    const ordinal: string = `${index + 1}`.padStart(2, '0');
+
+    return {
+      entityId: index + 1,
+      entityName: `Find ${ordinal}`,
+      entityAccountNo: `${index + 1}`.padStart(9, '0'),
+      entityType: 'CLIENT',
+      parentName: OFFICE_NAME,
+      entityStatus: { id: 300, code: 'clientStatusType.active', value: SERVER_STATUS_LABEL },
+    };
+  });
+}
 
 /**
  * Installs the production mapping of a Fineract failure onto the test transport, so a rejection
@@ -905,25 +931,68 @@ describe('ClientListComponent', () => {
     expect(component.loading()).toBe(false);
   });
 
-  it('offers no pager for a single page, nor over a find’s answer', () => {
+  it('pages a find’s answer client-side, fifteen rows at a time and with no request', () => {
     mount();
     initialRead.flush(FIRST_PAGE);
 
-    // Three rows at fifteen per page is one page — the state the design's five-client capture paints,
-    // where the card shows no pager at all.
-    expect(component.pageCount()).toBe(1);
-    expect(component.pageNumbers()).toEqual([1]);
-
-    component.toolbar.controls.find.setValue('Ada');
+    // Legacy's find keeps the whole match and pages it out of the rows in hand: `totalClients` is the
+    // answer's length, the first page is `actualClients.slice(0, clientsPerPage)`, and a later page is
+    // the same slice moved along with no request at all (`ClientController.js:15-19,81-83`).
+    component.toolbar.controls.find.setValue('Find');
     component.onFind();
-    httpMock.match(isFindRead)[0].flush([]);
+    httpMock.match(isFindRead)[0].flush(findAnswer(31));
+    fixture.detectChanges();
 
-    // A search answer is not a page of the list and carries no count, so the pager is not offered.
-    expect(component.totalRecords()).toBe(0);
-    expect(component.pageCount()).toBe(1);
+    expect(component.page()).toBe(1);
+    expect(component.totalRecords()).toBe(31);
+    expect(component.pageCount()).toBe(3);
+    expect(component.pageNumbers()).toEqual([1, 2, 3]);
+    expect(component.visibleRows()).toHaveLength(15);
+    expect(component.visibleRows()[0]?.name).toBe('Find 01');
+    expect(pageLinks().map((link) => link.textContent?.trim())).toEqual(['1', '2', '3']);
+
+    const click = new MouseEvent('click', { cancelable: true });
+    component.goToPage(click, 2);
+    fixture.detectChanges();
+
+    // Paging the answer in hand costs no request of either kind, and the anchor's default is still
+    // suppressed so the hash route cannot change.
+    expect(click.defaultPrevented).toBe(true);
+    httpMock.verify();
+    expect(component.page()).toBe(2);
+    expect(component.visibleRows()).toHaveLength(15);
+    expect(component.visibleRows()[0]?.name).toBe('Find 16');
+
+    component.goToPage(click, 3);
+    expect(component.visibleRows()).toHaveLength(1);
+    expect(component.visibleRows()[0]?.name).toBe('Find 31');
+
+    // The display filter narrows the answer under the pager: the page in view is clamped to the last
+    // page that still holds a match, so the table is never empty while the answer has one.
+    component.toolbar.controls.filter.setValue('Find 31');
+    fixture.detectChanges();
+
+    expect(component.visibleRows()).toHaveLength(1);
+    expect(component.visibleRows()[0]?.name).toBe('Find 31');
+
+    // A page read ends the client-side paging: the rows come from the server again, exactly as
+    // `getResultsPage` asks it once the find field is empty (`ClientController.js:15-27,53-55`).
+    component.toolbar.controls.find.setValue('');
+    component.toolbar.controls.filter.setValue('');
+    component.onFind();
+    const reread = httpMock.match(isClientListRead);
+
+    expect(reread).toHaveLength(1);
+    expect(reread[0].request.params.get('offset')).toBe(FIRST_PAGE_OFFSET);
+    reread[0].flush(LARGE_MATCH_FIRST_PAGE);
+    fixture.detectChanges();
+
+    expect(component.totalRecords()).toBe(31);
+    expect(component.page()).toBe(1);
+    expect(component.visibleRows()).toHaveLength(1);
   });
 
-  it('renders one page link per page and marks the page in view', () => {
+  it('renders one page link per page and marks the page in view active, as legacy does', () => {
     mount();
     initialRead.flush(LARGE_MATCH_FIRST_PAGE);
     fixture.detectChanges();
@@ -934,9 +1003,16 @@ describe('ClientListComponent', () => {
     const firstPageLinks = pageLinks();
 
     expect(firstPageLinks.map((link) => link.textContent?.trim())).toEqual(['1', '2', '3']);
-    expect(firstPageLinks[0].getAttribute('aria-current')).toBe('page');
+    // `.active` on the `li` is the only state the pager carries, and the wrapper is no landmark:
+    // legacy's control renders a bare `<a href="">` inside a plain block, and AAP 0.10.5 registers
+    // no ARIA addition on top of it (Rule 1 clause 3).
     expect(firstPageLinks[0].closest('li')?.classList.contains('active')).toBe(true);
-    expect(firstPageLinks[1].getAttribute('aria-current')).toBeNull();
+    expect(host().querySelector('nav')).toBeNull();
+    expect(firstPageLinks.map((link) => link.getAttribute('aria-current'))).toEqual([
+      null,
+      null,
+      null,
+    ]);
 
     component.goToPage(new MouseEvent('click', { cancelable: true }), 2);
     httpMock.match(isClientListRead)[0].flush(LARGE_MATCH_SECOND_PAGE);
@@ -944,8 +1020,13 @@ describe('ClientListComponent', () => {
 
     const secondPageLinks = pageLinks();
 
-    expect(secondPageLinks[1].getAttribute('aria-current')).toBe('page');
-    expect(secondPageLinks[0].getAttribute('aria-current')).toBeNull();
+    expect(secondPageLinks[1].closest('li')?.classList.contains('active')).toBe(true);
+    expect(secondPageLinks[0].closest('li')?.classList.contains('active')).toBe(false);
+    expect(secondPageLinks.map((link) => link.getAttribute('aria-current'))).toEqual([
+      null,
+      null,
+      null,
+    ]);
   });
 
   it('paints no pager for a single page', () => {

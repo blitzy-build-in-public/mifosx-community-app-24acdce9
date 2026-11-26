@@ -89,7 +89,17 @@
                     <div class="row">
                       <div class="col-md-offset-5 col-md-7">
                         <a id="cancel" class="btn btn-default" [routerLink]="['/viewclient', clientId()]">{{ cancelKey | translate }}</a>
-                        <button id="save" type="submit" class="btn btn-primary" [disabled]="guard.busy()">
+                        <!--
+                          The submit is gated on the command's own code, reproducing the
+                          `has-permission` attribute legacy binds to its own submit button, which
+                          names `taskPermissionName` there (`app/views/clients/clientactions.html`).
+                          The code is the one the route declared for this URL and the one the record
+                          gated the entry that opened it on, all read from
+                          `CLIENT_ACTION_PERMISSIONS` (AAP 0.1.1). Only the button carries the gate:
+                          legacy renders the fields and the cancel link for every user who reaches
+                          the form, and this screen reproduces that (Rule 1 clause 3).
+                        -->
+                        <button id="save" type="submit" class="btn btn-primary" [disabled]="guard.busy()" [hasPermission]="actionPermission()">
                           {{ submitKey() | translate }}
                         </button>
                       </div>
@@ -124,7 +134,7 @@
                     <div class="row">
                       <div class="col-md-offset-5 col-md-7">
                         <a id="cancel" class="btn btn-default" [routerLink]="['/viewclient', clientId()]">{{ cancelKey | translate }}</a>
-                        <button id="save" type="submit" class="btn btn-primary" [disabled]="guard.busy()">
+                        <button id="save" type="submit" class="btn btn-primary" [disabled]="guard.busy()" [hasPermission]="actionPermission()">
                           {{ submitKey() | translate }}
                         </button>
                       </div>
@@ -159,7 +169,7 @@
                     <div class="row">
                       <div class="col-md-offset-5 col-md-7">
                         <a id="cancel" class="btn btn-default" [routerLink]="['/viewclient', clientId()]">{{ cancelKey | translate }}</a>
-                        <button id="save" type="submit" class="btn btn-primary" [disabled]="guard.busy()">
+                        <button id="save" type="submit" class="btn btn-primary" [disabled]="guard.busy()" [hasPermission]="actionPermission()">
                           {{ submitKey() | translate }}
                         </button>
                       </div>
@@ -194,7 +204,7 @@
                     <div class="row">
                       <div class="col-md-offset-5 col-md-7">
                         <a id="cancel" class="btn btn-default" [routerLink]="['/viewclient', clientId()]">{{ cancelKey | translate }}</a>
-                        <button id="save" type="submit" class="btn btn-primary" [disabled]="guard.busy()">
+                        <button id="save" type="submit" class="btn btn-primary" [disabled]="guard.busy()" [hasPermission]="actionPermission()">
                           {{ submitKey() | translate }}
                         </button>
                       </div>
@@ -223,7 +233,7 @@
                     <div class="row">
                       <div class="col-md-offset-5 col-md-7">
                         <a id="cancel" class="btn btn-default" [routerLink]="['/viewclient', clientId()]">{{ cancelKey | translate }}</a>
-                        <button id="save" type="submit" class="btn btn-primary" [disabled]="guard.busy()">
+                        <button id="save" type="submit" class="btn btn-primary" [disabled]="guard.busy()" [hasPermission]="actionPermission()">
                           {{ submitKey() | translate }}
                         </button>
                       </div>

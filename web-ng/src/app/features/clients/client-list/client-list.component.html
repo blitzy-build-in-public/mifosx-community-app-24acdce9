@@ -233,38 +233,37 @@
 
           <!--
             The pager: the legacy client list's own fifteen rows per page, driven through
-            `on-page-change="getResultsPage(newPageNumber)"` (`app/views/clients/clients.html:79-82`),
-            which is why the request carries `offset: (page - 1) * limit` and
-            `totalFilteredRecords` is what the control counts. `.pagination` supplies the styling
-            (AAP 0.5.4). It is painted only when the match spans more than one page — legacy's
-            `dir-pagination-controls` auto-hides to one page, and the design's capture of five
-            clients consequently paints no pager at all — so a single-page result keeps the card
-            exactly as the design shows it.
+            `on-page-change="getResultsPage(newPageNumber)"` (`app/views/clients/clients.html:79-82`).
+            Over a page the server read, the request carries `offset: (page - 1) * limit` and
+            `totalFilteredRecords` is what the control counts; over a find, the answer is already in
+            hand and the control pages it client-side, exactly as legacy slices `actualClients` with
+            no request (`app/scripts/controllers/client/ClientController.js:15-19,66-85`).
+            `.pagination` supplies the styling (AAP 0.5.4). It is painted only when the match spans
+            more than one page — legacy's `dir-pagination-controls` auto-hides to one page, and the
+            design's capture of five clients consequently paints no pager at all — so a single-page
+            result keeps the card exactly as the design shows it.
           -->
           @if (pageCount() > 1) {
-            <!-- The landmark's name is English and invisible: no shipped bundle carries a key for it,
-                 and `aria-label` is the only way to distinguish this navigation from the breadcrumb's
-                 (the same wording decision `client-view.component.html` records). -->
-            <nav class="text-center" aria-label="Pagination">
+            <!-- The wrapper is the plain, centred block legacy's `dir-pagination-controls`
+                 renders, carrying no landmark, no `aria-label` and no `aria-current`: AAP 0.10.5
+                 registers no accessibility difference from legacy here, and Rule 1 clause 3
+                 forbids an unregistered one. `.active` on the `li` is the only state the control
+                 carries. -->
+            <div class="text-center">
               <ul class="pagination">
                 @for (pageNumber of pageNumbers(); track pageNumber) {
                   <li [class.active]="pageNumber === page()">
                     <!--
-                      `href` exists so the control is a focusable, Enter-activatable link rather than
-                      a click-only div, and `goToPage` always prevents the default: paging is a read,
-                      never a navigation, so the hash route cannot change. `aria-current` marks the
-                      page being shown, and the anchor's own text — the page number — is its
-                      accessible name.
+                      `href=""` is legacy's own — its pager template renders `<a href=""
+                      ng-click="setCurrent(pageNumber)">` — and `goToPage` always prevents the
+                      default: paging is a read, never a navigation, so the hash route cannot
+                      change.
                     -->
-                    <a
-                      href=""
-                      [attr.aria-current]="pageNumber === page() ? 'page' : null"
-                      (click)="goToPage($event, pageNumber)"
-                    >{{ pageNumber }}</a>
+                    <a href="" (click)="goToPage($event, pageNumber)">{{ pageNumber }}</a>
                   </li>
                 }
               </ul>
-            </nav>
+            </div>
           }
         </div>
       </div>

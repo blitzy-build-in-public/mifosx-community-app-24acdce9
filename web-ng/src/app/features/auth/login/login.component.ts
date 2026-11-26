@@ -11,7 +11,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 import { AuthService } from '../../../core/auth/auth.service';
-import { ApiError } from '../../../core/http/api-error';
+import { ApiError, screenFailure } from '../../../core/http/api-error';
 import { bindDocumentLanguage } from '../../../core/i18n/document-language';
 import { AVAILABLE_LANGS, FALLBACK_LANG } from '../../../core/i18n/translate.config';
 import { createSubmitGuard } from '../../../shared/submit-guard.util';
@@ -51,7 +51,11 @@ export class LoginComponent {
   /** Duplicate-submission protection: the template disables the button on `busy()` (AAP 0.14.1). */
   readonly guard = createSubmitGuard();
 
-  /** The error region: Fineract's message verbatim, or a generic one, and `null` while idle. */
+  /**
+   * The error region: Fineract's message verbatim for the refusal it answered, the generic legacy
+   * sentence for a failure that never reached the server, and `null` while idle or when the
+   * interceptor's single notification is that failure's one surface.
+   */
   readonly error = signal<string | null>(null);
 
   /**
@@ -91,7 +95,9 @@ export class LoginComponent {
 
   /**
    * Authenticates and continues to the interrupted route or `#/clients`; an invalid form returns
-   * before any request, and a failure renders the server's message while only the password clears.
+   * before any request, and a failed attempt paints what {@link describe} answers — Fineract's own
+   * message for the refusal it sent, nothing when the interceptor's notification is already that
+   * failure's one surface — while only the password clears.
    */
   async submit(): Promise<void> {
     this.form.markAllAsTouched();
@@ -212,10 +218,40 @@ export class LoginComponent {
     this.languageFailure = true;
   }
 
-  /** A failure's text: Fineract's own message when the interceptor mapped it, else the generic one. */
-  private describe(failure: unknown): string {
-    return failure instanceof ApiError
-      ? failure.message
-      : this.translate.instant(GENERIC_FAILURE_KEY);
+  /**
+   * The text the error region paints for a failed sign-in attempt, or `null` when that failure has
+   * already had its one surface.
+   *
+   * Three cases, and the first that matches answers:
+   *
+   * 1. A 4xx is Fineract's own answer to the submitted credentials — the 401 a refused login arrives
+   *    as — and its `defaultUserMessage` is painted verbatim: no prefix, no translation, no
+   *    capitalisation (AAP 0.7.4 "a 401 shows Fineract's message in the form area"; workflow W7).
+   *    `screenFailure` in `core/http/api-error.ts` is the shared rule for that case.
+   * 2. A status of `0` or one at or above `500` has had exactly one notification raised for it by
+   *    `core/http/fineract.interceptor.ts`, so this screen paints nothing and that notification
+   *    stays the failure's only report (AAP 0.7.4; AAP 0.14.2 "every HTTP call path ends in either a
+   *    rendered message or a notification").
+   * 3. A rejection that is not an HTTP answer never reaches the interceptor's notification, so the
+   *    region is filled rather than left empty: the `ApiError` `AuthService.login` raises with status
+   *    `200` for a response that cannot describe a session carries the sentence that says so, and any
+   *    other fault becomes the legacy generic sentence, so the screen shows neither a raw key nor an
+   *    empty banner (AAP 0.14.2 "no `catch` swallows an error silently").
+   *
+   * @param failure Whatever the failed sign-in attempt rejected with.
+   * @returns The text to render, or `null` when the interceptor's notification is the only report.
+   */
+  private describe(failure: unknown): string | null {
+    const refusal = screenFailure(failure);
+
+    if (refusal !== null) {
+      return refusal.message;
+    }
+
+    if (failure instanceof ApiError) {
+      return failure.status === 0 || failure.status >= 500 ? null : failure.message;
+    }
+
+    return this.translate.instant(GENERIC_FAILURE_KEY);
   }
 }

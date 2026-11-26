@@ -23,7 +23,7 @@ import { catchError, throwError } from 'rxjs';
 import { SessionService } from '../auth/session.service';
 import { AppConfigService } from '../config/app-config.service';
 import { NotificationService } from '../notifications/notification.service';
-import { toApiError, toDisplayableFailure } from './api-error';
+import { navigationFailure, toApiError } from './api-error';
 
 /** Tenant header every Fineract request carries; the value is the resolved configuration's `tenantId`. */
 const TENANT_HEADER = 'Fineract-Platform-TenantId';
@@ -78,11 +78,14 @@ export const fineractInterceptor: HttpInterceptorFn = (req, next) => {
           if (!router.url.startsWith('/login')) {
             // Settled rather than dropped: a navigation the router refuses would otherwise be an
             // unhandled rejection, and the user is told the return to the login screen did not
-            // happen instead of being left on a screen the ended session can no longer serve.
+            // happen instead of being left on a screen the ended session can no longer serve. The
+            // text is the navigation sentence naming that screen, because a refused navigation
+            // carries no server text, and the router's own wording names nothing an operator acts
+            // on (`api-error.ts` `navigationFailure`).
             void router
               .navigate(['/login'], { queryParams: { returnUrl: router.url } })
               .catch((cause: unknown) => {
-                notifications.show('error', toDisplayableFailure(cause).message);
+                notifications.show('error', navigationFailure(cause, 'login screen').message);
               });
           }
         }

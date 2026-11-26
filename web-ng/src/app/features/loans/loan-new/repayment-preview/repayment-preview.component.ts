@@ -3,15 +3,19 @@ import { DatePipe, DecimalPipe } from '@angular/common';
 import { TranslatePipe } from '@ngx-translate/core';
 
 import { EmptyStateComponent } from '../../../../shared/empty-state/empty-state.component';
-import {
-  DISPLAY_DATE_FORMAT,
-  fromFineractDate,
-  type FineractDate,
-} from '../../../../shared/date-format.util';
-// `FineractDate` is read from the module that declares it, not from `loan.models`: the family's
-// model module types `RepaymentPeriod.fromDate` and `dueDate` with the union but does not re-export
-// it, and a second declaration of the same union is what the model module exists to prevent.
+import { DISPLAY_DATE_FORMAT, fromFineractDate } from '../../../../shared/date-format.util';
 import type { RepaymentPeriod, RepaymentSchedule } from '../../loan.models';
+
+/**
+ * A payment period as this table renders it: every member the payload's period carries, with the
+ * two date members parsed once, in the `rows` projection below, into the local-midnight `Date` the
+ * template formats. Derived from `RepaymentPeriod` rather than retyped, so the columns cannot drift
+ * from the wire contract (AAP 0.7.2; Rule 1 clause 2).
+ */
+type RepaymentPreviewRow = Omit<RepaymentPeriod, 'fromDate' | 'dueDate'> & {
+  readonly fromDate: Date | null;
+  readonly dueDate: Date | null;
+};
 
 /**
  * Repayment schedule preview of the individual-loan application: the periods
@@ -31,10 +35,11 @@ import type { RepaymentPeriod, RepaymentSchedule } from '../../loan.models';
  * Every figure and every date is the server's own value (AAP 0.4.4 decision 6, behavioural
  * inheritance; Rule 1 clause 3). The array is read unchanged — no re-sorting, no reversal, no
  * filtering, no derived column and no computed total — because a client-side adjustment would
- * describe a schedule Fineract did not calculate. The one transformation here is `toDate`, which
- * parses a response date through the shared util so no timezone shift moves a due date onto
- * another day; display stays at `DISPLAY_DATE_FORMAT` (`dd MMMM yyyy`), the pattern the legacy
- * screens render in every language (AAP 0.7.2 "Date handling").
+ * describe a schedule Fineract did not calculate. The one transformation here is the `rows`
+ * projection, which parses each period's two response dates through the shared util once per
+ * schedule change, so no timezone shift moves a due date onto another day and no wire date is
+ * re-read on a change detection pass; display stays at `DISPLAY_DATE_FORMAT` (`dd MMMM yyyy`), the
+ * pattern the legacy screens render in every language (AAP 0.7.2 "Date handling").
  *
  * The look is Bootstrap 3's table plus the legacy partials compiled into
  * `web-ng/src/styles.scss`, so this component declares no stylesheet, no inline style and no
@@ -64,38 +69,31 @@ export class RepaymentPreviewComponent {
 
   /**
    * The one pattern the table's date cells display, bound by the template as
-   * `{{ toDate(period.dueDate) | date: displayFormat }}` so a due date reads `21 November 2026`
+   * `{{ row.dueDate | date: displayFormat }}` so a due date reads `21 November 2026`
    * rather than a locale-defaulted `DatePipe` format (AAP 0.7.2 "Date handling").
    */
   protected readonly displayFormat: string = DISPLAY_DATE_FORMAT;
 
   /**
-   * The server's periods, exactly as received: same members, same values, same order. The array
-   * order is meaningful — it is the schedule's sequence — so nothing is sorted, filtered or
-   * mapped (Rule 1 clause 3). An absent schedule yields an empty list rather than `undefined`, so
-   * the template always iterates something.
+   * The table's rows: the server's periods in the order the server returned them, each carrying the
+   * period's own figures unchanged and both of its dates parsed here, once. The array order is
+   * meaningful — it is the schedule's sequence — so nothing is sorted, filtered or recomputed
+   * (Rule 1 clause 3), and an absent schedule yields no rows rather than `undefined`, so the
+   * template always iterates something. Parsing inside the projection is what keeps the template
+   * from re-reading a wire date on every change detection pass.
    */
-  protected readonly periods = computed<readonly RepaymentPeriod[]>(
-    () => this.schedule()?.periods ?? [],
+  protected readonly rows = computed<readonly RepaymentPreviewRow[]>(() =>
+    (this.schedule()?.periods ?? []).map((period) => ({
+      ...period,
+      fromDate: fromFineractDate(period.fromDate),
+      dueDate: fromFineractDate(period.dueDate),
+    })),
   );
 
   /**
    * `true` while no schedule has been calculated and after one that carried no periods, which is
-   * what switches the template from the table to the shared empty state. Derived rather than
-   * stored, so the two can never disagree.
+   * what switches the template from the table to the shared empty state. Derived from `rows()`
+   * rather than stored, so the two can never disagree.
    */
-  protected readonly isEmpty = computed<boolean>(() => this.periods().length === 0);
-
-  /**
-   * Reads a period's `fromDate` or `dueDate` into the local-midnight `Date` the template formats.
-   *
-   * It exists as a member because a template expression reaches this component's members but not an
-   * imported module function. The conversion itself is the shared `fromFineractDate` — the same
-   * parser every screen uses — which is given the `FineractDate` shape `RepaymentPeriod` declares
-   * and returns `null` for a value that names no calendar day; the null guard covers a payload that
-   * omits the field at run time, and it is a guard, not a substituted date.
-   */
-  protected toDate(value: FineractDate | null | undefined): Date | null {
-    return value == null ? null : fromFineractDate(value);
-  }
+  protected readonly isEmpty = computed<boolean>(() => this.rows().length === 0);
 }

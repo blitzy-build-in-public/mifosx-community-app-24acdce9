@@ -1544,7 +1544,7 @@ export class LoansPage {
     if ((await this.page.locator(rootSelector).count()) > 0) {
       return;
     }
-    const trigger = view.locator('.nav-tabs a[role="tab"]').filter({ hasText: tab }).first();
+    const trigger = view.locator('.nav-tabs li > a').filter({ hasText: tab }).first();
     if ((await trigger.count()) === 0) {
       return;
     }

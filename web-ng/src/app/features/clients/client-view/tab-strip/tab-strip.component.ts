@@ -32,25 +32,26 @@ export class TabStripComponent {
   /** Emits the chosen tab's id, and only when the chosen tab is not already active. */
   readonly tabChange = output<string>();
 
-  /** Reports the tab the user picked, unless it is already the active one. */
-  select(tab: TabDescriptor): void {
+  /**
+   * Reports the tab the user picked, unless it is already the active one.
+   *
+   * One path serves the pointer and the keyboard: the anchor is legacy's own link — uib-tab 1.3.2
+   * renders `<a href ng-click="select($event)">` — so a real Enter activates the focused tab here,
+   * exactly as it does in legacy. The click's default is cancelled first and unconditionally, the
+   * already-active tab included, because that valueless `href` would otherwise navigate to the
+   * current URL and so change the hash route; the pager's `goToPage` cancels its own for the same
+   * reason.
+   *
+   * @param event the anchor's click event, whose default navigation is suppressed.
+   * @param tab the tab the user picked.
+   */
+  select(event: Event, tab: TabDescriptor): void {
+    event.preventDefault();
+
     if (tab.id === this.activeId()) {
       return;
     }
-    this.tabChange.emit(tab.id);
-  }
 
-  /**
-   * Chooses the tab from the keyboard: both Enter and Space activate the tab the user has focused,
-   * as the legacy record's Bootstrap tabs did, and delegate to `select` so the keyboard and the
-   * pointer take the same path. The key's own default is suppressed because Space would otherwise
-   * scroll the page, and nothing else needs it: the anchor carries no link target of its own.
-   *
-   * The event is typed as the DOM `Event` Angular reports for a `keydown.<key>` binding; cancelling
-   * it is the only thing this method needs from it.
-   */
-  activateFromKeyboard(tab: TabDescriptor, event: Event): void {
-    event.preventDefault();
-    this.select(tab);
+    this.tabChange.emit(tab.id);
   }
 }

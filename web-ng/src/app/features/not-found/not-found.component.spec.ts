@@ -137,7 +137,7 @@ describe('NotFoundComponent', () => {
 
   it('never shows a raw translation key: an absent key renders as humanised words', () => {
     const body = panelBody();
-    const heading = body.querySelector<HTMLElement>('h4.panel-title');
+    const heading = body.querySelector<HTMLElement>('h1.panel-title');
     const paragraphs = Array.from(body.querySelectorAll<HTMLElement>('p'));
     const text = body.textContent ?? '';
 

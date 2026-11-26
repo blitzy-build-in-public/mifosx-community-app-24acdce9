@@ -15,10 +15,24 @@
  * **Why a format check rather than an encoding.** Percent-encoding the segment would change the URL
  * a valid identifier produces, and every valid identifier already has the one shape Fineract defines
  * for it. So a value that holds that shape is written exactly as the legacy application wrote it, and
- * a value that does not is refused before any request is composed. The refusal is a plain `Error`
- * from here; the caller raises it inside an RxJS `defer` so it reaches the caller of the service as an
- * observable error rather than an exception thrown out of a `switchMap` projection, which is why
- * these functions are synchronous and allocation-free.
+ * a value that does not is refused before any request is composed.
+ *
+ * **Where this departs from legacy, and why.** Rule 1 clause 3 asks that a deliberate difference from
+ * the legacy application be registered with its reason, and this is one: the legacy application wrote
+ * whichever segment it held into its URL and let Fineract answer, while this application refuses a
+ * segment of the wrong shape and sends nothing at all. The difference is deliberate and
+ * security-driven — refusing the segment is what stops a crafted `:id` from moving the request to
+ * another path on the same host (CWE-22) — rather than an improvement of legacy's behaviour, and it
+ * is registered here because the guard is where it happens.
+ *
+ * **Two channels out of a refusal.** A refusal is a plain `Error` thrown from here, and the caller
+ * raises it inside an RxJS `defer` so it reaches the caller of the service as an observable error
+ * rather than an exception thrown out of a `switchMap` projection, which is why these functions are
+ * synchronous and allocation-free. The `message` is one fixed sentence naming what the user was
+ * doing, because a screen renders it as the failure's own message: it holds no rejected value, no
+ * call name and no framework vocabulary. The diagnostic — which call was given which value, and why
+ * no segment of that shape may be written — travels in the error's `cause`, which the mapper in
+ * `core/http/api-error.ts` never reads, so a developer keeps the detail and a user never sees it.
  */
 
 /**
@@ -42,30 +56,47 @@ const RESOURCE_ID_PATTERN = /^\d+$/;
 const DATATABLE_NAME_PATTERN = /^[A-Za-z0-9_]+$/;
 
 /**
+ * The sentence a refusal is reported with, one per guarded segment, each naming what the user was
+ * doing and nothing else — no rejected value, no call name, no framework concept — because a screen
+ * renders it as the failure's own message. Both are deliberately not translated for the reason
+ * `core/http/api-error.ts` keeps `UNMAPPED_FAILURE` untranslated: no language bundle carries wording
+ * for a fault the server never reported. The diagnostic that says which call was given which value
+ * travels in each refusal's `cause` instead.
+ */
+const RESOURCE_ID_REFUSAL = 'The record could not be opened because its address is not valid.';
+
+const DATATABLE_NAME_REFUSAL =
+  'The account action could not be checked because the server named a table that is not valid.';
+
+/**
  * The path segment a Fineract resource identifier is written as, or a refusal to build one.
  *
  * A service calls this where it composes an identifier into its URL — `clients/${…}`, `loans/${…}`,
  * `savingsaccounts/${…}`, `datatables/{table}/${…}` — and passes a `source` naming the call, so the
- * refusal a caller sees says which request it stopped. A numeric id and a route parameter that holds
- * digits both produce the digits alone, which is byte-identical to the segment the legacy application
- * sent (Rule 1 clause 2).
+ * diagnostic a refusal carries says which request it stopped. A numeric id and a route parameter that
+ * holds digits both produce the digits alone, which is byte-identical to the segment the legacy
+ * application sent (Rule 1 clause 2).
  *
  * @param id the identifier as the caller holds it — a numeric id from a payload, or a `:id` route
  * parameter, which the router hands over decoded.
- * @param source the call composing the segment, e.g. `'ClientService.get'`, quoted back in the error.
+ * @param source the call composing the segment, e.g. `'ClientService.get'`, named in the refusal's
+ * `cause`.
  * @returns the identifier's own text, which is its path segment unchanged.
  * @throws Error when the value is not one or more ASCII digits. Such a value could move the request
- * to another path on the same host, so no request is issued for it.
+ * to another path on the same host, so no request is issued for it. Its `message` is the fixed
+ * sentence `RESOURCE_ID_REFUSAL`, which is what a screen renders; the rejected value and the `source`
+ * are in its `cause`, where a developer can read them and no user does.
  */
 export function resourceId(id: number | string, source: string): string {
   const segment = String(id);
 
   if (!RESOURCE_ID_PATTERN.test(segment)) {
-    throw new Error(
-      `PathSegment.resourceId: ${source} was given the identifier '${segment}', which is not a Fineract ` +
+    throw new Error(RESOURCE_ID_REFUSAL, {
+      cause:
+        `PathSegment.resourceId: ${source} was given the identifier '${segment}', which is not a Fineract ` +
         'resource identifier. Fineract identifiers are one or more ASCII digits, and a path segment of any ' +
         'other shape can move the request to another path on the same host, so no request has been issued.',
-    );
+    });
   }
 
   return segment;
@@ -81,19 +112,23 @@ export function resourceId(id: number | string, source: string): string {
  * composed.
  *
  * @param name the `datatableName` a check row carries.
- * @param source the call composing the segment, e.g. `'DataTableGateService.checkClientActionGate'`.
+ * @param source the call composing the segment, e.g. `'DataTableGateService.checkClientActionGate'`,
+ * named in the refusal's `cause`.
  * @returns the table name, which is its path segment unchanged.
  * @throws Error when the name is not one or more ASCII letters, digits or underscores. Such a value
- * could move the read to another path on the same host, so no request is issued for it.
+ * could move the read to another path on the same host, so no request is issued for it. Its `message`
+ * is the fixed sentence `DATATABLE_NAME_REFUSAL`, which is what a screen renders; the rejected name
+ * and the `source` are in its `cause`, where a developer can read them and no user does.
  */
 export function datatableName(name: string, source: string): string {
   if (!DATATABLE_NAME_PATTERN.test(name)) {
-    throw new Error(
-      `PathSegment.datatableName: ${source} was given the datatable name '${name}', which is not a ` +
+    throw new Error(DATATABLE_NAME_REFUSAL, {
+      cause:
+        `PathSegment.datatableName: ${source} was given the datatable name '${name}', which is not a ` +
         'Fineract table name. Registered table names are one or more ASCII letters, digits or underscores, ' +
         'and a path segment of any other shape can move the request to another path on the same host, so no ' +
         'request has been issued.',
-    );
+    });
   }
 
   return name;

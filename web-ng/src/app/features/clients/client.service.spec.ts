@@ -1103,19 +1103,27 @@ describe('ClientService', () => {
     // (`firstValueFrom` inside a `try`, or a `catchError` beside it) — `defer` is what makes the
     // invalid id an error value rather than an exception thrown out of a `switchMap` projection.
     const crafted = '../../../users';
-    let message = '';
+    const refusals: Error[] = [];
     let emissions = 0;
 
     service.get(crafted).subscribe({
       next: () => (emissions += 1),
       error: (failure: unknown) => {
-        message = failure instanceof Error ? failure.message : String(failure);
+        if (failure instanceof Error) {
+          refusals.push(failure);
+        }
       },
     });
 
     expect(emissions).toBe(0);
-    expect(message).toContain(`'${crafted}'`);
-    expect(message).toContain('ClientService.get');
+    expect(refusals).toHaveLength(1);
+    // The message is the guard's fixed sentence, which names neither the rejected value nor the call
+    // that composed the segment: it is the text a screen renders, so neither diagnostic may be in it.
+    // Both are readable in the error's `cause`, which the displayable-failure mapper never reads.
+    expect(refusals[0].message).not.toContain(crafted);
+    expect(refusals[0].message).not.toContain('ClientService.get');
+    expect(String(refusals[0].cause)).toContain(`'${crafted}'`);
+    expect(String(refusals[0].cause)).toContain('ClientService.get');
     // Nothing was sent: no read of the family this call owns, and no request of any other shape. The
     // teardown's `verify()` states the same expectation for the whole case.
     httpMock.expectNone(isRequest('GET', clientUrl('clients', crafted)));

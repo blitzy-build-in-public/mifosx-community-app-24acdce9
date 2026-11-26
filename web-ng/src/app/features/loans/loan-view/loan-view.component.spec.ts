@@ -227,6 +227,10 @@ const TRANSACTIONS: readonly LoanTransaction[] = [
  * `GET /loans/{id}?associations=all` (AAP 0.7.3 row "W6 repayment"): one charge still outstanding,
  * with a specified due date, and one already paid that falls due on disbursement and so carries no
  * date at all.
+ *
+ * The settle flags are the fork's own. `chargePayable` is false on both because neither charge is
+ * payable through an account transfer: the fork's `isChargePayable()` folds that payment mode in
+ * beside the paid and waived flags, which is why an outstanding charge is still not a payable one.
  */
 const LOAN_CHARGES: readonly LoanCharge[] = [
   {
@@ -238,6 +242,9 @@ const LOAN_CHARGES: readonly LoanCharge[] = [
     amountPaid: 0,
     amountWaived: 0,
     amountOutstanding: 25,
+    paid: false,
+    waived: false,
+    chargePayable: false,
     chargeTimeType: { id: 2, value: 'Specified due date' },
     chargeCalculationType: { id: 1, value: 'Flat' },
     dueDate: '2026-12-24',
@@ -251,6 +258,9 @@ const LOAN_CHARGES: readonly LoanCharge[] = [
     amountPaid: 40,
     amountWaived: 0,
     amountOutstanding: 0,
+    paid: true,
+    waived: false,
+    chargePayable: false,
     chargeTimeType: { id: 1, value: 'Disbursement' },
     chargeCalculationType: { id: 1, value: 'Flat' },
   },
@@ -297,6 +307,9 @@ const SECOND_LOAN_CHARGE: LoanCharge = {
   amountPaid: 0,
   amountWaived: 0,
   amountOutstanding: 60,
+  paid: false,
+  waived: false,
+  chargePayable: false,
   chargeTimeType: { id: 2, value: 'Specified due date' },
   chargeCalculationType: { id: 1, value: 'Flat' },
   dueDate: '2027-01-24',
@@ -695,6 +708,10 @@ describe('LoanViewComponent', () => {
     expect(charges).not.toBeNull();
     expect((charges.componentInstance as LoanChargesComponent).charges()).toEqual(LOAN_CHARGES);
     expect((charges.componentInstance as LoanChargesComponent).loanId()).toBe(LOAN.id);
+    // The child is handed the loan's own lifecycle state beside its rows, because the section's two
+    // actions are offered only on an `Active` loan, exactly as the legacy record decides them
+    // (`ViewLoanDetailsController.js:168-175`; Rule 1 clause 3).
+    expect((charges.componentInstance as LoanChargesComponent).loanStatus()).toEqual(LOAN.status);
     expect(fixture.debugElement.query(By.directive(LoanTransactionsComponent))).toBeNull();
     // Switching tabs reads nothing: the one answer already carried every section.
     expect(readLoan).toHaveBeenCalledTimes(1);
@@ -876,7 +893,8 @@ describe('LoanViewComponent', () => {
     fixture.detectChanges();
     expect(chargeActionLinks().every((link) => link.style.display === 'none')).toBe(true);
 
-    // …while the code the route declares reveals them all.
+    // …while the code the route declares opens the directive's own gate on all four: whether a row
+    // then offers its action is the section's per-row eligibility rule, which its own spec pins.
     permissions.grant(['UPDATE_LOAN']);
     fixture.detectChanges();
     expect(chargeActionLinks().every((link) => link.style.display === '')).toBe(true);

@@ -8,19 +8,57 @@ import { DISPLAY_DATE_FORMAT, fromFineractDate } from '../../../../shared/date-f
 import { EmptyStateComponent } from '../../../../shared/empty-state/empty-state.component';
 // The loans feature keeps one model module at its root (`features/loans/loan.models.ts`), which is
 // two levels above this section's folder.
-import type { LoanCharge } from '../../loan.models';
+import type { LoanCharge, LoanStatus } from '../../loan.models';
+
+/**
+ * The fork's `LoanStatus.ACTIVE` value (`LoanStatus.java`, id 300): the one loan state in which the
+ * record offers either charge action.
+ *
+ * Legacy tests `loan.status.value != 'Active'` before it shows a charge's actions, so a charge on a
+ * loan in any other state offers neither of them
+ * (`app/scripts/controllers/loanAccount/ViewLoanDetailsController.js:168-175`).
+ */
+const ACTIVE_LOAN_STATUS_ID = 300;
+
+/**
+ * The fork's `ChargeTimeType.DISBURSEMENT` value (`ChargeTimeType.java`, id 1): a charge that falls
+ * due at disbursement.
+ *
+ * Legacy treats such a charge as settled for the purposes of the waive action — its `actionFlag` is
+ * set by `charge.chargeTimeType.value == 'Disbursement'` — so the record never offers to waive it.
+ * The numeric id decides, exactly as it does in the fork's own `ChargeTimeType.fromInt`, rather than
+ * the display text, which is translated.
+ */
+const DISBURSEMENT_CHARGE_TIME_TYPE_ID = 1;
 
 /**
  * One rendered row of the record's charges table: a loan charge carrying Fineract's own values, with
- * its `dueDate` parsed for display.
+ * its `dueDate` parsed for display and the two eligibility decisions legacy makes per row.
  *
  * Module-local and deliberately not exported, so no other file can come to depend on a
  * transformation that belongs to this component (AAP 0.7.2, AAP 0.14.2). `dueDate` widens to
  * `Date | null` because `fromFineractDate` answers `null` for a value it cannot parse, and for a
  * charge that falls due on disbursement and carries no date at all; the cell then renders empty
  * instead of showing an invalid date.
+ *
+ * `canWaive` and `canPay` are legacy's own per-row rule, reproduced (Rule 1 clause 3; AAP 0.10.5
+ * registers no difference for it): the record's controller sets a charge `actionFlag` when it is paid
+ * or waived, falls due on disbursement, or belongs to a loan that is not `Active`
+ * (`ViewLoanDetailsController.js:168-175`); the template hides the waive link on that flag
+ * (`app/views/loans/viewloanaccountdetails.html:865`) and shows the pay link only for
+ * `charge.chargePayable && status=='Active'` (`:868`). Both are read from the payload's own flags —
+ * the fork's `isChargePayable()` already folds in "account transfer, not paid, not waived" — so no
+ * amount is compared here.
  */
-type ChargeRow = Omit<LoanCharge, 'dueDate'> & { readonly dueDate: Date | null };
+type ChargeRow = Omit<LoanCharge, 'dueDate'> & {
+  readonly dueDate: Date | null;
+
+  /** Whether the row offers the waive action: legacy's `actionFlag`, inverted. */
+  readonly canWaive: boolean;
+
+  /** Whether the row offers the pay action: legacy's `chargePayable && status=='Active'`. */
+  readonly canPay: boolean;
+};
 
 /**
  * Charges section of the individual-loan record (`#/viewloanaccount/:id`): the read-only table of the
@@ -57,14 +95,14 @@ type ChargeRow = Omit<LoanCharge, 'dueDate'> & { readonly dueDate: Date | null }
  * link never leads somewhere the guard then refuses (AAP 0.1.1, "a route guard and a template
  * directive must agree").
  *
- * Legacy does decide per row there, in its controller: it marks a charge `actionFlag` when it is paid
- * or waived, falls due on disbursement, or belongs to a loan that is not `Active`, hides the waive
- * link on that flag, and shows the pay link only for a payable charge on an active loan. That is a
- * rendering rule of the row, so it belongs to this component's template rather than to its class — an
- * eligibility predicate declared here and read by no template would be dead code — and until the
- * template applies it this section shows both links for every charge and leaves the legality of the
- * command to the server. The difference is reported for the plan owner's intentional-difference
- * register rather than hidden by a comparison this class cannot render.
+ * Legacy decides per row there, and this section reproduces that rule rather than leaving a step's
+ * legality to the server alone: the record's controller marks a charge `actionFlag` when it is paid
+ * or waived, falls due on disbursement, or belongs to a loan that is not `Active`
+ * (`ViewLoanDetailsController.js:168-175`), the template hides the waive link on that flag (`:865`),
+ * and it shows the pay link only for a payable charge on an active loan (`:868`). {@link ChargeRow}
+ * carries the two decisions as `canWaive` and `canPay`, worked out once per row by {@link rows}, and
+ * the template hides — never removes — the ineligible link with Bootstrap's global `.hidden` utility,
+ * so this rule and the permission gate stay two independent conditions on the same anchor.
  *
  * The look comes entirely from the global Bootstrap 3 classes of `web-ng/src/styles.scss` — this
  * component declares no stylesheet, no inline style and no colour (Rule 1 clause 6; AAP 0.4.4
@@ -110,6 +148,18 @@ export class LoanChargesComponent {
   readonly actionPermission = input.required<string>();
 
   /**
+   * The loan's own lifecycle status, as the record's `status` member reported it — the state legacy
+   * tests before it offers either charge action, so a charge on a loan that is not `Active` offers
+   * neither (Rule 1 clause 3; `ViewLoanDetailsController.js:168-175`).
+   *
+   * Typed {@link LoanStatus} rather than the raw payload because the row rule reads one thing from
+   * it, the numeric id the fork's `LoanStatus.ACTIVE` names. Defaults to `null`, the state a record
+   * that reported no status leaves: no loan is `Active` then, so no action is offered, which is the
+   * conservative reading legacy takes when its two conditions match neither.
+   */
+  readonly loanStatus = input<LoanStatus | null>(null);
+
+  /**
    * The one date pattern the table displays, which the template passes to `DatePipe` for each parsed
    * row date (AAP 0.7.2 "Date handling"). A plain string rather than a signal: the pattern is fixed
    * for the application's lifetime, so the template reads it directly.
@@ -117,16 +167,27 @@ export class LoanChargesComponent {
   protected readonly displayFormat: string = DISPLAY_DATE_FORMAT;
 
   /**
-   * The rows to render: every charge in the payload's order, with `dueDate` parsed for display and
-   * every other field passed through untouched. Parsing is the only transformation — nothing is
-   * sorted, filtered, summed or recalculated (Rule 1 clause 3).
+   * The rows to render: every charge in the payload's order, with `dueDate` parsed for display, the
+   * two eligibility decisions legacy makes, and every other field passed through untouched. Parsing
+   * and those two decisions are the only transformations — nothing is sorted, filtered, summed or
+   * recalculated (Rule 1 clause 3).
    */
-  protected readonly rows = computed<readonly ChargeRow[]>(() =>
-    this.charges().map((charge) => ({
+  protected readonly rows = computed<readonly ChargeRow[]>(() => {
+    // Legacy's own precondition: a loan that is not `Active` offers neither action, and a loan whose
+    // status the payload omitted is not known to be `Active`.
+    const loanActive = this.loanStatus()?.id === ACTIVE_LOAN_STATUS_ID;
+
+    return this.charges().map((charge) => ({
       ...charge,
       dueDate: fromFineractDate(charge.dueDate),
-    })),
-  );
+      canWaive:
+        loanActive &&
+        !charge.paid &&
+        !charge.waived &&
+        charge.chargeTimeType.id !== DISBURSEMENT_CHARGE_TIME_TYPE_ID,
+      canPay: loanActive && charge.chargePayable,
+    }));
+  });
 
   /**
    * Whether the loan carries no charges — the state in which the template renders the explicit empty

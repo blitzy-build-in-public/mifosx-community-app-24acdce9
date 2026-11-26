@@ -5,8 +5,9 @@
   A white page with NO application chrome: this route is not wrapped by the signed-in shell, so nothing
   from `core/layout` renders here — no navbar, no left rail, no breadcrumb. The application's single
   notification host is `app.component.html`, so this file renders no notification component of its own;
-  a login-time API failure surfaces in the `.alert.alert-danger` region below, which is this screen's
-  only error surface.
+  a failed sign-in surfaces either in the `.alert.alert-danger` region below, which carries the refusal
+  Fineract answered, or in that one notification, which `fineractInterceptor` raises for a 5xx or
+  transport failure — never in both (AAP 0.14.2).
 
   Every visual value comes from the global Bootstrap 3 layer compiled in `web-ng/src/styles.scss`, so
   this file carries no stylesheet, no `style` attribute, no colour and no pixel: `.container`,
@@ -96,7 +97,9 @@
               `translate` pipe, no prefix, no capitalisation and no truncation, so the message the
               user reads is the message the backend returned (AAP 0.7.4; AAP 0.14.1 "errors are
               values"). `role="alert"` announces it without moving focus, and the typed username
-              survives because the component clears only the password.
+              survives because the component clears only the password. A 5xx or transport failure
+              never reaches this region: `fineractInterceptor` has raised that failure's one
+              notification, and a second copy here would report one failure twice (AAP 0.14.2).
             -->
             @if (error(); as message) {
               <div class="alert alert-danger" role="alert">{{ message }}</div>

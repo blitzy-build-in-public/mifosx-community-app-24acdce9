@@ -9,11 +9,13 @@
  * parameter set with exactly the three parameters the service takes, a trimmed query that is never
  * sent empty, a scope validated against the three the control offers with every out-of-scope value
  * answered by `all`, the exact-match flag the URL carries together with legacy's `false` when it
- * carries none, one row per result carrying the server's values with a text-free status indicator,
- * the client and loan records the rows open, the explicit empty state, a 4xx rendered verbatim with
- * the previous rows and the card kept, a parameter change that replaces the results, and a row
- * listed to a user who may not open it, with the link withheld in both families while the result
- * itself stays on screen.
+ * carries none, legacy's own block list — one `.blockquoteresult` per result, carrying the name
+ * link, the account segment and the entity and parent line the family uses, with no table, no card
+ * title and no status indicator anywhere — legacy's 200-record bound and the bundle's notice above
+ * it, the client and loan records the blocks open, the explicit empty state, a 4xx rendered verbatim
+ * with the previous results and the card kept, a parameter change that replaces the results, and a
+ * result listed to a user who may not open it, with the link withheld in both families while the
+ * result itself stays on screen.
  *
  * Providers, and what each one proves. `provideRouter([])` because the rows link through `RouterLink`
  * and the component builds their destinations with `Router`; an empty route table is enough, because
@@ -83,6 +85,33 @@ const IDENTIFIER: SearchResult = {
 const NO_DATA_TEXT = 'Nothing matched from the spec bundle';
 
 /**
+ * The legacy bundle's own truncation message, `label.search.query.matched.results.exceeds.max.length`
+ * (`app/global-translations/locale-en.json:678`), served here so the case below asserts that the
+ * screen renders that key rather than a sentence of its own invention.
+ */
+const TRUNCATED_TEXT = 'This query shows only the first 200 records.';
+
+/**
+ * A search answer carrying `count` client results, each named by its ordinal so a case can see which
+ * results survived legacy's cut: an answer of more than 200 is rendered as its first 201.
+ *
+ * @param count how many results the stubbed service answers with.
+ */
+function clientResults(count: number): SearchResult[] {
+  return Array.from({ length: count }, (_, index): SearchResult => {
+    const ordinal: string = `${index + 1}`;
+
+    return {
+      entityType: 'CLIENT',
+      entityId: index + 1,
+      entityName: `Client ${ordinal}`,
+      entityAccountNo: ordinal.padStart(9, '0'),
+      parentName: 'Head Office',
+    };
+  });
+}
+
+/**
  * The rejections that carry no text for this screen, each for a reason the screen must honour: a 5xx
  * and a transport failure (status `0`) have already raised the interceptor's single notification, and
  * a rejection that is not an `ApiError` never came from Fineract at all — its message is Angular's
@@ -107,16 +136,19 @@ const SILENT_FAILURES: readonly { readonly label: string; readonly failure: () =
     failure: () => 'nothing an Error carries',
   },
 ];
+/**
+ * Only the keys the rendered markup resolves: the empty state's message, the entity and parent
+ * labels of the blocks' second line, and legacy's truncation notice. Nothing else is served, so a
+ * template that reached for another key would render the missing-translation text and the cases
+ * below would see it.
+ */
 const LABELS = {
   'label.nodatafound': NO_DATA_TEXT,
-  'label.heading.search': 'Search',
-  'label.heading.name': 'Name',
-  'label.heading.accnum': 'Account No',
-  'label.heading.clientname': 'Client Name',
-  'label.heading.type': 'Type',
+  'label.heading.entity': 'Entity',
   'label.heading.client': 'Client',
   'label.heading.loan': 'Loan',
-  'label.heading.status': 'Status',
+  'label.heading.office': 'Office',
+  'label.search.query.matched.results.exceeds.max.length': TRUNCATED_TEXT,
 };
 
 describe('SearchResultsComponent', () => {
@@ -129,8 +161,20 @@ describe('SearchResultsComponent', () => {
 
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
 
-  const rows = (): HTMLTableRowElement[] =>
-    Array.from(host().querySelectorAll<HTMLTableRowElement>('#search-results tbody tr'));
+  /**
+   * The rendered results: legacy's own blocks, one per result, inside the container that marks the
+   * answer (`app/views/search/glresults.html:9-66`).
+   */
+  const blocks = (): HTMLDivElement[] =>
+    Array.from(host().querySelectorAll<HTMLDivElement>('#search-results .blockquoteresult'));
+
+  /**
+   * A block's rendered text with every run of whitespace — the `&nbsp;` entities among the separators
+   * included — collapsed to one space, so a case can name what a reader sees without depending on
+   * the markup's own line breaks.
+   */
+  const text = (element: Element | null | undefined): string =>
+    (element?.textContent ?? '').replace(/[\s\u00A0]+/g, ' ').trim();
 
   const anchors = (): HTMLAnchorElement[] =>
     Array.from(host().querySelectorAll<HTMLAnchorElement>('#search-results a'));
@@ -219,6 +263,8 @@ describe('SearchResultsComponent', () => {
     expect(host().querySelector('#search-results')).toBeNull();
     expect(host().querySelector('#search-results-empty')?.textContent?.trim()).toBe(NO_DATA_TEXT);
     expect(host().querySelector('#search-results-error')).toBeNull();
+    // A blank query answers with nothing, so there is nothing to cut and no notice to raise.
+    expect(host().querySelector('#search-results-truncated')).toBeNull();
   });
 
   it('accepts only the three scopes and answers anything else with all', async () => {
@@ -257,90 +303,142 @@ describe('SearchResultsComponent', () => {
     expect(calls).toHaveLength(9);
   });
 
-  it('renders one row per result, with the server values the table binds', () => {
-    const rendered = rows();
+  it('renders legacy’s block list, one block per result, with the values each block carries', () => {
+    const rendered = blocks();
 
     expect(rendered).toHaveLength(2);
     expect(component.rows()).toHaveLength(2);
+    // A client result names the client, its account number and the office it is filed under, which is
+    // what legacy prints on that family's line (`app/views/search/glresults.html:32-34,57-59`).
     expect(component.rows()[0]).toMatchObject({
       kind: 'client',
       name: 'Ada Okafor',
       accountNo: '000000002',
-      clientName: '',
-      status: 'active',
+      printsAccountNo: true,
+      parentName: 'Head Office',
+      parentLabelKey: 'label.heading.office',
       permission: 'READ_CLIENT',
     });
+    // A loan result names the loan product, its account number and the client that owns it, which the
+    // same line labels `Client` (`app/views/search/glresults.html:63-64`).
     expect(component.rows()[1]).toMatchObject({
       kind: 'loan',
       name: 'Parity Loan',
       accountNo: '000000011',
-      clientName: 'Ada Okafor',
-      product: 'Parity Loan',
-      status: 'active',
+      printsAccountNo: true,
+      parentName: 'Ada Okafor',
+      parentLabelKey: 'label.heading.client',
       permission: 'READ_LOAN',
     });
-    expect(rendered[0]?.cells[0]?.textContent?.trim()).toBe('Client');
-    expect(rendered[1]?.cells[0]?.textContent?.trim()).toBe('Loan');
-    expect(rendered[1]?.textContent).toContain('Ada Okafor');
-    expect(rendered[0]?.querySelector('app-status-swatch')).not.toBeNull();
-    expect(rendered[1]?.querySelector('app-status-swatch .status-swatch')).not.toBeNull();
-    // The indicator is a colour and nothing else: no word, label or tooltip rides along with it
-    // (AAP 0.10.5 item 11; Rule 1 clause 3).
-    expect(rendered[0]?.querySelector('app-status-swatch')?.textContent?.trim()).toBe('');
-    expect(rendered[1]?.querySelector('app-status-swatch')?.textContent?.trim()).toBe('');
+
+    // Each block carries the name, the account segment and the entity and parent line, in that order:
+    // the account number is unprefixed by any column heading and the family is the legacy word.
+    expect(text(rendered[0])).toContain('| #000000002');
+    expect(text(rendered[0])).toContain('Entity:Client');
+    expect(text(rendered[0])).toContain('| Office:Head Office');
+    expect(text(rendered[1])).toContain('| #000000011');
+    expect(text(rendered[1])).toContain('Entity:Loan');
+    expect(text(rendered[1])).toContain('| Client:Ada Okafor');
+
+    // Nothing the legacy results list does not render is added: no table, no column headers, no
+    // status indicator and no card title (Rule 1 clause 3; AAP 0.10.5's register holds no entry for
+    // any of them).
+    expect(host().querySelector('table')).toBeNull();
+    expect(host().querySelector('thead')).toBeNull();
+    expect(host().querySelector('app-status-swatch')).toBeNull();
+    expect(host().querySelector('.panel-title')).toBeNull();
+    expect(host().querySelector('.panel-heading')).toBeNull();
   });
 
-  it('names the card and echoes the query, showing the title alone for a blank one', async () => {
-    // The card title names the screen and the search the rows answer, so the same screen showing a
-    // second search's results can never be misread as the first's. Whitespace is collapsed before
-    // the comparison because the title is written across the template's own line breaks.
-    const title = (): string =>
-      (host().querySelector('.panel-title')?.textContent ?? '').replace(/\s+/g, ' ').trim();
-
-    expect(title()).toBe('Search “Parity”');
-
-    params.next(convertToParamMap({ query: '   ' }));
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    // A blank query is trimmed to nothing, so there is no search to echo and no quotes to open.
-    expect(title()).toBe('Search');
-    expect(host().querySelector('#search-results-empty')?.textContent?.trim()).toBe(NO_DATA_TEXT);
+  it('opens the screen’s own page container around its card', () => {
+    // The shell leaves the page container to the screen: it wraps only the breadcrumb in a
+    // `.container-fluid` of its own and renders the routed view bare
+    // (`core/layout/shell.component.html:50-59`), so this screen opens the same
+    // `.container-fluid > .row > .col-md-12` wrapper every sibling screen opens, with the card inside
+    // it.
+    expect(
+      host().querySelector('.container-fluid > .row > .col-md-12 > .panel.panel-default'),
+    ).not.toBeNull();
+    expect(host().querySelector('.panel > .panel-body')).not.toBeNull();
   });
 
-  it('maps each family status code onto the four keys the indicator paints', async () => {
-    const withStatus = (code: string, id: number): SearchResult => ({
-      entityType: 'LOAN',
-      entityId: id,
-      entityName: 'Parity Loan',
-      entityAccountNo: `00000001${id}`,
-      parentName: 'Ada Okafor',
-      entityStatus: { id: 1, code, value: 'whatever the server calls it' },
-    });
-
-    answer = () =>
-      of([
-        withStatus('loanStatusType.submitted.and.pending.approval', 1),
-        withStatus('loanStatusType.closed.obligations.met', 2),
-        withStatus('clientStatusType.withdraw', 3),
-        withStatus('loanStatusType.transfer.in.progress', 4),
-        withStatus('clientStatusType.active', 5),
-      ]);
-
+  it('names the parent by the label each family uses and prints no account number on an identifier match', async () => {
+    answer = () => of([CLIENT, LOAN, IDENTIFIER]);
     params.next(convertToParamMap({ query: 'Parity' }));
     fixture.detectChanges();
     await fixture.whenStable();
+    fixture.detectChanges();
 
-    expect(component.rows().map((row) => row.status)).toEqual([
-      'pending',
-      'closed',
-      'closed',
-      'other',
-      'active',
+    // Legacy's three lines: a client's parent is its office, a loan's and an identifier match's is the
+    // client, and only the first two carry an account number
+    // (`app/views/search/glresults.html:11-64`).
+    expect(component.rows().map((row) => row.parentLabelKey)).toEqual([
+      'label.heading.office',
+      'label.heading.client',
+      'label.heading.client',
     ]);
-    // Every row's key is its own, so two results can never collide in the loop's track expression.
-    expect(new Set(component.rows().map((row) => row.key)).size).toBe(5);
+    expect(component.rows().map((row) => row.printsAccountNo)).toEqual([true, true, false]);
+
+    // The identifier's block therefore shows the client it matched and no `#` segment at all.
+    const identifierBlock = blocks()[2];
+
+    expect(text(identifierBlock)).toContain('Entity:Client');
+    expect(text(identifierBlock)).toContain('| Client:Ada Okafor');
+    expect(text(identifierBlock)).not.toContain('#');
+
+    // Every block's key is its own, so two results can never collide in the loop's track expression.
+    expect(new Set(component.rows().map((row) => row.key)).size).toBe(3);
+  });
+
+  it('cuts an answer longer than 200 results to legacy’s first 201 and shows the bundle’s notice', async () => {
+    answer = () => of(clientResults(202));
+    params.next(convertToParamMap({ query: 'Client' }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Legacy's controller slices the answer to its first 201 and raises its flag
+    // (`app/scripts/controllers/main/SearchController.js:10-18`), and the results list prints the
+    // bundle's own message above the rows it kept (`app/views/search/glresults.html:5`).
+    expect(component.exceedsMaxLength()).toBe(true);
+    expect(blocks()).toHaveLength(201);
+    expect(text(blocks()[200])).toContain('Client 201');
+    expect(text(blocks()[200])).not.toContain('Client 202');
+    expect(host().querySelector('#search-results-truncated')?.textContent?.trim()).toBe(
+      TRUNCATED_TEXT,
+    );
+  });
+
+  it('renders an answer of 200 results whole and shows no notice', async () => {
+    answer = () => of(clientResults(200));
+    params.next(convertToParamMap({ query: 'Client' }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Legacy's own boundary: `data.length > 200` is the test, so an answer of exactly 200 is neither
+    // cut nor announced (`SearchController.js:10-11`).
+    expect(component.exceedsMaxLength()).toBe(false);
+    expect(blocks()).toHaveLength(200);
+    expect(host().querySelector('#search-results-truncated')).toBeNull();
+  });
+
+  it('renders an answer of 201 results whole but already reports the truncation legacy reports', async () => {
+    answer = () => of(clientResults(201));
+    params.next(convertToParamMap({ query: 'Client' }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Legacy tests `data.length > 200` BEFORE it slices, so 201 results are both all rendered —
+    // `data.slice(0, 201)` keeps every one of them — and announced by the bundle's notice
+    // (`SearchController.js:10-12`; Rule 1 clause 3).
+    expect(component.exceedsMaxLength()).toBe(true);
+    expect(blocks()).toHaveLength(201);
+    expect(text(blocks()[200])).toContain('Client 201');
+    expect(host().querySelector('#search-results-truncated')?.textContent?.trim()).toBe(
+      TRUNCATED_TEXT,
+    );
   });
 
   it('opens the client record and the loan record, and maps an identifier to its client', async () => {
@@ -357,7 +455,8 @@ describe('SearchResultsComponent', () => {
 
     expect(component.rows()).toHaveLength(1);
     expect(component.rows()[0]?.key).toBe('clientIdentifier:7');
-    expect(component.rows()[0]?.status).toBe('pending');
+    expect(component.rows()[0]?.parentName).toBe('Ada Okafor');
+    expect(component.rows()[0]?.printsAccountNo).toBe(false);
     expect(anchors()[0]?.getAttribute('href')).toBe('/viewclient/2');
   });
 
@@ -388,10 +487,10 @@ describe('SearchResultsComponent', () => {
     expect(host().querySelector('#search-results-error')?.textContent?.trim()).toBe(serverText);
     expect(component.isEmpty()).toBe(false);
     expect(host().querySelector('#search-results-empty')).toBeNull();
-    expect(rows()).toHaveLength(2);
-    // The screen stays mounted and usable: the card and its title are still there around the alert.
+    expect(blocks()).toHaveLength(2);
+    // The screen stays mounted and usable: the card and its body are still there around the alert.
     expect(host().querySelector('.panel')).not.toBeNull();
-    expect(host().querySelector('.panel-title')).not.toBeNull();
+    expect(host().querySelector('.panel-body')).not.toBeNull();
   });
 
   for (const { label, failure } of SILENT_FAILURES) {
@@ -410,7 +509,7 @@ describe('SearchResultsComponent', () => {
       expect(component.isEmpty()).toBe(false);
       expect(host().querySelector('#search-results-empty')).toBeNull();
       // The rows of the search before it stay exactly where they were.
-      expect(rows()).toHaveLength(2);
+      expect(blocks()).toHaveLength(2);
     });
   }
 
@@ -425,7 +524,7 @@ describe('SearchResultsComponent', () => {
 
     expect(calls).toHaveLength(2);
     expect(component.query()).toBe('Ada');
-    expect(rows()).toHaveLength(1);
+    expect(blocks()).toHaveLength(1);
     expect(component.error()).toBeNull();
   });
 
@@ -435,14 +534,14 @@ describe('SearchResultsComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const loanRow = rows()[1];
+    const loanRow = blocks()[1];
     const anchor = loanRow?.querySelector('a');
     const plain = loanRow?.querySelector('span');
 
     expect(anchor?.style.display).toBe('none');
     expect(plain?.style.display).not.toBe('none');
     expect(plain?.textContent?.trim()).toBe('Parity Loan');
-    expect(rows()[0]?.querySelector('a')?.style.display).not.toBe('none');
+    expect(blocks()[0]?.querySelector('a')?.style.display).not.toBe('none');
   });
 
   it('lists a client row to a user without READ_CLIENT but does not offer the link', async () => {
@@ -451,14 +550,14 @@ describe('SearchResultsComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const clientRow = rows()[0];
+    const clientRow = blocks()[0];
     const anchor = clientRow?.querySelector('a');
     const plain = clientRow?.querySelector('span');
 
     expect(anchor?.style.display).toBe('none');
     expect(plain?.style.display).not.toBe('none');
     expect(plain?.textContent?.trim()).toBe('Ada Okafor');
-    expect(rows()[1]?.querySelector('a')?.style.display).not.toBe('none');
+    expect(blocks()[1]?.querySelector('a')?.style.display).not.toBe('none');
   });
 
   it('survives a failure and searches again afterwards', async () => {
@@ -471,7 +570,7 @@ describe('SearchResultsComponent', () => {
     // A 5xx carries no text for this screen: it is the interceptor's notification alone (AAP 0.7.4).
     expect(component.error()).toBeNull();
     expect(host().querySelector('#search-results-error')).toBeNull();
-    expect(rows()).toHaveLength(2);
+    expect(blocks()).toHaveLength(2);
 
     answer = () => of([CLIENT]);
     params.next(convertToParamMap({ query: 'second' }));
@@ -480,7 +579,7 @@ describe('SearchResultsComponent', () => {
     fixture.detectChanges();
 
     expect(component.error()).toBeNull();
-    expect(rows()).toHaveLength(1);
+    expect(blocks()).toHaveLength(1);
     expect(calls).toHaveLength(3);
   });
 });

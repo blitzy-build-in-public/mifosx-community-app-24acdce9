@@ -14,6 +14,7 @@ import { finalize } from 'rxjs';
 import { AppConfigService } from '../../../core/config/app-config.service';
 import { ApiError } from '../../../core/http/api-error';
 import { fromFineractDate, toFineractDate } from '../../../shared/date-format.util';
+import { CLIENT_ACTION_PERMISSIONS } from '../client-actions/client-actions.component';
 import { toClientStatusKey, type Client } from '../client.models';
 import { ClientService } from '../client.service';
 import {
@@ -403,27 +404,40 @@ export class ClientViewComponent {
   readonly newSavingPermission = 'CREATE_SAVINGSACCOUNT';
 
   /**
-   * Permission of the `Activate` entry point: legacy's own gate on the record's activate button
-   * (`ACTIVATE_CLIENT`), one of the five lifecycle commands `client-actions.component.ts` posts.
+   * Permission of the `Activate` entry point: the code `CLIENT_ACTION_PERMISSIONS` declares for the
+   * command — legacy's own gate on the record's activate button — which is also the code the
+   * `client/:id/:action` route declares and the code the action screen's submit control is gated on,
+   * so the record's entry cannot drift from the screen it opens (AAP 0.1.1).
    */
-  readonly activatePermission = 'ACTIVATE_CLIENT';
-
-  /** Permission of the `Close` entry point: legacy's own gate (`CLOSE_CLIENT`). */
-  readonly closePermission = 'CLOSE_CLIENT';
-
-  /** Permission of the `Reject` entry point: legacy's own gate (`REJECT_CLIENT`). */
-  readonly rejectPermission = 'REJECT_CLIENT';
-
-  /** Permission of the `Withdraw` entry point: legacy's own gate (`WITHDRAW_CLIENT`). */
-  readonly withdrawPermission = 'WITHDRAW_CLIENT';
+  readonly activatePermission = CLIENT_ACTION_PERMISSIONS.activate;
 
   /**
-   * Permission of the `Reactivate` entry point: legacy's own gate (`REACTIVATE_CLIENT`), which the
-   * fork issues as permission id 618 and which legacy's `Closed` status carries as the one button
-   * that state offers. It is deliberately not `ACTIVATE_CLIENT`: a user holding only the activation
-   * code would then be shown a control the server refuses (Rule 1 clause 3; AAP 0.1.1).
+   * Permission of the `Close` entry point: the code `CLIENT_ACTION_PERMISSIONS` declares for the
+   * command, shared with the route guard and the action screen's submit control (AAP 0.1.1).
    */
-  readonly reactivatePermission = 'REACTIVATE_CLIENT';
+  readonly closePermission = CLIENT_ACTION_PERMISSIONS.close;
+
+  /**
+   * Permission of the `Reject` entry point: the code `CLIENT_ACTION_PERMISSIONS` declares for the
+   * command, shared with the route guard and the action screen's submit control (AAP 0.1.1).
+   */
+  readonly rejectPermission = CLIENT_ACTION_PERMISSIONS.reject;
+
+  /**
+   * Permission of the `Withdraw` entry point: the code `CLIENT_ACTION_PERMISSIONS` declares for the
+   * command, shared with the route guard and the action screen's submit control (AAP 0.1.1).
+   */
+  readonly withdrawPermission = CLIENT_ACTION_PERMISSIONS.withdraw;
+
+  /**
+   * Permission of the `Reactivate` entry point: the code `CLIENT_ACTION_PERMISSIONS` declares for the
+   * command, shared with the route guard and the action screen's submit control (AAP 0.1.1). It is
+   * legacy's own gate, which the fork issues as permission id 618 and which legacy's `Closed` status
+   * carries as the one button that state offers. It is deliberately not `ACTIVATE_CLIENT`: a user
+   * holding only the activation code would then be shown a control the server refuses (Rule 1
+   * clause 3; AAP 0.1.1).
+   */
+  readonly reactivatePermission = CLIENT_ACTION_PERMISSIONS.reactivate;
 
   /**
    * Whether the record on screen is a closed one, which is the single condition the action row adds

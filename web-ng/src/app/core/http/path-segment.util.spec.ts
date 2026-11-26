@@ -4,43 +4,68 @@ import { datatableName, resourceId } from './path-segment.util';
 
 /**
  * Behaviour spec for `core/http/path-segment.util.ts`, the guard every Fineract path segment passes
- * through (Rule 1 clause 8; AAP 0.14.2 "Test coverage"; review finding F06 / cr3-F06).
+ * through (Rule 1 clause 8; AAP 0.14.2 "Test coverage"; review finding F05).
  *
- * The two points these cases pin are the ones the fix turns on:
+ * The three points these cases pin are the ones the guard turns on:
  *
  *   - a value of Fineract's own shape is returned unchanged, so the URL a valid route parameter or a
  *     valid datatable name produces is byte-identical to the one the legacy application sent
- *     (Rule 1 clause 2; AAP 0.1.1 "Parity is behavioural, not visual"); and
- *   - a value of any other shape is refused with a message that quotes it, names the call that
- *     composed it and says no request was issued, which is what stops a crafted `:id` from moving the
- *     request to another path on the same host (CWE-20, CWE-22).
+ *     (Rule 1 clause 2; AAP 0.1.1 "Parity is behavioural, not visual");
+ *   - a value of any other shape is refused before a request is composed, which is what stops a
+ *     crafted `:id` from moving the request to another path on the same host (CWE-20, CWE-22); and
+ *   - the refusal keeps its two channels apart: the `message` a screen renders is one fixed sentence
+ *     naming neither the rejected value nor the call that composed the segment, while the diagnostic
+ *     that names both travels in `cause`, where the displayable-failure mapper never looks.
  *
  * Neither function touches Angular, `HttpClient` or the configuration, so these cases need no
  * `TestBed`: the observable form the refusal reaches a caller in is asserted where the services
  * compose it, in their own specs.
  */
 
-/** The `source` these cases pass, so the message assertions read against a named call. */
+/** The `source` these cases pass, so the refusal's diagnostic reads against a named call. */
 const SOURCE = 'PathSegmentSpec.call';
 
+/** The sentence a refused identifier is reported with — the text a screen renders, pinned whole. */
+const RESOURCE_ID_SENTENCE = 'The record could not be opened because its address is not valid.';
+
+/** The sentence a refused datatable name is reported with — the text a screen renders, pinned whole. */
+const DATATABLE_NAME_SENTENCE =
+  'The account action could not be checked because the server named a table that is not valid.';
+
 /**
- * The message a call refused with, or the empty string when it did not throw.
+ * The error a call refused with, or `null` when it did not throw.
  *
- * Returning the text rather than asserting inside the `catch` keeps every case's assertions in one
- * place: a call that wrongly succeeds leaves `''`, and the `toContain` below reports the value it
- * expected to be quoted.
+ * Returning the error rather than asserting inside the `catch` keeps every case's assertions in one
+ * place: a call that wrongly succeeds leaves `null`, which the `toBeInstanceOf` below reports as the
+ * refusal that never happened.
  *
  * @param run the call under test.
- * @returns the refusal's message.
+ * @returns the refusal, with its `message` and its `cause` available to assert on.
  */
-function refusalMessage(run: () => unknown): string {
+function refusal(run: () => unknown): Error | null {
   try {
     run();
   } catch (error: unknown) {
-    return error instanceof Error ? error.message : String(error);
+    return error instanceof Error ? error : null;
   }
 
-  return '';
+  return null;
+}
+
+/**
+ * The diagnostic a refusal carries in `cause`, as text.
+ *
+ * `Error.cause` is typed `unknown`, so the spec reads it as a string instead of casting it: a cause
+ * that is missing, or that is not the interpolated diagnostic, shows up as text naming neither the
+ * call nor the value, which is exactly the failure these cases must report (Rule 1 clause 4).
+ *
+ * @param error the refusal under test.
+ * @returns the `cause` read as text, or the empty string when there is none.
+ */
+function causeText(error: Error | null): string {
+  const cause: unknown = error?.cause;
+
+  return typeof cause === 'string' ? cause : '';
 }
 
 /** Values of Fineract's identifier shape, each of which must come back unchanged. */
@@ -66,16 +91,24 @@ describe('resourceId', () => {
   });
 
   it.each(REFUSED_RESOURCE_IDS)('refuses the route value %j and issues no request', (value) => {
-    const message = refusalMessage(() => resourceId(value, SOURCE));
+    const error = refusal(() => resourceId(value, SOURCE));
 
-    // The value itself is quoted, so a caller reading the failure knows which route parameter it came
-    // from rather than only that some identifier was refused.
-    expect(message).toContain(`'${value}'`);
-    // The call that composed the segment is named, so the failure points at one place in the services.
-    expect(message).toContain(SOURCE);
-    // The message states the consequence and that nothing was sent: the refusal is the whole outcome.
-    expect(message).toContain('another path');
-    expect(message).toContain('no request');
+    // The message is the one fixed sentence, so the staff user whose route was refused reads a
+    // sentence about the record rather than a developer diagnostic.
+    expect(error).toBeInstanceOf(Error);
+    expect(error?.message).toBe(RESOURCE_ID_SENTENCE);
+    // Neither the rejected value nor the composing call appears in it. This disclosure is the defect
+    // these assertions exist to catch, so they are stated rather than left to the sentence's wording.
+    expect(error?.message).not.toContain(SOURCE);
+    expect(error?.message).not.toContain('PathSegment.');
+    if (value !== '') {
+      expect(error?.message).not.toContain(value);
+    }
+
+    // The diagnostic is kept, out of the message: the call and the value it was handed are both
+    // readable in `cause`, so a developer can still find the request that was refused.
+    expect(causeText(error)).toContain(SOURCE);
+    expect(causeText(error)).toContain(`'${value}'`);
   });
 });
 
@@ -85,11 +118,17 @@ describe('datatableName', () => {
   });
 
   it.each(REFUSED_DATATABLE_NAMES)('refuses the server-supplied name %j and issues no request', (name) => {
-    const message = refusalMessage(() => datatableName(name, SOURCE));
+    const error = refusal(() => datatableName(name, SOURCE));
 
-    expect(message).toContain(`'${name}'`);
-    expect(message).toContain(SOURCE);
-    expect(message).toContain('another path');
-    expect(message).toContain('no request');
+    expect(error).toBeInstanceOf(Error);
+    expect(error?.message).toBe(DATATABLE_NAME_SENTENCE);
+    expect(error?.message).not.toContain(SOURCE);
+    expect(error?.message).not.toContain('PathSegment.');
+    if (name !== '') {
+      expect(error?.message).not.toContain(name);
+    }
+
+    expect(causeText(error)).toContain(SOURCE);
+    expect(causeText(error)).toContain(`'${name}'`);
   });
 });
