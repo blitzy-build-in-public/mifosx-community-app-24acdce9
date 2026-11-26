@@ -18,6 +18,7 @@
     [attr.aria-label]="accessibleName"
     [attr.aria-required]="required() ? 'true' : null"
     [attr.aria-invalid]="invalid ? 'true' : null"
+    [attr.aria-describedby]="describedBy() || null"
   />
 
   <ng-content></ng-content>

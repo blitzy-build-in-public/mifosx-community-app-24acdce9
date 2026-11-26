@@ -56,6 +56,15 @@ const REASON_COMMANDS = [
   'withdraw',
 ] as const satisfies readonly ClientActionCommand[];
 
+/** The two commands that take only a date and render no select, in the order the screen's own `switch` handles them; each owns a date field no other command shares, which is why their messages carry an id of their own. */
+const DATE_ONLY_COMMANDS = ['activate', 'reactivate'] as const satisfies readonly ClientActionCommand[];
+
+/** The id the date field of each date-only command carries its message's id from, quoted from `client-actions.component.html`: `close`, `reject` and `withdraw` share `client-action-date-error`, because only one of those three forms renders at a time. */
+const DATE_ONLY_ERROR_ID: Readonly<Record<(typeof DATE_ONLY_COMMANDS)[number], string>> = {
+  activate: 'client-action-activation-date-error',
+  reactivate: 'client-action-reactivation-date-error',
+};
+
 /** The body member each command carries its action date in, quoted from AAP 0.7.2 row `ClientActionRequest`. */
 const DATE_BODY_KEY: Readonly<Record<ClientActionCommand, string>> = {
   activate: 'activationDate',
@@ -723,7 +732,14 @@ describe('ClientActionsComponent', () => {
 
       expect(host().querySelectorAll('.help-block[role="alert"]')).toHaveLength(0);
 
-      // The date starts empty and the reason still shows the prompt row, so this is the invalid submit the legacy form refuses.
+      // Nothing describes either control yet: a valid field names no message, so no control points at an element the screen does not render.
+      expect(dateInput?.hasAttribute('aria-describedby')).toBe(false);
+      expect(reasonSelect?.hasAttribute('aria-describedby')).toBe(false);
+
+      // The date starts empty and the reason still shows the prompt row, so this is the invalid submit the legacy form refuses. The button carries focus because pressing it is what brought the user here; the refusal is what has to move focus off it.
+      saveButton()?.focus();
+      expect(document.activeElement).toBe(saveButton());
+
       component.submit();
       fixture.detectChanges();
 
@@ -736,7 +752,47 @@ describe('ClientActionsComponent', () => {
       );
       expect(host().querySelectorAll('.help-block[role="alert"]')).toHaveLength(2);
 
+      // Each control now names the one message its own field projects, for as long as that message is on screen, so assistive technology reads the message as the control's description rather than as an alert parked beside the form (WCAG 1.3.1, 3.3.1).
+      expect(dateInput?.getAttribute('aria-describedby')).toBe('client-action-date-error');
+      expect(reasonSelect?.getAttribute('aria-describedby')).toBe('client-action-reason-error');
+
+      // And the user is not left on the button that did nothing: focus moves to the first control the form reports invalid, which is the date in the order the form declares its controls (WCAG 2.4.3).
+      expect(document.activeElement).toBe(dateInput);
+
       // The invalid form posts nothing: the body Fineract would refuse for its missing reason is never sent, and the screen stays where it is.
+      expect(httpMock.match(isCommandPost)).toHaveLength(0);
+      expect(navigate).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(DATE_ONLY_COMMANDS)(
+    'requires the %s date, describes it with the message it projects and moves focus there on a refused submit',
+    async (command) => {
+      await showReady(command);
+      // A reactivation date starts empty, and the activation form starts on the browser's today, so only a cleared field is the refused submit this case needs on either.
+      dateControl(command).setValue(null);
+      fixture.detectChanges();
+
+      const dateInput = host().querySelector<HTMLInputElement>('app-date-field input[type="date"]');
+
+      // The command takes no reason, so the date is the form's only control and the only one focus can move to.
+      expect(dateInput).not.toBeNull();
+      expect(host().querySelectorAll('app-select-field')).toHaveLength(0);
+      expect(dateInput?.hasAttribute('aria-describedby')).toBe(false);
+
+      saveButton()?.focus();
+      expect(document.activeElement).toBe(saveButton());
+
+      component.submit();
+      fixture.detectChanges();
+
+      expect(host().querySelector(`#${DATE_ONLY_ERROR_ID[command]}`)?.textContent?.trim()).toBe(
+        TRANSLATIONS['label.requiredfield'],
+      );
+      expect(dateInput?.getAttribute('aria-describedby')).toBe(DATE_ONLY_ERROR_ID[command]);
+      expect(document.activeElement).toBe(dateInput);
+
+      // The form is refused before any body the server would reject is composed.
       expect(httpMock.match(isCommandPost)).toHaveLength(0);
       expect(navigate).not.toHaveBeenCalled();
     },

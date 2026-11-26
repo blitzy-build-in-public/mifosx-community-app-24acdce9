@@ -1,4 +1,4 @@
-<!-- The client lifecycle action screen (`#/client/:id/:action`): a single-purpose form for exactly one of the five commands `activate`, `close`, `reject`, `withdraw` and `reactivate`, with the way back to the record and nothing else (AAP 0.7.4 screens; AAP 0.8.2 route `client/:id/:action`). Every visual value comes from the global Bootstrap 3 layer `web-ng/src/styles.scss` compiles, so this file carries no style, no colour and no pixel: `.container-fluid` and `.row`/`.col-md-*` are the page and its grid, the card is `app-panel-card` (AAP 0.2.3 row `PanelCard`), `.btn.btn-primary` the brand fill with its white label, `.btn.btn-default` the cancel control and `.alert.alert-danger` the failure banner (Rule 1 clause 6; AAP 0.5.2). This card's heading is not a string the component can print — it exists only once the route names a known command — so the screen leaves the card's `title` unset and projects its own `.panel-heading`/`.panel-title` 18px title inside it, exactly as the markup was. The fields are the shared `app-date-field` and `app-select-field`, which own their `.form-group`, `.control-label`, `.form-control` and `.has-error` markup; this template adds no `.form-group` of its own, because a second one would nest two groups and break the 34px control metrics the design measures. What a field cannot own is its required message, which belongs to the caller: the legacy `label.requiredfield` text is projected into the slot each field renders after its control, once per control, so an empty date or an unchosen reason reports itself in words rather than by a red label and border alone. One `@if` branch per command, each with its own `<form>`, because the commands post different bodies — a date alone, a date with a reason, or a date on the reactivation form — and a single form would have to render fields the current command does not send. No `novalidate` attribute is written: `FormGroupDirective` adds it, which is what the shared date and select fields rely on to keep the browser from blocking a submission Fineract alone decides. Captions are the legacy bundle's own keys, translated here, and the reason options are the Fineract template's own list in the server's order (AAP 0.7.1; AAP 0.4.4 decision 6). Nothing else is interpolated: no payload, no header, no client id and no reason object reaches the page, and the one untranslated string is Fineract's own failure message (Rule 1 clause 9). Deliberately absent, because this screen reproduces the legacy form and the shell owns all chrome: the breadcrumb and the datatable step wizard, its "proceed" button, the transfer, staff, savings and note fields of actions this migration does not deliver, every confirmation step and any success message (Rule 1 clause 3; AAP 0.9.2; AAP 0.10.5). -->
+<!-- The client lifecycle action screen (`#/client/:id/:action`): a single-purpose form for exactly one of the five commands `activate`, `close`, `reject`, `withdraw` and `reactivate`, with the way back to the record and nothing else (AAP 0.7.4 screens; AAP 0.8.2 route `client/:id/:action`). Every visual value comes from the global Bootstrap 3 layer `web-ng/src/styles.scss` compiles, so this file carries no style, no colour and no pixel: `.container-fluid` and `.row`/`.col-md-*` are the page and its grid, the card is `app-panel-card` (AAP 0.2.3 row `PanelCard`), `.btn.btn-primary` the brand fill with its white label, `.btn.btn-default` the cancel control and `.alert.alert-danger` the failure banner (Rule 1 clause 6; AAP 0.5.2). This card's heading is not a string the component can print — it exists only once the route names a known command — so the screen leaves the card's `title` unset and projects its own `.panel-heading`/`.panel-title` 18px title inside it, exactly as the markup was. The fields are the shared `app-date-field` and `app-select-field`, which own their `.form-group`, `.control-label`, `.form-control` and `.has-error` markup; this template adds no `.form-group` of its own, because a second one would nest two groups and break the 34px control metrics the design measures. What a field cannot own is its required message, which belongs to the caller: the legacy `label.requiredfield` text is projected into the slot each field renders after its control, once per control, so an empty date or an unchosen reason reports itself in words rather than by a red label and border alone, and each field carries that message's id through `describedBy` for exactly as long as the message is on screen — `showsRequiredError` decides both, so no control ever names an element that is not rendered — which is what makes the message the control's own description instead of an unrelated alert beside it. One `@if` branch per command, each with its own `<form>`, because the commands post different bodies — a date alone, a date with a reason, or a date on the reactivation form — and a single form would have to render fields the current command does not send. No `novalidate` attribute is written: `FormGroupDirective` adds it, which is what the shared date and select fields rely on to keep the browser from blocking a submission Fineract alone decides. Captions are the legacy bundle's own keys, translated here, and the reason options are the Fineract template's own list in the server's order (AAP 0.7.1; AAP 0.4.4 decision 6). Nothing else is interpolated: no payload, no header, no client id and no reason object reaches the page, and the one untranslated string is Fineract's own failure message (Rule 1 clause 9). Deliberately absent, because this screen reproduces the legacy form and the shell owns all chrome: the breadcrumb and the datatable step wizard, its "proceed" button, the transfer, staff, savings and note fields of actions this migration does not deliver, every confirmation step and any success message (Rule 1 clause 3; AAP 0.9.2; AAP 0.10.5). -->
 <div class="container-fluid">
   <div class="row">
     <div class="col-md-12">
@@ -33,6 +33,7 @@
                           [control]="activateForm.controls.activationDate"
                           [label]="dateLabelKey() | translate"
                           [required]="true"
+                          [describedBy]="showsRequiredError(activateForm.controls.activationDate) ? 'client-action-activation-date-error' : ''"
                         >
                           @if (showsRequiredError(activateForm.controls.activationDate)) {
                             <span id="client-action-activation-date-error" class="help-block" role="alert">
@@ -63,6 +64,7 @@
                           [control]="closeForm.controls.closureDate"
                           [label]="dateLabelKey() | translate"
                           [required]="true"
+                          [describedBy]="showsRequiredError(closeForm.controls.closureDate) ? 'client-action-date-error' : ''"
                         >
                           @if (showsRequiredError(closeForm.controls.closureDate)) {
                             <span id="client-action-date-error" class="help-block" role="alert">
@@ -81,6 +83,7 @@
                           [placeholder]="reasonPlaceholderKey | translate"
                           [label]="reasonLabelKey() | translate"
                           [required]="true"
+                          [describedBy]="showsRequiredError(closeForm.controls.closureReasonId) ? 'client-action-reason-error' : ''"
                         >
                           @if (showsRequiredError(closeForm.controls.closureReasonId)) {
                             <span id="client-action-reason-error" class="help-block" role="alert">
@@ -111,6 +114,7 @@
                           [control]="rejectForm.controls.rejectionDate"
                           [label]="dateLabelKey() | translate"
                           [required]="true"
+                          [describedBy]="showsRequiredError(rejectForm.controls.rejectionDate) ? 'client-action-date-error' : ''"
                         >
                           @if (showsRequiredError(rejectForm.controls.rejectionDate)) {
                             <span id="client-action-date-error" class="help-block" role="alert">
@@ -129,6 +133,7 @@
                           [placeholder]="reasonPlaceholderKey | translate"
                           [label]="reasonLabelKey() | translate"
                           [required]="true"
+                          [describedBy]="showsRequiredError(rejectForm.controls.rejectionReasonId) ? 'client-action-reason-error' : ''"
                         >
                           @if (showsRequiredError(rejectForm.controls.rejectionReasonId)) {
                             <span id="client-action-reason-error" class="help-block" role="alert">
@@ -159,6 +164,7 @@
                           [control]="withdrawForm.controls.withdrawalDate"
                           [label]="dateLabelKey() | translate"
                           [required]="true"
+                          [describedBy]="showsRequiredError(withdrawForm.controls.withdrawalDate) ? 'client-action-date-error' : ''"
                         >
                           @if (showsRequiredError(withdrawForm.controls.withdrawalDate)) {
                             <span id="client-action-date-error" class="help-block" role="alert">
@@ -177,6 +183,7 @@
                           [placeholder]="reasonPlaceholderKey | translate"
                           [label]="reasonLabelKey() | translate"
                           [required]="true"
+                          [describedBy]="showsRequiredError(withdrawForm.controls.withdrawalReasonId) ? 'client-action-reason-error' : ''"
                         >
                           @if (showsRequiredError(withdrawForm.controls.withdrawalReasonId)) {
                             <span id="client-action-reason-error" class="help-block" role="alert">
@@ -207,6 +214,7 @@
                           [control]="reactivateForm.controls.reactivationDate"
                           [label]="dateLabelKey() | translate"
                           [required]="true"
+                          [describedBy]="showsRequiredError(reactivateForm.controls.reactivationDate) ? 'client-action-reactivation-date-error' : ''"
                         >
                           @if (showsRequiredError(reactivateForm.controls.reactivationDate)) {
                             <span id="client-action-reactivation-date-error" class="help-block" role="alert">

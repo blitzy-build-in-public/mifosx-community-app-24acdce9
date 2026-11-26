@@ -247,6 +247,20 @@ describe('DateFieldComponent', () => {
     }
   });
 
+  /** The description rule: the caller owns the message and the field only carries its id, and an empty id leaves the attribute off altogether — the state a valid field is in, and the one the legacy markup starts from. */
+  it('names the element carrying its message only while a caller supplies one', () => {
+    fixture.detectChanges();
+
+    expect(dateInput().hasAttribute('aria-describedby')).toBe(false);
+
+    fixture.componentRef.setInput('describedBy', 'client-action-activation-date-error');
+    fixture.detectChanges();
+
+    expect(dateInput().getAttribute('aria-describedby')).toBe(
+      'client-action-activation-date-error',
+    );
+  });
+
   it('exposes required to assistive technology without letting the browser block submission', () => {
     fixture.detectChanges();
     expect(dateInput().hasAttribute('aria-required')).toBe(false);

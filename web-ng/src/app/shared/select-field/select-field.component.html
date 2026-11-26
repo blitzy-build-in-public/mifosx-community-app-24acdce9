@@ -15,6 +15,7 @@
     [attr.aria-label]="accessibleName"
     [attr.aria-required]="required() || null"
     [attr.aria-invalid]="invalid ? 'true' : null"
+    [attr.aria-describedby]="describedBy() || null"
     (change)="emitSelection()"
   >
     @if (placeholder()) {

@@ -18,6 +18,7 @@ interface FieldInputs {
   readonly label?: string;
   readonly ariaLabel?: string;
   readonly required?: boolean;
+  readonly describedBy?: string;
 }
 
 /** Reads the component's single `<select>`. The cast is the test-DOM boundary: `ComponentFixture` exposes `nativeElement` untyped, and everything reached below it is narrowed by its own check. */
@@ -101,6 +102,9 @@ describe('SelectFieldComponent', () => {
     }
     if (inputs.required !== undefined) {
       fixture.componentRef.setInput('required', inputs.required);
+    }
+    if (inputs.describedBy !== undefined) {
+      fixture.componentRef.setInput('describedBy', inputs.describedBy);
     }
 
     fixture.detectChanges();
@@ -366,6 +370,21 @@ describe('SelectFieldComponent', () => {
     if (visibleLabel) {
       expect(renderedLabels[0]?.getAttribute('for')).toBe(select.id);
     }
+  });
+
+  /** The description rule, stated exactly as the sibling `shared/date-field` spec states it since both fields sit on the same forms: the caller owns the message and the field only carries its id, and an empty id leaves the attribute off altogether — the state a valid field is in. */
+  it('names the element carrying its message only while a caller supplies one', () => {
+    const undescribed = renderedSelect(createField(new FormControl<SelectValue | null>(null)));
+
+    expect(undescribed.hasAttribute('aria-describedby')).toBe(false);
+
+    const described = renderedSelect(
+      createField(new FormControl<SelectValue | null>(null), {
+        describedBy: 'client-action-reason-error',
+      }),
+    );
+
+    expect(described.getAttribute('aria-describedby')).toBe('client-action-reason-error');
   });
 
   it('marks the field required for assistive technology only', () => {

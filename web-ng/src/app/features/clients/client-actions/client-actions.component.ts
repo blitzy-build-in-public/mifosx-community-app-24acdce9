@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DOCUMENT,
   DestroyRef,
   computed,
   inject,
@@ -137,6 +138,9 @@ export class ClientActionsComponent {
   /** Completes the route subscription should the screen be destroyed before it emits. */
   private readonly destroyRef = inject(DestroyRef);
 
+  /** The document the refused submit focuses the first invalid control in, injected rather than read off the global so a test focuses the element the application itself would. */
+  private readonly document = inject(DOCUMENT);
+
   /** Which load is the current one, incremented by every emission of the route's parameters: a superseded load compares its own number with this one after each await and returns instead of writing its answer, so a slow earlier response can never put the previous command's message or reasons on the screen. */
   private loadSequence = 0;
 
@@ -244,7 +248,7 @@ export class ClientActionsComponent {
       });
   }
 
-  /** Posts the current command, once: it does nothing until the screen is ready, marks the current form's controls as touched so every required control that is still empty renders the message the shared field projects instead of turning its label and border red alone, and returns before issuing a request when the form is invalid, so no body Fineract would refuse is sent. The three reason commands validate both their date and their reason, `activate` and `reactivate` validate the date, and otherwise it hands the command's own fields to {@link send}, which formats nothing. */
+  /** Posts the current command, once: it does nothing until the screen is ready, marks the current form's controls as touched so every required control that is still empty renders the message the shared field projects instead of turning its label and border red alone, and returns before issuing a request when the form is invalid, so no body Fineract would refuse is sent. The three reason commands validate both their date and their reason, `activate` and `reactivate` validate the date, and otherwise it hands the command's own fields to {@link send}, which formats nothing. A refused submit also moves focus to the first control the form reports invalid, so the user who pressed the button lands on the field that refused and on the message its field projects instead of staying on a button that did nothing. */
   submit(): void {
     const command = this.command();
 
@@ -257,6 +261,7 @@ export class ClientActionsComponent {
         this.activateForm.markAllAsTouched();
 
         if (this.activateForm.invalid) {
+          this.focusFirstInvalid(this.activateForm, ['client-action-activation-date']);
           return;
         }
 
@@ -271,6 +276,10 @@ export class ClientActionsComponent {
         this.closeForm.markAllAsTouched();
 
         if (this.closeForm.invalid) {
+          this.focusFirstInvalid(this.closeForm, [
+            'client-action-date',
+            'client-action-reason',
+          ]);
           return;
         }
 
@@ -289,6 +298,10 @@ export class ClientActionsComponent {
         this.rejectForm.markAllAsTouched();
 
         if (this.rejectForm.invalid) {
+          this.focusFirstInvalid(this.rejectForm, [
+            'client-action-date',
+            'client-action-reason',
+          ]);
           return;
         }
 
@@ -307,6 +320,10 @@ export class ClientActionsComponent {
         this.withdrawForm.markAllAsTouched();
 
         if (this.withdrawForm.invalid) {
+          this.focusFirstInvalid(this.withdrawForm, [
+            'client-action-date',
+            'client-action-reason',
+          ]);
           return;
         }
 
@@ -324,6 +341,7 @@ export class ClientActionsComponent {
         this.reactivateForm.markAllAsTouched();
 
         if (this.reactivateForm.invalid) {
+          this.focusFirstInvalid(this.reactivateForm, ['client-action-reactivation-date']);
           return;
         }
 
@@ -333,6 +351,23 @@ export class ClientActionsComponent {
         });
         return;
       }
+    }
+  }
+
+  /** Moves focus to the first control `form` reports invalid, which is what a refused submit owes a keyboard or screen-reader user: the button they pressed moved nothing, so without this they are left on it with no way to learn which field failed. `@param form` the form {@link submit} has just marked as touched; `@param fieldIds` the DOM id of each of that form's controls, in the order the form declares them — the `inputId` values `client-actions.component.html` passes to the fields that render those controls, which is the order the controls appear on screen, so no second mapping of control to element is kept here. A form with no invalid control moves nothing, and a form the caller supplies no id for at the invalid control's position moves nothing either. */
+  private focusFirstInvalid(form: FormGroup, fieldIds: readonly string[]): void {
+    const invalidIndex = Object.entries(form.controls).findIndex(
+      ([, control]) => control.invalid,
+    );
+
+    if (invalidIndex === -1) {
+      return;
+    }
+
+    const id = fieldIds[invalidIndex];
+
+    if (id !== undefined) {
+      this.document.getElementById(id)?.focus();
     }
   }
 

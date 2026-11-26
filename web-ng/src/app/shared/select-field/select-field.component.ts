@@ -33,6 +33,8 @@ export class SelectFieldComponent {
   readonly label = input<string>('');
   /** Accessible name for a field that renders no visible label, already translated by the parent; `''` renders no attribute, and the template emits it only while no `<label>` renders, so a visible label always supplies the name itself and is never overridden (WCAG label in name). */
   readonly ariaLabel = input<string>('');
+  /** Id of the element carrying this field's message — the caller's own `.help-block`, which it projects into the slot the template renders after the control; `''` renders no attribute, because the caller shows a message only while the field is invalid and an attribute naming an element that is not on screen is worse than none. */
+  readonly describedBy = input<string>('');
   /** Sets `aria-required` for assistive technology and is deliberately not the native `required` attribute: the browser would then block submission before Fineract sees the request, which is client-side validation the legacy form does not perform (Rule 1 clause 3). */
   readonly required = input<boolean>(false);
   /** Id of the `<select>` and of the label's `for`, defaulting to a unique `select-field-<n>`; a caller-supplied id always wins. */

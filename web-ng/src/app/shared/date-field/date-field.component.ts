@@ -72,6 +72,8 @@ export class DateFieldComponent {
   readonly label = input<string>('');
   /** Accessible name for a field that renders no visible label, already translated by the parent; empty renders no attribute. */
   readonly ariaLabel = input<string>('');
+  /** Id of the element carrying this field's message — the caller's own `.help-block`, which it projects into the slot the template renders after the control; empty renders no attribute, because the caller shows a message only while the field is invalid and an attribute naming an element that is not on screen is worse than none. */
+  readonly describedBy = input<string>('');
   /** Marks the label as required for display and assistive technology; adds no validator. */
   readonly required = input(false);
   /** Id shared by the input and its label; defaults to a per-instance `date-field-N`. */

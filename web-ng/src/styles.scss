@@ -321,6 +321,12 @@ input[type="date"].form-control {
   color: $mx-text-select; // color-select-value
 }
 
+// Bootstrap answers an invalid field with `.has-error .form-control { border-color: $state-danger-text }` [_forms.scss:423-425], and on these two native controls that rule is exactly where they come apart: the box rule above is `input[type="date"].form-control` at a specificity of (0,2,1), which outranks Bootstrap's (0,2,0), so an invalid date keeps its #E0E0E0 border, while `select.form-control` at (0,1,1) loses to it and turns #a94442 — one form showing the same error in two colours. This restates the invalid border for both from Bootstrap's own variable, through Bootstrap's own `.has-error` state, so neither control can be red while the other stays grey.
+.has-error select.form-control,
+.has-error input[type="date"].form-control {
+  border-color: $state-danger-text;
+}
+
 // The "Show Closed" control is the browser's own input[type=checkbox] (AAP 0.5.2), whose box the user agent draws: a border or background declared here never paints, and the design shows no treatment of it — which is why the token block records AAP 0.2.2's checkbox border as the user agent's own rendering.  It sits in the find field's `.input-group`, which Bootstrap lays out as a table, so the choice is one of the group's cells: the native box and its label on the field's own 34px line, with a gutter after the search button. The wrapper carries no `.form-control` (the legacy markup did), because that class is what painted an input-shaped frame around the choice and made it read as a third text field (AAP 0.2.3 FilterToolbar).
 .input-group > .checkbox {
   display: table-cell;
