@@ -131,10 +131,11 @@ describe('parity-report line budget', () => {
     expect(markdown).toContain('58,643 generated lines across 245 tracked files');
     expect(markdown).toContain('git ls-files | grep -v package-lock.json | xargs wc -l');
     expect(markdown).toContain('inside the ceiling by 1,357 lines');
-    // The trim, its reason and the revised totals: nothing was cut, so the fixed cut order never engaged.
-    expect(markdown).toContain('84,770 lines before the trim');
-    expect(markdown).toContain('No scope was cut');
-    expect(markdown).toContain('Stretch ships');
+    // The prose trim, then the scope cut AAP 0.9.3's fixed order required, with the totals on either side of it.
+    expect(markdown).toContain('84,770 lines before the prose trim');
+    expect(markdown).toContain('65,259 after it');
+    expect(markdown).toContain('AAP 0.9.3\'s fixed cut order engaged at 65,259 lines');
+    expect(markdown).toContain('no Must scope was dropped');
     // The check scripts' recorded share against the plan's about 600, stated as a revised share.
     expect(markdown).toContain('1,479 lines against AAP 0.9.3\'s share of about 600');
     // Last section: nothing headed renders after it.

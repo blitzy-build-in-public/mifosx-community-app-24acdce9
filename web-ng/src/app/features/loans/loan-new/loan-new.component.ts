@@ -15,6 +15,7 @@ import { firstValueFrom } from 'rxjs';
 import { screenFailure } from '../../../core/http/api-error';
 import { DateFieldComponent } from '../../../shared/date-field/date-field.component';
 import { fromFineractDate } from '../../../shared/date-format.util';
+import { PanelCardComponent } from '../../../shared/panel-card/panel-card.component';
 import {
   SelectFieldComponent,
   type SelectOption,
@@ -127,6 +128,7 @@ function today(): Date {
     RouterLink,
     TranslatePipe,
     DateFieldComponent,
+    PanelCardComponent,
     SelectFieldComponent,
     RepaymentPreviewComponent,
   ],

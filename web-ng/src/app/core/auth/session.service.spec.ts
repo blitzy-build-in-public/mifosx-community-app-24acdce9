@@ -125,7 +125,7 @@ function projectionOf(response: HttpResponse<unknown>): SessionUserResponse {
   return response.body;
 }
 
-/** The `GET /users/{id}` reader `restore()` receives, in the shape `SessionUserReader` declares and with the semantics its production owner gives it (`auth.service.ts`, one of the seven files the lint gate leaves free to. */
+/** The `GET /users/{id}` reader `restore()` receives, in the shape `SessionUserReader` declares and with the semantics its production owner gives it (`auth.service.ts`, one of the six files the lint gate leaves free to. */
 function httpReader(handler: HttpHandler, calls: number[]): SessionUserReader {
   return (userId: number): Observable<SessionUserResponse> => {
     calls.push(userId);

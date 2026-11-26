@@ -13,6 +13,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiError } from '../../../core/http/api-error';
 import { fromFineractDate } from '../../../shared/date-format.util';
 import { DateFieldComponent } from '../../../shared/date-field/date-field.component';
+import { PanelCardComponent } from '../../../shared/panel-card/panel-card.component';
 import {
   SelectFieldComponent,
   type SelectOption,
@@ -281,7 +282,14 @@ function chargeRow(charge: LoanCharge): LoanChargeRow {
 @Component({
   selector: 'app-loan-edit',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, RouterLink, TranslatePipe, DateFieldComponent, SelectFieldComponent],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    TranslatePipe,
+    DateFieldComponent,
+    PanelCardComponent,
+    SelectFieldComponent,
+  ],
   templateUrl: './loan-edit.component.html',
 })
 export class LoanEditComponent {

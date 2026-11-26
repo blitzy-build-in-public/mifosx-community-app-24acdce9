@@ -1,4 +1,64 @@
-<!-- The edit-loan-application form (`#/editloanaccount/:id`): the persisted application, re-read from Fineract and posted back to the endpoint that saves it (AAP 0.7.3 row "Loan edit"; AAP 0.7.4) (Rule 1 clause 6, AAP 0.5.2, AAP 0.14.1, Rule 1 clause 3). -->
+<!--
+  The edit-loan-application form (`#/editloanaccount/:id`): the persisted application, re-read from
+  Fineract and posted back to the endpoint that saves it (AAP 0.7.3 row "Loan edit"; AAP 0.7.4 "Loan
+  screens follow the same shell and card pattern … single-purpose forms rendered in the same card,
+  each with a primary submit and a cancel that returns to the record"). The signed-in shell — navbar,
+  breadcrumb, the product's app-background tint — belongs to `core/layout/shell.component.ts`, so this
+  renders the content card only.
+
+  The card itself — the `.panel` surface with its shadow and no border stroke, and the
+  `.panel-heading`/`.panel-title` band carrying the form's title — comes from the shared
+  `div[appPanelCard]` component (AAP 0.2.3 row `PanelCard`), which is the one place the card is
+  defined. Every other visual value comes from the global Bootstrap 3 layer `web-ng/src/styles.scss`
+  compiles: `.container-fluid`, `.row` and `.col-md-*` are the page and its grid; `.panel-body` the
+  card's body; `.form-group`, `.control-label` and `.form-control` the form layout at the legacy 34px
+  control height; `.form-control-static` a persisted value the payload sent no option list for;
+  `.has-error` and `.help-block` Bootstrap's own invalid-field treatment; `.alert.alert-danger` the
+  failure banner; `.btn.btn-default` and `.btn.btn-primary` the two footer actions (Rule 1 clause 6;
+  AAP 0.5.2). No style, colour or pixel value is written here.
+
+  Layout: the two-column `.row`/`.col-md-6` grid of the sibling create-client form rather than
+  `form-horizontal`, because `app-date-field` and `app-select-field` each render their own
+  `.form-group` and Bootstrap's `.form-horizontal .form-group` is `make-row` — negative 15px side
+  margins — so nesting those fields in a horizontal form would push every date and select 15px past
+  the inputs beside it and leave one form with two vertical rhythms.
+
+  Labels: this template owns the `<label class="control-label" for>` of every field, including the
+  ones the shared components draw, because the legacy edit form marks each required field with
+  `<span class="required">*</span>` while the components' `[required]` input only reaches assistive
+  technology. Rendering the label here lets the marker show, and the `<label for>` is then the
+  control's accessible name, so the shared fields correctly take no `label` input of their own
+  (WCAG label in name) — the composition the create-client form already uses.
+
+  Field ids are the control names — `#principal`, `#loanTermFrequency`, `#numberOfRepayments`,
+  `#repaymentEvery`, `#interestRatePerPeriod`, `#submittedOnDate`, `#expectedDisbursementDate`,
+  `#loanOfficerId`, `#fundId` and the seven enumeration selects — because the parity page objects
+  address the same controls by id on both front ends (`e2e/pages/legacy/loans.page.ts`).
+
+  Captions are shipped keys of the legacy bundles (`app/global-translations/locale-en.json`), so no
+  label text is written into this file and every one resolves in English and in the other locales:
+  `label.heading.editloanapplication`, `label.input.principal`, `label.input.loanterm`,
+  `label.heading.frequencyType`, `label.input.numofrepayments`, `label.input.repaidevery`,
+  `label.input.nominalinterestrate`, `label.heading.interesttype`, `label.input.amortization`,
+  `label.input.interestcalculationperiod`, `label.input.repaymentstrategy`, `label.input.submittedon`,
+  `label.input.disbursementon`, `label.input.expecteddisbursementon`,
+  `label.input.loanofficer`, `label.input.fund`, `label.selectloanofficer`, `label.selectfund`,
+  `label.requiredfield`, `label.button.save` and `label.button.cancel`. The not-found sentence reuses
+  `error.msg.resource.not.found`, the key `features/not-found` renders, so the message reads alike on
+  every screen.
+
+  Error text is Fineract's own: `error()` carries the interceptor's `ApiError`, whose `message` is the
+  server's `errors[].defaultUserMessage` rendered verbatim — no prefix, no translation, no truncation
+  — because workflow W7 compares the rendered text with the server's. The form stays mounted below it
+  with every entered value intact (AAP 0.7.4; AAP 0.14.1 "errors are values").
+
+  Deliberately absent: any `min`, `max` or `pattern` on an amount, since W7 depends on Fineract
+  rejecting a 50,000 principal and the browser must not block it (Rule 1 clause 3); a product or
+  client picker, because the component echoes `productId` and `clientId` from the loaded record
+  instead of offering them for editing; a charges editor, a confirmation step and a "submit for
+  approval" action, all of which AAP 0.9.2 keeps out of scope; and any chart, image or Figma reference,
+  since the design covers the login, client-list and client-record screens only.
+-->
 
 @let principalInvalid = controls.principal.invalid && (controls.principal.touched || controls.principal.dirty);
 @let loanTermInvalid = controls.loanTermFrequency.invalid && (controls.loanTermFrequency.touched || controls.loanTermFrequency.dirty);
@@ -12,16 +72,22 @@
 <div class="container-fluid">
   <div class="row">
     <div class="col-md-12">
-      <div class="panel">
-        <div class="panel-heading">
-          <h3 class="panel-title">{{ 'label.heading.editloanapplication' | translate }}</h3>
-        </div>
+      <div appPanelCard [title]="'label.heading.editloanapplication' | translate">
         <div class="panel-body" [attr.aria-busy]="loading() ? 'true' : null">
-          <!-- A loan that does not exist, or a body the model's guard rejects: the record page's own not-found sentence in place of the form, with the shell still usable around it and no error banner, no retry action and no form (AAP 0.7.4). -->
+          <!--
+            A loan that does not exist, or a body the model's guard rejects: the record page's own
+            not-found sentence in place of the form, with the shell still usable around it and no
+            error banner, no retry action and no form (AAP 0.7.4 "States every list and record screen
+            must implement").
+          -->
           @if (notFound()) {
             <p class="text-center text-muted">{{ 'error.msg.resource.not.found' | translate }}</p>
           } @else {
-            <!-- Fineract's failure text, verbatim and moved by no prefix: `role="alert"` announces it without a focus change, and every value the user entered is kept in the form below, so a rejection costs no retyping. -->
+            <!--
+              Fineract's failure text, verbatim and unmoved by any prefix. `role="alert"` announces it
+              without a focus change, and every value the user entered is kept in the form below, so a
+              rejection costs no retyping.
+            -->
             @if (error(); as apiError) {
               <div class="alert alert-danger" role="alert">{{ apiError.message }}</div>
             }
@@ -33,7 +99,12 @@
                     <label class="control-label" for="principal">
                       {{ 'label.input.principal' | translate }}<span class="required">*</span>
                     </label>
-                    <!-- `type="number"` keeps the control's value a number, which is what the form and the request body carry; `step="any"` only lifts the browser's whole-number assumption, because no bound is placed on the amount — a principal above the product's maximum still reaches Fineract (Rule 1 clause 3; workflow W7). -->
+                    <!--
+                      `type="number"` keeps the control's value a number, which is what the form and
+                      the request body carry. `step="any"` only lifts the browser's whole-number
+                      assumption: no bound is placed on the amount, so a principal above the product's
+                      maximum still reaches Fineract (Rule 1 clause 3; workflow W7).
+                    -->
                     <input
                       id="principal"
                       name="principal"
@@ -81,7 +152,12 @@
                   >
                     {{ 'label.heading.frequencyType' | translate }}<span class="required">*</span>
                   </label>
-                  <!-- The options are Fineract's own list, in the order the payload returned it (Rule 1 clause 3); a payload that carried no list leaves the persisted value as a static display, because this form never invents an enumeration the server did not send. -->
+                  <!--
+                    The options are Fineract's own list, rendered in the order the payload returned it
+                    (Rule 1 clause 3: dropdown sources are the template endpoint's). A payload that
+                    carried no list leaves the persisted value as a static display, because this form
+                    never invents an enumeration the server did not send.
+                  -->
                   @if (template().termFrequencyTypeOptions.length > 0) {
                     <app-select-field
                       inputId="loanTermFrequencyType"
@@ -283,7 +359,11 @@
                   >
                     {{ 'label.input.repaymentstrategy' | translate }}<span class="required">*</span>
                   </label>
-                  <!-- The strategy picker is keyed by the option's `code`, which is what the request body posts as `transactionProcessingStrategyCode`; the control's id stays the legacy template's `transactionProcessingStrategyId` so the parity page objects find it. -->
+                  <!--
+                    The strategy picker is keyed by the option's `code`, which is what the request body
+                    posts (`transactionProcessingStrategyCode`); the control's id stays the legacy
+                    template's `transactionProcessingStrategyId` so the parity page objects find it.
+                  -->
                   @if (template().transactionProcessingStrategyOptions.length > 0) {
                     <app-select-field
                       inputId="transactionProcessingStrategyId"
@@ -304,7 +384,12 @@
                   <label class="control-label" for="submittedOnDate">
                     {{ 'label.input.submittedon' | translate }}<span class="required">*</span>
                   </label>
-                  <!-- `app-date-field` replaces the legacy jQuery datepicker (AAP 0.10.5 item 1) and holds the date as `Date | null`, which `LoanService.update` serialises with `dateFormat` and the active `locale` at the boundary; no native `required`, `min` or `max`, because the browser must not block a date Fineract alone judges. -->
+                  <!--
+                    `app-date-field` replaces the legacy jQuery datepicker (AAP 0.10.5 item 1) and holds
+                    the date as `Date | null`, which `LoanService.update` serialises with `dateFormat`
+                    and the active `locale` at the boundary. No native `required`, `min` or `max`: the
+                    browser must not block a date Fineract alone judges.
+                  -->
                   <app-date-field
                     inputId="submittedOnDate"
                     [control]="controls.submittedOnDate"
@@ -330,7 +415,11 @@
               <div class="row">
                 <div class="col-md-6">
                   <label class="control-label" for="loanOfficerId">{{ 'label.input.loanofficer' | translate }}</label>
-                  <!-- Optional, and the prompt row returns the picker to empty as the legacy chosen control's prompt did; the rows are Fineract's `loanOfficerOptions`, in the order the payload sent them and not re-sorted here. -->
+                  <!--
+                    Optional, and the prompt row returns the picker to empty, as the legacy chosen
+                    control's prompt did. The rows are Fineract's `loanOfficerOptions`, in the order
+                    the payload sent them — not re-sorted here.
+                  -->
                   <app-select-field
                     inputId="loanOfficerId"
                     [control]="controls.loanOfficerId"
@@ -351,11 +440,20 @@
 
               <div class="row">
                 <div class="col-md-offset-5 col-md-7">
-                  <!-- Cancel returns to the record and posts nothing: `#/viewloanaccount/:id`, the route the loan record declares, with no history-based "back", so the destination does not depend on how the user arrived. -->
+                  <!--
+                    Cancel returns to the record and posts nothing: `#/viewloanaccount/:id`, the route
+                    the loan record declares. No history-based "back", so the destination does not
+                    depend on how the user arrived.
+                  -->
                   <a class="btn btn-default" [routerLink]="['/viewloanaccount', loanId()]">
                     {{ 'label.button.cancel' | translate }}
                   </a>
-                  <!-- `type="submit"` so Enter in any field runs the same `(ngSubmit)` handler; disabled while the save is in flight, because `PUT /loans/{id}` is not idempotent and one click must send exactly one request, and while no record is loaded, so an empty form cannot be saved before the payload arrives. -->
+                  <!--
+                    `type="submit"` so Enter in any field runs the same `(ngSubmit)` handler. Disabled
+                    while the save is in flight — `PUT /loans/{id}` is not idempotent, so one click
+                    must send exactly one request — and while no record is loaded, so an empty form
+                    cannot be saved before the payload arrives.
+                  -->
                   <button type="submit" class="btn btn-primary" [disabled]="guard.busy() || !account()">
                     {{ 'label.button.save' | translate }}
                   </button>

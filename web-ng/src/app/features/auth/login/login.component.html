@@ -1,25 +1,67 @@
-<!-- The login screen at `#/login` (AAP 0.7.1 `auth`; AAP 0.7.4 "Login"; AAP 0.2.1 Step 1; Figma flow "Sign in and open a client record" step 1), the entry point of workflow W1 (AAP 0.14.2, Rule 1 clause 6, AAP 0.2.3). -->
+<!--
+  The login screen at `#/login` (AAP 0.7.1 `auth`; AAP 0.7.4 "Login"; AAP 0.2.1 Step 1; Figma flow
+  "Sign in and open a client record" step 1), the entry point of workflow W1.
+
+  A white page with NO application chrome: this route is not wrapped by the signed-in shell, so nothing
+  from `core/layout` renders here — no navbar, no left rail, no breadcrumb. The application's single
+  notification host is `app.component.html`, so this file renders no notification component of its own;
+  a login-time API failure surfaces in the `.alert.alert-danger` region below, which is this screen's
+  only error surface.
+
+  Every visual value comes from the global Bootstrap 3 layer compiled in `web-ng/src/styles.scss`, so
+  this file carries no stylesheet, no `style` attribute, no colour and no pixel: `.container`,
+  `.row`, `.col-sm-4` and `.col-sm-offset-4` are the page and the centred form column the design
+  measures (Bootstrap's 360px of content inside the 1170px container — the design's 396px at its 110%
+  capture scale), `hr` the 1px hairline and `.alert.alert-danger` this screen's failure banner
+  (Rule 1 clause 6).
+
+  The two regions of the component inventory (AAP 0.2.3) are rendered as the components it names: the
+  language row is the shared `LanguageSwitcherComponent` the navbar also uses, and the form is
+  `LoginFormComponent`, which owns the typed reactive form and carries the legacy ids the parity
+  harness addresses (`uid`, `pwd`, `name="username"`, `name="password"`, `form.form`, `login-button`;
+  `web-ng/e2e/pages/legacy/login.page.ts`). What this file keeps is the page around them — the lockup,
+  the error region, the footer and the column they sit in.
+
+  One gap in the global layer is visible here and is reported rather than patched locally: the legacy
+  page's `margin-top: 10vh` page offset has no global class, and no invented class or inline value is
+  introduced for it.
+-->
 <div class="container">
   <div class="row">
     <div class="col-xs-12">
       <main>
-        <!-- The language switcher, right-aligned as the design shows it. A bare native `<select>` is the Angular-native replacement for the plugin the legacy screen used (AAP 0.10.5 item 2), and `onLangChange` swaps the active (AAP 0.7.4, Rule 1 clause 4). -->
-        <div class="text-right language-switcher">
-          <label for="langSelect">{{ 'label.input.changelanguage' | translate }}</label>
-          <select
-            id="langSelect"
-            #langSelect
-            class="btn btn-default btn-xs"
-            [value]="currentLang()"
-            (change)="onLangChange(langSelect.value, langSelect)"
-          >
-            @for (lang of langs; track lang) {
-              <option [value]="lang" [selected]="lang === currentLang()">{{ lang }}</option>
-            }
-          </select>
-        </div>
+        <!--
+          The language switcher, right-aligned as the design shows it: the shared
+          `LanguageSwitcherComponent` the navbar also renders (AAP 0.2.3 `LanguageSwitcher`), so the
+          two rows cannot drift. It keeps legacy's own "Change language:" key and the `langSelect` id
+          the parity page objects drive, owns the switch in place — no page reload and no navigation
+          (AAP 0.7.4) — and reports both outcomes: a switch that took effect withdraws the message a
+          failed one left, and a bundle that could not be loaded fills this screen's error region.
+          The host element carries the `text-right` alignment the inline row carried; the row's own
+          colour, size and select height stay in `web-ng/src/styles.scss` (Rule 1 clause 6).
+        -->
+        <app-language-switcher
+          class="text-right"
+          [langs]="langs"
+          [current]="currentLang()"
+          labelKey="label.input.changelanguage"
+          selectId="langSelect"
+          (langChange)="onLangChange()"
+          (langChangeFailed)="onLangChangeFailed()"
+        />
 
-        <!-- The brand lockup, centred on the form column. The image is served in place from the legacy `app/images` tree through the `angular.json` assets mapping and is never copied, re-created in CSS or replaced by an icon (Rule (Rule 1 clause 6, AAP 0.2.4, AAP 0.2.1). -->
+        <!--
+          The brand lockup, centred on the form column. The image is served in place from the legacy
+          `app/images` tree through the `angular.json` assets mapping and is never copied, re-created
+          in CSS or replaced by an icon (Rule 1 clause 6; AAP 0.2.4). `alt` comes from the legacy
+          bundle's own product name, so the image is announced in the active language.
+
+          `.login-hero` is what governs the rendered width: legacy pinned the lockup to 80% of the form
+          column with an inline `width:80%; margin:auto` (`app/index.html:80`), and that rule now lives
+          in `web-ng/src/styles.scss` as a class, so the hero renders at the AAP 0.2.1 size instead of
+          the file's intrinsic width. `.center-block` supplies the centring the inline style carried and
+          `.img-responsive` keeps the height proportional, so the lockup is never stretched.
+        -->
         <div class="row">
           <div class="col-sm-4 col-sm-offset-4 text-center">
             <img
@@ -34,91 +76,30 @@
 
         <div class="row">
           <div class="col-sm-4 col-sm-offset-4">
-            <!-- Fineract's own failure text, rendered verbatim and directly above the form: no `translate` pipe, no prefix, no capitalisation and no truncation, so the message the user reads is the message the backend returned (AAP (AAP 0.7.4, AAP 0.14.1, AAP 0.14.2). -->
+            <!--
+              Fineract's own failure text, rendered verbatim and directly above the form: no
+              `translate` pipe, no prefix, no capitalisation and no truncation, so the message the
+              user reads is the message the backend returned (AAP 0.7.4; AAP 0.14.1 "errors are
+              values"). `role="alert"` announces it without moving focus, and the typed username
+              survives because the component clears only the password.
+            -->
             @if (error(); as message) {
               <div class="alert alert-danger" role="alert">{{ message }}</div>
             }
 
-            <!-- `novalidate` because the typed reactive form owns validation: the controls carry no `required` attribute, so the browser never blocks submission on its own. -->
-            <form class="form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
-              <div
-                class="form-group"
-                [class.has-error]="
-                  form.controls.username.invalid &&
-                  (form.controls.username.touched || form.controls.username.dirty)
-                "
-              >
-                <label class="form-label" for="uid">{{ 'label.input.username' | translate }}</label>
-                <input
-                  id="uid"
-                  name="username"
-                  type="text"
-                  class="form-control"
-                  formControlName="username"
-                  [attr.placeholder]="'label.input.username' | translate"
-                  [attr.aria-required]="true"
-                  [attr.aria-invalid]="
-                    form.controls.username.invalid && form.controls.username.touched ? 'true' : null
-                  "
-                  [attr.aria-describedby]="
-                    form.controls.username.invalid && form.controls.username.touched
-                      ? 'uid-error'
-                      : null
-                  "
-                />
-                @if (form.controls.username.invalid && form.controls.username.touched) {
-                  <span id="uid-error" class="help-block">
-                    {{ 'label.requiredfield' | translate }}
-                  </span>
-                }
-              </div>
+            <!--
+              The form itself, the `LoginForm` row of the component inventory (AAP 0.2.3): its ids,
+              names, classes, placeholders and labels are the legacy screen's own (`uid`, `pwd`,
+              `login-button`), so the parity page objects drive the same controls on both
+              applications, and it reports the typed pair through its `(submit)` output.
 
-              <div
-                class="form-group"
-                [class.has-error]="
-                  form.controls.password.invalid &&
-                  (form.controls.password.touched || form.controls.password.dirty)
-                "
-              >
-                <label class="form-label" for="pwd">{{ 'label.input.password' | translate }}</label>
-                <!-- `type="password"` and the legacy screen's own `autocomplete="new-password"`: the value is masked on screen and never echoed, logged or captured (Rule 1 clause 9). -->
-                <input
-                  id="pwd"
-                  name="password"
-                  type="password"
-                  class="form-control"
-                  formControlName="password"
-                  autocomplete="new-password"
-                  [attr.placeholder]="'label.input.password' | translate"
-                  [attr.aria-required]="true"
-                  [attr.aria-invalid]="
-                    form.controls.password.invalid && form.controls.password.touched ? 'true' : null
-                  "
-                  [attr.aria-describedby]="
-                    form.controls.password.invalid && form.controls.password.touched
-                      ? 'pwd-error'
-                      : null
-                  "
-                />
-                @if (form.controls.password.invalid && form.controls.password.touched) {
-                  <span id="pwd-error" class="help-block">
-                    {{ 'label.requiredfield' | translate }}
-                  </span>
-                }
-              </div>
-
-              <div class="form-group">
-                <!-- One full-width primary submit. `[disabled]="guard.busy()"` is the whole duplicate-submission guard: `POST /authentication` is not idempotent, so one click sends exactly one request (AAP 0.14.1) and no second spinner. -->
-                <button
-                  id="login-button"
-                  type="submit"
-                  class="btn btn-primary btn-block"
-                  [disabled]="guard.busy()"
-                >
-                  {{ 'label.button.signin' | translate }}
-                </button>
-              </div>
-            </form>
+              `[busy]="guard.busy()"` is the whole duplicate-submission guard: the request belongs to
+              this screen, which owns `AuthService` and the guard, so the form disables its button
+              while `POST /authentication` is in flight and one click sends one request (AAP
+              0.14.1). The error region above stays outside the form: a refused exchange replaces no
+              field, it only asks the form to clear the credential control.
+            -->
+            <app-login-form [busy]="guard.busy()" (submit)="onSubmit($event)" />
           </div>
         </div>
       </main>
@@ -126,7 +107,20 @@
       <footer>
         <hr />
 
-        <!-- The footer's three link columns, one heading and three links each, as the design shows them (Rule 1 clause 3). -->
+        <!--
+          The footer's three link columns, one heading and three links each, as the design shows them.
+          Every string is a key the shipped legacy bundles already carry, so no label is written into
+          this file and none reaches the user as a raw key. Each heading takes Bootstrap 3's own
+          `.text-uppercase` utility because legacy renders the same three keys through
+          `| translate | uppercase` (`app/index.html:202,216,233`), and the transform has to follow the
+          active bundle rather than a literal (Rule 1 clause 3).
+
+          No destination is invented: the link targets behind these columns and this paragraph belong
+          to modules outside this migration's scope (product documentation, community forums,
+          contribution pages), so each renders the inert `href="#"` that `$event.preventDefault()`
+          keeps from navigating — under hash routing a bare `#` would otherwise leave `#/login` for
+          the root fragment. Nothing here is wired to the router.
+        -->
         <div class="row">
           <div class="col-xs-4 text-center">
             <ul class="list-unstyled">
@@ -192,7 +186,18 @@
 
         <hr />
 
-        <!-- The centred closing paragraph, at the width the design gives it, with its three inline links rendered inert for the same reason as the columns above (Rule 1 clause 3). -->
+        <!--
+          The centred closing paragraph, at the width the design gives it, with its three inline
+          links rendered inert for the same reason as the columns above.
+
+          BLITZY [I18N]: this is the one string on the screen that is not translated, because the
+          legacy application never translated it either — it is hard-coded English HTML in
+          app/scripts/controllers/main/MainController.js:220-222 — and no shipped bundle carries a
+          key for it, while adding a key would mean editing a locale file (forbidden: Rule 1 clauses
+          1 and 6). Keeping the legacy wording verbatim is what matches the legacy screen (Rule 1
+          clause 3); the alternative, keys with no bundle behind them, would put humanised key
+          fragments in front of the user, which the missing-translation policy exists to prevent.
+        -->
         <div class="row">
           <div class="col-sm-6 col-sm-offset-3 text-center">
             <p class="text-muted">

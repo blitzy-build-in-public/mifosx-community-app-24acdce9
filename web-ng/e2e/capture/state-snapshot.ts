@@ -53,18 +53,7 @@ export interface LoanSnapshot {
   /** Charges attached to the loan; the charge form adds one. */
   readonly chargeCount: number;
 }
-/** A savings account's end state, reduced to what W8 asserts: status and the three balances. */
-export interface SavingsSnapshot {
-  /** Status as Fineract names it, e.g. `Submitted` or `Active`; `''` only when the payload carried none. */
-  readonly status: string;
-  /** `summary.accountBalance` — W8 must end at 800 (deposit 1,000, withdrawal 200). */
-  readonly accountBalance: number | null;
-  /** `summary.totalDeposits` — W8's 1,000. */
-  readonly totalDeposits: number | null;
-  /** `summary.totalWithdrawals` — W8's 200. */
-  readonly totalWithdrawals: number | null;
-}
-/** One workflow's end state on one front end plus the metadata that makes the file self-describing; `client`, `loan` and `savings` appear only when the caller asked for them, and nothing names the machine the run happened on. */
+/** One workflow's end state on one front end plus the metadata that makes the file self-describing; `client` and `loan` appear only when the caller asked for them, and nothing names the machine the run happened on. */
 export interface StateSnapshot {
   /** Playwright project the snapshot came from. */
   readonly project: 'legacy' | 'next';
@@ -76,8 +65,6 @@ export interface StateSnapshot {
   readonly client?: ClientSnapshot;
   /** Loan end state, when the workflow targeted a loan. */
   readonly loan?: LoanSnapshot;
-  /** Savings end state, when the workflow targeted a savings account. */
-  readonly savings?: SavingsSnapshot;
 }
 /** A snapshot as {@link captureState} returns it: the written document plus the file's absolute path, the one field kept out of the file because it differs between two runs by construction ({@link diffStates} compares plain snapshots). */
 export interface WrittenStateSnapshot extends StateSnapshot {
@@ -88,20 +75,18 @@ export interface WrittenStateSnapshot extends StateSnapshot {
 export interface StateTargets {
   /** Playwright project the snapshot belongs to. */
   project: 'legacy' | 'next';
-  /** Workflow id the snapshot covers, e.g. `'W1'` … `'W8'` or `'CHAIN'`. */
+  /** Workflow id the snapshot covers, e.g. `'W1'` … `'W7'` or `'CHAIN'`. */
   workflow: string;
   /** Client to read; validated as a positive integer before any call is made. */
   clientId?: number;
   /** Loan to read; validated the same way. */
   loanId?: number;
-  /** Savings account to read; validated the same way. */
-  savingsId?: number;
   /** Run date to offset dates against; defaults to {@link readBusinessDate} — the tenant's business date, never the browser clock (Rule 1 clause 2). */
   runDate?: Date;
 }
 /** One field-level difference between the two front ends' end states, shaped like the traffic side's `ExchangeDiff` so the report writer renders both the same way. */
 export interface StateDiff {
-  /** What differs, as a value path: `client.status`, `loan.totalOutstanding`, `savings.accountBalance`. */
+  /** What differs, as a value path: `client.status` or `loan.totalOutstanding`. */
   readonly field: string;
   /** The legacy side's value; `null` when that side has no such section or the field is absent. */
   readonly legacy: NormalizedValue;
@@ -220,20 +205,9 @@ export function reduceLoan(raw: unknown): LoanSnapshot {
     chargeCount: asArray(field(loan, 'charges')).length,
   };
 }
-/** Reduces a `GET /savingsaccounts/{id}?associations=all` payload to a {@link SavingsSnapshot} (AAP 0.7.3 W8); pure and exported for the same reason as {@link reduceClient}. */
-export function reduceSavings(raw: unknown): SavingsSnapshot {
-  const savings = asRecord(raw);
-  const summary = asRecord(field(savings, 'summary'));
-  return {
-    status: statusOf(savings),
-    accountBalance: asNumber(field(summary, 'accountBalance')),
-    totalDeposits: asNumber(field(summary, 'totalDeposits')),
-    totalWithdrawals: asNumber(field(summary, 'totalWithdrawals')),
-  };
-}
 /** Query parameters of one snapshot read, in the shape Playwright's `params` option takes. */
 type QueryParameters = Readonly<Record<string, string>>;
-/** The association set the loan and savings reads ask for — `?associations=all`, which is what the record screens send (AAP 0.7.3 W6, W8) — passed as the request's `params` option so this module carries no URL literal. */
+/** The association set the loan read asks for — `?associations=all`, which is what the record screen sends (AAP 0.7.3 W6) — passed as the request's `params` option so this module carries no URL literal. */
 const ALL_ASSOCIATIONS: QueryParameters = { associations: 'all' };
 /** A resource path with its query parameters rendered, e.g. `/loans/45?associations=all`: used only to name a resource in an error, keys sorted so the same read always labels the same. */
 function endpointLabel(resourcePath: string, params: QueryParameters | undefined): string {
@@ -370,21 +344,13 @@ export async function snapshotLoan(loanId: number): Promise<LoanSnapshot> {
     reduceLoan(await readJson(context, `/loans/${id}`, ALL_ASSOCIATIONS)),
   );
 }
-/** A savings account's end state from `GET /savingsaccounts/{id}?associations=all` (AAP 0.7.3 W8). */
-export async function snapshotSavings(savingsId: number): Promise<SavingsSnapshot> {
-  const id = requireResourceId(savingsId, 'savingsId');
-  return withContext(async (context) =>
-    reduceSavings(await readJson(context, `/savingsaccounts/${id}`, ALL_ASSOCIATIONS)),
-  );
-}
 /** Reads the end state of every targeted resource, writes it as one snapshot file and returns a {@link WrittenStateSnapshot}: one authentication and one context serve every resource, and a workflow that touched only a client writes `client` and nothing else. @throws {@link StateSnapshotError} when a read fails; `Error` when no resource was targeted, an id is not a positive integer, `workflow` is blank or `runDate` is invalid. */
 export async function captureState(targets: StateTargets): Promise<WrittenStateSnapshot> {
   const clientId = optionalResourceId(targets.clientId, 'clientId');
   const loanId = optionalResourceId(targets.loanId, 'loanId');
-  const savingsId = optionalResourceId(targets.savingsId, 'savingsId');
-  if (clientId === undefined && loanId === undefined && savingsId === undefined) {
+  if (clientId === undefined && loanId === undefined) {
     throw new Error(
-      'captureState() needs at least one of clientId, loanId or savingsId: a snapshot of nothing cannot ' +
+      'captureState() needs at least one of clientId or loanId: a snapshot of nothing cannot ' +
         'be compared with the other front end.',
     );
   }
@@ -399,10 +365,6 @@ export async function captureState(targets: StateTargets): Promise<WrittenStateS
       loanId === undefined
         ? undefined
         : reduceLoan(await readJson(context, `/loans/${loanId}`, ALL_ASSOCIATIONS));
-    const savings =
-      savingsId === undefined
-        ? undefined
-        : reduceSavings(await readJson(context, `/savingsaccounts/${savingsId}`, ALL_ASSOCIATIONS));
     // The written document is the metadata and the sections the workflow reached, in that order; the absolute path is added to the returned object only, because recording it in the file would put a machine-specific path into an artefact two runs are expected to compare byte for byte.
     const written = {
       project: targets.project,
@@ -410,7 +372,6 @@ export async function captureState(targets: StateTargets): Promise<WrittenStateS
       runDate: formatDateOnly(runDate),
       ...(client === undefined ? {} : { client }),
       ...(loan === undefined ? {} : { loan }),
-      ...(savings === undefined ? {} : { savings }),
     };
     const directory = join(CAPTURES_DIR, 'state');
     filesystem.mkdirSync(directory, { recursive: true });
@@ -439,13 +400,6 @@ const LOAN_FIELDS: readonly (keyof LoanSnapshot)[] = [
   'firstPeriodTotalDue',
   'transactionCount',
   'chargeCount',
-];
-/** {@link SavingsSnapshot}'s compared fields, in comparison order. */
-const SAVINGS_FIELDS: readonly (keyof SavingsSnapshot)[] = [
-  'status',
-  'accountBalance',
-  'totalDeposits',
-  'totalWithdrawals',
 ];
 /** A snapshot field as a comparable JSON value; anything but a scalar is malformed input from outside and is rendered as text rather than thrown on, because an incomplete comparison is a finding in its own right. */
 function asNormalized(value: unknown): NormalizedValue {
@@ -482,7 +436,6 @@ export function diffStates(legacy: StateSnapshot, next: StateSnapshot): StateDif
   const differences: StateDiff[] = [];
   compareSection('client', CLIENT_FIELDS, legacy.client, next.client, differences);
   compareSection('loan', LOAN_FIELDS, legacy.loan, next.loan, differences);
-  compareSection('savings', SAVINGS_FIELDS, legacy.savings, next.savings, differences);
   return differences;
 }
 

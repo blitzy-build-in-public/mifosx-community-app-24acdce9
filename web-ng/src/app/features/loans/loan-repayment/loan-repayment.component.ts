@@ -17,6 +17,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiError, screenFailure, toDisplayableFailure } from '../../../core/http/api-error';
 import { DateFieldComponent } from '../../../shared/date-field/date-field.component';
 import { fromFineractDate } from '../../../shared/date-format.util';
+import { PanelCardComponent } from '../../../shared/panel-card/panel-card.component';
 import { SelectFieldComponent } from '../../../shared/select-field/select-field.component';
 import type { SelectOption, SelectValue } from '../../../shared/select-field/select-field.component';
 import { createSubmitGuard } from '../../../shared/submit-guard.util';
@@ -30,7 +31,14 @@ type RepaymentBody = Parameters<LoanService['repay']>[1];
 @Component({
   selector: 'app-loan-repayment',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, TranslatePipe, DateFieldComponent, SelectFieldComponent],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    TranslatePipe,
+    DateFieldComponent,
+    PanelCardComponent,
+    SelectFieldComponent,
+  ],
   templateUrl: './loan-repayment.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })

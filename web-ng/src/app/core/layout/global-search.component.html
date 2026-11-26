@@ -12,7 +12,7 @@
       id="search"
       type="text"
       class="form-control"
-      [formControl]="query"
+      [formControl]="queryControl"
       [attr.placeholder]="'label.searchorpress' | translate"
       [attr.aria-label]="'label.heading.search' | translate"
     />
@@ -22,7 +22,7 @@
       <select
         id="search-scope"
         class="form-control"
-        [formControl]="scope"
+        [formControl]="scopeControl"
         [attr.aria-label]="'label.button.filter' | translate"
       >
         @for (option of scopes; track option) {

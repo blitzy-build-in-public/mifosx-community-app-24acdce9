@@ -5,7 +5,6 @@ import {
   diffStates,
   reduceClient,
   reduceLoan,
-  reduceSavings,
   type LoanSnapshot,
   type StateSnapshot,
 } from './state-snapshot';
@@ -128,30 +127,6 @@ describe('reduceLoan (AAP 0.10.1 W4 to W7; AAP 0.10.2)', () => {
     });
 
     expect(snapshot.firstPeriodTotalDue).toBe(466.67);
-  });
-});
-
-describe('reduceSavings (AAP 0.10.1 W8)', () => {
-  it('reduces status and the three balances', () => {
-    expect(
-      reduceSavings({
-        status: status('Active'),
-        summary: { accountBalance: 800, totalDeposits: 1000, totalWithdrawals: 200 },
-      }),
-    ).toEqual({
-      status: 'Active',
-      accountBalance: 800,
-      totalDeposits: 1000,
-      totalWithdrawals: 200,
-    });
-  });
-  it('answers null balances when the summary is absent', () => {
-    expect(reduceSavings({ status: status('Submitted') })).toEqual({
-      status: 'Submitted',
-      accountBalance: null,
-      totalDeposits: null,
-      totalWithdrawals: null,
-    });
   });
 });
 

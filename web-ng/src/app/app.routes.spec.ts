@@ -30,7 +30,7 @@ import { SearchResultsComponent } from './features/search/search-results.compone
 
 /** Behaviour of the application's route tree (AAP 0.8.2 "Shell and navigation" and "Feature routes"; AAP 0.3.4 claims 1 and 2; AAP 0.10.4 route list; AAP 0.11.1 row `app.routes.ts`) (AAP 0.10.5, AAP 0.1.1). */
 
-/** The nineteen paths `web-ng/tools/parity/in-scope-routes.json` declares, in its own order, with the response status the list gives each of them. */
+/** The sixteen paths `web-ng/tools/parity/in-scope-routes.json` declares, in its own order, with the response status the list gives each of them. */
 const IN_SCOPE_PATHS: readonly string[] = [
   'login',
   '',
@@ -46,9 +46,6 @@ const IN_SCOPE_PATHS: readonly string[] = [
   'loanaccount/:id/:action',
   'addloancharge/:id',
   'loanaccountcharge/:id/:action/:chargeId',
-  'new_client_saving_application/:clientId',
-  'viewsavingaccount/:id',
-  'savingaccount/:id/:action',
   'search/:query',
   '**',
 ];
@@ -215,7 +212,7 @@ function routerFor(authenticated: boolean): Router {
 }
 
 describe('APP_ROUTES', () => {
-  it('composes the nineteen in-scope paths and nothing else, declaring the catch-all twice', async () => {
+  it('composes the sixteen in-scope paths and nothing else, declaring the catch-all twice', async () => {
     const composed: readonly string[] = await composePaths(APP_ROUTES);
     const unique: readonly string[] = [...new Set(composed)];
 
@@ -231,7 +228,7 @@ describe('APP_ROUTES', () => {
       (route: Route): boolean => route.loadChildren !== undefined,
     );
 
-    expect(mounts).toHaveLength(3);
+    expect(mounts).toHaveLength(2);
 
     for (const mount of mounts) {
       // Still a lazy group: the predicate decides which chunk is fetched, never whether it is one.

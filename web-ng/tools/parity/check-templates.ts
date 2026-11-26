@@ -16,7 +16,7 @@ const ALLOWLIST_FILE = 'endpoint-allowlist.json';
 const ALLOWLIST_SHOWN = `web-ng/tools/parity/${ALLOWLIST_FILE}`;
 const LEGACY_ABSENT = 'LEGACY TREE ABSENT: app/scripts could not be read (base commit holds only README.md) — the expected template set is built from AAP 0.7.3 alone, not from a legacy scan.';
 /** Route families this migration delivers; a legacy template call under one of them must have an equivalent here. */
-const IN_SCOPE = ['/clients', '/loans', '/savingsaccounts', '/search', '/datatables'];
+const IN_SCOPE = ['/clients', '/loans', '/search', '/datatables'];
 /** In-scope prefixes of an out-of-scope feature: collateral stays out of scope even on the in-scope client and loan records. */
 const OUT_OF_SCOPE = ['/clients/{}/collaterals', '/loans/{}/collaterals'];
 /** A legacy token shaped like a resource factory key; a legacy scan's other matches name a property, never a resource. */
@@ -56,10 +56,6 @@ const EXPECTED: readonly ExpectedTemplate[] = [
     note: 'charge options of the add-charge form' },
   { id: 'loans-schedule-preview', canonicalPath: '/loans', markers: ['calculateLoanSchedule'], family: 'Loans', source: 'W4 loan application',
     note: 'the repayment-schedule preview posted to command=calculateLoanSchedule' },
-  { id: 'savings-application-template', canonicalPath: '/savingsaccounts/template', markers: ['savingsaccounts/template'], family: 'Savings', source: 'W8 savings',
-    note: 'product and field options of the savings application' },
-  { id: 'savings-transactions-template', canonicalPath: '/savingsaccounts/{}/transactions/template', markers: ['transactions/template'], family: 'Savings', source: 'W8 savings',
-    note: 'payment types of deposit and withdrawal' },
   { id: 'search-template', canonicalPath: '/search/template', markers: ['search/template'], family: 'Search', source: 'Shell: global search',
     note: 'the search scope template' },
   { id: 'loan-charge-template', canonicalPath: '/charges/{}', markers: ['charges/', 'template'], family: 'Loans', source: 'W4 loan application',
@@ -133,7 +129,7 @@ const TEMPLATES_USAGE: CliUsage = {
   name: 'check:templates',
   summary: 'Fails on any AAP 0.7.3 template endpoint that no file under web-ng/src/app calls.',
   effects: [
-    'compares the fourteen AAP 0.7.3 template endpoints with the calls the non-spec code under web-ng/src/app makes',
+    'compares the twelve AAP 0.7.3 template endpoints with the calls the non-spec code under web-ng/src/app makes',
     'reports LEGACY TREE ABSENT as a note, never as a failure, when app/scripts cannot be read',
     'writes nothing: the gate only reads web-ng/src/app and the data files under web-ng/tools/parity',
   ],

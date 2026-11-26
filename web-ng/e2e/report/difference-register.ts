@@ -12,8 +12,22 @@ export interface DifferenceRegisterReading {
   readonly why: string;
 }
 
-/** The two readings this run takes more narrowly than the plan's wording, in AAP order: AAP 0.10.5 item 15, the default dates a form opens with, and AAP 0.10.1's W2 row, the client template read (AAP 0.3.4). */
+/** The three readings this run takes from the plan's wording, in AAP order: AAP 0.10.5 item 5, the savings entry point AAP 0.9.3's fixed cut order withdrew; AAP 0.10.5 item 15, the default dates a form opens with; and AAP 0.10.1's W2 row, the client template read (AAP 0.3.4). */
 export const DIFFERENCE_REGISTER_READINGS: readonly DifferenceRegisterReading[] = [
+  {
+    where: 'AAP 0.10.5 item 5 — the client record\'s "New Saving" entry point',
+    plan: 'the savings entry point is rendered because Stretch ships',
+    delivered:
+      'the savings screens are not delivered: the record offers `Edit`, `New Loan` and `Close` and no "New Saving", '
+      + 'and the savings application, record and action screens, their three routes, their e2e page objects and their '
+      + 'spec are gone. Every Must workflow keeps its screen and its spec, and no Must scope was dropped.',
+    why:
+      'AAP 0.9.3 fixes the cut order for the case its 60,000-line ceiling cannot otherwise be met — first drop Stretch '
+      + '(savings, workflow W8), then trim the e2e suite to the Must workflows, and stop there — and requires every cut to '
+      + 'be recorded with its reason and its revised totals. The integrated tree measured 65,259 generated lines, so that '
+      + 'order engaged: W8 was the only Stretch workflow and its spec the only Stretch spec, so its first step contains the '
+      + 'second. The revised totals stand in the report\'s `## Line budget` section, and Rule 1 clause 10 is met by that record.',
+  },
   {
     where: 'AAP 0.10.5 item 15 — the default dates a form opens with',
     plan:
@@ -67,7 +81,8 @@ export function renderDifferenceRegister(
     '',
     'The register itself is AAP 0.10.5\'s sixteen deliberate differences, and every `intentional-diff` row '
       + 'above cites one of them by number. The entries below are the ones this run reads more narrowly than '
-      + 'the plan wrote them, stated with what the run delivers so that the register and the specs agree.',
+      + 'the plan wrote them — or, at item 5, does not deliver at all, as AAP 0.9.3\'s fixed cut order required — '
+      + 'stated with what the run delivers so that the register and the specs agree.',
     '',
     `| ${REGISTER_COLUMNS.join(' | ')} |`,
     `| ${REGISTER_COLUMNS.map(() => '---').join(' | ')} |`,

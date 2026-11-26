@@ -10,6 +10,7 @@ import { ApiError } from '../../../core/http/api-error';
 import { DateFieldComponent } from '../../../shared/date-field/date-field.component';
 import { fromFineractDate } from '../../../shared/date-format.util';
 import { HasPermissionDirective } from '../../../shared/has-permission.directive';
+import { PanelCardComponent } from '../../../shared/panel-card/panel-card.component';
 import { createSubmitGuard } from '../../../shared/submit-guard.util';
 import type { ClientEditRequest, ClientTemplate } from '../client.models';
 import { ClientService } from '../client.service';
@@ -100,7 +101,7 @@ function setRequired(control: AbstractControl, required: boolean): void {
 /** The edit screen (`#/editclient/:id`) of AAP 0.7.3 "Client list and edit": one `getWithTemplate` seed read and one `update` save through the family's service, one load per navigation, and legacy's required set with nothing added (AAP 0.8.2; Rule 1 clauses 2, 3 and 5). */
 @Component({
   selector: 'app-client-edit',
-  imports: [ReactiveFormsModule, RouterLink, TranslatePipe, DateFieldComponent, HasPermissionDirective],
+  imports: [ReactiveFormsModule, RouterLink, TranslatePipe, DateFieldComponent, HasPermissionDirective, PanelCardComponent],
   templateUrl: './client-edit.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })

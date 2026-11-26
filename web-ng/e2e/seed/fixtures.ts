@@ -493,21 +493,6 @@ export const SEED_LOAN_CHARGE = {
   timeType: 'specified due date',
   calculation: 'flat',
 } as const satisfies LoanChargeSeed;
-/** The savings product the seed creates — the AAP 0.10.1 row "Parity Savings, currency USD, nominal annual interest 2%", in the table's own vocabulary. */
-export interface SavingsProductSeed {
-  /** Product name the savings workflow selects. */
-  readonly name: string;
-  /** Product currency. */
-  readonly currencyCode: string;
-  /** Nominal annual interest rate, in per cent. */
-  readonly nominalAnnualInterestRate: number;
-}
-/** The seed savings product of AAP 0.10.1, consumed by the seed script and by W8. */
-export const SEED_SAVINGS_PRODUCT = {
-  name: 'Parity Savings',
-  currencyCode: 'USD',
-  nominalAnnualInterestRate: 2,
-} as const satisfies SavingsProductSeed;
 /** One narration value a client lifecycle action needs: an entry of the `narrations` list `GET /clients/template?commandParam=<close|reject|withdraw>` answers with, and the reason id the matching `POST (AAP 0.10.1, AAP 0.9.1). */
 export interface ClientActionReasonSeed {
   /** Narration code the value belongs to, as `GET /codes` names it, e.g. `ClientClosureReason`; the seed keys its write by this name rather than by the code's numeric id, which the tenant's migration creates and this repository may not fix. */
@@ -588,17 +573,6 @@ export interface ScenarioLoanApplication {
   /** Principal the application applies for. */
   readonly principal: number;
 }
-/** The savings account W8 opens, funds and draws on. */
-export interface ScenarioSavings {
-  /** Product the application selects. */
-  readonly productName: string;
-  /** Amount deposited after activation. */
-  readonly deposit: number;
-  /** Amount withdrawn after the deposit. */
-  readonly withdrawal: number;
-  /** Balance left afterwards — the AAP 0.10.1 row's own arithmetic (1,000 - 200), which is also the W8 outcome the state snapshot asserts. */
-  readonly expectedBalance: number;
-}
 /** How W6 derives its repayment rather than being handed a number: the AAP 0.10.1 row defines it as "the first period's total due from the loan's repayment schedule", a value that exists only once the loan is disbursed, so a fabricated amount would break W6 and the W2-to-W6 chain. */
 export interface ScenarioRepayment {
   /** Where the repayment amount comes from: the first repayment schedule period's total due. */
@@ -606,7 +580,7 @@ export interface ScenarioRepayment {
   /** Where the repayment's transaction date comes from: the loan's disbursement date. */
   readonly transactionDateSource: 'disbursement-date';
 }
-/** The fixed test data of AAP 0.10.1 as the workflows that consume it read it — consumed by the seed script, the page objects, the state snapshot and the specs for W2, W3, W4, W7 and W8; only what the table names is here (Rule 1 clause 3), with no extra fixture or field and no rounded or renamed value. */
+/** The fixed test data of AAP 0.10.1 as the workflows that consume it read it — consumed by the seed script, the page objects, the state snapshot and the specs for W2, W3, W4 and W7; only what the table names is here (Rule 1 clause 3), with no extra fixture or field and no rounded or renamed value. */
 export interface Scenario {
   /** The client W2 creates and activates, and W3 and W4 start from. */
   readonly client: ScenarioClient;
@@ -614,8 +588,6 @@ export interface Scenario {
   readonly loanApplication: ScenarioLoanApplication;
   /** The application W7 submits to provoke a server-side validation error: 50,000, above the product's 10,000 maximum — typed into the new app rather than seeded, and kept here so the seed's product range and the spec's input cannot drift apart. */
   readonly invalidLoanApplication: ScenarioLoanApplication;
-  /** The savings account W8 opens, funds and draws on. */
-  readonly savings: ScenarioSavings;
   /** How W6 derives its repayment amount and date. */
   readonly repayment: ScenarioRepayment;
 }
@@ -630,12 +602,6 @@ export const SCENARIO = {
   },
   loanApplication: { productName: 'Parity Loan', principal: 5000 },
   invalidLoanApplication: { productName: 'Parity Loan', principal: 50000 },
-  savings: {
-    productName: 'Parity Savings',
-    deposit: 1000,
-    withdrawal: 200,
-    expectedBalance: 800,
-  },
   repayment: {
     amountSource: 'first-schedule-period-total-due',
     transactionDateSource: 'disbursement-date',

@@ -10,6 +10,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiError, screenFailure, toDisplayableFailure } from '../../../core/http/api-error';
 import { DateFieldComponent } from '../../../shared/date-field/date-field.component';
 import { fromFineractDate } from '../../../shared/date-format.util';
+import { PanelCardComponent } from '../../../shared/panel-card/panel-card.component';
 import {
   SelectFieldComponent,
   type SelectOption,
@@ -38,7 +39,7 @@ const LEGACY_MOBILE_PATTERN = /^[0-9]+$/;
 /** The create screen (`#/createclient`), first half of W2: `GET /clients/template` seeded once and re-read on an office change, then one `POST /clients` per click through `ClientService` (AAP 0.7.3 "W2"; AAP 0.8.2 route `createclient`). */
 @Component({
   selector: 'app-client-create',
-  imports: [ReactiveFormsModule, TranslatePipe, DateFieldComponent, SelectFieldComponent],
+  imports: [ReactiveFormsModule, TranslatePipe, DateFieldComponent, SelectFieldComponent, PanelCardComponent],
   templateUrl: './client-create.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })

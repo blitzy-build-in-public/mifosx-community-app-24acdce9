@@ -128,11 +128,6 @@ const ACTION_DESTINATIONS: readonly {
 }[] = [
   { route: /\/editclient\//, root: 'app-client-edit', description: 'the client edit screen' },
   { route: /\/newclientloanaccount\//, root: 'app-loan-new', description: 'the loan application screen' },
-  {
-    route: /\/new_client_saving_application\//,
-    root: 'app-savings-new',
-    description: 'the savings application screen',
-  },
   { route: /\/client\//, root: 'app-client-actions', description: 'the client action screen' },
 ];
 
@@ -475,11 +470,6 @@ export class ClientViewPage {
   /** Leaves the record for the client's new loan application — the entry step of W4 (AAP 0.10.1). @throws When the row does not offer the entry to the user, naming the labels it does offer. */
   async startNewLoan(): Promise<void> {
     await this.startAction('New Loan');
-  }
-
-  /** Leaves the record for the client's new savings application — the entry step of W8 (AAP 0.10.1) (AAP 0.9.1, AAP 0.10.5). */
-  async startNewSaving(): Promise<void> {
-    await this.startAction('New Saving');
   }
 
   /** Root locator: every other locator in this class is scoped to the record. */

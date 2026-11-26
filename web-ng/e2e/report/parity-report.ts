@@ -12,8 +12,8 @@ import {
   type DifferenceRegisterReading,
 } from './difference-register';
 
-/** Every workflow the suite runs, in the order AAP 0.8.2 and 0.10.4 list them: W1 to W8 plus the `CHAIN` spec (`chain-w2-w4-w5-w6`). */
-export const WORKFLOW_IDS: readonly WorkflowId[] = ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8', 'CHAIN'];
+/** Every workflow the suite runs, in the order AAP 0.8.2 and 0.10.4 list them: W1 to W7 plus the `CHAIN` spec (`chain-w2-w4-w5-w6`). */
+export const WORKFLOW_IDS: readonly WorkflowId[] = ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'CHAIN'];
 
 /** The two Playwright projects: the untouched AngularJS baseline and this application (AAP 0.10.1). */
 export const UI_PROJECTS: readonly UiProject[] = ['legacy', 'next'];
@@ -25,7 +25,7 @@ export const WORKFLOW_STATUSES: readonly WorkflowStatus[] = ['pass', 'fail', 'le
 const MAX_INTENTIONAL_DIFF_ID = 16;
 
 /** Workflow ids the harness knows by name (AAP 0.8.2); `CHAIN` is the W2 -> W4 -> W5 -> W6 spec. */
-export type WorkflowId = 'W1' | 'W2' | 'W3' | 'W4' | 'W5' | 'W6' | 'W7' | 'W8' | 'CHAIN';
+export type WorkflowId = 'W1' | 'W2' | 'W3' | 'W4' | 'W5' | 'W6' | 'W7' | 'CHAIN';
 
 /** How one workflow ended on one front end (AAP 0.10.4's closed vocabulary). */
 export type WorkflowStatus = 'pass' | 'fail' | 'legacy-broken' | 'intentional-diff';
@@ -156,6 +156,9 @@ export const PLANNING_TARGET = 50_000;
 /** Generated lines the tree carried before the documentation-prose trim, as the size finding measured it (AAP 0.9.3). */
 export const LINES_BEFORE_TRIM = 84_770;
 
+/** Generated lines the tree carried when AAP 0.9.3's fixed cut order engaged — after the prose trim and after this checkpoint's two landed work units, as the size finding measured it (AAP 0.9.3). */
+export const LINES_BEFORE_CUT = 65_259;
+
 /** The repository root every measurement below is taken from — `web-ng/`'s parent — resolved from this module's own URL so `git ls-files` sees the whole delivered tree. */
 const REPO_ROOT_DIR = fileURLToPath(new URL('../../../', import.meta.url));
 
@@ -213,7 +216,7 @@ function typeName(value: unknown): string {
   return typeof value === 'object' ? 'an object' : `a ${typeof value}`;
 }
 
-/** Whether a value is one of the nine workflow ids. */
+/** Whether a value is one of the eight workflow ids. */
 function isWorkflowId(value: unknown): value is WorkflowId {
   return typeof value === 'string' && (WORKFLOW_IDS as readonly string[]).includes(value);
 }
@@ -488,7 +491,7 @@ function toExchanges(value: unknown): NormalizedExchange[] | null {
   return exchanges;
 }
 
-/** The reduced end state of one snapshot document, or `null` when it is not the `{project, workflow, runDate, client?, loan?, savings?}` shape `capture/state-snapshot.ts` writes. */
+/** The reduced end state of one snapshot document, or `null` when it is not the `{project, workflow, runDate, client?, loan?}` shape `capture/state-snapshot.ts` writes. */
 function toStateSnapshot(value: unknown): StateSnapshot | null {
   if (!isRecord(value)) {
     return null;
@@ -497,7 +500,7 @@ function toStateSnapshot(value: unknown): StateSnapshot | null {
   if (!isUiProject(project) || typeof workflow !== 'string' || typeof runDate !== 'string') {
     return null;
   }
-  for (const section of ['client', 'loan', 'savings']) {
+  for (const section of ['client', 'loan']) {
     const present = value[section];
     if (present !== undefined && !isRecord(present)) {
       return null;
@@ -746,7 +749,7 @@ export async function measureLineBudget(): Promise<LineBudget> {
   };
 }
 
-/** Builds the whole report: header, the nine workflow rows for each front end, the comparison, the deliberate-difference register AAP 0.10.5 requires, the artefacts that could not be read (AAP 0.10.3 criterion 4) and the size record AAP 0.9.3 requires. */
+/** Builds the whole report: header, the eight workflow rows for each front end, the comparison, the deliberate-difference register AAP 0.10.5 requires, the artefacts that could not be read (AAP 0.10.3 criterion 4) and the size record AAP 0.9.3 requires. */
 export async function buildReport(): Promise<ParityReport> {
   const [header, { records, unreadable }] = await Promise.all([resolveHeader(), readWorkflowRecords()]);
   const byKey = new Map<string, WorkflowRecord>();
@@ -814,7 +817,7 @@ function group(value: number): string {
   return value.toLocaleString('en-US');
 }
 
-/** The `## Line budget` section's lines: ceiling, measured total with the command that settles it, the trim and why it was enough, the revised totals and the check scripts' recorded share (AAP 0.9.3, Rule 1 clause 10). */
+/** The `## Line budget` section's lines: ceiling, measured total with the command that settles it, the prose trim, the scope cut AAP 0.9.3's fixed order required and why, the revised totals and the check scripts' recorded share (AAP 0.9.3, Rule 1 clause 10). */
 function lineBudgetLines(budget: LineBudget | undefined): string[] {
   if (budget === undefined || budget.measuredLines === null) {
     return ['', 'Not measured: `git ls-files` could not list the tree in this environment, so the generated-line total and the cut record are unestablished here.'];
@@ -828,7 +831,8 @@ function lineBudgetLines(budget: LineBudget | undefined): string[] {
     `- Ceiling: ${group(LINE_CEILING)} generated lines across code, tests, configuration and documentation, with a planning target of about ${group(PLANNING_TARGET)} (AAP 0.9.3).`,
     `- Measured: ${group(measured)} generated lines across ${group(budget.measuredFiles)} tracked files, \`package-lock.json\` aside — \`git ls-files | grep -v package-lock.json | xargs wc -l\`, the plan's own basis; the tree stands ${standing}.`,
     '- Trim applied: the documentation prose was compressed to one line per declaration across the delivered tree, keeping a doc comment on every exported service method, component input/output and model field (AAP 0.14.2), every recorded decision and every citation a comment carries — the multi-line blocks collapsed, the facts they stated did not.',
-    `- Revised totals: ${group(LINES_BEFORE_TRIM)} lines before the trim, ${group(measured)} after it. No scope was cut, because AAP 0.9.3's fixed cut order — first drop Stretch (savings, workflow W8), then trim the e2e suite to the Must workflows — applies only when the ceiling cannot be met otherwise: Stretch ships, W8 is in the matrix above, and every Must workflow keeps its spec.`,
+    `- Revised totals: ${group(LINES_BEFORE_TRIM)} lines before the prose trim, ${group(LINES_BEFORE_CUT)} after it and after the two work units this checkpoint landed, ${group(measured)} after the cut below.`,
+    `- Scope cut: AAP 0.9.3's fixed cut order engaged at ${group(LINES_BEFORE_CUT)} lines, so its first step — drop Stretch — was applied and the second is contained in it, because the savings workflow (W8) was the only Stretch workflow and its spec the only Stretch spec. The savings screens, their three routes, their e2e page objects, their seed product and the client record's "New Saving" entry point are therefore not delivered. Every Must workflow (W1–W7 and the W2→W4→W5→W6 chain) keeps its screen and its spec: no Must scope was dropped, and the three check scripts are untouched.`,
     `- Check scripts and their \`lib/\` helpers: ${group(budget.checkScriptLines)} lines against AAP 0.9.3's share of about 600. That share was estimated for skeleton checks, while the delivered gates enforce 0.10.4's whole rules over the tree (endpoint allowlist, template coverage, wiring, scope and credential), so the figure above is the revised share: it is recorded here, never met by weakening a gate (Rule 1 clauses 2 and 8).`,
   ];
 }

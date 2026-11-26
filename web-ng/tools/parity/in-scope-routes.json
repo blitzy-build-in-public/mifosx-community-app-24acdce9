@@ -5,12 +5,11 @@
       "web-ng/src/app/app.routes.ts",
       "web-ng/src/app/features/auth/auth.routes.ts",
       "web-ng/src/app/features/clients/clients.routes.ts",
-      "web-ng/src/app/features/loans/loans.routes.ts",
-      "web-ng/src/app/features/savings/savings.routes.ts"
+      "web-ng/src/app/features/loans/loans.routes.ts"
     ],
     "composition": "full paths are app-level parent segments joined with feature child segments; lazy groups mount at path ''",
     "generatedOn": "2026-11-24",
-    "routeCount": 19,
+    "routeCount": 16,
     "legacyGap": "app/scripts/routes.js is absent from this checkout; the tree is transcribed from AAP 0.8.2",
     "strictness": "a route absent from this list, or present only in it, fails npm run check:wiring (AAP 0.10.4)"
   },
@@ -100,24 +99,6 @@
       "family": "loans",
       "kind": "component",
       "declaredIn": "web-ng/src/app/features/loans/loans.routes.ts"
-    },
-    {
-      "path": "new_client_saving_application/:clientId",
-      "family": "savings",
-      "kind": "component",
-      "declaredIn": "web-ng/src/app/features/savings/savings.routes.ts"
-    },
-    {
-      "path": "viewsavingaccount/:id",
-      "family": "savings",
-      "kind": "component",
-      "declaredIn": "web-ng/src/app/features/savings/savings.routes.ts"
-    },
-    {
-      "path": "savingaccount/:id/:action",
-      "family": "savings",
-      "kind": "component",
-      "declaredIn": "web-ng/src/app/features/savings/savings.routes.ts"
     },
     {
       "path": "search/:query",

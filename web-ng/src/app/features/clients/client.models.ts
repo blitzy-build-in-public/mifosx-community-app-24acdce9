@@ -115,9 +115,9 @@ export interface ClientLoanAccountSummary {
   loanBalance?: number;
 }
 
-/** One savings account row of the client record's accounts table, projecting `GET /clients/{id}/accounts`; declared here to keep `features/savings` out of this family. */
+/** One savings account row of the client record's accounts table, projecting `GET /clients/{id}/accounts` (AAP 0.7.3). */
 export interface ClientSavingsAccountSummary {
-  /** Savings account id: the `:id` of `#/viewsavingaccount/:id`. */
+  /** Savings account id, carried through from the payload: the row prints the account number, never the id. */
   id: number;
   /** Savings account number, printed in the row. */
   accountNo: string;

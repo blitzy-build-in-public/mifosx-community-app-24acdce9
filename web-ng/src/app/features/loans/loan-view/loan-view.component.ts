@@ -14,6 +14,7 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
 import { ApiError } from '../../../core/http/api-error';
 import { HasPermissionDirective } from '../../../shared/has-permission.directive';
+import { PanelCardComponent } from '../../../shared/panel-card/panel-card.component';
 import type { StatusKey } from '../../../shared/status-key.util';
 import { StatusSwatchComponent } from '../../../shared/status-swatch/status-swatch.component';
 import {
@@ -165,6 +166,7 @@ export const LOAN_ACTIONS: readonly LoanActionDefinition[] = [
     TranslatePipe,
     StatusSwatchComponent,
     HasPermissionDirective,
+    PanelCardComponent,
     TabStripComponent,
     LoanScheduleComponent,
     LoanTransactionsComponent,

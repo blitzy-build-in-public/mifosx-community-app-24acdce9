@@ -22,7 +22,7 @@ export default tseslint.config(
     extends: [tseslint.configs.recommended, angular.configs.tsRecommended],
     processor: angular.processInlineTemplates,
     rules: {
-      // Architectural gate: an error, never a warning. The only relaxation is the exemption list below — the seven URL owners — so every other file reaches Fineract through a typed service.
+      // Architectural gate: an error, never a warning. The only relaxation is the exemption list below — the six URL owners — so every other file reaches Fineract through a typed service.
       'no-restricted-imports': [
         'error',
         {
@@ -31,8 +31,8 @@ export default tseslint.config(
               name: '@angular/common/http',
               importNames: ['HttpClient'],
               message:
-                'Inject HttpClient only in the seven Fineract URL-owning files: auth.service.ts, ' +
-                'client.service.ts, loan.service.ts, savings.service.ts, search.service.ts, ' +
+                'Inject HttpClient only in the six Fineract URL-owning files: auth.service.ts, ' +
+                'client.service.ts, loan.service.ts, search.service.ts, ' +
                 'datatable-gate.service.ts and fineract.interceptor.ts. Every other component and ' +
                 'service reaches Fineract through its typed service.',
             },
@@ -44,12 +44,11 @@ export default tseslint.config(
     },
   },
   {
-    // The seven files that own the Fineract API surface (AAP 0.14.1, AAP 0.8.2) are the only ones allowed to import HttpClient: the six typed services and the core/http interceptor that attaches the auth and tenant headers..
+    // The six files that own the Fineract API surface (AAP 0.14.1, AAP 0.8.2) are the only ones allowed to import HttpClient: the five typed services and the core/http interceptor that attaches the auth and tenant headers..
     files: [
       'src/app/core/auth/auth.service.ts',
       'src/app/features/clients/client.service.ts',
       'src/app/features/loans/loan.service.ts',
-      'src/app/features/savings/savings.service.ts',
       'src/app/core/api/search.service.ts',
       'src/app/core/api/datatable-gate.service.ts',
       'src/app/core/http/fineract.interceptor.ts',

@@ -17,6 +17,7 @@ import { SearchService } from '../../core/api/search.service';
 import { ApiError } from '../../core/http/api-error';
 import { EmptyStateComponent } from '../../shared/empty-state/empty-state.component';
 import { HasPermissionDirective } from '../../shared/has-permission.directive';
+import { PanelCardComponent } from '../../shared/panel-card/panel-card.component';
 
 /** The global search results screen: the destination of the signed-in navbar's search control, where a client or a loan is found by name, account number or identifier (AAP 0.7.1 Features row `search`; AAP 0.7.3 row "Shell (AAP 0.8.2, AAP 0.10.5, AAP 0.11.1, Rule 1 clause 2). */
 @Component({
@@ -26,6 +27,7 @@ import { HasPermissionDirective } from '../../shared/has-permission.directive';
     TranslatePipe,
     EmptyStateComponent,
     HasPermissionDirective,
+    PanelCardComponent,
   ],
   templateUrl: './search-results.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,

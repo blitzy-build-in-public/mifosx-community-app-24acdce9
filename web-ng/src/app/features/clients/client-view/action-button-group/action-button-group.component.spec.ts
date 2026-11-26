@@ -19,12 +19,6 @@ const ACTIONS: readonly ClientActionButton[] = [
     routerLink: '/newclientloanaccount/1',
   },
   {
-    label: 'label.button.newsaving',
-    icon: 'fa-plus',
-    permission: 'CREATE_SAVINGSACCOUNT',
-    routerLink: '/new_client_saving_application/1',
-  },
-  {
     label: 'label.button.close',
     icon: 'fa-times-circle-o',
     permission: 'CLOSE_CLIENT',
@@ -51,12 +45,11 @@ const MENU_HREFS: readonly string[] = ACTIONS.filter((action) => action.menu ===
   (action) => action.routerLink,
 );
 /** The caption each row entry renders, in render order: the legacy bundle's wording, not the key. */
-const ROW_LABELS: readonly string[] = ['Edit', 'New Loan', 'New Saving', 'Close'];
+const ROW_LABELS: readonly string[] = ['Edit', 'New Loan', 'Close'];
 /** The wording of every key the component resolves, keyed as the shipped legacy bundles key them (`app/global-translations/`), so a raw dotted key would show. */
 const TRANSLATIONS: Readonly<Record<string, string>> = {
   'label.button.edit': 'Edit',
   'label.button.newloan': 'New Loan',
-  'label.button.newsaving': 'New Saving',
   'label.button.close': 'Close',
   'label.button.more': 'More',
   'label.button.activate': 'Activate',

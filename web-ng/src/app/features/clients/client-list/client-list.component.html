@@ -1,129 +1,185 @@
-<!-- The clients list screen (`#/clients`): the card the signed-in shell renders as its content — the filter toolbar, the permission-gated "Create Client" control, the six-column table of clients and the pager beneath it (AAP 0.7.1, AAP 0.7.4, AAP 0.8.2, AAP 0.11.1). -->
+<!--
+  The clients list screen (`#/clients`): the card the signed-in shell renders as its content — the
+  filter toolbar, the permission-gated "Create Client" control, the six-column table of clients and
+  the pager beneath it (AAP 0.7.1 Features row `clients`; AAP 0.7.4 "Clients list (`#/clients`)";
+  AAP 0.8.2 route `clients`; AAP 0.11.1 row for this folder; Figma screen `1:3`, step 2 of "Sign in
+  and open a client record").
+
+  The shell is not here. The navbar, breadcrumb, global search, language switcher and user menu come
+  from `core/layout` through this route's `data.breadcrumb`, and the shell deliberately leaves the
+  page container to the screen it renders — the routed view sits beside the breadcrumb's own
+  `.container-fluid`, so a wrapper there would double every gutter. This file therefore opens the
+  page container itself, exactly as the record, create and action screens do: `.container-fluid` >
+  `.row` > `.col-md-12` gives the card the design's inset on the app background (Figma screen `1:3`
+  measures the card inset from the page edges with that background visible on all four sides).
+
+  Every visual value comes from the global Bootstrap 3 layer `web-ng/src/styles.scss` compiles, so
+  this file carries no `<style>`, no `style` attribute, no colour and no pixel: the card and the
+  heading band that carries its title come from `app-panel-card` (AAP 0.2.3 row `PanelCard`), whose
+  `.panel` host is the white card with a shadow and no border stroke and whose 18px `.panel-title`
+  prints this screen's title, `.panel-body` its 13px body, `.alert.alert-danger` the failure banner,
+  `.pagination` the pager and `hr` the hairline above the table (Rule 1 clause 6; AAP 0.2.2,
+  AAP 0.2.3). The toolbar's and the table's own visuals are that same layer's, declared by the two
+  components that carry their markup.
+
+  Column proportions are the design's own and are fixed in the global layer, not here: the table is
+  given the `client-list` class and `web-ng/src/styles.scss` sizes its first column at 28% (Name, the
+  widest) and its last at 8.5% (Staff, the narrowest), with the four middle columns dividing what is
+  left — the values AAP 0.7.4 records from the design (Rule 1 clause 6 keeps every visual value in the
+  stylesheet).
+
+  The toolbar is `app-filter-toolbar` and the table is `app-data-table` — AAP 0.2.3's two inventory
+  rows, which own the legacy markup, ids and classes of what they render. The toolbar renders no
+  out-of-scope control: no "Import Clients" button (AAP 0.10.5 item 4) and none of the navbar's or the
+  left rail's controls (AAP 0.10.5 item 8). The filter field narrows the rows already in hand; the find
+  field submits a server search, which is the difference AAP 0.7.4 states as "filter (client-side
+  display), search (server)".
+
+  Captions are the legacy bundle's own keys — the six column headers resolved for the active language,
+  the rest through `| translate` — so the screen follows the language switcher and the i18n comparison
+  sees the same words on both applications (Rule 1 clauses 3 and 6; AAP 0.10.2). The card's title is
+  the one exception, flagged where it is written.
+
+  States, in the order a viewer meets them: nothing is painted while a read is in flight (the design
+  carries no loader asset — AAP 0.2.4); a failed read renders Fineract's own message and no rows; a
+  completed read that matched nothing renders the explicit empty state and no error; otherwise the
+  table (AAP 0.7.4 "States every list and record screen must implement").
+-->
 <div class="container-fluid">
   <div class="row">
     <div class="col-md-12">
-      <div class="panel panel-default">
-        <div class="panel-heading">
-          <!-- BLITZY [I18N]: "List of Clients" is the one string on this screen that is not translated, because no shipped locale bundle carries a key for it — the legacy template hardcodes the same literal (Rule 1 clause 6). -->
-          <h3 class="panel-title">List of Clients</h3>
-        </div>
+      <div appPanelCard variant="default" [title]="'List of Clients'">
+        <!--
+          BLITZY [I18N]: "List of Clients" is the one string on this screen that is not translated,
+          because no shipped locale bundle carries a key for it — the legacy template hardcodes the
+          same literal (`app/views/clients/clients.html:9`), so a key invented here would be one
+          only this build defines, and Rule 1 clause 6 forbids copying or regenerating the legacy
+          translation files (`label.heading.clients` is the word "Clients", which the breadcrumb
+          already uses). Rendering it verbatim is the parity-faithful choice: the same words appear
+          on both applications. The literal reaches the card's heading through the `title` input, so
+          the `.panel-heading` band and its `h3.panel-title` are the component's own markup
+          (AAP 0.2.3 row `PanelCard`).
+        -->
         <div class="panel-body">
-          <!-- Fineract's own failure text, verbatim and untranslated, above whatever the screen holds: a failed read leaves the card mounted and its toolbar usable (AAP 0.7.4, AAP 0.14.1). -->
+          <!--
+            Fineract's own failure text, verbatim and untranslated, above whatever the screen holds: a
+            failed read leaves the card mounted and its toolbar usable. `role="alert"` announces it
+            without a focus change (AAP 0.7.4; AAP 0.14.1 "errors are values").
+          -->
           @if (errorMessage(); as message) {
             <div class="alert alert-danger" id="client-list-error" role="alert">{{ message }}</div>
           }
 
-          <!-- The filter toolbar (AAP 0.2.3 row `FilterToolbar`). Submitting the form runs the find: the component trims the field's text, searches the server when it carries something and re-reads the unfiltered first page when it (Rule 1 clause 4). -->
-          <div class="row">
-            <div class="col-sm-8">
-              <form [formGroup]="toolbar" (ngSubmit)="onFind()" class="form-horizontal">
-                <div class="form-group">
-                  <div class="col-md-4">
-                    <!-- The two text controls carry the legacy field's own placeholder and, in addition, the same words as an `aria-label`: a placeholder is not a label, so the associated name is what a screen reader announces for the field. -->
-                    <input
-                      type="text"
-                      class="form-control"
-                      id="filterText"
-                      name="filterText"
-                      formControlName="filter"
-                      [placeholder]="'label.input.filterbynameaccno' | translate"
-                      [attr.aria-label]="'label.input.filterbynameaccno' | translate"
-                    />
-                  </div>
-                  <div class="col-md-8">
-                    <div class="input-group">
-                      <input
-                        type="text"
-                        class="form-control"
-                        id="find"
-                        name="find"
-                        formControlName="find"
-                        [placeholder]="'label.input.searchByNameAccNo' | translate"
-                        [attr.aria-label]="'label.input.searchByNameAccNo' | translate"
-                      />
-                      <span class="input-group-btn">
-                        <!-- The button's only content is the search glyph, which is decorative, so the accessible name comes from the legacy bundle's own word for it rather than from the icon (AAP 0.7.4's find control; Rule 1 clause 6). -->
-                        <button
-                          type="submit"
-                          class="btn btn-primary"
-                          [disabled]="loading()"
-                          [attr.aria-label]="'label.heading.search' | translate"
-                        >
-                          <i class="fa fa-search" aria-hidden="true"></i>
-                        </button>
-                      </span>
-                      <!-- `showAll` is the legacy checkbox's own id (`app/views/clients/clients.html:34`), so the harness addresses the same control on both applications and the `label for` points at the input it names (AAP 0.5.2). -->
-                      <div class="checkbox form-control">
-                        <label for="showAll">
-                          <input type="checkbox" id="showAll" name="showAll" formControlName="showClosed" />
-                          &nbsp;{{ 'label.button.showall' | translate }}
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </form>
-            </div>
-            <div class="col-sm-4">
-              <!-- "Create Client" — the entry point of workflow W2 and the only action this card offers (AAP 0.7.4, AAP 0.9.1, AAP 0.10.5). -->
-              <a routerLink="/createclient" class="btn btn-primary pull-right" hasPermission="CREATE_CLIENT">
-                <i class="fa fa-plus" aria-hidden="true"></i>
-                {{ 'label.button.createclient' | translate }}
-              </a>
-            </div>
-          </div>
+          <!--
+            The filter toolbar (AAP 0.2.3 row `FilterToolbar`). The component owns the toolbar's own
+            typed form and publishes what it changes; this screen supplies only what it knows — the
+            read in flight, so the search button disables while a request is out — and takes back the
+            three publications it acts on: the filter text and the show-closed flag, which narrow the
+            rows already in hand, and the submitted find text, which runs the server search. Nothing
+            about the controls' ids, captions or layout is decided here any more; the extraction moved
+            the legacy markup across unchanged (Rule 1 clauses 3 and 4; AAP 0.7.4 "filter (client-side
+            display), search (server)").
+          -->
+          <app-filter-toolbar
+            [busy]="loading()"
+            (filterChange)="onFilterChange($event)"
+            (showClosedChange)="onShowClosedChange($event)"
+            (search)="onFind($event)"
+          />
 
           <hr />
 
-          <!-- Four mutually exclusive states. While a read is in flight nothing is painted: the design shows no spinner, skeleton or placeholder, and AAP 0.2.4 records that the flow carries no such asset, so emitting nothing is the. -->
+          <!-- Four mutually exclusive states. While a read is in flight nothing is painted: the design
+               shows no spinner, skeleton or placeholder, and AAP 0.2.4 records that the flow carries no
+               such asset, so emitting nothing is the faithful state rather than a missing one. -->
           @if (loading()) {
           } @else if (failed()) {
-            <!-- A failed read paints no rows. A 4xx has already published Fineract's own message in the alert above; a 5xx or a transport fault has raised the interceptor's single notification instead (AAP 0.7.4). -->
+            <!-- A failed read paints no rows. A 4xx has already published Fineract's own message in
+                 the alert above; a 5xx or a transport fault has raised the interceptor's single
+                 notification instead. Either way the table must not claim "no clients" about a read
+                 that failed (AAP 0.7.4). -->
           } @else if (isEmpty()) {
             <app-empty-state id="client-list-empty" [message]="'label.nodata' | translate" />
           } @else {
-            <!-- `.table-responsive` is Bootstrap 3's own wrapper for a wide table: it is inert at 768px and above, and below that it keeps the six columns from pushing the whole page into horizontal scroll. -->
-            <div class="table-responsive">
-              <table class="table table-striped client-list" id="client-list">
-                <thead>
-                  <tr>
-                    <!-- The six columns in the legacy table's order (`app/views/clients/clients.html:53-60`), each headed by that table's own bundle key (AAP 0.7.4; Rule 1 clause 6). -->
-                    <th scope="col">{{ 'label.heading.name' | translate }}</th>
-                    <th scope="col">{{ 'label.heading.clientno' | translate }}</th>
-                    <th scope="col">{{ 'label.heading.externalid' | translate }}</th>
-                    <th scope="col">{{ 'label.heading.status' | translate }}</th>
-                    <th scope="col">{{ 'label.heading.office' | translate }}</th>
-                    <th scope="col">{{ 'label.heading.staff' | translate }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <!-- Tracked by the row's own key, which is unique across a page and a search answer, so the loop never falls back to the index. -->
-                  @for (row of visibleRows(); track row.key) {
-                    <!-- The row as a whole opens the record, which is the affordance the legacy table gives every cell (`data-ng-click="routeTo(client.id)"`) and the design paints with no link styling, chevron or button of its own (AAP 0.7.4 (Rule 1 clause 3). -->
-                    <tr [routerLink]="['/viewclient', row.clientId]">
-                      <td>{{ row.name }}</td>
-                      <td>{{ row.accountNo }}</td>
-                      <td>{{ row.externalId }}</td>
-                      <!-- The swatch is the whole cell: a colour and no word, no `title`, no `aria-label`, no visually-hidden text (AAP 0.10.5, Rule 1 clause 3). -->
-                      <td><app-status-swatch [status]="row.statusKey" /></td>
-                      <td>{{ row.officeName }}</td>
-                      <td>{{ row.staffName }}</td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            </div>
+            <!--
+              The table (AAP 0.2.3 row `ClientList / DataTable`): its rows are this screen's visible
+              rows, its six columns the legacy table's own order and bundle keys, and the whole row
+              the link to the record — the affordance the legacy table gives every cell
+              (`data-ng-click="routeTo(client.id)"`) and the design paints with no link styling,
+              chevron or button of its own (AAP 0.7.4; Figma screen `1:3`). The classes and the id are
+              bound so the global layer keeps sizing the columns through `.table.client-list` and the
+              harness keeps addressing `#client-list` (Rule 1 clauses 3 and 6); the component carries
+              Bootstrap's `.table-responsive` wrapper itself.
+
+              The row class is legacy's own `pointer-main`: the row wears it in the template being
+              migrated (`app/views/clients/clients.html:64`, beside the per-cell `data-ng-click`) and
+              the global layer paints it with the pointer cursor, the brand-blue fill and white text
+              on hover (`_content.scss:413-417`), so the row keeps the treatment it has in the
+              application being migrated (Rule 1 clause 3).
+
+              BLITZY [A11Y]: the row's `routerLink` is activated by a pointer click, exactly as the
+              legacy cells were. `RouterLink` gives a non-anchor host a tab stop, so the row can be
+              focused, but it binds no Enter/Space activation — a keyboard user can therefore reach a
+              row without being able to open it. Adding that activation, or a link in the name cell,
+              would be an interaction the legacy screen does not have (Rule 1 clause 3); a
+              keyboard-operable row is a design decision for the design owner.
+            -->
+            <app-data-table
+              [rows]="visibleRows()"
+              [columns]="columns()"
+              [rowKey]="rowKey"
+              [rowLink]="rowLink"
+              tableClasses="table table-striped client-list"
+              tableId="client-list"
+              rowClass="pointer-main"
+              [cellTemplate]="statusCell"
+            />
+            <!--
+              The one cell of this table that is not text. The swatch is the whole cell: a colour and
+              no word, no `title`, no `aria-label`, no visually-hidden text (AAP 0.2.3 row
+              `StatusSwatch`; AAP 0.10.5 deliberate difference 11). Every other column renders its own
+              text, which this template takes from the context's `value`, so the five text cells read
+              exactly as they did before the extraction, and a value the payload did not carry leaves
+              its cell empty, with no zero, dash or placeholder in its place (Rule 1 clause 3).
+            -->
+            <ng-template #statusCell let-row let-column="column" let-value="value">
+              @if (column.key === 'status') {
+                <app-status-swatch [status]="row.statusKey" />
+              } @else {
+                {{ value }}
+              }
+            </ng-template>
           }
 
-          <!-- The pager: the legacy client list's own fifteen rows per page, driven through `on-page-change="getResultsPage(newPageNumber)"` (`app/views/clients/clients.html:79-82`) (AAP 0.5.4). -->
+          <!--
+            The pager: the legacy client list's own fifteen rows per page, driven through
+            `on-page-change="getResultsPage(newPageNumber)"` (`app/views/clients/clients.html:79-82`),
+            which is why the request carries `offset: (page - 1) * limit` and
+            `totalFilteredRecords` is what the control counts. `.pagination` supplies the styling
+            (AAP 0.5.4). It is painted only when the match spans more than one page — legacy's
+            `dir-pagination-controls` auto-hides to one page, and the design's capture of five
+            clients consequently paints no pager at all — so a single-page result keeps the card
+            exactly as the design shows it.
+          -->
           @if (pageCount() > 1) {
-            <!-- The wrapper is the plain, centred block legacy's `dir-pagination-controls` renders, carrying no landmark, no `aria-label` and no `aria-current`: AAP 0.10.5 registers no accessibility difference from legacy here, and (Rule 1 clause 3). -->
+            <!-- The landmark's name is English and invisible: no shipped bundle carries a key for it,
+                 and `aria-label` is the only way to distinguish this navigation from the breadcrumb's
+                 (the same wording decision `client-view.component.html` records). -->
             <div class="text-center">
               <ul class="pagination">
                 @for (pageNumber of pageNumbers(); track pageNumber) {
                   <li [class.active]="pageNumber === page()">
-                    <!-- `href=""` is legacy's own — its pager template renders `<a href="" ng-click="setCurrent(pageNumber)">` — and `goToPage` always prevents the default: paging is a read, never a navigation, so the hash route cannot change. -->
-                    <a href="" (click)="goToPage($event, pageNumber)">{{ pageNumber }}</a>
+                    <!--
+                      `href` exists so the control is a focusable, Enter-activatable link rather than
+                      a click-only div, and `goToPage` always prevents the default: paging is a read,
+                      never a navigation, so the hash route cannot change. `aria-current` marks the
+                      page being shown, and the anchor's own text — the page number — is its
+                      accessible name.
+                    -->
+                    <a
+                      href=""
+                      (click)="goToPage($event, pageNumber)"
+                    >{{ pageNumber }}</a>
                   </li>
                 }
               </ul>

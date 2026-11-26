@@ -290,7 +290,7 @@ test.describe('W6 make a repayment and verify the schedule and transactions', ()
       const candidates: LoanCandidate[] = [];
 
       for (const row of accounts) {
-        // The baseline's reader names each row's family; a savings row is not this workflow's and is passed over rather than followed to a record that is not a loan (W8 opens it after W6).
+        // The baseline's reader names each row's family; a savings row is not this workflow's and is passed over rather than followed to a record that is not a loan.
         if ('accountType' in row && row.accountType !== 'loan') {
           continue;
         }

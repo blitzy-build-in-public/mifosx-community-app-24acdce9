@@ -1,13 +1,68 @@
-<!-- The loan lifecycle action screen — the route `#/loanaccount/:id/:action`, five actions on one route plus the not-found outcome (AAP 0.7.1 `LoanActionComponent`; AAP 0.8.2 `loans.routes.ts`) (Rule 1 clause 6, AAP 0.7.4, Rule 1 clause 2, Rule 1 clause 3). -->
+<!--
+  The loan lifecycle action screen — the route `#/loanaccount/:id/:action`, five actions on one route
+  plus the not-found outcome (AAP 0.7.1 `LoanActionComponent`; AAP 0.8.2 `loans.routes.ts`).
+
+  One card per screen (AAP 0.7.4). The card itself — the `.panel` surface with its shadow and no border
+  stroke, and the `.panel-heading`/`.panel-title` band carrying the mode's own title — comes from the
+  shared `div[appPanelCard]` component (AAP 0.2.3 row `PanelCard`), which is the one place the card is
+  defined, so a card change is made there and not here. Every other visual value comes from the global
+  Bootstrap 3 layer compiled in `web-ng/src/styles.scss`, so this file carries no style block, no style
+  attribute, no colour and no pixel of its own (Rule 1 clause 6): `.panel-body`/`.panel-footer` the
+  card's body and footer bands, `.form-horizontal`/`.form-group`/`.control-label`/`.col-md-*` the field
+  layout, `.form-control` the standard control, `.has-error`/`.help-block` Bootstrap's invalid-field
+  treatment, `.alert.alert-danger` the verbatim Fineract failure, and `.btn.btn-primary`/
+  `.btn.btn-default` the primary action and its cancel.
+
+  **The modes.** `approve`, `reject`, `disburse`, `undoapproval` and `undodisbursal` are drawn here, one
+  form each, every form carrying its own error region and footer. `repayment` is delegated whole to
+  `app-loan-repayment`, which draws its own card, heading, error region and submit (workflow W6); nesting
+  one `.panel` inside another would double the shadow and the padding no legacy action screen shows
+  (Rule 1 clauses 3 and 6). Any other `:action`, a route carrying no loan id, and a 404 from a mode's own
+  seed read all render the not-found message and post nothing.
+
+  **The ids the parity harness addresses.** Every control carries an `id` equal to its `formControlName`,
+  so `e2e/pages/*/loans.page.ts` fills the same field on both applications: `approvedOnDate`,
+  `approvedLoanAmount`, `rejectedOnDate`, `actualDisbursementDate`, `transactionAmount` and `note`. The
+  approved amount is `approvedLoanAmount` and not the plan's `approvedPrincipal` because the fork rejects
+  that parameter (HTTP 400, "The parameter approvedPrincipal is not supported") while it documents and
+  the legacy action controller posts `approvedLoanAmount` — the departure `loan.models.ts` records for
+  the whole feature, carried here so the control is named after the member it posts (Rule 1 clause 2).
+  The note is `note` because that is the legacy textarea's own id
+  (`app/views/loans/loanaccountactions.html:260`), and each mode renders one form, so the id is unique.
+
+  **What is deliberately absent**, because the legacy action screens have none of it and the migration
+  reproduces behaviour rather than improving it (Rule 1 clause 3): no native `required` attribute on any
+  control — the browser would block a submission Fineract alone decides, so `required` reaches assistive
+  technology as `aria-required` and the component's validators stay the only rule; no confirmation
+  dialog and no success toast; no `min`, `max` or business `step` on either amount, because the product's
+  range is enforced on the server and its message is what the user reads (AAP 0.4.4 decision 6); and no
+  payment-type picker on the disbursement form, because the disburse body carries no such member. The
+  form is not withheld while a mode's seed read is in flight either: legacy shows the same empty controls
+  and fills them as its template answers.
+
+  **Wording.** Every caption is a shipped legacy `label.*` key resolved by `TranslatePipe`; the
+  mode-dependent heading and primary label come from the component's single copy table. The one string
+  rendered untranslated is Fineract's own failure message, because workflow W7 compares it with the
+  server's `errors[].defaultUserMessage` character for character (AAP 0.4.4 decision 6).
+-->
 <div class="container-fluid">
   <div class="row">
     <div class="col-md-12">
       @if (mode() === 'repayment') {
-        <!-- The child is the whole screen for this mode: it draws its own card and runs its own read, so this template contributes neither a card nor a heading around it. -->
+        <!--
+          The child is the whole screen for this mode: it draws its own card and runs its own read, so
+          this template contributes neither a card nor a heading around it (see the header comment).
+        -->
         <app-loan-repayment [loanId]="id()" />
       } @else if (notFound()) {
-        <!-- An `:action` outside the five served here and the repayment mode, a route whose `:id` is absent or blank, or a 404 from the mode's own seed read: the message replaces the form inside the same card, so the shell around it stays usable and no control can post against the loan (AAP 0.7.4 state rules). The two keys are the ones the sibling unknown-path screen renders, so the product has one not-found sentence and not two. -->
-        <div class="panel">
+        <!--
+          An `:action` outside the five served here and the repayment mode, a route whose `:id` is
+          absent or blank, or a 404 from the mode's own seed read: the message replaces the form inside
+          the same card, so the shell around it stays usable and no control can post against the loan
+          (AAP 0.7.4 state rules). The two keys are the ones the sibling unknown-path screen renders, so
+          the product has one not-found sentence and not two.
+        -->
+        <div appPanelCard>
           <div class="panel-body">
             <div class="text-center text-muted">
               <h3 class="panel-title">{{ notFoundHeadingKey | translate }}</h3>
@@ -16,12 +71,16 @@
           </div>
         </div>
       } @else {
-        <div class="panel">
-          <div class="panel-heading">
-            <h3 class="panel-title">{{ headingKey() | translate }}</h3>
-          </div>
-
-          <!-- Fineract's own failure text, verbatim and moved by no prefix or capitalisation: a refused action posts back the server's `defaultUserMessage`, and the form below keeps every entered value so the refusal can be corrected (AAP 0.7.4). -->
+        <div appPanelCard [title]="headingKey() | translate">
+          <!--
+            Fineract's own failure text, verbatim and unmoved by any prefix or capitalisation: a refused
+            action posts back the server's `defaultUserMessage`, and the form below keeps every entered
+            value so the refusal can be corrected in place (AAP 0.7.4). It is its own `.panel-body` above
+            the form and outside the mode switch, so every mode carries the one message and the message
+            is never duplicated. `role="alert"` announces it without a focus change. A 5xx or a transport
+            failure leaves `error()` `null`, because the interceptor has already raised its one
+            notification, so a failure produces one message and not two.
+          -->
           @if (error(); as failure) {
             <div class="panel-body">
               <div class="alert alert-danger" role="alert">{{ failure.message }}</div>
@@ -30,10 +89,21 @@
 
           @switch (mode()) {
             @case ('approve') {
-              <!-- `POST /loans/{id}?command=approve`: the approval date the command requires and the approved amount the screen collects, seeded by the component from the loan's approval template. The amount is required-only — no range and no step derived from a business rule — so the server alone decides what it accepts (Rule 1 clause 3). -->
+              <!--
+                `POST /loans/{id}?command=approve`: the approval date the command requires and the
+                approved amount the screen collects, seeded by the component from the loan's approval
+                template. The amount is required-only — no range, no step derived from a business rule —
+                so the server alone decides what it accepts (Rule 1 clause 3).
+              -->
               <form class="form-horizontal" [formGroup]="approveForm" (ngSubmit)="submit()" novalidate>
                 <div class="panel-body">
-                  <!-- The date field renders its own `.form-group`, `.control-label` and `input[type=date]` — the native control that replaces the forbidden jQuery datepicker (AAP 0.10.5 item 1) — and `inputId` is the id its input and label share, which is how the harness addresses `#approvedOnDate` on both applications; `[required]` marks the label for assistive technology and adds no validator. -->
+                  <!--
+                    The date field renders its own `.form-group`, `.control-label` and
+                    `input[type=date]` — the native control that replaces the forbidden jQuery
+                    datepicker (AAP 0.10.5 item 1) — and `inputId` is the id its input and label
+                    share, which is how the harness addresses `#approvedOnDate` on both applications.
+                    `[required]` marks the label for assistive technology and adds no validator.
+                  -->
                   <app-date-field
                     inputId="approvedOnDate"
                     [control]="approveForm.controls.approvedOnDate"
@@ -69,7 +139,12 @@
                     </div>
                   </div>
 
-                  <!-- Optional: the component attaches a note only when its trimmed value carries text, so an untouched field adds no member the legacy body lacked (Rule 1 clause 2). The label carries no required marker, which is how every form in this application tells an optional field from a required one. -->
+                  <!--
+                    Optional: the component attaches a note only when its trimmed value carries text, so
+                    an untouched field adds no member the legacy body lacked (Rule 1 clause 2). The label
+                    carries no required marker, which is how every form in this application tells an
+                    optional field from a required one.
+                  -->
                   <div class="form-group">
                     <label class="col-md-3 control-label" for="note">{{
                       'label.input.note' | translate
@@ -93,7 +168,10 @@
             }
 
             @case ('reject') {
-              <!-- `POST /loans/{id}?command=reject`: the rejection date and an optional note, and no seed read at all — legacy's rejection branch reads no template. -->
+              <!--
+                `POST /loans/{id}?command=reject`: the rejection date and an optional note, and no seed
+                read at all — legacy's rejection branch reads no template.
+              -->
               <form class="form-horizontal" [formGroup]="rejectForm" (ngSubmit)="submit()" novalidate>
                 <div class="panel-body">
                   <app-date-field
@@ -125,7 +203,12 @@
             }
 
             @case ('disburse') {
-              <!-- `POST /loans/{id}?command=disburse`: the actual disbursement date and the amount the component seeds from `GET /loans/{id}/transactions/template?command=disburse`, left editable exactly as legacy leaves it. No payment-type picker, because the disburse body has no member for one and a picker would collect a choice nothing posts. -->
+              <!--
+                `POST /loans/{id}?command=disburse`: the actual disbursement date and the amount the
+                component seeds from `GET /loans/{id}/transactions/template?command=disburse`, left
+                editable exactly as legacy leaves it. No payment-type picker, because the disburse body
+                has no member for one — a picker would collect a choice nothing posts.
+              -->
               <form class="form-horizontal" [formGroup]="disburseForm" (ngSubmit)="submit()" novalidate>
                 <div class="panel-body">
                   <app-date-field
@@ -185,7 +268,11 @@
             }
 
             @case ('undoapproval') {
-              <!-- `POST /loans/{id}?command=undoapproval`: an optional note and nothing else; the command takes no date, so the body carries no date and therefore no date pattern or language beside it. -->
+              <!--
+                `POST /loans/{id}?command=undoapproval`: an optional note and nothing else. The command
+                takes no date, so the body carries no date and therefore no date pattern or language
+                beside it.
+              -->
               <form class="form-horizontal" [formGroup]="undoapprovalForm" (ngSubmit)="submit()" novalidate>
                 <div class="panel-body">
                   <div class="form-group">
@@ -210,7 +297,19 @@
             }
 
             @case ('undodisbursal') {
-              <!-- `POST /loans/{id}?command=undodisbursal`: a confirm view with no control at all, because the command takes an empty body and legacy's undo-disbursal screen shows no field (Rule 1 clause 3). -->
+              <!--
+                `POST /loans/{id}?command=undodisbursal`: a confirm view with no control at all, because
+                the command takes an empty body and legacy's undo-disbursal screen shows no field. The
+                sentence is legacy's own confirm wording (`label.areyousure`, the key its confirm actions
+                render before a destructive submit) and it comes from `app-empty-state`, which draws
+                exactly the centred muted text of the surrounding card and so introduces no new visual
+                language. Legacy's own undo-disbursal branch renders no such line, so this caption is the
+                one deliberate addition here: it states the action being confirmed, carries no control,
+                no field and no new copy, and it is kept because the action screen's specification asks
+                the control-free modes to state the confirmed action (Rule 1 clause 3, departure
+                recorded). There is no form to submit, which is why the primary control is a button that
+                calls the same guarded submit.
+              -->
               <div class="panel-body">
                 <app-empty-state [message]="'label.areyousure' | translate" />
               </div>

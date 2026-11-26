@@ -1,24 +1,71 @@
-<!-- Individual loan application, `#/newclientloanaccount/:clientId` — workflow W4 and the surface W7 is proved on (AAP 0.7.3 "W4 loan application", "W7 validation error"; AAP 0.7.4; AAP 0.10.1) (Rule 1 clause 6, AAP 0.5.2). -->
+<!--
+  Individual loan application, `#/newclientloanaccount/:clientId` — workflow W4 (submit an application
+  after previewing its repayment schedule) and the surface workflow W7 is proved on, a Fineract
+  validation error rendered verbatim (AAP 0.7.3 "W4 loan application" and "W7 validation error";
+  AAP 0.7.4 loan screens; AAP 0.10.1).
+
+  The card itself — the `.panel` surface in its `.panel-default` variant with its `.panel-heading`/
+  `.panel-title` title band — comes from the shared `div[appPanelCard]` component (AAP 0.2.3 row
+  `PanelCard`), which is the one place the card is defined. Every other visual value comes from the
+  global Bootstrap 3 layer `web-ng/src/styles.scss` compiles, so this file carries no style element, no
+  inline style, no colour and no pixel: `.form-horizontal` / `.form-group` / `.control-label` the form
+  layout, `.form-control` the 34px control, `.btn.btn-primary` the brand fill and `.alert.alert-danger`
+  the failure banner. `span.required` is the legacy marker rule in
+  `app/styles-dev/main/components/_content.scss`, consumed in place (Rule 1 clause 6; AAP 0.5.2,
+  AAP 0.5.3).
+
+  Field ids are the legacy form's own (`app/views/loans/newloanaccount.html`): the id, the
+  `formControlName` and the `[inputId]` a shared field receives are the same string, which is both the
+  contract `web-ng/e2e/pages/next/loans.page.ts` drives and what makes each `<label for>` point at the
+  control it names.
+
+  Captions and options are the legacy bundle's keys and the Fineract template's own lists: no label and no
+  option is written into this file. Where this template renders the `<label>` of a field a shared
+  component owns (`app-select-field`, `app-date-field`), the component is given no `label` input, so the
+  one visible label is the one above and no control is named twice. Those two fields report their own
+  invalid state (`.has-error`, `aria-invalid`) from the control they hold; the native inputs here carry
+  the same `.has-error` and a `.help-block` of their own.
+
+  Three captions are taken from keys the shipped bundle actually holds: the card title is
+  `label.heading.loanapplication` ("New Loan Application", the legacy breadcrumb's text), the not-found
+  message `error.msg.resource.not.found`, and the preview trigger `label.heading.preview`. The bundle
+  defines no key for a "new loan account" heading or for a generic not-found heading, and a key it lacks
+  would reach the user as a humanised fragment — neither the legacy wording nor a translation — so the
+  captions resolve as real labels on every screen (Rule 1 clause 3 and clause 6).
+-->
 @if (notFound()) {
-  <!-- No client on the route: Fineract's own "resource is not available" text replaces the form, so no control is rendered and nothing is posted. -->
-  <div class="panel panel-default">
+  <!-- No client on the route: the message replaces the form, so no control is rendered and nothing is
+       posted. Fineract's own "resource is not available" text, not a locally written sentence. -->
+  <div appPanelCard variant="default">
     <div class="panel-body">
       <p class="text-center text-muted">{{ 'error.msg.resource.not.found' | translate }}</p>
     </div>
   </div>
 } @else {
-  <div class="panel panel-default">
-    <div class="panel-heading">
-      <h3 class="panel-title">{{ 'label.heading.loanapplication' | translate }}</h3>
-    </div>
-
+  <div appPanelCard variant="default" [title]="'label.heading.loanapplication' | translate">
     <div class="panel-body" [attr.aria-busy]="loading() ? 'true' : null">
-      <!-- Fineract's own failure text, verbatim and moved by no prefix, capitalisation or translation, because W7 compares it character for character with `errors[].defaultUserMessage`; `role="alert"` announces it without moving focus and the form below keeps every entered value (AAP 0.7.4; AAP 0.14.1 "errors are values"). -->
+      <!--
+        Fineract's own failure text, verbatim and unmoved by any prefix, capitalisation or translation:
+        W7 compares it character for character with `errors[].defaultUserMessage`. `role="alert"` announces
+        it without moving focus, and the form below keeps every entered value (AAP 0.7.4; AAP 0.14.1
+        "errors are values").
+      -->
       @if (error()) {
         <div class="alert alert-danger" role="alert">{{ error() }}</div>
       }
 
-      <!-- The submission was accepted but its answer named no loan id, so there is no record to open and the screen states that instead of returning quietly (AAP 0.14.2). This is the one string with no translation key: no shipped legacy bundle carries one, the legacy controller navigated with `data.loanId` unconditionally and had no such state, and adding a key would mean editing a locale file, which Rule 1 clauses 1 and 6 forbid. -->
+      <!--
+        The submission was accepted but its answer named no loan id, so there is no record to open:
+        the screen states that instead of returning quietly after a request that already created the
+        loan (AAP 0.14.2). It is this screen's own state, not a Fineract failure, so it stays out of
+        the verbatim server message above.
+
+        BLITZY [I18N]: this is the one string on the screen with no translation key, because no
+        shipped legacy locale bundle carries one — the legacy controller navigated with `data.loanId`
+        unconditionally and had no such state to report — and adding a key would mean editing a
+        locale file (forbidden: Rule 1 clauses 1 and 6). The wording says what happened and what the
+        user can do, rather than showing a humanised key fragment.
+      -->
       @if (submittedWithoutId()) {
         <div class="alert alert-warning" role="alert">
           The application was submitted, but the server reported no loan identifier for it, so the
@@ -26,7 +73,12 @@
         </div>
       }
 
-      <!-- `novalidate` and no `required`, `min`, `max` or `step` anywhere: the browser must never block a submission Fineract alone decides, and legacy applies no bound of its own — W7 proves the server rejecting a principal above the product maximum (Rule 1 clause 3). The reactive form's `Validators.required` supplies the state each control displays. -->
+      <!--
+        `novalidate` and no `required`, `min`, `max` or `step` anywhere: the browser must never block a
+        submission Fineract alone decides, and legacy applies no bound of its own — W7 proves the server
+        rejecting a principal above the product maximum (Rule 1 clause 3). The reactive form's
+        `Validators.required` supplies the state each control displays.
+      -->
       <form [formGroup]="form" class="form-horizontal" (ngSubmit)="submit()" novalidate>
         @let principalError = form.controls.principal.invalid && (form.controls.principal.touched || form.controls.principal.dirty);
         @let loanTermError = form.controls.loanTermFrequency.invalid && (form.controls.loanTermFrequency.touched || form.controls.loanTermFrequency.dirty);
@@ -39,7 +91,12 @@
             {{ 'label.input.product' | translate }}<span class="required">*</span>
           </label>
           <div class="col-md-9">
-            <!-- The product list is the Fineract template's own, in its order; selecting one re-reads the template so the terms and defaults below become that product's, and the shared field reports the selection through its `valueChange` output rather than this screen depending on the inner select's DOM event. -->
+            <!--
+              The product list is the Fineract template's own, in its order. Selecting one re-reads the
+              template so the terms and defaults below become that product's: the shared field writes the
+              control and reports the selection it now holds through its `valueChange` output, so this
+              screen never depends on the inner select's DOM event reaching this host.
+            -->
             <app-select-field
               inputId="productId"
               [control]="form.controls.productId"
@@ -206,7 +263,8 @@
             {{ 'label.input.amortization' | translate }}<span class="required">*</span>
           </label>
           <div class="col-md-9">
-            <!-- Amortisation methods, from the template's `amortizationTypeOptions`; no list is written into this file, because a hard-coded enumeration is a dropdown legacy never showed. -->
+            <!-- Amortisation methods, from the template's `amortizationTypeOptions`; no list is written
+                 into this file, because a hard-coded enumeration is a dropdown legacy never showed. -->
             <app-select-field
               inputId="amortizationType"
               [control]="form.controls.amortizationType"
@@ -251,7 +309,10 @@
             {{ 'label.input.repaymentstrategy' | translate }}<span class="required">*</span>
           </label>
           <div class="col-md-9">
-            <!-- Strategies, from the template's `transactionProcessingStrategyOptions`; the control keeps the legacy form's name while its value is the strategy code the fork accepts on `POST /loans` — the id form of the choice is rejected — so this picker posts the member the legacy body carries (Rule 1 clause 2). -->
+            <!-- Strategies, from the template's `transactionProcessingStrategyOptions`. The control keeps
+                 the legacy form's name, while its value is the strategy code the fork accepts on
+                 `POST /loans` — the id form of the choice is rejected — so this picker posts the same
+                 member the legacy screen's body carries (Rule 1 clause 2). -->
             <app-select-field
               inputId="transactionProcessingStrategyId"
               [control]="form.controls.transactionProcessingStrategyId"
@@ -266,7 +327,9 @@
             {{ 'label.input.disbursementon' | translate }}<span class="required">*</span>
           </label>
           <div class="col-md-9">
-            <!-- A native date control in place of the legacy jQuery datepicker, which this application may not load; the payload still carries `dd MMMM yyyy` and the active locale because the service formats it at the boundary (AAP 0.10.5 item 1). -->
+            <!-- A native date control in place of the legacy jQuery datepicker, which this application
+                 may not load; the payload still carries `dd MMMM yyyy` and the active locale because the
+                 service formats it at the boundary (AAP 0.10.5 item 1). -->
             <app-date-field
               inputId="expectedDisbursementDate"
               [control]="form.controls.expectedDisbursementDate"
@@ -291,7 +354,8 @@
         <div class="form-group">
           <label class="control-label col-md-3" for="loanOfficerId">{{ 'label.input.loanofficer' | translate }}</label>
           <div class="col-md-9">
-            <!-- Optional: a tenant need not have officers to choose from, so the control carries no validator and the leading empty option returns it to unassigned. -->
+            <!-- Optional: a tenant need not have officers to choose from, so the control carries no
+                 validator and the leading empty option returns it to unassigned. -->
             <app-select-field
               inputId="loanOfficerId"
               [control]="form.controls.loanOfficerId"
@@ -314,7 +378,15 @@
           </div>
         </div>
 
-        <!-- The charges the application applies: the rows the template preselected plus any the applicant adds from the charges it offers, rendered only when there is a row or a charge to pick, so a product with no applicable charge shows no empty section. A picked charge's amount is the server's figure — a flat charge costs its amount, a percentage charge a share of the principal — read through the charge's own template when the selection changes (Rule 1 clause 3). -->
+        <!--
+          The charges the application applies: the rows the template preselected plus any the applicant
+          adds from the charges the template offers. Rendered only when there is a row or a charge to pick,
+          so a product with no applicable charge shows no empty section and no picker over an empty list.
+
+          A picked charge's amount is the server's figure (a flat charge costs its amount, a percentage
+          charge a share of the principal), which the component reads through the charge's own template
+          when the selection changes.
+        -->
         @if (chargeOptions().length > 0 || chargeRows.length > 0) {
           <fieldset>
             <legend>{{ 'label.heading.charges' | translate }}</legend>
@@ -329,7 +401,9 @@
                       {{ 'label.input.charge' | translate }}<span class="required">*</span>
                     </label>
                     <div class="col-md-9">
-                      <!-- The same change wiring as the product picker: the shared field writes the row's control and reports the selection it now holds through its `valueChange` output, which names the charge the amount field below belongs to. -->
+                      <!-- The same change wiring as the product picker: the shared field writes the row's
+                           control and reports the selection it now holds through its `valueChange`
+                           output, which names the charge the amount field below belongs to. -->
                       <app-select-field
                         [inputId]="'charge-' + $index + '-chargeId'"
                         [control]="row.controls.chargeId"
@@ -360,7 +434,8 @@
                           {{ 'label.requiredfield' | translate }}
                         </span>
                       }
-                      <!-- The row number is part of the accessible name only: "Remove" repeats once per row, and a screen reader needs to know which charge a press drops. -->
+                      <!-- The row number is part of the accessible name only: "Remove" repeats once per
+                           row, and a screen reader needs to know which charge a press drops. -->
                       <button
                         type="button"
                         class="btn btn-default"
@@ -387,10 +462,18 @@
           </fieldset>
         }
 
-        <!-- The schedule the preview calculated, or the shared explicit empty state before the first one — the preview component owns that state, so no placeholder text is written here (AAP 0.7.4). -->
+        <!--
+          The schedule the preview calculated, or the shared explicit empty state before the first one —
+          the preview component owns that state, so no placeholder text is written here (AAP 0.7.4).
+        -->
         <app-repayment-preview [schedule]="schedule()" />
 
-        <!-- Both triggers are disabled while a call is in flight: `POST /loans` and the schedule calculation are not idempotent, so one press is one request (AAP 0.1.1, AAP 0.14.1). `Cancel` returns to the client record the application was opened from, the only navigation this screen offers besides the record the component opens after a successful submit. -->
+        <!--
+          Both triggers are disabled while a call is in flight: `POST /loans` and the schedule
+          calculation are not idempotent, so one press is one request (AAP 0.1.1, AAP 0.14.1). `Cancel`
+          returns to the client record the application was opened from — the only navigation this screen
+          offers besides the record the component opens after a successful submit.
+        -->
         <div class="form-group">
           <div class="col-md-offset-3 col-md-9">
             <a class="btn btn-default" [routerLink]="['/viewclient', clientId()]">

@@ -77,7 +77,7 @@ describe('appConfig', () => {
 
     await runStartUp();
 
-    // `HttpHandler` rather than `HttpClient`: web-ng/eslint.config.js restricts the `HttpClient` import to the seven Fineract URL-owning files, and `HttpHandler` is what `provideHttpClient` resolves *after* the interceptor chain, so this request passes through the same chain.
+    // `HttpHandler` rather than `HttpClient`: web-ng/eslint.config.js restricts the `HttpClient` import to the six Fineract URL-owning files, and `HttpHandler` is what `provideHttpClient` resolves *after* the interceptor chain, so this request passes through the same chain.
     const handler = TestBed.inject(HttpHandler);
     const http = TestBed.inject(HttpTestingController);
 

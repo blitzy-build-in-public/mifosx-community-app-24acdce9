@@ -218,12 +218,11 @@ describe('ClientViewComponent', () => {
     return route.split('/').at(-1) ?? '';
   }
 
-  /** The action hrefs every record shows, for the client id it is showing: the four entries of the joined row and the three lifecycle commands of its `More` menu, in render order. */
+  /** The action hrefs every record shows, for the client id it is showing: the three entries of the joined row and the three lifecycle commands of its `More` menu, in render order. */
   function expectedHrefs(id: string): string[] {
     return [
       `/editclient/${id}`,
       `/newclientloanaccount/${id}`,
-      `/new_client_saving_application/${id}`,
       `/client/${id}/close`,
       `/client/${id}/activate`,
       `/client/${id}/reject`,
@@ -236,11 +235,10 @@ describe('ClientViewComponent', () => {
     return [...expectedHrefs(id), `/client/${id}/reactivate`];
   }
 
-  /** The legacy label keys the record's descriptors carry, in the order the action group renders them: the four entries of the joined row, then the three lifecycle commands of the `More` menu (`label.button.*` in (AAP 0.7.4). */
+  /** The legacy label keys the record's descriptors carry, in the order the action group renders them: the three entries of the joined row, then the three lifecycle commands of the `More` menu (`label.button.*` in (AAP 0.7.4). */
   const ACTION_LABEL_KEYS: readonly string[] = [
     'label.button.edit',
     'label.button.newloan',
-    'label.button.newsaving',
     'label.button.close',
     'label.button.activate',
     'label.button.reject',
@@ -251,7 +249,6 @@ describe('ClientViewComponent', () => {
   const ACTION_PERMISSIONS: readonly string[] = [
     'UPDATE_CLIENT',
     'CREATE_LOAN',
-    'CREATE_SAVINGSACCOUNT',
     'CLOSE_CLIENT',
     'ACTIVATE_CLIENT',
     'REJECT_CLIENT',
@@ -376,7 +373,6 @@ describe('ClientViewComponent', () => {
     heldCodes = [
       'UPDATE_CLIENT',
       'CREATE_LOAN',
-      'CREATE_SAVINGSACCOUNT',
       'CLOSE_CLIENT',
       'ACTIVATE_CLIENT',
       'REJECT_CLIENT',
@@ -591,7 +587,7 @@ describe('ClientViewComponent', () => {
     const links = actionLinks(host);
 
     // The legacy gate hides rather than removes: every anchor is still in the document, carrying the inline `display: none` `HasPermissionDirective` writes before its first verdict (AAP 0.3.4 claim 12; Rule 1 clause 3).
-    expect(links).toHaveLength(7);
+    expect(links).toHaveLength(6);
     expect(links.every((link) => link.style.display === 'none')).toBe(true);
   });
 
@@ -623,7 +619,7 @@ describe('ClientViewComponent', () => {
     const host = hostOf(await render(`/viewclient/${CLIENT_ID}`));
 
     // The wildcard answers every code, exactly as it does to `permissionGuard` (AAP 0.1.1), and the `More` entries are included because each one carries its own gate.
-    expect(actionLinks(host)).toHaveLength(7);
+    expect(actionLinks(host)).toHaveLength(6);
     expect(actionLinks(host).every((link) => link.style.display !== 'none')).toBe(true);
   });
 

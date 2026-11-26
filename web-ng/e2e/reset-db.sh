@@ -16,8 +16,8 @@
 #   4. seed the fixed test data (AAP 0.10.1) once the backend answers.
 #
 # The seed is last because it is the only step that needs a working API, and it is not idempotent: it
-# writes the fixed staff, loan product, loan charge and savings product into a freshly recreated
-# database, so a second run on an unreset one is meant to fail (AAP 0.9.4 row 13).
+# writes the fixed staff, loan product and loan charge into a freshly recreated database, so a
+# second run on an unreset one is meant to fail (AAP 0.9.4 row 13).
 #
 # FINERACT_COMPOSE_FILE names the fork's own docker-compose-postgresql.yml of
 # `Blitzy-Sandbox/blitzy-fineract`. That file lives outside this repository and its location differs

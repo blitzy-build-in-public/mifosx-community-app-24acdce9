@@ -75,15 +75,13 @@ const ACTION_MENU = '.dropdown-menu';
 const GENERAL_TAB = 'General';
 const IDENTITIES_TAB = 'Identities';
 
-/** Action labels as the legacy English translations render them: `label.button.more` = "More", `label.button.newloan` = "New Loan" and `label.button.newsaving` = "New Saving" (app/scripts/models/clientStatus.js:90-110 and. */
+/** Action labels as the legacy English translations render them: `label.button.more` = "More" and `label.button.newloan` = "New Loan" (app/scripts/models/clientStatus.js:90-110 and. */
 const MORE_LABEL = 'More';
 const NEW_LOAN_LABEL = 'New Loan';
-const NEW_SAVING_LABEL = 'New Saving';
 
 /** Hash prefixes of the routes the record's actions lead to: `location.path('/viewloanaccount/' + id)` in app/scripts/controllers/client/ViewClientController.js:145, and the action hrefs of. */
 const LOAN_ACCOUNT_ROUTE = '#/viewloanaccount/';
 const NEW_LOAN_ROUTE = '#/newclientloanaccount/';
-const NEW_SAVING_ROUTE = '#/new_client_saving_application/';
 
 /** How long a hash jump is given to take effect before the helper drives `location.hash` directly. */
 const HASH_SETTLE_TIMEOUT_MS = 2_000;
@@ -228,7 +226,7 @@ export class ClientViewPage {
     this.page = page;
   }
 
-  /** Opens the record of `clientId` (AAP 0.10.1 W3) — the entry point of W4 and W8 as well, because the "New Loan" and "New Saving" actions live on this screen — and waits for the record header, which the profile card, the. */
+  /** Opens the record of `clientId` (AAP 0.10.1 W3) — the entry point of W4 as well, because the "New Loan" action lives on this screen — and waits for the record header, which the profile card, the. */
   async open(clientId: number): Promise<void> {
     await this.gotoHash(`#/viewclient/${clientId}`);
     await this.recordHeader().waitFor({ state: 'visible' });
@@ -352,12 +350,6 @@ export class ClientViewPage {
   async startNewLoan(): Promise<void> {
     await this.startAction(NEW_LOAN_LABEL);
     await this.hashStartsWith(NEW_LOAN_ROUTE);
-  }
-
-  /** Starts a new savings application from the record and waits for its route (AAP 0.10.1 W8; `#/new_client_saving_application/:clientId`). */
-  async startNewSaving(): Promise<void> {
-    await this.startAction(NEW_SAVING_LABEL);
-    await this.hashStartsWith(NEW_SAVING_ROUTE);
   }
 
   /** The record header locator: the title block the whole screen settles behind (AAP 0.2.3 `RecordHeader`). */

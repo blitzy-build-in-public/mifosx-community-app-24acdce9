@@ -48,8 +48,9 @@ function readingWhere(prefix: string): DifferenceRegisterReading | undefined {
 }
 
 describe('the deliberate-difference register\'s readings', () => {
-  it('holds the two readings this run takes more narrowly than the plan, and no other', () => {
-    expect(DIFFERENCE_REGISTER_READINGS).toHaveLength(2);
+  it('holds the three readings this run takes from the plan, and no other', () => {
+    expect(DIFFERENCE_REGISTER_READINGS).toHaveLength(3);
+    expect(readingWhere('AAP 0.10.5 item 5')).toBeDefined();
     expect(readingWhere('AAP 0.10.5 item 15')).toBeDefined();
     expect(readingWhere('AAP 0.10.1')).toBeDefined();
   });
@@ -61,6 +62,14 @@ describe('the deliberate-difference register\'s readings', () => {
       expect(reading.delivered.trim().length).toBeGreaterThan(0);
       expect(reading.why.trim().length).toBeGreaterThan(0);
     }
+  });
+
+  it('records item 5 as the savings screens the fixed cut order withdrew, with the reason and the Must scope kept', () => {
+    const item5 = readingWhere('AAP 0.10.5 item 5');
+    expect(item5?.delivered).toContain('the savings screens are not delivered');
+    expect(item5?.delivered).toContain('no Must scope was dropped');
+    expect(item5?.why).toContain('AAP 0.9.3 fixes the cut order');
+    expect(item5?.why).toContain('The revised totals stand in the report');
   });
 
   it('records item 15 as the template-seeded disbursement and repayment dates, with no business-date request', () => {
@@ -86,7 +95,8 @@ describe('the rendered register', () => {
     expect(lines).toContain(
       'The register itself is AAP 0.10.5\'s sixteen deliberate differences, and every `intentional-diff` row '
         + 'above cites one of them by number. The entries below are the ones this run reads more narrowly than '
-        + 'the plan wrote them, stated with what the run delivers so that the register and the specs agree.',
+        + 'the plan wrote them — or, at item 5, does not deliver at all, as AAP 0.9.3\'s fixed cut order required — '
+        + 'stated with what the run delivers so that the register and the specs agree.',
     );
   });
 

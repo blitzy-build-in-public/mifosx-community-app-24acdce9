@@ -71,13 +71,26 @@ $mx-rule: #DDDDDD; // color-rule — $table-border-color
 $mx-section-rule: #E5E5E5; // color-section-rule — panel heading rule
 $mx-hairline: #EEEEEE; // color-hairline — $gray-lighter
 $mx-input-border: #E0E0E0; // color-input-border
-$mx-input-focus: #BCE0FD; // _inputs.scss :focus border
 $mx-navbar-border: #DFDFDF; // color-navbar-border
-$mx-checkbox-border: #767676; // color-checkbox-border — the native box no rule here paints
 
-// The notification widget's own colours — main/components/_notifications.scss, which AAP 0.2.3 and 0.5.2 name as this widget's visual specification.
-$mx-notice-border: #CCCCCC; // _notifications.scss — the panel's 1px border
-$mx-notice-accent: #4F99ED; // .new-notification — the 2px accent bar's colour
+// AAP 0.2.2 records the token `color-checkbox-border` #767676 with the legacy source "native checkbox
+// styling": the user agent draws the box of the list's `input[type=checkbox]` (AAP 0.5.2), so no rule
+// in this stylesheet paints that border and no variable is declared for it. A declared value that
+// nothing here produces would be a token the interface never shows.
+
+// The values the legacy partials carry that the AAP 0.2.2 manifest does not tokenise. Each was verified
+// this pass against the partial named beside it, and each is declared here rather than written into a
+// rule, so this stylesheet stays a closed set of documented values.
+$mx-input-focus: #BCE0FD; // _inputs.scss:11 — the .form-control focus border
+$mx-notice-border: #CCCCCC; // _notifications.scss — the notification panel's 1px border
+$mx-legacy-blue: #4F99ED; // _notifications.scss `.new-notification` and _layout.scss's nav-link pin —
+                          // the partials' own blue literal, the literal expansion of the product's
+                          // `$brand-primary: rgba(79, 153, 237, 1)` declared at the top of this file,
+                          // which AAP 0.2.2 records as color-brand-blue #5099ED
+$mx-notice-accent: $mx-legacy-blue; // _notifications.scss `.new-notification` — the 2px accent bar
+$mx-danger: #d9534f; // $brand-danger as the legacy variables leave it [_variables.scss:23] — the
+                     // required marker's colour [_content.scss:148] and the notification widget's
+                     // error accent
 
 // Brand and status
 $mx-brand-blue: #5099ED; // color-brand-blue — $brand-primary #5099ED
@@ -85,10 +98,19 @@ $mx-brand-border: #378CEB; // color-primary-border — $btn-primary-border
 $mx-tab-accent: #428BCA; // color-tab-accent — the active tab's 3px top bar
 $mx-status-active: #00CE02; // color-status-active
 $mx-status-pending: #FFA500; // color-status-pending
+// AAP 0.2.2 fixes a colour for the active and pending status keys only. These two carry the same
+// neutrals the closed and other keys paint today, so a later change to a body-text token cannot
+// silently repaint a status indicator.
+$mx-status-closed: #777777; // color-text-secondary's value — the closed key's neutral
+$mx-status-other: #999999; // color-placeholder's value — the other key's neutral
 
 // Metrics
 $mx-control-height: 34px; // space-control — .form-control height
 $mx-nav-control-height: 30px; // space-nav-control — the navbar's search control
+$mx-navbar-height: 52px; // the bar's rendered height, measured in the browser: a 50px
+                         // `.navbar-brand` row plus its 1px top and bottom borders
+$mx-navbar-brand-width: 73.5px; // the signed-in lockup's width: AAP 0.2.1 measures 53x20 for the
+                                // wordmark plus 20.5x16.5 for the mark, ≈73.5x20 CSS px combined
 $mx-cell-padding: 8px; // space-cell — .table > tbody > tr > td padding
 $mx-radius-input: 2px; // radius-input; Bootstrap's default is 4px and the legacy partial
                         // sets 0, so the measured 2px is the value the design shows
@@ -209,9 +231,25 @@ hr.section-rule {
   }
 }
 
-// ----------------------------------------------------------------------------- The search results list (_report.scss:154, reproduced inline) -----------------------------------------------------------------------------
+// The list's row affordance, which the legacy table gives every cell and the row itself names with
+// `class="pointer-main"` (`app/views/clients/clients.html:64`): the partial's `.pointer-main:hover`
+// rule (`_content.scss:413-417`) paints the pointer cursor, its own blue fill and white text.
+// _content.scss nests that rule under `.card`, and AAP 0.5.2 maps the card to `.panel.panel-default`
+// — the `.panel` the in-scope list renders — so the rule is scoped to the card the row lives
+// in. `.panel .pointer-main:hover` (0,3,0) outranks Bootstrap's
+// `.table-striped > tbody > tr:nth-of-type(odd)` (0,2,2), so an odd row's zebra fill cannot paint
+// over the hover fill.
+.panel .pointer-main:hover {
+  cursor: pointer;
+  background-color: $mx-legacy-blue; // _content.scss:413 .pointer-main:hover — the partial's #4f99ed
+  color: $mx-surface; // the partial's #fff
+}
 
-// Legacy spaces each search result as a block: `.blockquoteresult { margin: 0 0 20px; padding: 10px 15px; }` [app/styles-dev/main/components/_report.scss:154-157]. That partial belongs to reports and is deliberately not.
+// -----------------------------------------------------------------------------
+// The search results list (_report.scss:154, reproduced inline)
+// -----------------------------------------------------------------------------
+
+// Legacy spaces each search result as a block: `.blockquoteresult { margin: 0 0 20px; padding: 10px 15px; }` [app/styles-dev/main/components/_report.scss:154-157]. That partial belongs to reports and is deliberately not imported, so the one rule the in-scope search screen needs is reproduced here value for value, and none of the partial's other rules are.
 .blockquoteresult {
   margin: 0 0 20px;
   padding: 10px 15px;
@@ -276,13 +314,23 @@ input[type="date"].form-control {
   color: $mx-text-select; // color-select-value
 }
 
-// The "Show Closed" control of the client list is the browser's own input[type=checkbox] (AAP 0.5.2), whose box the user agent draws: a border or background declared here never paints, and replacing the control's (AAP 0.2.2).
+// The "Show Closed" control of the client list is the browser's own input[type=checkbox] (AAP
+// 0.5.2), whose box the user agent draws: a border or background declared here never paints, and
+// replacing the control's appearance is a treatment the design does not show. That is why the token
+// block records the AAP 0.2.2 token color-checkbox-border as the user agent's own rendering and
+// declares no variable for it — a value nothing in this stylesheet paints is not one it holds.
 
 // Invalid fields use Bootstrap's own .has-error / .help-block treatment; there is no second validation mechanism.
 
-// The required-field marker a form template renders as `<span class="required">*</span>`.
+// The required-field marker a form template renders as `<span class="required">*</span>`. Legacy
+// declares the marker once, in the product partial — `span.required { color: $brand-danger; }`
+// [app/styles-dev/main/components/_content.scss:148] — and $brand-danger is Bootstrap's own
+// #d9534f, which the legacy variables leave at its default [_variables.scss:23]. Until this rule
+// existed the global layer declared nothing for the class, so every asterisk painted in the
+// colour of the label it sits in instead of the red the legacy screens show. The colour is the
+// `$mx-danger` token, whose own comment in the token block cites the same partial and variable.
 span.required {
-  color: $brand-danger; // the legacy marker colour — Bootstrap's $brand-danger, #d9534f
+  color: $mx-danger; // the legacy marker colour — $brand-danger, #d9534f
 }
 
 // ----------------------------------------------------------------------------- Login language switcher (AAP 0.2.3 `LanguageSwitcher`: "label 13px #666F74 + native select 24px tall") The row the login screen renders is a (Rule 1 clause 6).
@@ -297,24 +345,72 @@ span.required {
   }
 }
 
-// ----------------------------------------------------------------------------- Login hero lockup (AAP 0.2.1 Step 1 and AAP 0.2.4: the brand lockup is "hero size 283.5x75.5 on the login screen") Legacy governed the hero's.
+// -----------------------------------------------------------------------------
+// Login hero lockup (AAP 0.2.1 Step 1 and AAP 0.2.4: the brand lockup is "hero size 283.5x75.5 on
+// the login screen")
+//
+// Legacy governed the hero's rendered width rather than leaving it at the image file's own size: it
+// pinned the lockup to the form column with an inline `width:80%; margin:auto` [app/index.html:80],
+// which is where this rule came from. The delivered value is the AAP's, not legacy's: AAP 0.2.1
+// measures the hero at 283.5x75.5 in a raster captured at the ≈110% zoom the same plan documents for
+// steps 1 and 2, so its CSS width is 283.5 / 1.1 ≈ 257.7px, and 257.7px of the 360px form column —
+// the `.col-sm-4` content box, the same 1.1 scale that turns the measured 396px form into 360px — is
+// 71.6%. The image keeps `img-responsive`, so its height follows the file's own aspect ratio and the
+// lockup is never stretched, and `.center-block` supplies the centring the inline style carried.
+// -----------------------------------------------------------------------------
 
 .login-hero {
-  width: 80%; // legacy app/index.html:80 — 288px inside the design's 360px column
+  width: 71.6%; // 257.7px (283.5 / 1.1) inside the design's 360px form column
 }
 
 // ----------------------------------------------------------------------------- Navbar (_navbar.scss, _layout.scss) -----------------------------------------------------------------------------
 
+// AAP 0.2.1 fixes the layout rule "a fixed top navbar above a scrolling content column", and legacy
+// carries the same intent: `app/views/_topnavbar.html:1` is `<nav class="navbar navbar-default
+// navbar-fixed-top">`, with its content container pinned under the bar at `top: 52px` [_layout.scss
+// `#mifos-reskin-ui-container`]. A bar that scrolls away is therefore a departure from both.
+//
+// Bootstrap's `.navbar-fixed-top` is deliberately not used. The bar measures 52px at 1440/1024/768 and
+// 272px at 500/375, because this application deliberately renders the full navigation at every width —
+// the template carries `.navbar-collapse` with no `.collapse` class and no hamburger (AAP 0.10.5 item
+// 8). A `position: fixed` bar with a hard-coded offset would therefore hide some 220px of the client
+// list behind the bar on a phone. Pinning the host element instead keeps the bar at the top of the
+// viewport and still reserves the bar's real height in flow at every width, so no offset is needed.
+//
+// A custom element is inline by default (measured: `display: inline`, `position: static`), so
+// `display: block` makes the host the sticky box. `$zindex-navbar-fixed` (1030) keeps the bar above the
+// routed screen it covers, while the notification container (1030 + 10) stays above the bar.
+app-navbar {
+  display: block;
+  position: sticky;
+  inset-block-start: 0;
+  z-index: $zindex-navbar-fixed;
+}
+
+// Bootstrap 3 applies `margin-bottom: $navbar-margin-bottom` to `.navbar` [_navbar.scss:15], a 20px
+// band. The bar's surface is painted by the bar itself and the #EBEFF1 surface by `.content-wrapper`,
+// so that margin paints a 20px body-white band between the bar's 1px #DFDFDF rule and the content
+// surface, where AAP 0.2.3 `AppShell` places the white navbar directly over the #EBEFF1 content
+// background with nothing between them (measured before this rule: `.navbar` bottom 52px,
+// `.content-wrapper` top 72px, and the band painted by `<body>` #FFFFFF). The margin is cleared, and
+// no compensating padding is needed, because the surface paint already lives on `.content-wrapper`.
 .navbar {
   min-height: 50px; // the design's navbar height
   background-color: $mx-surface;
   border-bottom: 1px solid $mx-navbar-border; // color-navbar-border
+  margin-bottom: 0; // clears Bootstrap's $navbar-margin-bottom: 20px [_navbar.scss:15]
 
   .navbar-brand {
     padding: 10px 15px;
 
+    // The lockup's width. Legacy's `_navbar.scss` caps the image at `max-width: 80px`, but AAP 0.2.1
+    // measures the signed-in navbar lockup at 53x20 (wordmark) plus 20.5x16.5 (mark), ≈73.5x20 CSS px,
+    // and the AAP outranks the legacy value for a measured design size. The manifest fixes no width for
+    // the lockup, so the token records the AAP measurement where the previous 80px maximum was an
+    // untraceable value. The served asset is `app/images/MifosX_logoSmall.png` (86x20), so the height
+    // follows its own aspect ratio.
     img {
-      max-width: 80px;
+      max-width: $mx-navbar-brand-width;
     }
   }
 }
@@ -329,6 +425,18 @@ span.required {
 .navbar-default .navbar-nav > li > a:focus,
 .navbar-default .navbar-nav > .open > a {
   color: $mx-brand-blue;
+}
+
+// BLITZY [A11Y]: legacy and this stylesheet leave the nav link's focus indicator to the user agent
+// (`outline: auto`), so keyboard focus reads only as the browser's ring. A designed indicator appears
+// on `:focus-visible` alone — never on hover and never at rest, which are the states legacy pins — and
+// draws it in the design's own primary-border token `color-primary-border` #378CEB, 3.4:1 against the
+// white bar and so clear of the 3:1 non-text contrast guidance. It deliberately does not darken the
+// link colour, nor the `.form-control:focus` border, whose designed #E0E0E0→#BCE0FD indicator this
+// file already flags and leaves at the design value.
+.navbar-default .navbar-nav > li > a:focus-visible {
+  outline: 2px solid $mx-brand-border;
+  outline-offset: -2px;
 }
 
 // The global search field sits in the navbar and is shorter than a form control in a form.
@@ -415,11 +523,11 @@ span.required {
 }
 
 .status-closed {
-  background-color: $mx-text-secondary;
+  background-color: $mx-status-closed; // the closed key's own neutral, #777777 as before
 }
 
 .status-other {
-  background-color: $mx-text-placeholder;
+  background-color: $mx-status-other; // the other key's own neutral, #999999 as before
 }
 
 // ----------------------------------------------------------------------------- Alerts and notifications (_alerts.scss, _notifications.scss) -----------------------------------------------------------------------------
@@ -431,7 +539,10 @@ span.required {
 // The notification widget NotificationComponent renders. AAP 0.2.3 and 0.5.2 name main/components/_notifications.scss as its visual specification, so these are that partial's values: a 250px white panel with a 1px #ccc (AAP 0.10.5).
 .notification-container {
   position: fixed;
-  inset-block-start: 51px; // the partial's top: 51px, one pixel under the 50px navbar
+  // The partial's own `top: 51px` was measured inside legacy's 52px bar, so it left the panel one
+  // pixel above the bar's bottom rule. With the bar pinned to the viewport that pixel would paint over
+  // the bar, so the panel starts exactly below it, at the bar's measured height.
+  inset-block-start: $mx-navbar-height; // the bar's measured 52px — see the Metrics block
   inset-inline-end: 0; // the partial's right: 0
   z-index: $zindex-navbar-fixed + 10; // the partial's 100 sat inside the navbar it hung from
   width: 250px; // the partial's width
@@ -458,7 +569,10 @@ span.required {
   color: $mx-text-strong;
   overflow-wrap: break-word;
 
-  // The partial accents a notice with one colour, .new-notification's #4f99ed.
+  // The partial accents a notice with one colour, .new-notification's #4f99ed. NotificationService
+  // publishes three kinds, so each takes the product token for its meaning: the partial's own blue
+  // for info, the status green for success, and the danger red for error — `$mx-danger`, the colour
+  // .alert-danger already carries.
   &.notification-info {
     border-inline-start-color: $mx-notice-accent;
   }
@@ -468,7 +582,7 @@ span.required {
   }
 
   &.notification-error {
-    border-inline-start-color: $brand-danger;
+    border-inline-start-color: $mx-danger;
   }
 }
 

@@ -14,6 +14,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiError, screenFailure, toDisplayableFailure } from '../../../core/http/api-error';
 import { DateFieldComponent } from '../../../shared/date-field/date-field.component';
 import { EmptyStateComponent } from '../../../shared/empty-state/empty-state.component';
+import { PanelCardComponent } from '../../../shared/panel-card/panel-card.component';
 import { createSubmitGuard } from '../../../shared/submit-guard.util';
 import type {
   LoanActionRequest,
@@ -129,6 +130,7 @@ function today(): Date {
     TranslatePipe,
     DateFieldComponent,
     EmptyStateComponent,
+    PanelCardComponent,
     LoanRepaymentComponent,
   ],
   templateUrl: './loan-action.component.html',

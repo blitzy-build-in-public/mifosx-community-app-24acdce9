@@ -14,6 +14,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { ApiError, screenFailure, toDisplayableFailure } from '../../../core/http/api-error';
 import { DateFieldComponent } from '../../../shared/date-field/date-field.component';
+import { PanelCardComponent } from '../../../shared/panel-card/panel-card.component';
 import {
   SelectFieldComponent,
   type SelectValue,
@@ -40,6 +41,7 @@ type LoanChargeFormMode = 'add' | 'pay' | 'waive' | 'notfound';
     RouterLink,
     TranslatePipe,
     DateFieldComponent,
+    PanelCardComponent,
     SelectFieldComponent,
   ],
   templateUrl: './loan-charge-form.component.html',

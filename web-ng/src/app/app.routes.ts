@@ -8,7 +8,7 @@ import { permissionGuard } from './core/auth/permission.guard';
 import { ShellComponent } from './core/layout/shell.component';
 import { NotFoundComponent } from './features/not-found/not-found.component';
 
-/** The `canMatch` predicate a lazy feature mount declares: it accepts a URL whose first segment is one of `firstSegments`, and refuses every other URL. **Why the mount needs it.** The three feature groups are siblings on. */
+/** The `canMatch` predicate a lazy feature mount declares: it accepts a URL whose first segment is one of `firstSegments`, and refuses every other URL. **Why the mount needs it.** The two feature groups are siblings on. */
 const mountsFirstSegment = (...firstSegments: readonly string[]): CanMatchFn =>
   (_route: Route, segments: readonly UrlSegment[]): boolean => {
     const first: string | undefined = segments.at(0)?.path;
@@ -53,13 +53,6 @@ export const routes: Routes = [
           ),
         ],
         loadChildren: () => import('./features/loans/loans.routes').then((m) => m.LOANS_ROUTES),
-      },
-      {
-        path: '',
-        canMatch: [
-          mountsFirstSegment('new_client_saving_application', 'viewsavingaccount', 'savingaccount'),
-        ],
-        loadChildren: () => import('./features/savings/savings.routes').then((m) => m.SAVINGS_ROUTES),
       },
       {
         // The access code the AAP requires on every route — "each route declares its permission in `data.permission` so `permissionGuard` and the nav can share one source" (AAP 0.8.2) — with the guard that reads it, because a (AAP 0.14.1, Rule 1 clause 3).

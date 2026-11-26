@@ -30,7 +30,7 @@ npm test                     # both coverage passes, described below
 `package-lock.json` is written locally by `npm install` and git-ignored by design; every dependency is
 pinned to an exact version in `package.json`. Two gates fail rather than warn: `npm run build` errors
 above a 1.5 MB uncompressed initial bundle, and `npm test` runs `ng test web-ng` (65% statements and
-lines overall) then `ng test web-ng-services` (90% over `core/http` plus the six Fineract services).
+lines overall) then `ng test web-ng-services` (90% over `core/http` plus the five Fineract services).
 
 ## Run in development
 
@@ -69,7 +69,7 @@ naming the variable when it is unset.
 export FINERACT_COMPOSE_FILE=/absolute/path/to/blitzy-fineract/docker-compose-postgresql.yml
 npm run check:backend    # proves the backend is Blitzy-Sandbox/blitzy-fineract, records its commit
 npm run reset:db         # pull db -> recreate with --pull never -> wait for /actuator/health -> seed
-npm run seed             # staff, loan product, loan charge, savings product, the closure, rejection and
+npm run seed             # staff, loan product, loan charge, the closure, rejection and
                          # withdrawal client-action reasons, and the client-action datatable gate (fixed values)
 npm run e2e              # legacy baseline, then the new app, then parity-report.{md,json}
 ```
@@ -78,6 +78,9 @@ npm run e2e              # legacy baseline, then the new app, then parity-report
 the seed is not idempotent. `npm run e2e` runs every workflow against the legacy app first (port 9090,
 with `?baseApiUrl=&tenantIdentifier=`), then the new app (port 4300): a legacy screen that no longer
 works is reported `legacy-broken` without failing, and `parity-report.{md,json}` land in `web-ng/` (git-ignored).
+
+The savings workflow (W8, Stretch) is not delivered: AAP 0.9.3's 60,000-line ceiling engaged its fixed cut
+order, so the savings screens, their routes and their spec were cut while every Must workflow keeps its own.
 
 Static gates:
 

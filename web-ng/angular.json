@@ -134,8 +134,7 @@
               "src/app/core/api/search.service.ts",
               "src/app/core/api/datatable-gate.service.ts",
               "src/app/features/clients/client.service.ts",
-              "src/app/features/loans/loan.service.ts",
-              "src/app/features/savings/savings.service.ts"
+              "src/app/features/loans/loan.service.ts"
             ],
             "coverageThresholds": {
               "statements": 90,
@@ -147,8 +146,7 @@
               "src/app/core/api/search.service.spec.ts",
               "src/app/core/api/datatable-gate.service.spec.ts",
               "src/app/features/clients/client.service.spec.ts",
-              "src/app/features/loans/loan.service.spec.ts",
-              "src/app/features/savings/savings.service.spec.ts"
+              "src/app/features/loans/loan.service.spec.ts"
             ]
           }
         }

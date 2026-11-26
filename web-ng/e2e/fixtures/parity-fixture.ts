@@ -10,12 +10,10 @@ import { ClientViewPage as LegacyClientViewPage } from '../pages/legacy/client-v
 import { ClientsPage as LegacyClientsPage } from '../pages/legacy/clients.page';
 import { LoansPage as LegacyLoansPage } from '../pages/legacy/loans.page';
 import { LoginPage as LegacyLoginPage } from '../pages/legacy/login.page';
-import { SavingsPage as LegacySavingsPage } from '../pages/legacy/savings.page';
 import { ClientViewPage as NextClientViewPage } from '../pages/next/client-view.page';
 import { ClientsPage as NextClientsPage } from '../pages/next/clients.page';
 import { LoansPage as NextLoansPage } from '../pages/next/loans.page';
 import { LoginPage as NextLoginPage } from '../pages/next/login.page';
-import { SavingsPage as NextSavingsPage } from '../pages/next/savings.page';
 import { WORKFLOW_IDS, redactEntryLocation, writeWorkflowRecord } from '../report/parity-report';
 import type { UiProject, WorkflowId, WorkflowRecord, WorkflowStatus } from '../report/parity-report';
 import { FINERACT_URL, readBusinessDate, resetBusinessDateCache } from '../seed/fixtures';
@@ -26,10 +24,10 @@ export { expect };
 /** The verdict vocabulary and the project names, re-exported as types so a spec needs no second import for the vocabulary its workflow ids and statuses are written in (AAP 0.10.4). */
 export type { UiProject, WorkflowId, WorkflowStatus } from '../report/parity-report';
 
-/** The five page objects of the running front end, one accessor per screen family, tagged with the project they drive (AAP 0.10.5). */
+/** The four page objects of the running front end, one accessor per screen family, tagged with the project they drive (AAP 0.10.5). */
 export type ParityPages = LegacyParityPages | NextParityPages;
 
-/** The legacy baseline's five page objects, tagged with the project they drive. */
+/** The legacy baseline's four page objects, tagged with the project they drive. */
 export interface LegacyParityPages {
   /** The discriminant of {@link ParityPages}: these objects drive the AngularJS baseline. */
   readonly uiProject: 'legacy';
@@ -41,11 +39,9 @@ export interface LegacyParityPages {
   readonly clientView: LegacyClientViewPage;
   /** The loan application, its repayment preview, the record, its actions and its charges. */
   readonly loans: LegacyLoansPage;
-  /** The savings application, its record and its actions (Stretch, W8). */
-  readonly savings: LegacySavingsPage;
 }
 
-/** The new application's five page objects, tagged with the project they drive. */
+/** The new application's four page objects, tagged with the project they drive. */
 export interface NextParityPages {
   /** The discriminant of {@link ParityPages}: these objects drive this application. */
   readonly uiProject: 'next';
@@ -57,13 +53,11 @@ export interface NextParityPages {
   readonly clientView: NextClientViewPage;
   /** The loan application, its repayment preview, the record, its actions and its charges. */
   readonly loans: NextLoansPage;
-  /** The savings application, its record and its actions (Stretch, W8). */
-  readonly savings: NextSavingsPage;
 }
 
 /** What a {@link WorkflowBody} is handed: the running side's screens, page, run date and capture. */
 export interface WorkflowTools {
-  /** The five page objects of the running front end. */
+  /** The four page objects of the running front end. */
   readonly pages: ParityPages;
   /** The test's own Playwright page, for the navigation a page object does not wrap. */
   readonly page: Page;
@@ -75,7 +69,7 @@ export interface WorkflowTools {
 
 /** What a {@link WorkflowBody} may return: the backend end state to snapshot once it succeeded. */
 export interface WorkflowArtifacts {
-  /** Client, loan and savings ids whose end state should be read after the body returns. */
+  /** Client and loan ids whose end state should be read after the body returns. */
   readonly stateTargets?: Partial<StateTargets>;
 }
 
@@ -103,7 +97,7 @@ export interface EvidenceSink {
 export interface ParityFixtures {
   /** Which front end the Playwright project drives (AAP 0.8.2). */
   uiProject: UiProject;
-  /** The five page objects of that front end. */
+  /** The four page objects of that front end. */
   pages: ParityPages;
   /** The tenant's business date read over the API (Rule 1 clause 2; AAP 0.10.1 "Run date"). */
   runDate: Date;
@@ -170,7 +164,7 @@ function uiProjectOf(projectName: string): UiProject {
   );
 }
 
-/** Whether a label is one of the nine workflow ids (AAP 0.8.2, AAP 0.10.4). */
+/** Whether a label is one of the eight workflow ids (AAP 0.8.2, AAP 0.10.4). */
 function isWorkflowId(value: string): value is WorkflowId {
   // The tuple is widened to `readonly string[]` for the membership test only: its own element type would let `includes` accept nothing but a WorkflowId, which is the thing being established.
   return (WORKFLOW_IDS as readonly string[]).includes(value);
@@ -178,7 +172,7 @@ function isWorkflowId(value: string): value is WorkflowId {
 
 /** The workflow label the capture artefact is named for. `startCapture()` fixes a capture's name when it starts, and the capture here starts in a fixture — before the spec has called {@link RunWorkflow} with the id it (AAP 0.11.1). */
 function captureLabelOf(testInfo: TestInfo): string {
-  const workflowToken = /(?:^|[^A-Z0-9])(W[1-8]|CHAIN)(?![A-Z0-9])/;
+  const workflowToken = /(?:^|[^A-Z0-9])(W[1-7]|CHAIN)(?![A-Z0-9])/;
   const specName = (testInfo.file.split(/[\\/]/).pop() ?? '').replace(/\.spec\.ts$/i, '');
   for (const candidate of [testInfo.title, specName]) {
     const found = workflowToken.exec(candidate.toUpperCase())?.[1];
@@ -214,7 +208,7 @@ function describeError(error: unknown): string {
   return redactEntryLocation(text);
 }
 
-/** The legacy baseline's five page objects, all driving one page. */
+/** The legacy baseline's four page objects, all driving one page. */
 function legacyPages(page: Page): LegacyParityPages {
   return {
     uiProject: 'legacy',
@@ -222,11 +216,10 @@ function legacyPages(page: Page): LegacyParityPages {
     clients: new LegacyClientsPage(page),
     clientView: new LegacyClientViewPage(page),
     loans: new LegacyLoansPage(page),
-    savings: new LegacySavingsPage(page),
   };
 }
 
-/** The new application's five page objects, all driving one page. */
+/** The new application's four page objects, all driving one page. */
 function nextPages(page: Page): NextParityPages {
   return {
     uiProject: 'next',
@@ -234,7 +227,6 @@ function nextPages(page: Page): NextParityPages {
     clients: new NextClientsPage(page),
     clientView: new NextClientViewPage(page),
     loans: new NextLoansPage(page),
-    savings: new NextSavingsPage(page),
   };
 }
 

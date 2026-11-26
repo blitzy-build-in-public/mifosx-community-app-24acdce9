@@ -1,4 +1,4 @@
-/** Seed of the parity fixture: the fixed test data of AAP 0.10.1 written into a freshly recreated Blitzy Fineract, so the legacy baseline and the new application run W1–W8 against the same state (Rule 2, AAP 0.9.4, AAP 0.7.3). */
+/** Seed of the parity fixture: the fixed test data of AAP 0.10.1 written into a freshly recreated Blitzy Fineract, so the legacy baseline and the new application run W1–W7 against the same state (Rule 2, AAP 0.9.4, AAP 0.7.3). */
 
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
@@ -13,7 +13,6 @@ import {
   SEED_CLIENT_ACTION_REASONS,
   SEED_LOAN_CHARGE,
   SEED_LOAN_PRODUCT,
-  SEED_SAVINGS_PRODUCT,
   SEED_STAFF,
   TENANT_ID,
   apiHeaders,
@@ -32,7 +31,7 @@ export interface SeedEntityResult {
   readonly id: number;
 }
 
-/** The four entities the seed creates, in creation order. */
+/** The three entities the seed creates, in creation order. */
 export interface SeedEntities {
   /** `Officer, Parity` — the loan officer the loan workflows select, the name Fineract composes from the AAP 0.10.1 first and last names. */
   readonly staff: SeedEntityResult;
@@ -40,8 +39,6 @@ export interface SeedEntities {
   readonly loanProduct: SeedEntityResult;
   /** `Parity Fee` — the charge the loan-charges workflow applies (AAP 0.10.1). */
   readonly loanCharge: SeedEntityResult;
-  /** `Parity Savings` — the product W8 uses (AAP 0.10.1). */
-  readonly savingsProduct: SeedEntityResult;
 }
 
 /** The narration values the seed created for the client lifecycle actions, one per action that takes a reason. */
@@ -164,31 +161,6 @@ interface LoanChargeCreateBody {
   /** API-required addition: the charge must be active to be offered by the loan charge template. */
   readonly active: boolean;
   /** API-required addition: the endpoint reads the amount with a locale and refuses a body that omits it. */
-  readonly locale: string;
-}
-
-/** Body of `POST /savingsproducts`: the AAP 0.10.1 product plus the fields the endpoint requires. */
-interface SavingsProductCreateBody {
-  readonly name: string;
-  /** API-required addition: Fineract rejects a product without a short name, and caps it at 4 characters. */
-  readonly shortName: string;
-  readonly currencyCode: string;
-  /** API-required addition: currency precision, 2 for USD as the template's `currencyOptions` report it. */
-  readonly digitsAfterDecimal: number;
-  /** API-required addition: no multiple-of restriction. */
-  readonly inMultiplesOf: number;
-  readonly nominalAnnualInterestRate: number;
-  /** API-required addition: `1` — DAILY (`interestCompoundingPeriodTypeOptions`). */
-  readonly interestCompoundingPeriodType: number;
-  /** API-required addition: `4` — MONTHLY (`interestPostingPeriodTypeOptions`). */
-  readonly interestPostingPeriodType: number;
-  /** API-required addition: `1` — DAILY_BALANCE (`interestCalculationTypeOptions`). */
-  readonly interestCalculationType: number;
-  /** API-required addition: `365` — DAYS_365 (`interestCalculationDaysInYearTypeOptions`). */
-  readonly interestCalculationDaysInYearType: number;
-  /** API-required addition: `1` — NONE, because the plan configures no accounting (`accountingRuleOptions`). */
-  readonly accountingRule: number;
-  /** API-required addition: the endpoint reads the rate with a locale and refuses a body that omits it. */
   readonly locale: string;
 }
 
@@ -426,24 +398,6 @@ function loanChargeCreateBody(): LoanChargeCreateBody {
   };
 }
 
-/** Body of `POST /savingsproducts` for the AAP 0.10.1 row "Parity Savings, currency USD, nominal annual interest 2%". */
-function savingsProductCreateBody(): SavingsProductCreateBody {
-  return {
-    name: SEED_SAVINGS_PRODUCT.name,
-    shortName: 'PARS',
-    currencyCode: SEED_SAVINGS_PRODUCT.currencyCode,
-    digitsAfterDecimal: 2,
-    inMultiplesOf: 0,
-    nominalAnnualInterestRate: SEED_SAVINGS_PRODUCT.nominalAnnualInterestRate,
-    interestCompoundingPeriodType: 1, // DAILY
-    interestPostingPeriodType: 4, // MONTHLY
-    interestCalculationType: 1, // DAILY_BALANCE
-    interestCalculationDaysInYearType: 365, // DAYS_365
-    accountingRule: 1, // NONE
-    locale: LOCALE,
-  };
-}
-
 /** Body of `POST /codes/name/{codeName}/codevalues` for one client-action narration value (AAP 0.10.1). */
 function codeValueCreateBody(reason: ClientActionReasonSeed): CodeValueCreateBody {
   return { name: reason.valueName, isActive: true, position: 1 };
@@ -556,7 +510,6 @@ function entityLines(result: SeedResult): string[] {
     `staff: ${result.entities.staff.name} id=${result.entities.staff.id}`,
     `loan product: ${result.entities.loanProduct.name} id=${result.entities.loanProduct.id}`,
     `loan charge: ${result.entities.loanCharge.name} id=${result.entities.loanCharge.id}`,
-    `savings product: ${result.entities.savingsProduct.name} id=${result.entities.savingsProduct.id}`,
     `closure reason: ${result.clientActionReasons.closure.name} id=${result.clientActionReasons.closure.id}`,
     `rejection reason: ${result.clientActionReasons.rejection.name} id=${result.clientActionReasons.rejection.id}`,
     `withdrawal reason: ${result.clientActionReasons.withdrawal.name} id=${result.clientActionReasons.withdrawal.id}`,
@@ -595,7 +548,6 @@ export async function runSeed(): Promise<SeedResult> {
     const staffId = await createEntity(context, '/staff', staffCreateBody());
     const loanProductId = await createEntity(context, '/loanproducts', loanProductCreateBody());
     const loanChargeId = await createEntity(context, '/charges', loanChargeCreateBody());
-    const savingsProductId = await createEntity(context, '/savingsproducts', savingsProductCreateBody());
     const closureReason = await createClientActionReason(context, SEED_CLIENT_ACTION_REASONS.closure);
     const rejectionReason = await createClientActionReason(context, SEED_CLIENT_ACTION_REASONS.rejection);
     const withdrawalReason = await createClientActionReason(context, SEED_CLIENT_ACTION_REASONS.withdrawal);
@@ -610,7 +562,6 @@ export async function runSeed(): Promise<SeedResult> {
         staff: { name: SEED_STAFF.displayName, id: staffId },
         loanProduct: { name: SEED_LOAN_PRODUCT.name, id: loanProductId },
         loanCharge: { name: SEED_LOAN_CHARGE.name, id: loanChargeId },
-        savingsProduct: { name: SEED_SAVINGS_PRODUCT.name, id: savingsProductId },
       },
       clientActionReasons: {
         closure: closureReason,
@@ -635,7 +586,7 @@ const SEED_USAGE: CliUsage = {
   name: 'seed',
   summary: 'Creates the AAP 0.10.1 parity fixtures in a freshly recreated Blitzy Fineract and records their ids in e2e/.captures/seed.json.',
   effects: [
-    'writes four records, in this order: staff (POST /staff), loan product (POST /loanproducts), loan charge (POST /charges), savings product (POST /savingsproducts)',
+    'writes three records, in this order: staff (POST /staff), loan product (POST /loanproducts), loan charge (POST /charges)',
     'writes one active narration value per client-action code (POST /codes/name/{codeName}/codevalues), so the close, reject and withdraw actions have a reason to offer: ClientClosureReason, ClientRejectReason and ClientWithdrawReason',
     'writes the client datatable client_action_check on m_client and the entity-datatable check registered for its CLOSE status (POST /datatables, then POST /entityDatatableChecks), so the client-action datatable gate has a check and a table to read',
     'writes e2e/.captures/seed.json with the ids, the tenant, the run date and the backend it wrote to',
@@ -658,7 +609,7 @@ const SEED_USAGE: CliUsage = {
 
 /** CLI body: seeds, prints one line per created entity, and turns any failure into exit code 1 with Fineract's own messages on stderr (Rule 1 clause 9). */
 async function main(): Promise<void> {
-  // Usage is answered before runSeed(), so `--help` inspects the four writes without performing one.
+  // Usage is answered before runSeed(), so `--help` inspects the three writes without performing one.
   const intent = resolveCliIntent(SEED_USAGE, process.argv.slice(2));
   if (intent.kind === 'handled') {
     process.exitCode = intent.exitCode;

@@ -1,0 +1,64 @@
+<!--
+  The table of a list screen (AAP 0.2.3 component inventory row `ClientList / DataTable`, Figma node
+  `1:3`). Three regions, each decided by an input:
+
+  1. `.table-responsive` — Bootstrap 3's own wrapper for a wide table. It is inert at 768px and above
+     and below that keeps the columns from pushing the page into horizontal scroll; it authors no
+     colour, size or spacing. Inside it, the `<table>`'s class list and id are the caller's, because
+     the screen's own class is what sizes its columns in the global layer and the legacy markup's id
+     is what the harness addresses the table by (Rule 1 clauses 3 and 6).
+
+  2. The header — one `<th scope="col">` per column, in the caller's order, printing the column's
+     already-translated label. `scope="col"` is Bootstrap 3's own table idiom and the one the legacy
+     table carried, so no assistive relationship is invented here (Rule 1 clause 3).
+
+  3. The body — one `<tr>` per row, tracked by the caller's row key rather than by the index, so a
+     re-render reconciles rows instead of rebuilding them. The row carries the caller's destination
+     as its own `RouterLink`, which is the affordance the legacy tables give every cell; a caller that
+     supplies no destination binds `null`, and `RouterLink` then navigates nothing, writes no `href`
+     and adds no tab stop, so the row is a plain row rather than a dead link. The row's class is
+     the caller's (`[rowClass]`): the clients list passes `pointer-main`, the class the legacy
+     table puts on a row that opens a record and the one the global layer paints with the
+     pointer cursor, the brand-blue fill and white text on hover (Rule 1 clause 3;
+     app/views/clients/clients.html:64).
+
+  Each `<td>` renders the caller's cell template when one is supplied, with the row, the column and
+  the column's text as its context, and the column's own text otherwise. The template is how one cell
+  of a table becomes a component — the clients list's Status column is a bare colour swatch and no
+  word (AAP 0.2.3 row `StatusSwatch`; AAP 0.10.5 deliberate difference 11) — so a caller that
+  supplies one renders the text of the columns it does not componentise itself, from the context's
+  `value`.
+
+  Deliberately absent: no sort affordance, no row action, no selection, no paging and no empty state.
+  Each belongs to the screen that owns the read, and adding one here would be behaviour the legacy
+  screens do not have (Rule 1 clause 3).
+-->
+<div class="table-responsive">
+  <table [id]="tableId()" [class]="tableClasses()">
+    <thead>
+      <tr>
+        @for (column of columns(); track column.key) {
+          <th scope="col">{{ column.header }}</th>
+        }
+      </tr>
+    </thead>
+    <tbody>
+      @for (row of rows(); track rowKey()(row)) {
+        <tr [class]="rowClass()" [routerLink]="rowTarget(row)">
+          @for (column of columns(); track column.key) {
+            <td>
+              @if (cellTemplate(); as cell) {
+                <ng-container
+                  [ngTemplateOutlet]="cell"
+                  [ngTemplateOutletContext]="cellContext(row, column)"
+                />
+              } @else {
+                {{ column.value(row) }}
+              }
+            </td>
+          }
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>
