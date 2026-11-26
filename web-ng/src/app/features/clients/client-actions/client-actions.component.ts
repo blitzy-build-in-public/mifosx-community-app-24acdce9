@@ -28,10 +28,10 @@ import { createSubmitGuard } from '../../../shared/submit-guard.util';
 import { CLIENT_ACTION_PERMISSIONS, type ClientActionCommand } from '../client.models';
 import { ClientService, type ClientActionInput } from '../client.service';
 
- /**
-  * The copy one lifecycle command renders, as translation keys of the shipped legacy bundles rather than sentences: every key is read from `app/global-translations/locale-*.json` in place (Rule 1
-  * clause 6) and `FineractMissingTranslationHandler` stands behind the ones a bundle might lack (AAP 0.10.2).
-  */
+  /**
+   * The copy one lifecycle command renders, as translation keys of the shipped legacy bundles rather than sentences: every key is read from `app/global-translations/locale-*.json` in place (Rule 1
+   * clause 6) and `FineractMissingTranslationHandler` stands behind the ones a bundle might lack (AAP 0.10.2).
+   */
 interface ClientActionCopy {
   /** Heading of the screen: the legacy step title, which is the action's own anchor label. */
   readonly headingKey: string;
@@ -46,11 +46,11 @@ interface ClientActionCopy {
   readonly reasonLabelKey: string;
 }
 
- /**
-  * The five commands' copy, keyed by the command itself: `satisfies Record<ClientActionCommand, ClientActionCopy>` makes a command without copy, or copy left behind by a removed command, a compile
-  * error. The keys are the legacy client-actions template's own — the `breadcrumbName` heading (`label.anchor.*`), its `labelName` and `labelNamereason`, and the `label.button.save` it shows for all
-  * five (Rule 1 clause 3); `activate` and `reactivate` take no reason, which is why their `reasonLabelKey` is empty.
-  */
+  /**
+   * The five commands' copy, keyed by the command itself: `satisfies Record<ClientActionCommand, ClientActionCopy>` makes a command without copy, or copy left behind by a removed command, a compile
+   * error. The keys are the legacy client-actions template's own — the `breadcrumbName` heading (`label.anchor.*`), its `labelName` and `labelNamereason`, and the `label.button.save` it shows for all
+   * five (Rule 1 clause 3); `activate` and `reactivate` take no reason, which is why their `reasonLabelKey` is empty.
+   */
 const ACTION_COPY = {
   activate: {
     headingKey: 'label.anchor.activate',
@@ -84,10 +84,10 @@ const ACTION_COPY = {
   },
 } satisfies Record<ClientActionCommand, ClientActionCopy>;
 
- /**
-  * The five in-scope commands as a lookup, so the `:action` segment is validated against the `ClientActionCommand` union without a cast and without a list that could drift from it:
-  * `satisfies Record<ClientActionCommand, true>` makes a missing member, or one the union no longer holds, a compile error, and {@link isClientActionCommand} is the single runtime test.
-  */
+  /**
+   * The five in-scope commands as a lookup, so the `:action` segment is validated against the `ClientActionCommand` union without a cast and without a list that could drift from it:
+   * `satisfies Record<ClientActionCommand, true>` makes a missing member, or one the union no longer holds, a compile error, and {@link isClientActionCommand} is the single runtime test.
+   */
 const ACTION_COMMANDS = {
   activate: true,
   close: true,
@@ -96,54 +96,54 @@ const ACTION_COMMANDS = {
   reactivate: true,
 } satisfies Record<ClientActionCommand, true>;
 
- /**
-  * Whether a raw `:action` segment is one of the five in-scope lifecycle commands, tested with `Object.hasOwn` rather than `in` so a segment such as `toString` is refused instead of passing on an
-  * inherited member. `@param value` the `:action` segment as the route delivered it; `@returns` true when it names a command this screen posts.
-  */
+  /**
+   * Whether a raw `:action` segment is one of the five in-scope lifecycle commands, tested with `Object.hasOwn` rather than `in` so a segment such as `toString` is refused instead of passing on an
+   * inherited member. `@param value` the `:action` segment as the route delivered it; `@returns` true when it names a command this screen posts.
+   */
 function isClientActionCommand(value: string): value is ClientActionCommand {
   return Object.hasOwn(ACTION_COMMANDS, value);
 }
 
- /**
-  * Today at local midnight: the activation date a new action screen starts on, and the one clock read in this file. A form's default date follows the browser clock rather than the tenant business date,
-  * departing from Rule 1 clause 2 on purpose: reading the business date here would add a request the legacy screen never makes and register as a request difference in every parity workflow, so the run
-  * date is derived where dates must be authoritative, in the E2E harness (AAP 0.10.5 item 15; AAP 0.12). Local midnight rather than `new Date()`, and built part by part rather than from a `'yyyy-MM-dd'`
-  * string, which `Date` reads as UTC midnight.
-  */
+  /**
+   * Today at local midnight: the activation date a new action screen starts on, and the one clock read in this file. A form's default date follows the browser clock rather than the tenant business date,
+   * departing from Rule 1 clause 2 on purpose: reading the business date here would add a request the legacy screen never makes and register as a request difference in every parity workflow, so the run
+   * date is derived where dates must be authoritative, in the E2E harness (AAP 0.10.5 item 15; AAP 0.12). Local midnight rather than `new Date()`, and built part by part rather than from a `'yyyy-MM-dd'`
+   * string, which `Date` reads as UTC midnight.
+   */
 function todayAtLocalMidnight(): Date {
   const now = new Date();
 
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
- /**
-  * The text a failed call paints on this screen: Fineract's own message for a 4xx, which a screen renders verbatim (AAP 0.4.4 decision 6, workflow W7) and which leaves the screen usable (AAP 0.7.4), and
-  * nothing for a failure the interceptor has already reported — `core/http/fineract.interceptor.ts` raises the single notification for a transport fault and for any status at or above 500 (AAP 0.7.4), so
-  * painting it here would report it twice. Nothing is logged (Rule 1 clause 9). `@param error` the value a failed call rejected with.
-  */
+  /**
+   * The text a failed call paints on this screen: Fineract's own message for a 4xx, which a screen renders verbatim (AAP 0.4.4 decision 6, workflow W7) and which leaves the screen usable (AAP 0.7.4), and
+   * nothing for a failure the interceptor has already reported — `core/http/fineract.interceptor.ts` raises the single notification for a transport fault and for any status at or above 500 (AAP 0.7.4), so
+   * painting it here would report it twice. Nothing is logged (Rule 1 clause 9). `@param error` the value a failed call rejected with.
+   */
 function failureMessage(error: unknown): string | null {
   return error instanceof ApiError && error.status >= 400 && error.status < 500
     ? error.message
     : null;
 }
 
- /**
-  * The single-purpose form behind one client lifecycle action — `#/client/:id/:action` (AAP 0.8.2; AAP 0.7.1 Features row `clients`). In legacy's order: read `:id` and `:action` from the route, refuse an
-  * `:action` that is not one of the five in-scope commands, run the datatable gate the legacy `ClientActionsController` runs first, load the reason list for the three commands that take one, render the
-  * form, then post exactly one command and return to the record. The five are `POST /clients/{id}?command=activate`, `=close`, `=reject`, `=withdraw` and `=reactivate` (AAP 0.7.3 row "Client actions"),
-  * and the gate runs once per load and never on submit: `DataTableGateService.checkClientActionGate` performs the legacy two-call sequence — the datatable-check list, then one generic-result-set read per
-  * applicable check (AAP 0.7.3 row "Client actions: datatable gate"; AAP 0.3.4 claim 13), a failed gate leaving the form unrendered. Reason ids come from the tenant: `close`, `reject` and `withdraw` read
-  * `GET /clients/template?commandParam=<command>` and render its `narrations` in the server's order (AAP 0.7.3 row "Client actions"), while `activate` and `reactivate` issue no template call; no URL, HTTP
-  * client, configuration read or date format appears here (Rule 1 clauses 2 and 5; AAP 0.7.2 "Date handling"; AAP 0.14.1).
-  *
-  * It matches legacy rather than improving it: every control of every form is required, and each rule is one legacy or Fineract already states — the action date, because Fineract's validator declares it
-  * `notNull`, and the reason, because the legacy template marks its label with the required asterisk and `ClientDataValidator.validateClose`, `validateRejection` and `validateWithdrawn` all declare the
-  * reason id `notNull().longGreaterThanZero()`. Enforcing the reason departs from Rule 1 clause 3 on purpose: the rule it enforces is the legacy template's own, the required-field rules being inherited
-  * rather than left decorative (AAP 0.4.4 decision 6), and each invalid control renders the legacy `label.requiredfield` message in the slot the shared fields project into. No other validator is added —
-  * the legacy datepicker's min/max bound is not re-implemented (AAP 0.7.4) — and the one registered difference is the native date input the shared `DateField` renders (AAP 0.10.5 item 1). One request
-  * per click through `shared/submit-guard.util.ts` (AAP 0.1.1; AAP 0.10.1 W5), every visual value from the template and the global Bootstrap 3 layer (Rule 1 clause 6; AAP 0.4.4 decision 4), and nothing
-  * logged (Rule 1 clause 9).
-  */
+  /**
+   * The single-purpose form behind one client lifecycle action — `#/client/:id/:action` (AAP 0.8.2; AAP 0.7.1 Features row `clients`). In legacy's order: read `:id` and `:action` from the route, refuse an
+   * `:action` that is not one of the five in-scope commands, run the datatable gate the legacy `ClientActionsController` runs first, load the reason list for the three commands that take one, render the
+   * form, then post exactly one command and return to the record. The five are `POST /clients/{id}?command=activate`, `=close`, `=reject`, `=withdraw` and `=reactivate` (AAP 0.7.3 row "Client actions"),
+   * and the gate runs once per load and never on submit: `DataTableGateService.checkClientActionGate` performs the legacy two-call sequence — the datatable-check list, then one generic-result-set read per
+   * applicable check (AAP 0.7.3 row "Client actions: datatable gate"; AAP 0.3.4 claim 13), a failed gate leaving the form unrendered. Reason ids come from the tenant: `close`, `reject` and `withdraw` read
+   * `GET /clients/template?commandParam=<command>` and render its `narrations` in the server's order (AAP 0.7.3 row "Client actions"), while `activate` and `reactivate` issue no template call; no URL, HTTP
+   * client, configuration read or date format appears here (Rule 1 clauses 2 and 5; AAP 0.7.2 "Date handling"; AAP 0.14.1).
+   *
+   * It matches legacy rather than improving it: every control of every form is required, and each rule is one legacy or Fineract already states — the action date, because Fineract's validator declares it
+   * `notNull`, and the reason, because the legacy template marks its label with the required asterisk and `ClientDataValidator.validateClose`, `validateRejection` and `validateWithdrawn` all declare the
+   * reason id `notNull().longGreaterThanZero()`. Enforcing the reason departs from Rule 1 clause 3 on purpose: the rule it enforces is the legacy template's own, the required-field rules being inherited
+   * rather than left decorative (AAP 0.4.4 decision 6), and each invalid control renders the legacy `label.requiredfield` message in the slot the shared fields project into. No other validator is added —
+   * the legacy datepicker's min/max bound is not re-implemented (AAP 0.7.4) — and the one registered difference is the native date input the shared `DateField` renders (AAP 0.10.5 item 1). One request
+   * per click through `shared/submit-guard.util.ts` (AAP 0.1.1; AAP 0.10.1 W5), every visual value from the template and the global Bootstrap 3 layer (Rule 1 clause 6; AAP 0.4.4 decision 4), and nothing
+   * logged (Rule 1 clause 9).
+   */
 @Component({
   selector: 'app-client-actions',
   imports: [

@@ -16,7 +16,6 @@ import {
  * is provided because the placeholder, the field's accessible name and the scope labels resolve through `TranslatePipe`, and `provideTranslateService()` installs the no-op loader so no bundle is requested. There
  * is deliberately no HTTP provider: the component injects no service at all, so reaching Fineract from it would fail with NG0201 instead of silently passing (Rule 1 clause 5).
  * The scope selector's accessible name is the control's own literal "Search scope", not the clients list's `label.button.filter` key, so it needs no bundle entry.
- *
  */
 
 /** Legacy key of the field's placeholder, and the text this spec serves for it. */
@@ -62,7 +61,6 @@ const SPEC_BUNDLE: Record<string, string> = {
 /**
  * The inputs whose surrounding quotes legacy strips before searching, with what it then searched for. `app/scripts/controllers/main/MainController.js:208-217` removes one leading and one trailing double quote
  * — either on its own as well as both — and sets `exactMatch` when that removal changed the text, so each row is one arm of that single derivation.
- *
  */
 const QUOTED_INPUTS: readonly {
   readonly label: string;

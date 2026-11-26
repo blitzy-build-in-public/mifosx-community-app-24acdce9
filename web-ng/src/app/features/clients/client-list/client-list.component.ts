@@ -66,8 +66,8 @@ export interface ClientListRow {
   readonly statusCode: string;
 }
 
- /** Declares what the Status cell template receives, so Angular compiles it against {@link ClientListRow} instead of `any` (Rule 1 clause 4; AAP 0.2.3 rows `ClientList /
-  * DataTable` and `StatusSwatch`): a bare `<ng-template let-row>` is `TemplateRef<any>`, so a renamed member would reach `toClientStatusKey` as an unknown code. */
+  /** Declares what the Status cell template receives, so Angular compiles it against {@link ClientListRow} instead of `any` (Rule 1 clause 4; AAP 0.2.3 rows `ClientList /
+   * DataTable` and `StatusSwatch`): a bare `<ng-template let-row>` is `TemplateRef<any>`, so a renamed member would reach `toClientStatusKey` as an unknown code. */
 @Directive({ selector: '[appClientListCell]' })
 export class ClientListCellDirective {
   /** States the context object the table hands a cell template, so `strictTemplates` compiles `let-row`, `let-column` and `let-value` against {@link ClientListRow}, its
@@ -81,20 +81,20 @@ export class ClientListCellDirective {
   }
 }
 
- /**
-  * The clients list (`#/clients`) — the signed-in landing screen, W2's "Create Client" entry point and W3's row-into-record step (AAP 0.7.1 Features row `clients`; AAP 0.7.4;
-  * AAP 0.8.2 route `clients`; AAP 0.11.1). It composes `app-panel-card` (AAP 0.2.3), `app-filter-toolbar` and `app-data-table` with the legacy ids, classes and captions
-  * unchanged (Rule 1 clauses 3 and 6), and reads through the families' typed callers, so this file composes no URL, sets no header and injects no HTTP client (Rule 1 clause 5;
-  * AAP 0.14.1; AAP 0.4.2): `ClientService.list()` for one page of `GET /clients` with `offset` and `limit` only, and `SearchService.search()` for the legacy find `GET /search`
-  * with `query`, `resource=clients,clientIdentifiers` and `exactMatch` (AAP 0.7.3 "Shell: global search"; AAP 0.10.5 item 9; `app/scripts/controllers/client/ClientController.js:44-62`).
-  *
-  * The two display filters and the rendered order are client-side and send no query parameter (Rule 1 clauses 2 and 3): {@link visibleRows} reproduces legacy's
-  * `| orderBy:'displayName':reverse` with `reverse` unset (`app/views/clients/clients.html:63`), and paging is legacy's fifteen rows a read (`app/views/clients/clients.html:79-82`;
-  * AAP 0.5.4 styles `.pagination`). Nothing is improved on the legacy screen (Rule 1 clause 3): no rows-per-page selector, spinner or skeleton (AAP 0.2.4), no textual status
-  * (AAP 0.10.5 item 11), no "Import Clients", left icon rail, Accounting/Reports/Admin navigation, hamburger or bell (AAP 0.9.2; AAP 0.10.5 items 4 and 8). Rows are projected at
-  * receipt, once per response, into {@link ClientListRow}. States: loaded renders the table, loading paints nothing invented, an empty result set renders `app-empty-state` with no
-  * error and withholds the pager, and a failed read leaves the screen usable — a 4xx rendering Fineract's own message (AAP 0.7.4).
-  */
+  /**
+   * The clients list (`#/clients`) — the signed-in landing screen, W2's "Create Client" entry point and W3's row-into-record step (AAP 0.7.1 Features row `clients`; AAP 0.7.4;
+   * AAP 0.8.2 route `clients`; AAP 0.11.1). It composes `app-panel-card` (AAP 0.2.3), `app-filter-toolbar` and `app-data-table` with the legacy ids, classes and captions
+   * unchanged (Rule 1 clauses 3 and 6), and reads through the families' typed callers, so this file composes no URL, sets no header and injects no HTTP client (Rule 1 clause 5;
+   * AAP 0.14.1; AAP 0.4.2): `ClientService.list()` for one page of `GET /clients` with `offset` and `limit` only, and `SearchService.search()` for the legacy find `GET /search`
+   * with `query`, `resource=clients,clientIdentifiers` and `exactMatch` (AAP 0.7.3 "Shell: global search"; AAP 0.10.5 item 9; `app/scripts/controllers/client/ClientController.js:44-62`).
+   *
+   * The two display filters and the rendered order are client-side and send no query parameter (Rule 1 clauses 2 and 3): {@link visibleRows} reproduces legacy's
+   * `| orderBy:'displayName':reverse` with `reverse` unset (`app/views/clients/clients.html:63`), and paging is legacy's fifteen rows a read (`app/views/clients/clients.html:79-82`;
+   * AAP 0.5.4 styles `.pagination`). Nothing is improved on the legacy screen (Rule 1 clause 3): no rows-per-page selector, spinner or skeleton (AAP 0.2.4), no textual status
+   * (AAP 0.10.5 item 11), no "Import Clients", left icon rail, Accounting/Reports/Admin navigation, hamburger or bell (AAP 0.9.2; AAP 0.10.5 items 4 and 8). Rows are projected at
+   * receipt, once per response, into {@link ClientListRow}. States: loaded renders the table, loading paints nothing invented, an empty result set renders `app-empty-state` with no
+   * error and withholds the pager, and a failed read leaves the screen usable — a 4xx rendering Fineract's own message (AAP 0.7.4).
+   */
 @Component({
   selector: 'app-client-list',
   imports: [
@@ -456,13 +456,13 @@ export class ClientListComponent {
   }
 }
 
- /**
-  * Whether a row shows any of the filter field's text in a cell the table prints. The field's own label fixes what it searches: `label.input.filterbynameaccno` reads "Filter
-  * display by name/client number/staff/office" (`app/global-translations/locale-en.json:726`), and legacy narrowed the whole row with `| filter:filterText`
-  * (`app/views/clients/clients.html:63`): name, client number, external id, office and staff, each compared case-insensitively against the needle the filter already lower-cased
-  * and trimmed, while the status cell prints no text at all (AAP 0.10.5 item 11). `@param row` the row under consideration; `@param needle` the filter text as the caller
-  * normalised it; `@returns` true when the row must stay on screen.
-  */
+  /**
+   * Whether a row shows any of the filter field's text in a cell the table prints. The field's own label fixes what it searches: `label.input.filterbynameaccno` reads "Filter
+   * display by name/client number/staff/office" (`app/global-translations/locale-en.json:726`), and legacy narrowed the whole row with `| filter:filterText`
+   * (`app/views/clients/clients.html:63`): name, client number, external id, office and staff, each compared case-insensitively against the needle the filter already lower-cased
+   * and trimmed, while the status cell prints no text at all (AAP 0.10.5 item 11). `@param row` the row under consideration; `@param needle` the filter text as the caller
+   * normalised it; `@returns` true when the row must stay on screen.
+   */
 function matchesDisplayFilter(row: ClientListRow, needle: string): boolean {
   const cells: readonly string[] = [
     row.name,
@@ -475,12 +475,12 @@ function matchesDisplayFilter(row: ClientListRow, needle: string): boolean {
   return cells.some((cell) => cell.toLowerCase().includes(needle));
 }
 
- /**
-  * Projects one `GET /clients` row onto the table's row view, reading the page payload's own names here and nowhere else: `displayName` is the name column, `accountNo` and
-  * `officeName` are carried as they arrived, and `externalId` and `staffName` become the empty string when the endpoint omits them rather than a stand-in the design never shows
-  * (Rule 1 clause 3). The key is the client's id; the status arrives as an object, so its code is carried as received — the "Show Closed" filter's input — and mapped once to the
-  * swatch's colour key. `@param client` one element of the page envelope's `pageItems`; `@returns` the row the table renders for it.
-  */
+  /**
+   * Projects one `GET /clients` row onto the table's row view, reading the page payload's own names here and nowhere else: `displayName` is the name column, `accountNo` and
+   * `officeName` are carried as they arrived, and `externalId` and `staffName` become the empty string when the endpoint omits them rather than a stand-in the design never shows
+   * (Rule 1 clause 3). The key is the client's id; the status arrives as an object, so its code is carried as received — the "Show Closed" filter's input — and mapped once to the
+   * swatch's colour key. `@param client` one element of the page envelope's `pageItems`; `@returns` the row the table renders for it.
+   */
 function toPageRow(client: Client): ClientListRow {
   return {
     key: `client:${client.id}`,
@@ -495,10 +495,10 @@ function toPageRow(client: Client): ClientListRow {
   };
 }
 
- /**
-  * Projects the search answer onto the table's row view, dropping the rows this screen does not render. `@param results` the rows `GET /search` answered with, in the server's
-  * order; `@returns` the rows the table renders, in the same order.
-  */
+  /**
+   * Projects the search answer onto the table's row view, dropping the rows this screen does not render. `@param results` the rows `GET /search` answered with, in the server's
+   * order; `@returns` the rows the table renders, in the same order.
+   */
 function toSearchRows(results: readonly SearchResult[]): readonly ClientListRow[] {
   const rows: ClientListRow[] = [];
 
@@ -513,14 +513,14 @@ function toSearchRows(results: readonly SearchResult[]): readonly ClientListRow[
   return rows;
 }
 
- /**
-  * Projects one search result onto the table's row view, by the discriminator the result carries. A `CLIENT` row names the client in `entityName`, its account in
-  * `entityAccountNo`, its external id in `entityExternalId` and its office in `parentName`, and its `entityId` opens the record — the five values the legacy controller copies
-  * from the same result. A `CLIENTIDENTIFIER` row is a client found by one of its identifiers: `parentName` is its name and `parentId` its id. The status comes from
-  * `entityStatus`, the `{id, code, value}` object legacy reads; a result carrying none leaves the code empty, which "Show Closed" treats as unclosed rather than hiding the row on a
-  * status it never had. `@returns` the row to render, or `null` for a result this screen does not render — a `LOAN` row the union admits but the `clients` scope never asks for,
-  * or a discriminator the server adds beyond the union.
-  */
+  /**
+   * Projects one search result onto the table's row view, by the discriminator the result carries. A `CLIENT` row names the client in `entityName`, its account in
+   * `entityAccountNo`, its external id in `entityExternalId` and its office in `parentName`, and its `entityId` opens the record — the five values the legacy controller copies
+   * from the same result. A `CLIENTIDENTIFIER` row is a client found by one of its identifiers: `parentName` is its name and `parentId` its id. The status comes from
+   * `entityStatus`, the `{id, code, value}` object legacy reads; a result carrying none leaves the code empty, which "Show Closed" treats as unclosed rather than hiding the row on a
+   * status it never had. `@returns` the row to render, or `null` for a result this screen does not render — a `LOAN` row the union admits but the `clients` scope never asks for,
+   * or a discriminator the server adds beyond the union.
+   */
 function toSearchRow(result: SearchResult): ClientListRow | null {
   switch (result.entityType) {
     case 'CLIENT':

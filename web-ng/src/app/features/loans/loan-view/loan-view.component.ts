@@ -105,7 +105,6 @@ export interface LoanActionDefinition extends Omit<LoanActionLink, 'commands'> {
  * difference from legacy (Rule 1 clause 3; AAP 0.10.5 registers none).
  *
  * `satisfies Record<LoanCommand | 'repayment', string>` makes a command the route serves without a code here a compile error, and a code added for a command the route does not serve one too.
- *
  */
 export const LOAN_ACTION_PERMISSIONS = {
   approve: 'APPROVE_LOAN',
@@ -119,7 +118,6 @@ export const LOAN_ACTION_PERMISSIONS = {
 /**
  * The Fineract code the add-charge form requires: `addloancharge/:id`'s `data.permission` in `loans.routes.ts` and the gate on the record's Add Loan Charge link, so
  * the link and the screen it opens are one permission rather than two (AAP 0.1.1, AAP 0.14.1). It is the legacy record's own code for that form (Rule 1 clause 3).
- *
  */
 export const LOAN_CHARGE_PERMISSION = 'CREATE_LOANCHARGE';
 

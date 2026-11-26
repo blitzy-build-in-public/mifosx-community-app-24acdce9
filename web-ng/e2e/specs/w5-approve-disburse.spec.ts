@@ -165,7 +165,7 @@ test.describe('W5 approve and disburse the loan', () => {
       const principal = SCENARIO.loanApplication.principal;
       const payloadDate = formatFineractDate(runDate).date;
 
-      // --------------------------------------------------------------------------------------------- Entry: sign in, land on the client list, open the client the loan belongs to (AAP 0.10.1 W5)..
+      // --------------------------------------------------------------------------------------------- Entry: sign in, land on the client list, open the client the loan belongs to (AAP 0.10.1 W5).
       const credentials = readCredentials();
       await pages.login.open();
       await pages.login.signIn(credentials.username, credentials.password);
@@ -225,7 +225,7 @@ test.describe('W5 approve and disburse the loan', () => {
       await pages.loans.openView(submittedLoan.loanId);
       const loanId = requireHashId(page.url(), 'viewloanaccount', 'the loan record');
 
-      // --------------------------------------------------------------------------------------------- Approve: the approval template, one fill, one submit, one POST (AAP 0.10.1 W5; AAP 0.4.4)..
+      // --------------------------------------------------------------------------------------------- Approve: the approval template, one fill, one submit, one POST (AAP 0.10.1 W5; AAP 0.4.4).
       await pages.loans.openAction(loanId, 'approve');
       await expect
         .poll(
@@ -325,7 +325,7 @@ test.describe('W5 approve and disburse the loan', () => {
         'approval books no transaction: the disbursement is the first one this loan can carry (W6 starts from it)',
       ).toBe(0);
 
-      // --------------------------------------------------------------------------------------------- Disburse: the transactions template, one fill, one submit, one POST (AAP 0.10.1 W5; AAP 0.4.4)..
+      // --------------------------------------------------------------------------------------------- Disburse: the transactions template, one fill, one submit, one POST (AAP 0.10.1 W5; AAP 0.4.4).
       await pages.loans.openAction(loanId, 'disburse');
       await expect
         .poll(
@@ -412,7 +412,7 @@ test.describe('W5 approve and disburse the loan', () => {
         'a freshly disbursed loan has nothing repaid, so its outstanding balance equals the total expected repayment',
       ).toBe(disbursed.totalExpectedRepayment);
 
-      // --------------------------------------------------------------------------------------------- The record the user is left on: active status, the disbursement in its transactions, no error..
+      // --------------------------------------------------------------------------------------------- The record the user is left on: active status, the disbursement in its transactions, no error.
       await pages.loans.openView(loanId);
       const summary = await pages.loans.readSummary();
       expect(

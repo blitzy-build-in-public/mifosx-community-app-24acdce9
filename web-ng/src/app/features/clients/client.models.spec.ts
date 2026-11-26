@@ -138,7 +138,7 @@ describe('toAccountStatusKey', () => {
     expect(toAccountStatusKey('savingsAccountStatusType.overpaid')).toBe('other');
   });
 });
-/** The legacy code each of the five in-scope lifecycle commands is gated on: the `taskPermissionName` of that command's entry in `/root/community-app/app/scripts/models/clientStatus.js`. */
+/** The legacy code each of the five in-scope lifecycle commands is gated on: the `taskPermissionName` of that command's entry in `app/scripts/models/clientStatus.js`. */
 const COMMAND_PERMISSIONS: readonly { readonly command: ClientActionCommand; readonly permission: string }[] = [
   { command: 'activate', permission: 'ACTIVATE_CLIENT' },
   { command: 'close', permission: 'CLOSE_CLIENT' },

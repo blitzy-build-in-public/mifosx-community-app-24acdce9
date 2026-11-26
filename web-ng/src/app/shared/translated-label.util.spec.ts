@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { createTranslatedLabels, type TranslatedLabel } from './translated-label.util';
 
-/** Behaviour of the resolver the two savings screens share: the text it answers for a key, and its re-resolution on the two events that change it — a language switch and a bundle arriving. */
+/** Behaviour of the resolver the client list and the loan record share: the text it answers for a key, and its re-resolution on the two events that change it — a language switch and a bundle arriving. */
 
 /** One in-memory bundle: the legacy flat dotted key to its text in that language. */
 type Bundle = Readonly<Record<string, string>>;
