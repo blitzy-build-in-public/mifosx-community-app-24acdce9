@@ -105,8 +105,8 @@ describe('LoginFormComponent', () => {
 
   /**
    * Submits the form the way a real browser does: a cancelable `submit` event that bubbles, which is
-   * the shape the component's own binding sees and the shape that used to escape to a caller's
-   * binding when the form was invalid.
+   * the shape the component's own binding sees. That binding cancels the event's default and stops it
+   * reaching the caller's `(submit)` output, so an invalid form reports nothing rather than escaping.
    */
   function submitForm(): void {
     const form = host().querySelector('form');

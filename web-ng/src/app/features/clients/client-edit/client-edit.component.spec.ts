@@ -13,7 +13,7 @@ import type { ClientEditRequest, ClientMutationResponse, ClientTemplate } from '
 import { ClientService } from '../client.service';
 import { ClientEditComponent } from './client-edit.component';
 
-/** Behaviour of the edit-client screen — `#/editclient/:id`, the client half of AAP 0.7.3's "Client list and edit" row and one of the two route targets the clients feature previously lacked (AAP 0.7.4 screens; AAP 0.8.2 (Rule 1 clause 8, Rule 1 clause 5, AAP 0.7.2, AAP 0.14.1). */
+/** Behaviour of the edit-client screen — `#/editclient/:id`, the client half of AAP 0.7.3's "Client list and edit" row and the second of that row's two route targets (AAP 0.7.4 screens; AAP 0.8.2; Rule 1 clause 8, Rule 1 clause 5, AAP 0.7.2, AAP 0.14.1). */
 
 /** The route that serves the edit screen, exactly as `clients.routes.ts` declares it. */
 const ROUTES: Routes = [

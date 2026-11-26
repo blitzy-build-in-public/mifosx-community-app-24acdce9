@@ -282,7 +282,7 @@ describe('ClientIdentifiersComponent', () => {
     expect(host().querySelector('[role="alert"]')?.textContent?.trim()).toBe('Identity read failed');
     expect(component.errorMessage()).toBe('Identity read failed');
     expect(notificationShow).not.toHaveBeenCalled();
-    // A 5xx is the failure the interceptor notifies, and it used to leave this panel blank: the alert now carries the failure's own text while the tab still raises no notification of its own (AAP 0.7.4; AAP 0.14.2).
+    // A 5xx is the failure the interceptor notifies: the panel carries that failure's own text in its alert, so a refused read never paints blank, while the tab raises no notification of its own (AAP 0.7.4; AAP 0.14.2).
     identifiers.mockReturnValue(
       throwError(() => new HttpErrorResponse({ status: 500, statusText: 'Server Error' })),
     );

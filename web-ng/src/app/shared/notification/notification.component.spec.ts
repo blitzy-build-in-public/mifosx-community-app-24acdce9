@@ -184,7 +184,7 @@ describe('NotificationComponent', () => {
 
     expect(closeLabel(notices[0])).toBe(CLOSE_LABEL_EN);
     expect(closeLabel(notices[1])).toBe(CLOSE_LABEL_EN);
-    // Not the raw key: the name resolved through the bundle rather than being echoed (AAP 0.1.1 requirement 1's i18n rule), and not the English literal the template used to carry.
+    // Not the raw key: the accessible name is the active translation bundle's rendering of its key (AAP 0.1.1 requirement 1's i18n rule), never the key itself and never an English literal hard-coded in the component, so a language switch re-resolves it.
     expect(closeLabel(notices[0])).not.toBe(CLOSE_LABEL_KEY);
     expect(closeLabel(notices[0])).not.toBe('Dismiss');
 

@@ -235,7 +235,7 @@ describe('AppConfigService', () => {
       expect(() => harness.service.config).toThrow(/not resolved yet/);
     });
 
-    // A schemeless or relative `apiBaseUrl` used to be accepted and resolved against the application's own origin, so every API call received the SPA's index.html while the application reported a healthy start.
+    // `apiBaseUrl` must be an absolute `http://` or `https://` URL (`ABSOLUTE_HTTP_URL`, `ABSOLUTE_URL_REQUIREMENT`): a schemeless or relative value would resolve against the application's own origin, so every API call would receive the served `index.html`.
     const invalidValues: readonly (readonly [string, Record<string, unknown>, string, string])[] = [
       ['a schemeless apiBaseUrl', servedRecord({ apiBaseUrl: 'localhost:8443' }), "'apiBaseUrl'", 'absolute URL'],
       ['a relative apiBaseUrl', servedRecord({ apiBaseUrl: './fineract-provider' }), "'apiBaseUrl'", 'absolute URL'],

@@ -566,7 +566,7 @@ describe('ClientViewComponent', () => {
     expect(clients.accounts).not.toHaveBeenCalled();
     expect(clients.identifiers).not.toHaveBeenCalled();
 
-    // The route still says what happened: the not-found copy the empty id and a 404 paint, in place of the record, rather than the blank content area a refused identifier used to leave inside a working shell (AAP 0.7.4; AAP 0.14.2).
+    // The route still says what happened: the not-found copy the empty id and a 404 paint, in place of the record, while the shell around it stays usable and no record section is rendered (AAP 0.7.4; AAP 0.14.2).
     expect(host.querySelectorAll('.alert.alert-danger')).toHaveLength(1);
     expect(renderedText(host)).toContain('Not Available');
     expect(renderedText(host)).toContain('The requested resource is not available.');
