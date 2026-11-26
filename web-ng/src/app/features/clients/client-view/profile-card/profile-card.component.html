@@ -13,16 +13,10 @@
 -->
 <div appPanelCard variant="bordered" [title]="displayName()" titleTag="h4">
   <div class="panel-body">
-    <!-- Decorative illustration: the record's identity is carried by the heading above it, so the
-         image has an empty alt, and `.img-responsive` is the only sizing it takes. The source is
-         the legacy image tree served in place; no asset file is created for it. -->
+    <!-- Decorative illustration: the record's identity is carried by the heading above it, so the image has an empty alt, and `.img-responsive` is the only sizing it takes. The source is the legacy image tree served in place; no asset file is created for it. -->
     <img [src]="AVATAR_SRC" alt="" class="img-responsive" />
 
-    <!-- One row per field, in the order received. The same column pair on every row puts every
-         value at one fixed offset. A field with no value renders its label beside an empty value
-         cell: the design shows such a row, and substituting a dash or any other stand-in text
-         would be the improvement this migration must not make (AAP 0.7.4), so no conditional or
-         fallback belongs in the value cell. -->
+    <!-- One row per field, in the order received. The same column pair on every row puts every value at one fixed offset. A field with no value renders its label beside an empty value cell: the design shows such a row, and substituting a dash or any other stand-in text would be the improvement this migration must not make (AAP 0.7.4), so no conditional or fallback belongs in the value cell. -->
     @for (field of fields(); track $index) {
       <div class="row" data-testid="profile-field">
         <div class="col-xs-5"><span class="value-key" data-testid="profile-field-label">{{ field.label }}</span></div>
@@ -34,9 +28,7 @@
 
     <h5>{{ 'label.heading.performancehistory' | translate }}</h5>
 
-    <!-- The history rows the parent supplies, in its order and under the sub-heading legacy paints
-         them beneath. A row whose value the payload does not carry renders its label beside an empty
-         value cell rather than a stand-in figure (AAP 0.7.4). -->
+    <!-- The history rows the parent supplies, in its order and under the sub-heading legacy paints them beneath. A row whose value the payload does not carry renders its label beside an empty value cell rather than a stand-in figure (AAP 0.7.4). -->
     @for (field of historyFields(); track $index) {
       <div class="row" data-testid="profile-history-field">
         <div class="col-xs-5"><span class="value-key" data-testid="profile-history-field-label">{{ field.label }}</span></div>

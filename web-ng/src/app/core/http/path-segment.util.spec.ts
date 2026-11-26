@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { datatableName, resourceId } from './path-segment.util';
+import { datatableName, isResourceId, resourceId } from './path-segment.util';
 
 /** Behaviour spec for `core/http/path-segment.util.ts`, the guard every Fineract path segment passes through (Rule 1 clause 8; AAP 0.14.2 "Test coverage"; review finding F05) (Rule 1 clause 2, AAP 0.1.1). */
 
@@ -43,6 +43,33 @@ const ACCEPTED_RESOURCE_IDS: readonly (readonly [label: string, id: number | str
 /** Route values that are not an identifier, each of which must be refused before a request exists. */
 const REFUSED_RESOURCE_IDS: readonly string[] = ['', '../..', '..%2Fx', '1/2', '-1', '1.5', 'NaN', '1e+21'];
 
+/**
+ * Values a screen may hold before it builds a path segment — a route segment or a model id — each of
+ * which `isResourceId` must accept and `resourceId` must then write unchanged: the two must agree, so a
+ * caller that asks the predicate issues exactly the reads the guard would have allowed.
+ */
+const IDENTIFIER_CANDIDATES: readonly (readonly [label: string, value: number | string])[] = [
+  ['a numeric id', 2],
+  ['a numeric zero', 0],
+  ['a route-string id', '2'],
+  ['a zero-padded route-string id', '000000002'],
+];
+
+/**
+ * Values a screen may hold that are not an identifier, each of which the predicate must refuse so the
+ * caller issues no request at all: the empty string of a route that names no id, a word, digits behind
+ * a word, a traversal segment, a space-padded id and the numeric shapes `resourceId` also refuses.
+ */
+const REFUSED_IDENTIFIER_CANDIDATES: readonly (readonly [label: string, value: number | string])[] = [
+  ['an empty string', ''],
+  ['a word', 'abc'],
+  ['digits behind a word', '2abc'],
+  ['a traversal segment', '../2'],
+  ['a space-padded id', ' 2 '],
+  ['a negative number', -1],
+  ['a decimal', 1.5],
+];
+
 /** Datatable names of Fineract's shape, each of which must come back unchanged. */
 const ACCEPTED_DATATABLE_NAMES: readonly string[] = ['client_extra_details', 'm_client_2', '_'];
 
@@ -57,10 +84,8 @@ describe('resourceId', () => {
   it.each(REFUSED_RESOURCE_IDS)('refuses the route value %j and issues no request', (value) => {
     const error = refusal(() => resourceId(value, SOURCE));
 
-    // The message is the one fixed sentence, so the staff user whose route was refused reads a sentence about the record rather than a developer diagnostic.
     expect(error).toBeInstanceOf(Error);
     expect(error?.message).toBe(RESOURCE_ID_SENTENCE);
-    // Neither the rejected value nor the composing call appears in it.
     expect(error?.message).not.toContain(SOURCE);
     expect(error?.message).not.toContain('PathSegment.');
     if (value !== '') {
@@ -71,6 +96,26 @@ describe('resourceId', () => {
     expect(causeText(error)).toContain(SOURCE);
     expect(causeText(error)).toContain(`'${value}'`);
   });
+});
+
+describe('isResourceId', () => {
+  it.each(IDENTIFIER_CANDIDATES)('accepts %s, which resourceId writes unchanged', (_label, value) => {
+    expect(isResourceId(value)).toBe(true);
+    // The predicate and the guard read one pattern: a value this accepts is a value `resourceId` writes as the path segment, not one it refuses.
+    expect(resourceId(value, SOURCE)).toBe(String(value));
+  });
+
+  it.each(REFUSED_IDENTIFIER_CANDIDATES)(
+    'refuses %s, so a caller can answer without a request',
+    (_label, value) => {
+      expect(isResourceId(value)).toBe(false);
+
+      const error = refusal(() => resourceId(value, SOURCE));
+
+      expect(error).toBeInstanceOf(Error);
+      expect(error?.message).toBe(RESOURCE_ID_SENTENCE);
+    },
+  );
 });
 
 describe('datatableName', () => {

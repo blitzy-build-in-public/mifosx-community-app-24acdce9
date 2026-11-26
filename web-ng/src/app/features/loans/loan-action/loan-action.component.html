@@ -49,27 +49,17 @@
   <div class="row">
     <div class="col-md-12">
       @if (mode() === 'repayment') {
-        <!--
-          The child is the whole screen for this mode: it draws its own card and runs its own read, so
-          this template contributes neither a card nor a heading around it (see the header comment).
-        -->
+        <!-- The child is the whole screen for this mode: it draws its own card and runs its own read, so this template contributes neither a card nor a heading around it (see the header comment). -->
         <app-loan-repayment [loanId]="id()" />
       } @else if (notFound()) {
         <!--
           An `:action` outside the five served here and the repayment mode, a route whose `:id` is
-          absent or blank, or a 404 from the mode's own seed read: the message replaces the form inside
-          the same card, so the shell around it stays usable and no control can post against the loan
-          (AAP 0.7.4 state rules). The two keys are the ones the sibling unknown-path screen renders, so
-          the product has one not-found sentence and not two.
+          absent or blank, or a 404 from the mode's own seed read: `shared/record-not-found` replaces
+          the form, so the shell around it stays usable and no control can post against the loan
+          (AAP 0.7.4 state rules). It is the one not-found presentation every record screen renders,
+          so the product has one not-found message and not two.
         -->
-        <div appPanelCard>
-          <div class="panel-body">
-            <div class="text-center text-muted">
-              <h3 class="panel-title">{{ notFoundHeadingKey | translate }}</h3>
-              <p>{{ notFoundMessageKey | translate }}</p>
-            </div>
-          </div>
-        </div>
+        <app-record-not-found />
       } @else {
         <div appPanelCard [title]="headingKey() | translate">
           <!--
@@ -89,12 +79,7 @@
 
           @switch (mode()) {
             @case ('approve') {
-              <!--
-                `POST /loans/{id}?command=approve`: the approval date the command requires and the
-                approved amount the screen collects, seeded by the component from the loan's approval
-                template. The amount is required-only — no range, no step derived from a business rule —
-                so the server alone decides what it accepts (Rule 1 clause 3).
-              -->
+              <!-- `POST /loans/{id}?command=approve`: the approval date the command requires and the approved amount the screen collects, seeded by the component from the loan's approval template. The amount is required-only — no range, no step derived from a business rule — so the server alone decides what it accepts (Rule 1 clause 3). -->
               <form class="form-horizontal" [formGroup]="approveForm" (ngSubmit)="submit()" novalidate>
                 <div class="panel-body">
                   <!--
@@ -132,19 +117,14 @@
                         "
                       />
                       @if (approvedAmountInvalid) {
-                        <span id="approvedLoanAmount-error" class="help-block">{{
+                        <span id="approvedLoanAmount-error" class="help-block" role="alert">{{
                           'label.requiredfield' | translate
                         }}</span>
                       }
                     </div>
                   </div>
 
-                  <!--
-                    Optional: the component attaches a note only when its trimmed value carries text, so
-                    an untouched field adds no member the legacy body lacked (Rule 1 clause 2). The label
-                    carries no required marker, which is how every form in this application tells an
-                    optional field from a required one.
-                  -->
+                  <!-- Optional: the component attaches a note only when its trimmed value carries text, so an untouched field adds no member the legacy body lacked (Rule 1 clause 2). The label carries no required marker, which is how every form in this application tells an optional field from a required one. -->
                   <div class="form-group">
                     <label class="col-md-3 control-label" for="note">{{
                       'label.input.note' | translate
@@ -168,10 +148,7 @@
             }
 
             @case ('reject') {
-              <!--
-                `POST /loans/{id}?command=reject`: the rejection date and an optional note, and no seed
-                read at all — legacy's rejection branch reads no template.
-              -->
+              <!-- `POST /loans/{id}?command=reject`: the rejection date and an optional note, and no seed read at all — legacy's rejection branch reads no template. -->
               <form class="form-horizontal" [formGroup]="rejectForm" (ngSubmit)="submit()" novalidate>
                 <div class="panel-body">
                   <app-date-field
@@ -203,12 +180,7 @@
             }
 
             @case ('disburse') {
-              <!--
-                `POST /loans/{id}?command=disburse`: the actual disbursement date and the amount the
-                component seeds from `GET /loans/{id}/transactions/template?command=disburse`, left
-                editable exactly as legacy leaves it. No payment-type picker, because the disburse body
-                has no member for one — a picker would collect a choice nothing posts.
-              -->
+              <!-- `POST /loans/{id}?command=disburse`: the actual disbursement date and the amount the component seeds from `GET /loans/{id}/transactions/template?command=disburse`, left editable exactly as legacy leaves it. No payment-type picker, because the disburse body has no member for one — a picker would collect a choice nothing posts. -->
               <form class="form-horizontal" [formGroup]="disburseForm" (ngSubmit)="submit()" novalidate>
                 <div class="panel-body">
                   <app-date-field
@@ -239,7 +211,7 @@
                         "
                       />
                       @if (disbursedAmountInvalid) {
-                        <span id="transactionAmount-error" class="help-block">{{
+                        <span id="transactionAmount-error" class="help-block" role="alert">{{
                           'label.requiredfield' | translate
                         }}</span>
                       }
@@ -268,11 +240,7 @@
             }
 
             @case ('undoapproval') {
-              <!--
-                `POST /loans/{id}?command=undoapproval`: an optional note and nothing else. The command
-                takes no date, so the body carries no date and therefore no date pattern or language
-                beside it.
-              -->
+              <!-- `POST /loans/{id}?command=undoapproval`: an optional note and nothing else. The command takes no date, so the body carries no date and therefore no date pattern or language beside it. -->
               <form class="form-horizontal" [formGroup]="undoapprovalForm" (ngSubmit)="submit()" novalidate>
                 <div class="panel-body">
                   <div class="form-group">

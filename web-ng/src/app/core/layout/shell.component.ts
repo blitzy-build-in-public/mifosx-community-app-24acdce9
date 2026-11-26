@@ -205,7 +205,6 @@ export class ShellComponent implements OnDestroy {
     this.idleWarning.set(false);
     this.auth.logout();
 
-    // A rejected navigation is not a failure to report: the login route is reached without a session, so a rejection means a guard redirected somewhere else instead — and the session is already cleared, which is the only.
     void this.router.navigate(['/login']).catch((): void => undefined);
   }
 

@@ -15,7 +15,10 @@
   `app-date-field` and `app-select-field`, which own
   their `.form-group`, `.control-label`, `.form-control` and `.has-error` markup; this template adds
   no `.form-group` of its own, because a second one would nest two groups and break the 34px control
-  metrics the design measures.
+  metrics the design measures. What a field cannot own is its required message, because that caption
+  belongs to the caller: the legacy `label.requiredfield` text is projected into the slot each field
+  renders after its control, once per control, so an empty date or an unchosen reason reports itself
+  in words rather than by a red label and border alone.
 
   One `@if` branch per command, each with its own `<form>`: the commands post different bodies — a
   date alone, a date with a reason, or a date on the reactivation form — so a single form would have
@@ -51,15 +54,9 @@
         }
 
         <div class="panel-body">
-          <!--
-            Unknown `:action` segment: neither the gate nor the command ran, so nothing but this one
-            message renders — no form, no field, no button and no second alert. Both strings are keys
-            the legacy bundles carry, so the missing-translation handler never has to humanise one.
-          -->
+          <!-- Unknown `:action` segment: neither the gate nor the command ran, so nothing but this one message renders — no form, no field, no button and no second alert, and the same 404 reads the same way on every record screen (AAP 0.7.4). -->
           @if (notFound()) {
-            <div class="alert alert-danger" role="alert">
-              <strong>{{ notFoundHeadingKey | translate }}</strong>{{ ' ' }}<span>{{ notFoundMessageKey | translate }}</span>
-            </div>
+            <app-record-not-found />
           } @else {
             <!--
               The one failure region, above the form: Fineract's own message for a 4xx, verbatim and
@@ -73,10 +70,7 @@
               <div class="alert alert-danger" role="alert">{{ message }}</div>
             }
 
-            <!--
-              The form renders only once the gate — and, for close, reject and withdraw, the reason
-              list — has resolved, so no field is ever enabled against a check that did not answer.
-            -->
+            <!-- The form renders only once the gate — and, for close, reject and withdraw, the reason list — has resolved, so no field is ever enabled against a check that did not answer. -->
             @if (ready()) {
               @if (command(); as activeCommand) {
                 @if (activeCommand === 'activate') {
@@ -89,7 +83,13 @@
                           [control]="activateForm.controls.activationDate"
                           [label]="dateLabelKey() | translate"
                           [required]="true"
-                        />
+                        >
+                          @if (showsRequiredError(activateForm.controls.activationDate)) {
+                            <span id="client-action-activation-date-error" class="help-block" role="alert">
+                              {{ 'label.requiredfield' | translate }}
+                            </span>
+                          }
+                        </app-date-field>
                       </div>
                     </div>
                     <div class="row">
@@ -113,7 +113,13 @@
                           [control]="closeForm.controls.closureDate"
                           [label]="dateLabelKey() | translate"
                           [required]="true"
-                        />
+                        >
+                          @if (showsRequiredError(closeForm.controls.closureDate)) {
+                            <span id="client-action-date-error" class="help-block" role="alert">
+                              {{ 'label.requiredfield' | translate }}
+                            </span>
+                          }
+                        </app-date-field>
                       </div>
                     </div>
                     <div class="row">
@@ -124,7 +130,14 @@
                           [options]="reasonOptions()"
                           [placeholder]="reasonPlaceholderKey | translate"
                           [label]="reasonLabelKey() | translate"
-                        />
+                          [required]="true"
+                        >
+                          @if (showsRequiredError(closeForm.controls.closureReasonId)) {
+                            <span id="client-action-reason-error" class="help-block" role="alert">
+                              {{ 'label.requiredfield' | translate }}
+                            </span>
+                          }
+                        </app-select-field>
                       </div>
                     </div>
                     <div class="row">
@@ -148,7 +161,13 @@
                           [control]="rejectForm.controls.rejectionDate"
                           [label]="dateLabelKey() | translate"
                           [required]="true"
-                        />
+                        >
+                          @if (showsRequiredError(rejectForm.controls.rejectionDate)) {
+                            <span id="client-action-date-error" class="help-block" role="alert">
+                              {{ 'label.requiredfield' | translate }}
+                            </span>
+                          }
+                        </app-date-field>
                       </div>
                     </div>
                     <div class="row">
@@ -159,7 +178,14 @@
                           [options]="reasonOptions()"
                           [placeholder]="reasonPlaceholderKey | translate"
                           [label]="reasonLabelKey() | translate"
-                        />
+                          [required]="true"
+                        >
+                          @if (showsRequiredError(rejectForm.controls.rejectionReasonId)) {
+                            <span id="client-action-reason-error" class="help-block" role="alert">
+                              {{ 'label.requiredfield' | translate }}
+                            </span>
+                          }
+                        </app-select-field>
                       </div>
                     </div>
                     <div class="row">
@@ -183,7 +209,13 @@
                           [control]="withdrawForm.controls.withdrawalDate"
                           [label]="dateLabelKey() | translate"
                           [required]="true"
-                        />
+                        >
+                          @if (showsRequiredError(withdrawForm.controls.withdrawalDate)) {
+                            <span id="client-action-date-error" class="help-block" role="alert">
+                              {{ 'label.requiredfield' | translate }}
+                            </span>
+                          }
+                        </app-date-field>
                       </div>
                     </div>
                     <div class="row">
@@ -194,7 +226,14 @@
                           [options]="reasonOptions()"
                           [placeholder]="reasonPlaceholderKey | translate"
                           [label]="reasonLabelKey() | translate"
-                        />
+                          [required]="true"
+                        >
+                          @if (showsRequiredError(withdrawForm.controls.withdrawalReasonId)) {
+                            <span id="client-action-reason-error" class="help-block" role="alert">
+                              {{ 'label.requiredfield' | translate }}
+                            </span>
+                          }
+                        </app-select-field>
                       </div>
                     </div>
                     <div class="row">
@@ -209,12 +248,7 @@
                 }
 
                 @if (activeCommand === 'reactivate') {
-                  <!--
-                    `POST /clients/{id}?command=reactivate` carries a reactivation date, so this screen
-                    renders the field the legacy form renders under `label.input.reactivationdate`
-                    instead of a confirm-only step: a screen without it would post a body the server
-                    refuses, and the legacy screen offers no such step either (Rule 1 clause 3).
-                  -->
+                  <!-- `POST /clients/{id}?command=reactivate` carries a reactivation date, so this screen renders the field the legacy form renders under `label.input.reactivationdate` instead of a confirm-only step: a screen without it would post a body the server refuses, and the legacy screen offers no such step either (Rule 1 clause 3). -->
                   <form [formGroup]="reactivateForm" (ngSubmit)="submit()">
                     <div class="row">
                       <div class="col-md-6">
@@ -223,7 +257,13 @@
                           [control]="reactivateForm.controls.reactivationDate"
                           [label]="dateLabelKey() | translate"
                           [required]="true"
-                        />
+                        >
+                          @if (showsRequiredError(reactivateForm.controls.reactivationDate)) {
+                            <span id="client-action-reactivation-date-error" class="help-block" role="alert">
+                              {{ 'label.requiredfield' | translate }}
+                            </span>
+                          }
+                        </app-date-field>
                       </div>
                     </div>
                     <div class="row">

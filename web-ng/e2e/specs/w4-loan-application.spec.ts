@@ -24,9 +24,7 @@ const CLIENT_RECORD_HASH = /^#\/viewclient\/(\d+)$/;
 const NEW_LOAN_HASH = /^#\/newclientloanaccount\/(\d+)$/;
 /** `#/viewloanaccount/:id` — the record the submission lands on (AAP 0.8.2). */
 const LOAN_RECORD_HASH = /#\/viewloanaccount\/(\d+)/;
-/** How long the live capture is given to record a call the screen has already made. */
 const CAPTURE_WAIT_MS = 20_000;
-/** Tolerance on the sum of rendered principal dues: each cell is the server's figure at the table's precision, so anything beyond one currency unit is a real difference. */
 const AMOUNT_TOLERANCE = 1;
 /** The application members the preview body and the submission body must agree on (AAP 0.7.2 `LoanApplicationRequest`); one builder posts both, so their agreement is the application's property. */
 const SHARED_APPLICATION_FIELDS: readonly string[] = [
@@ -52,26 +50,18 @@ const SHARED_APPLICATION_FIELDS: readonly string[] = [
 ];
 /** One preview row over both readers — `pages/next` parses cells into numbers, `pages/legacy` reports text — read-only, because a spec observes the screen. */
 interface PreviewRowReading {
-  /** Period number from the first column, in whichever type the running reader reported it. */
   readonly period: number | string | null;
-  /** The period's due date, exactly as the screen formatted it. */
   readonly dueDate: string;
-  /** Principal due in the period, as the reader reported it. */
   readonly principalDue: number | string | null;
 }
 /** The record's status colour and label/value rows over both readers: the pair types differ by name only, which is what lets one assertion read both front ends (AAP 0.10.2). */
 interface LoanSummaryReading {
-  /** The colour class of the record's status indicator — a colour and never a status word. */
   readonly statusClass: string;
-  /** Label/value rows in document order. */
   readonly fields: readonly { readonly label: string; readonly value: string }[];
 }
-/** The one member this spec reads from a client list row: the name a caller opens the record by. */
 interface NamedClientRow {
-  /** The client's display name as the list renders it. */
   readonly name: string;
 }
-/** The two attributes a numeric field must not carry, read off the control itself. */
 interface PrincipalBounds {
   /** The control's declared `min`, or `null` when it declares none. */
   readonly min: string | null;
@@ -111,7 +101,6 @@ function hashOf(url: string): string {
   const marker = url.indexOf('#');
   return marker === -1 ? '' : url.slice(marker);
 }
-/** The id a route's own hash carries; throws when the hash is not that route, so a workflow never reads one screen and asserts another. */
 function routeId(url: string, pattern: RegExp, what: string): number {
   const hash = hashOf(url);
   const matched = pattern.exec(hash);
@@ -157,7 +146,6 @@ function isLoanPost(exchange: NormalizedExchange, command: string | null): boole
   return command === null ? sent === undefined : sent === command;
 }
 
-/** Waits until the live capture holds an exchange the predicate accepts, then answers with every matching exchange in record order. */
 async function awaitExchanges(
   capture: CaptureSession,
   matches: (exchange: NormalizedExchange) => boolean,
@@ -168,7 +156,6 @@ async function awaitExchanges(
   return capture.capture.exchanges.filter(matches);
 }
 
-/** Reads the bounds a numeric control declares, so the spec can prove the application added none of its own. */
 function readPrincipalBounds(element: Element): PrincipalBounds {
   return { min: element.getAttribute('min'), max: element.getAttribute('max') };
 }
@@ -229,7 +216,6 @@ test.describe('W4 submit an individual loan application after previewing the sch
       expect(templateRead.query['productId']).toMatch(/^\d+$/);
       expect(templateRead.hasTenantHeader).toBe(true);
 
-      // 7. The form is seeded from that template and not from anything the workflow typed: the product's 5,000 default principal and 12 repayments, and a submission date the screen pre-fills.
       const principalDefault = await page.locator('#principal').inputValue();
       const repaymentsDefault = await page.locator('#numberOfRepayments').inputValue();
       const submittedDefault = await page.locator('#submittedOnDate').inputValue();
@@ -262,7 +248,6 @@ test.describe('W4 submit an individual loan application after previewing the sch
         });
       }
 
-      // The two dates the form now holds are the run date, in whichever shape the front end renders a date in, which is what both bodies below must carry.
       const submittedAfterFill = await page.locator('#submittedOnDate').inputValue();
       const disbursementAfterFill = await page.locator('#expectedDisbursementDate').inputValue();
       expect(namesRunDate(submittedAfterFill, runDate)).toBe(true);
@@ -288,7 +273,6 @@ test.describe('W4 submit an individual loan application after previewing the sch
       expect(previewBody['dateFormat']).toBe(PAYLOAD_DATE_FORMAT);
       expect(previewBody['locale']).toBe(LOCALE);
 
-      // 11. The preview itself: the server's schedule, one row per period, in the order it calculated.
       const previewRows: readonly PreviewRowReading[] = await pages.loans.readPreviewRows();
       const repaymentPeriods = previewRows.filter((row) => toPeriodNumber(row.period) !== null);
       expect(repaymentPeriods).toHaveLength(SEED_LOAN_PRODUCT.numberOfRepayments);
@@ -306,7 +290,6 @@ test.describe('W4 submit an individual loan application after previewing the sch
       const principalTotal = periodicPrincipal.reduce<number>((total, amount) => total + (amount ?? 0), 0);
       expect(Math.abs(principalTotal - SCENARIO.loanApplication.principal)).toBeLessThanOrEqual(AMOUNT_TOLERANCE);
 
-      // Every instalment falls due after the money is handed over, so no period may be dated on or before the disbursement date the application states.
       const notAfterDisbursement = repaymentPeriods
         .filter((row) => {
           const dueDate = parseFineractDate(row.dueDate);

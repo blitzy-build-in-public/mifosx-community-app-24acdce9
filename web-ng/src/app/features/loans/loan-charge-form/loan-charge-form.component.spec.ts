@@ -284,10 +284,10 @@ describe('LoanChargeFormComponent', () => {
     async (_label, id, action, chargeId) => {
       await show(id, action, chargeId);
       expect(component.notFound()).toBe(true);
+      expect(host().querySelectorAll('.alert.alert-danger')).toHaveLength(1);
       expect(renderedText()).toContain('error.msg.resource.not.found');
-      expect(host().querySelector('.text-center.text-muted')?.textContent?.trim()).toBe(
-        'error.msg.resource.not.found',
-      );
+      expect(host().querySelector('.text-center.text-muted')).toBeNull();
+      expect(host().querySelector('.panel-heading')).toBeNull();
       expect(host().querySelectorAll('form')).toHaveLength(0);
       expect(host().querySelector('#save')).toBeNull();
       expect(host().querySelector('#cancel')).toBeNull();
@@ -506,15 +506,13 @@ describe('LoanChargeFormComponent', () => {
     component.form.controls.chargeId.setValue(DISBURSEMENT_CHARGE_ID);
     fixture.detectChanges();
 
-    // The control lives in the card's footer, outside the form it posts, so its `form` attribute is
-    // the only thing that makes it that form's submit control — the association a browser's implicit
-    // submission needs before Enter in one of the fields dispatches anything at all.
+    // The control lives in the card's footer, outside the form it posts, so its `form` attribute is the only thing that makes it that form's submit control — the
+    // association a browser's implicit submission needs before Enter in one of the fields dispatches anything at all.
     expect(host().querySelectorAll('form')).toHaveLength(1);
     const form: HTMLFormElement | null = saveButton()?.form ?? null;
     expect(form).toBe(host().querySelector('form'));
 
-    // One submit through the form itself — the event a click on the associated control and the
-    // keyboard path both raise — posts the charge once and returns to the record once.
+    // One submit through the form itself — the event a click on the associated control and the keyboard path both raise — posts the charge once and returns to the record once.
     form?.requestSubmit();
     await vi.waitFor(() => {
       expect(navigate).toHaveBeenCalledTimes(1);

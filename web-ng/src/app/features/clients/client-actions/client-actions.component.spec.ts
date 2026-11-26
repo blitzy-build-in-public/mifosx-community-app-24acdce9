@@ -26,8 +26,8 @@ import type {
   SelectOption,
   SelectValue,
 } from '../../../shared/select-field/select-field.component';
-import type { ClientActionCommand } from '../client.models';
-import { CLIENT_ACTION_PERMISSIONS, ClientActionsComponent } from './client-actions.component';
+import { CLIENT_ACTION_PERMISSIONS, type ClientActionCommand } from '../client.models';
+import { ClientActionsComponent } from './client-actions.component';
 
 /** Behaviour of the client lifecycle action screen at `#/client/:id/:action` — the five commands `activate`, `close`, `reject`, `withdraw` and `reactivate`, each preceded by the datatable gate the legacy controller runs (AAP 0.7.1, AAP 0.7.3, AAP 0.7.4, AAP 0.11.1). */
 
@@ -105,6 +105,7 @@ const TRANSLATIONS: Readonly<Record<string, string>> = {
   'label.input.withdrawalreason': 'Withdrawal reason',
   'label.button.save': 'Submit',
   'label.button.cancel': 'Cancel',
+  'label.requiredfield': 'Required field',
   'label.select': 'Select an option',
   'label.heading.notavailable': 'Not Available',
   'error.msg.resource.not.found': 'The requested resource is not available.',
@@ -284,10 +285,8 @@ describe('ClientActionsComponent', () => {
     id: string = CLIENT_ID,
     granted?: readonly string[],
   ): Promise<void> {
-    // Every case mounts the screen for its own URL, so the module is reset first: a module left instantiated by the previous case cannot take a new route stub.
     TestBed.resetTestingModule();
 
-    // The sequence a case asserts is its own screen's, so the recorder starts empty every time.
     recorded = [];
 
     TestBed.configureTestingModule({
@@ -301,7 +300,6 @@ describe('ClientActionsComponent', () => {
       ],
     });
 
-    // The submit control is gated on the command's own code, so the permission list is what decides whether the rendered form is the one a permitted operator sees.
     TestBed.inject(PermissionsService).setPermissions(granted ?? commandCodes(action));
 
     await TestBed.inject(AppConfigService).load();
@@ -432,7 +430,6 @@ describe('ClientActionsComponent', () => {
     // A 4xx is Fineract answering, so its own text reaches the screen verbatim (AAP 0.7.4; workflow W7).
     expect(component.error()).toBe(GATE_FAILURE_MESSAGE);
     expect(component.reasonOptions()).toEqual([]);
-    // A failed gate is never treated as a pass: the reason list is not read at all.
     expect(httpMock.match(isTemplateRead('close'))).toHaveLength(0);
     expect(httpMock.match(isCommandPost)).toHaveLength(0);
 
@@ -483,7 +480,6 @@ describe('ClientActionsComponent', () => {
 
     expect(template.request.method).toBe('GET');
     expect(template.request.params.keys()).toEqual(['commandParam']);
-    // The form stays unready until the reasons are in hand, so no select is ever rendered empty.
     expect(component.ready()).toBe(false);
     expect(component.reasonOptions()).toEqual([]);
 
@@ -554,7 +550,6 @@ describe('ClientActionsComponent', () => {
     post.flush({ resourceId: 2, clientId: 2 });
     await settle();
 
-    // The one request that was sent released the button again, so the next command can be clicked.
     expect(component.guard.busy()).toBe(false);
     expect(navigate).toHaveBeenCalledTimes(1);
   });
@@ -577,7 +572,6 @@ describe('ClientActionsComponent', () => {
 
     // The server's own text, verbatim: no prefix, no translation, no fallback (workflow W7).
     expect(component.error()).toBe(COMMAND_FAILURE_MESSAGE);
-    // The form keeps what the operator entered, so the field the server named can be corrected.
     expect(component.closeForm.controls.closureDate.value).toEqual(CLOSURE_DATE);
     expect(component.closeForm.controls.closureReasonId.value).toBe(CHOSEN_REASON.id);
     expect(navigate).not.toHaveBeenCalled();
@@ -614,8 +608,21 @@ describe('ClientActionsComponent', () => {
     component.submit();
 
     expect(httpMock.match(isCommandPost)).toHaveLength(0);
-    // The control is marked as touched, so the shared date field shows its required message rather than the screen appearing to ignore the click.
     expect(component.closeForm.controls.closureDate.touched).toBe(true);
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('posts nothing while the closure reason is still unchosen', async () => {
+    await showReadyClose();
+
+    // The date is filled and the picker still shows its prompt row, which is the state the legacy form leaves a user in when they submit without choosing a reason.
+    component.closeForm.controls.closureDate.setValue(CLOSURE_DATE);
+    component.submit();
+
+    // The legacy template marks the reason required and `validateClose` declares the id `notNull().longGreaterThanZero`, so the prompt row is not a choice: no body
+    // that lacks a reason is posted, and the control is marked as touched so its field reports the missing one.
+    expect(httpMock.match(isCommandPost)).toHaveLength(0);
+    expect(component.closeForm.controls.closureReasonId.touched).toBe(true);
     expect(navigate).not.toHaveBeenCalled();
   });
 
@@ -674,7 +681,6 @@ describe('ClientActionsComponent', () => {
    */
 
   it('hides the submit control from a user who does not hold the command’s code', async () => {
-    // A signed-in user holding no code at all: the form, its fields and the way back render, and the one control that posts the command does not.
     await show('close', CLIENT_ID, []);
     await passGate();
     await answerTemplate('close');
@@ -706,24 +712,42 @@ describe('ClientActionsComponent', () => {
     expect(saveButton()?.style.display).toBe('none');
   });
 
-  it.each(['close', 'reject', 'withdraw'] as const)(
-    'marks the %s date field required and leaves the optional reason select unmarked',
+  it.each(REASON_COMMANDS)(
+    'requires the %s date and reason, and names each missing one in the message its field projects',
     async (action) => {
       await show(action);
       await passGate();
       await answerTemplate(action);
       fixture.detectChanges();
 
-      const reasonSelect = host().querySelector<HTMLSelectElement>('app-select-field select');
       const dateInput = host().querySelector<HTMLInputElement>('app-date-field input[type="date"]');
+      const reasonSelect = host().querySelector<HTMLSelectElement>('app-select-field select');
 
-      // The reason is posted as chosen — including nothing at all — and its control carries no validator, so the field must not announce a constraint this screen does not enforce (Rule 1 clause 3; AAP 0.4.4 decision 6).
-      expect(reasonSelect).not.toBeNull();
-      expect(reasonSelect?.hasAttribute('aria-required')).toBe(false);
-
-      // The date control does carry `Validators.required`, so the one rule Fineract states is the one assistive technology is told about.
+      // Both controls carry a rule and both announce it: the date, which Fineract's validator declares `notNull`, and the reason, which the legacy template marks
+      // required — so the picker's prompt row is not a choice and the control says as much.
       expect(dateInput).not.toBeNull();
       expect(dateInput?.getAttribute('aria-required')).toBe('true');
+      expect(reasonSelect).not.toBeNull();
+      expect(reasonSelect?.getAttribute('aria-required')).toBe('true');
+
+      expect(host().querySelectorAll('.help-block[role="alert"]')).toHaveLength(0);
+
+      // The date starts empty and the reason still shows the prompt row, so this is the invalid submit the legacy form refuses.
+      component.submit();
+      fixture.detectChanges();
+
+      // One message per invalid control, each in the slot its shared field renders after the control and each announcing itself, so a red label and border are no longer the only report (Rule 1 clause 3).
+      expect(host().querySelector('#client-action-date-error')?.textContent?.trim()).toBe(
+        TRANSLATIONS['label.requiredfield'],
+      );
+      expect(host().querySelector('#client-action-reason-error')?.textContent?.trim()).toBe(
+        TRANSLATIONS['label.requiredfield'],
+      );
+      expect(host().querySelectorAll('.help-block[role="alert"]')).toHaveLength(2);
+
+      // The invalid form posts nothing: the body Fineract would refuse for its missing reason is never sent, and the screen stays where it is.
+      expect(httpMock.match(isCommandPost)).toHaveLength(0);
+      expect(navigate).not.toHaveBeenCalled();
     },
   );
 
@@ -747,6 +771,8 @@ describe('ClientActionsComponent', () => {
       }
 
       dateControl(command).setValue(ACTION_DATE);
+      // The reason is a required control of the three commands that take one, so a case fills it before submitting — the body the command posts is the one the sequence below counts, and the form is valid.
+      reasonControl(command)?.setValue(CHOSEN_REASON.id);
       component.submit();
 
       httpMock.expectOne(isCommandPost).flush({ resourceId: 2, clientId: 2 });
@@ -760,7 +786,6 @@ describe('ClientActionsComponent', () => {
   it('runs the gate for the client the route named, as the raw segment it delivered', async () => {
     await show('close');
 
-    // A tenant whose closure check applies to the client entity, so the gate reads that table for the client the URL named rather than stopping at the checks list.
     httpMock.expectOne(isGateRead).flush({
       totalFilteredRecords: 1,
       pageItems: [
@@ -815,7 +840,6 @@ describe('ClientActionsComponent', () => {
   it('posts the reactivation date with no reason and reads no reason list', async () => {
     await showReady('reactivate');
 
-    // A reactivation takes no reason, so it is the gate and the command alone: no template read, which is also why the screen renders no select.
     const [gate] = expectedSequence('reactivate');
 
     expect(requestSequence()).toEqual([gate]);
@@ -854,13 +878,11 @@ describe('ClientActionsComponent', () => {
       const select = host().querySelector<HTMLSelectElement>('app-select-field select');
 
       expect(select).not.toBeNull();
-      // The prompt row, then the tenant's reasons in the order the template returned them: nothing sorted, filtered or renamed.
       expect(reasonOptionLabels()).toEqual([
         TRANSLATIONS['label.select'],
         ...REASONS.map((reason) => reason.name),
       ]);
 
-      // Chosen through the control the operator sees, so the id the body carries is the option's own and keeps the number type the template sent rather than a stringified copy of it.
       if (select !== null) {
         select.value = select.options[select.options.length - 1].value;
         select.dispatchEvent(new Event('change'));
@@ -875,7 +897,6 @@ describe('ClientActionsComponent', () => {
       const post = httpMock.expectOne(isCommandPost);
 
       expect(post.request.params.get('command')).toBe(command);
-      // The chosen reason's id, never a hard-coded one: the tenant configures these, so a screen that invented an id would post a reason the server does not know.
       expect(post.request.body[REASON_BODY_KEY[command]]).toBe(OTHER_REASON.id);
       expect(post.request.body[DATE_BODY_KEY[command]]).toBe(ACTION_DATE_AS_PAYLOAD);
 

@@ -85,7 +85,6 @@ describe('SearchService', () => {
   let apiUrl: Mock<(path: string) => string>;
 
   beforeEach(() => {
-    // A fresh spy per test, so one case's composition and its calls are never read by the next case's assertions.
     apiUrl = vi.fn((path: string): string => API_ROOT + SEPARATOR + path);
     TestBed.configureTestingModule({
       providers: [provideHttpClient(), provideHttpClientTesting(),
@@ -95,7 +94,6 @@ describe('SearchService', () => {
   });
 
   afterEach(() => {
-    // A request the service issued but this spec never saw fails here, and so does one it should have issued and did not.
     httpMock.verify();
   });
   for (const { scope, resource } of SCOPE_CASES) {

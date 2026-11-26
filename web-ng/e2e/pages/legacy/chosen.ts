@@ -4,7 +4,6 @@ import type { Locator, Page } from '@playwright/test';
 export interface ChosenOption {
   /** The `<option>` value, which is what the legacy form posts to Fineract. */
   value: string;
-  /** The visible label, trimmed the way this helper matches it. */
   label: string;
 }
 
@@ -77,7 +76,6 @@ function isDropOpen(element: HTMLElement): boolean {
   return element.classList.contains('chosen-with-drop');
 }
 
-/** Formats option labels for an error message, which never carries page markup. */
 function listLabels(labels: readonly string[]): string {
   return labels.length === 0 ? 'none' : labels.map((label) => `"${label}"`).join(', ');
 }
@@ -92,7 +90,6 @@ async function readWidgetLabel(select: Locator): Promise<string> {
 /** Whether the widget displays `label` on its anchor, allowing one bounded window for it to repaint. */
 async function widgetShows(select: Locator, label: string): Promise<boolean> {
   if (label === '') return (await readWidgetLabel(select)) === '';
-  // Scoped to the anchor's label and exact, so a result row of the same text cannot be read as the rendered selection.
   const shown = select.locator(CHOSEN_CONTAINER)
     .locator(`${CHOSEN_SINGLE_LABEL}:text-is(${JSON.stringify(label)})`);
   return shown.first().waitFor({ state: 'visible', timeout: WIDGET_REDRAW_TIMEOUT_MS }).then(
@@ -101,12 +98,9 @@ async function widgetShows(select: Locator, label: string): Promise<boolean> {
   );
 }
 
-/** Opens the widget's dropdown, whichever click the plugin's current state needs. */
 async function openChosenDrop(widget: Locator, selectName: string): Promise<void> {
-  // Chosen toggles the dropdown on every mousedown in the container, so a click on the anchor opens it the user's way.
   await widget.locator(CHOSEN_SINGLE).click();
   if (await widget.evaluate(isDropOpen)) return;
-  // The click landed while the plugin held the field active and closed the dropdown; a click on the container reopens it.
   await widget.click();
   if (await widget.evaluate(isDropOpen)) return;
   throw new Error(`The chosen dropdown on ${selectName} did not open.`);
@@ -132,7 +126,6 @@ export async function chooseOption(page: Page, select: Locator, optionText: stri
     );
   }
   const widget = select.locator(CHOSEN_CONTAINER);
-  // Without the widget this select was never enhanced, so the native select is the whole control.
   if ((await widget.count()) === 0) return;
   if (await widgetShows(select, outcome.label)) return;
   await openChosenDrop(widget, outcome.selectName);

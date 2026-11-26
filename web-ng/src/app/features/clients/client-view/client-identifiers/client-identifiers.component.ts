@@ -11,7 +11,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslatePipe } from '@ngx-translate/core';
 import { Subject, catchError, finalize, map, of, switchMap, type Observable } from 'rxjs';
 
-import { ApiError } from '../../../../core/http/api-error';
+import { toDisplayableFailure } from '../../../../core/http/api-error';
 import { EmptyStateComponent } from '../../../../shared/empty-state/empty-state.component';
 import type { ClientIdentifier, ClientIdentifierTemplate } from '../../client.models';
 import { ClientService } from '../../client.service';
@@ -26,7 +26,7 @@ export interface ClientIdentifierRow {
   readonly documentKey: string;
   /** Free-text description, empty when the record carries none. */
   readonly description: string;
-  /** Identifier status as the endpoint sent it — plain text, not a status object. */
+  /** Identifier status as the endpoint sent it — the code `clientIdentifierStatusType.active`, not a status object — which the template resolves through the shipped bundle exactly as legacy's tab does (Rule 1 clauses 3 and 6). */
   readonly status: string;
 }
 
@@ -117,7 +117,7 @@ export class ClientIdentifiersComponent {
   /** Whether the last load rejected. */
   private readonly failedState = signal(false);
 
-  /** Fineract's own failure text for the last rejected load, or `null` when none may be rendered. */
+  /** The last rejected load's own failure text, or `null` before the first load and after one that succeeded. */
   private readonly errorMessageState = signal<string | null>(null);
 
   /** The input values to load, in order: a `Subject` because the pipeline needs `switchMap`, `catchError` and `takeUntilDestroyed`, which an `effect` cannot express. */
@@ -132,11 +132,10 @@ export class ClientIdentifiersComponent {
   /** Whether the last load rejected, which withholds the empty state while the absence of rows means "could not read" rather than "has none". */
   readonly failed: Signal<boolean> = this.failedState.asReadonly();
 
-  /** Fineract's own failure text for a 4xx only — the interceptor notifies for status `0` and `>= 500` alone — shown unmoved and never logged (AAP 0.7.4; Rule 1 clauses 3 and 9). */
+  /** The last rejected load's own failure text for every status, so the panel says what went wrong instead of painting blank; the interceptor still raises that failure's single notification, and the text is shown unmoved and never logged (AAP 0.7.4; AAP 0.14.2; Rule 1 clauses 3 and 9). */
   readonly errorMessage: Signal<string | null> = this.errorMessageState.asReadonly();
 
   constructor() {
-    // The input is a signal, so every value it takes is handed to the pipeline below, which cancels the pass it supersedes.
     effect(() => {
       this.requestedClientIds.next(this.clientId());
     });
@@ -149,14 +148,10 @@ export class ClientIdentifiersComponent {
           this.errorMessageState.set(null);
 
           return this.loadRows(clientId).pipe(
-            // Swallowed inside the inner observable rather than in the subscriber: an error escaping it would end the outer subscription and the tab would never load again for a later client.
             catchError((error: unknown) => {
               this.failedState.set(true);
-              this.errorMessageState.set(
-                error instanceof ApiError && error.status >= 400 && error.status < 500
-                  ? error.message
-                  : null,
-              );
+              // Every failure records its own text, whichever status it arrived with, because the panel must never paint blank: a 4xx keeps Fineract's message verbatim, and a 5xx or transport fault shows the text the interceptor also notifies (AAP 0.7.4; AAP 0.14.2).
+              this.errorMessageState.set(toDisplayableFailure(error).message);
 
               return of(NO_ROWS);
             }),

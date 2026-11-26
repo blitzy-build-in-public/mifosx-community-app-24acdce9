@@ -172,13 +172,11 @@ describe('DataTableGateService', () => {
   });
 
   afterEach(() => {
-    // Proves no request was left outstanding: a gate that issued a call it never reported would fail here, and so would one that stayed silent about a table the checks named.
     httpMock.verify();
   });
 
   for (const [action, statusValue] of ACTION_STATUS) {
     it(`gates the ${action} action on the ${statusValue} check status`, () => {
-      // The production table is asserted against this spec's own expectation first, so a changed mapping fails here rather than silently gating on another status.
       expect(CLIENT_ACTION_CHECK_STATUS.get(action)).toBe(statusValue);
 
       const emissions: DataTableGateResult[][] = [];
@@ -194,7 +192,6 @@ describe('DataTableGateService', () => {
       // The legacy order of the two calls (`app/scripts/controllers/client/ClientActionsController.js:26-35`): the tables to read come out of the checks answer, so nothing in the datatable family may be in flight before that.
       httpMock.expectNone(isAnyDatatableRequest);
 
-      // Three rows the action must ignore — another entity, another status, and the right status for a different entity — beside the one it must read.
       const otherStatus: ClientCheckStatus = statusValue === 'CLOSE' ? 'ACTIVATE' : 'CLOSE';
       checksRequest.flush(
         checksPage([
@@ -227,17 +224,14 @@ describe('DataTableGateService', () => {
     const firstRead = httpMock.expectOne(isDatatableRequest(SECOND_TABLE, CLIENT_ID));
     const secondRead = httpMock.expectOne(isDatatableRequest(FIRST_TABLE, CLIENT_ID));
 
-    // Both reads are bodiless GETs: the table and the client id are in the path, and the only parameter is the one asserted in the cases above.
     expect(firstRead.request.body).toBeNull();
     expect(secondRead.request.body).toBeNull();
 
-    // The first table answers last on purpose: the emitted array must follow the server's order of the checks, not the order the reads happen to complete in.
     secondRead.flush(RESULT_SET);
     firstRead.flush(EMPTY_RESULT_SET);
 
     expect(emissions).toHaveLength(1);
     expect(emissions[0]?.map((result) => result.table)).toEqual([SECOND_TABLE, FIRST_TABLE]);
-    // The same envelopes the reads returned, not copies and not projections: the gate reads no column of a table whose columns are defined per tenant.
     expect(emissions[0]?.[0]?.resultSet).toBe(EMPTY_RESULT_SET);
     expect(emissions[0]?.[1]?.resultSet).toBe(RESULT_SET);
   });
@@ -264,7 +258,6 @@ describe('DataTableGateService', () => {
     expect(emissions).toEqual([[]]);
     // The gate answers with one empty emission and then finishes, so a caller awaiting it through `firstValueFrom` resolves instead of hanging on a stream that never completes.
     expect(completed).toBe(true);
-    // Nothing to read means nothing was read: no request in the datatable family exists at all, which is stricter than naming the fixtures' two tables and cannot be satisfied by a read of a third.
     httpMock.expectNone(isAnyDatatableRequest);
   });
 
@@ -290,7 +283,6 @@ describe('DataTableGateService', () => {
 
       httpMock.expectOne(isChecksRequest).flush(answer);
 
-      // One failure, no gate, no completion: an answer the gate cannot read is reported as a failure rather than emitted as the empty gate a caller would proceed on.
       expect(emissions).toEqual([]);
       expect(failures).toHaveLength(1);
 
@@ -344,7 +336,6 @@ describe('DataTableGateService', () => {
       next: (results) => emissions.push(results), error: (failure: unknown) => failures.push(failure), });
     httpMock.expectOne(isChecksRequest).flush(checksPage([checkRow(FIRST_TABLE, 'ACTIVATE')]));
 
-    // One table failing fails the whole gate: a partial answer would let the caller act on a check whose table was never read.
     httpMock
       .expectOne(isDatatableRequest(FIRST_TABLE, CLIENT_ID))
       .flush({ defaultUserMessage: 'Not permitted' }, { status: 403, statusText: 'Forbidden' });
@@ -376,7 +367,6 @@ describe('DataTableGateService', () => {
 
     expect(failures).toHaveLength(1);
     expect(emissions).toEqual([]);
-    // The gate cannot tell what to read, so it read nothing at all rather than passing on an empty list.
     httpMock.expectNone(() => true);
   });
 

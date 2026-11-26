@@ -169,7 +169,6 @@ describe('FineractMissingTranslationHandler', () => {
       expect(request.request.url.startsWith('/')).toBe(false);
       expect(request.request.url).not.toContain('assets/');
 
-      // The loader constants are the parity contract behind that path, pinned here so a change to either half is reported by this spec rather than by a missing label in the running app.
       expect(TRANSLATE_LOADER_PREFIX).toBe('global-translations/locale-');
       expect(TRANSLATE_LOADER_SUFFIX).toBe('.json');
 
@@ -180,7 +179,6 @@ describe('FineractMissingTranslationHandler', () => {
       expect(translate.instant('label.heading.clients')).toBe('Clients');
       expect(translate.instant('label.input.username')).toBe('Username');
 
-      // A key the bundle answers never reaches the missing-translation handler.
       expect(handle).not.toHaveBeenCalled();
     });
 
@@ -201,7 +199,6 @@ describe('FineractMissingTranslationHandler', () => {
       await loaded;
       httpMock.verify();
 
-      // The served bundle carries both keys, so what follows resolves them instead of falling through to the missing-translation handler — the case is a proof of resolution, not of the handler's answer.
       expect(Object.keys(bundle)).toContain('label.heading.clients');
       expect(Object.keys(bundle)).toContain('label.input.username');
 
@@ -231,7 +228,6 @@ describe('FineractMissingTranslationHandler', () => {
       expect(missing).not.toBe('label.heading.missing');
       expect(missing).not.toBe('');
 
-      // One key, one warning, however many times the view asks for it.
       expect(warnings).toHaveLength(1);
     });
   });
@@ -302,7 +298,6 @@ describe('FineractMissingTranslationHandler', () => {
       try {
         Reflect.set(globalThis, 'ngDevMode', false);
 
-        // Not vacuous: the flag really reads false while the handler below runs.
         expect(isDevMode()).toBe(false);
 
         expect(handler.handle(params)).toBe('Missing');
@@ -316,7 +311,6 @@ describe('FineractMissingTranslationHandler', () => {
         }
       }
 
-      // The restore itself is pinned, so a leaked flag cannot silence the dev-mode warning above.
       expect(isDevMode()).toBe(true);
     });
 
@@ -339,7 +333,6 @@ describe('FineractMissingTranslationHandler', () => {
     );
 
     it('holds exactly the two keys the application introduces, so no legacy key is shadowed', () => {
-      // A third entry would answer a key a served bundle is meant to own, and a missing entry would leave the idle warning humanised — both would be silent at run time, so the set is pinned here.
       expect([...APP_OWNED_TRANSLATIONS.keys()]).toEqual(APP_OWNED_COPY.map(([key]) => key));
 
       for (const [key, text] of APP_OWNED_COPY) {
@@ -357,7 +350,6 @@ describe('FineractMissingTranslationHandler', () => {
       expect(harness.translate.instant('label.button.stay.signed.in')).toBe('Stay signed in');
       expect(warnings).toHaveLength(0);
 
-      // The map answers two keys, not the key space: every other absent key keeps the humanised label and the single development-only warning the handler has always emitted.
       expect(harness.translate.instant('label.heading.missing')).toBe('Missing');
       expect(warnings).toHaveLength(1);
       expect(warnings[0]).toContain('label.heading.missing');
@@ -371,7 +363,6 @@ describe('FineractMissingTranslationHandler', () => {
         const harness = createHarness();
         const warnings = captureWarnings();
 
-        // Rendered before the bundle is flushed, so the key really is absent at the moment the pipe asks for it — the state the idle warning is in on every screen of the application.
         const fixture = TestBed.createComponent(TranslateProbeComponent);
         fixture.componentRef.setInput('key', key);
         fixture.detectChanges();

@@ -11,24 +11,15 @@ import { NotificationService } from '../notifications/notification.service';
 import { NavbarComponent } from './navbar.component';
 
 /**
- * Behavioural spec for `NavbarComponent` — the `Navbar` row of the component inventory (AAP 0.2.3) and the
- * signed-in chrome of the clients list screen in the "Sign in and open a client record" flow (Figma node
- * `1:3`, file `DKm5TBFbXypfqyx4xUdhBw`; AAP 0.7.1 `core/layout`, AAP 0.7.4).
+ * Behavioural spec for `NavbarComponent` — the `Navbar` row of the component inventory (AAP 0.2.3) and the signed-in chrome of the clients list screen in the "Sign in and open a client record" flow (Figma node
+ * `1:3`, file `DKm5TBFbXypfqyx4xUdhBw`; AAP 0.7.1 `core/layout`, AAP 0.7.4). It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with at least one behavioural spec")
+ * and Rule 1 clause 8 (no spec without an `expect`). It pins the five in-scope things the bar renders and the out-of-scope chrome it does not (AAP 0.10.5 items 4 and 8), the permission-gated "Clients"
+ * destination including `ALL_FUNCTIONS`, the user-menu label, a search becoming a navigation to `/search/:query` with the scope and exact-match flag, the language switch without navigation, sign-out clearing
+ * the session before it navigates (AAP 0.7.1; W1), a navigation the router refuses settled in its own words (AAP 0.14.2), the inventory's public contract (AAP 0.2.3's `Navbar` props: `searchScope`,
+ * `(langChange)`, `(signOut)`), and the menu opening and closing on the trigger and on `Escape` through Angular state rather than the Bootstrap dropdown plugin. `AuthService` and `PermissionsService` are stubs
+ * typed against the real classes, so no session is assembled and no storage read. No HTTP provider exists: the component injects no Fineract service, so reaching the backend from it would fail with NG0201
+ * rather than passing silently (Rule 1 clause 5, Rule 2). The router is the real one, its route table empty and its `navigate` spied.
  *
- * It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with at
- * least one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`). It pins the five in-scope
- * things the bar renders and the out-of-scope chrome it does not (AAP 0.10.5 items 4 and 8), the
- * permission-gated "Clients" destination including `ALL_FUNCTIONS`, the user-menu label, a search becoming a
- * navigation to `/search/:query` with the scope and exact-match flag, the language switch without
- * navigation, sign-out clearing the session before it navigates (AAP 0.7.1; W1), a navigation the router
- * refuses settled in its own words (AAP 0.14.2), the inventory's public contract (AAP 0.2.3's `Navbar`
- * props: `searchScope`, `(langChange)`, `(signOut)`), and the menu opening and closing on the trigger and on
- * `Escape` through Angular state rather than the Bootstrap dropdown plugin.
- *
- * `AuthService` and `PermissionsService` are stubs typed against the real classes, so no session is
- * assembled and no storage read. No HTTP provider exists: the component injects no Fineract service, so
- * reaching the backend from it would fail with NG0201 rather than passing silently (Rule 1 clause 5,
- * Rule 2). The router is the real one, its route table empty and its `navigate` spied.
  */
 
 /** The permission the clients route group declares, spelled out rather than imported from routes. */
@@ -129,8 +120,7 @@ describe('NavbarComponent', () => {
   /** How many times the bar reported a completed sign-out: its `(signOut)` output. */
   let signOuts: number;
 
-  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps the
-  // assertions below type-checked and confines the boundary to this line (Rule 1 clause 4).
+  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps the assertions below type-checked and confines the boundary to this line (Rule 1 clause 4).
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
 
   /** The rendered element with the given selector, or a named failure when nothing matches it. */
@@ -152,9 +142,7 @@ describe('NavbarComponent', () => {
   const languageSelector = (): HTMLSelectElement => find<HTMLSelectElement>('#navbar-language');
 
   beforeEach(() => {
-    // Reset first so each test starts on a fresh root injector: a permission granted by one test
-    // must never reach the next, and a second `configureTestingModule` on an instantiated module
-    // throws.
+    // Reset first so each test starts on a fresh root injector: a permission granted by one test must never reach the next, and a second `configureTestingModule` on an instantiated module throws.
     TestBed.resetTestingModule();
     auth = new AuthStub();
     permissions = new PermissionsStub();
@@ -202,9 +190,8 @@ describe('NavbarComponent', () => {
   });
 
   it('labels the user menu with the name the shell hands in, and with the session projection when it hands none', () => {
-    // AAP 0.7.1's `ShellComponent` input chain: the signed-in shell passes its own `userName` down,
-    // and the navbar falls back to `AuthService.username` — the `GET /users/{id}` projection — when
-    // nothing above it supplies a name. The menu shows one value, never both.
+    // AAP 0.7.1's `ShellComponent` input chain: the signed-in shell passes its own `userName` down, and the navbar falls back to `AuthService.username` — the `GET
+    // /users/{id}` projection — when nothing above it supplies a name. The menu shows one value, never both.
     expect(userMenuTrigger().textContent).toContain(ACCOUNT_NAME);
 
     fixture.componentRef.setInput('userName', SUPPLIED_NAME);
@@ -222,12 +209,9 @@ describe('NavbarComponent', () => {
   it('renders none of the out-of-scope chrome the legacy navbar carried', () => {
     const text = host().textContent ?? '';
 
-    // AAP 0.10.5 item 8: no hamburger, no notification bell and no Accounting / Reports / Admin
-    // destination, because every screen behind them stays on the legacy application.
+    // AAP 0.10.5 item 8: no hamburger, no notification bell and no Accounting / Reports / Admin destination, because every screen behind them stays on the legacy application.
     expect(host().querySelector('.navbar-toggle')).toBeNull();
     expect(host().querySelector('.fa-bell')).toBeNull();
-    // The three destinations themselves, addressed the way a link would address them: text absence
-    // alone would miss a link whose label resolved to an empty string.
     expect(
       host().querySelectorAll('a[href*="accounting"], a[href*="reports"], a[href*="admin"]'),
     ).toHaveLength(0);
@@ -247,10 +231,8 @@ describe('NavbarComponent', () => {
   });
 
   it('shows the Clients destination to a super user holding ALL_FUNCTIONS', () => {
-    // The wildcard the legacy gate answers before it considers any other code, so a user who holds it
-    // reaches the one in-scope destination with `READ_CLIENT` absent from the list entirely (AAP 0.3.4
-    // claim 12). The item is hidden first, so what this measures is the wildcard's effect and not a
-    // gate that was open all along.
+    // The wildcard the legacy gate answers before it considers any other code, so a user who holds it reaches the one in-scope destination with `READ_CLIENT` absent
+    // from the list entirely (AAP 0.3.4 claim 12). The item is hidden first, so what this measures is the wildcard's effect and not a gate that was open all along.
     permissions.grant([]);
     fixture.detectChanges();
     expect(clientsItem().style.display).toBe('none');
@@ -268,18 +250,16 @@ describe('NavbarComponent', () => {
     find<HTMLFormElement>('app-global-search form').dispatchEvent(new Event('submit'));
     fixture.detectChanges();
 
-    // The pair legacy put in its own URL, and the pair the results screen forwards to the search
-    // request: the scope beside the flag, which is `false` for text the user did not quote
-    // (`app/scripts/controllers/main/MainController.js:208-217`).
+    // The pair legacy put in its own URL, and the pair the results screen forwards to the search request: the scope beside the flag, which is `false` for text the user
+    // did not quote (`app/scripts/controllers/main/MainController.js:208-217`).
     expect(navigate).toHaveBeenCalledWith(['/search', 'ada okafor'], {
       queryParams: { scope: 'all', exactMatch: false },
     });
   });
 
   it('carries the scope the user picked in the selector beside the search text', () => {
-    // The scope travels from the control's own selector rather than from its default: the results
-    // screen turns it into legacy's `resource` parameter, so a navigation that lost it would search a
-    // wider scope than the user asked for (AAP 0.7.3 row "Shell: global search").
+    // The scope travels from the control's own selector rather than from its default: the results screen turns it into legacy's `resource` parameter, so a navigation
+    // that lost it would search a wider scope than the user asked for (AAP 0.7.3 row "Shell: global search").
     const scope = find<HTMLSelectElement>('#search-scope');
     scope.value = 'clients';
     scope.dispatchEvent(new Event('change'));
@@ -295,9 +275,8 @@ describe('NavbarComponent', () => {
   });
 
   it('seeds the search control with the searchScope it was given', async () => {
-    // AAP 0.2.3's `Navbar` prop `searchScope`: the scope is the bar's input rather than state buried
-    // inside the search control, so a host can decide what the user meets. The control's own
-    // selector shows it, and the payload carries it from there.
+    // AAP 0.2.3's `Navbar` prop `searchScope`: the scope is the bar's input rather than state buried inside the search control, so a host can decide what the user
+    // meets. The control's own selector shows it, and the payload carries it from there.
     fixture.componentRef.setInput('searchScope', 'clients');
     fixture.detectChanges();
     await fixture.whenStable();
@@ -323,8 +302,7 @@ describe('NavbarComponent', () => {
     find<HTMLFormElement>('app-global-search form').dispatchEvent(new Event('submit'));
     fixture.detectChanges();
 
-    // The path segment is the unquoted text legacy searched for; the quotes survive only as the
-    // flag that asks Fineract for the literal string.
+    // The path segment is the unquoted text legacy searched for; the quotes survive only as the flag that asks Fineract for the literal string.
     expect(navigate).toHaveBeenCalledWith(['/search', 'ada okafor'], {
       queryParams: { scope: 'all', exactMatch: true },
     });
@@ -339,17 +317,14 @@ describe('NavbarComponent', () => {
     fixture.detectChanges();
 
     expect(translate.currentLang()).toBe('fr');
-    // AAP 0.2.3's `(langChange)` prop: the bar reports the switch its switcher performed, and the
-    // report is what the next consumer would react to. A language switch is not a navigation.
+    // AAP 0.2.3's `(langChange)` prop: the bar reports the switch its switcher performed, and the report is what the next consumer would react to. A language switch is not a navigation.
     expect(reported).toEqual(['fr']);
     expect(navigate).not.toHaveBeenCalled();
   });
 
   it('keeps the selector on the language actually in force when a bundle cannot be loaded', () => {
-    // A bundle that fails to load moves nothing: the service keeps the language it had, so the
-    // control must not go on advertising the one that was asked for. The shared switcher writes it
-    // back, and the bar reports the failure in the application's notification channel rather than
-    // swallowing it (AAP 0.14.2).
+    // A bundle that fails to load moves nothing: the service keeps the language it had, so the control must not go on advertising the one that was asked for. The
+    // shared switcher writes it back, and the bar reports the failure in the application's notification channel rather than swallowing it (AAP 0.14.2).
     const notifications = TestBed.inject(NotificationService);
     vi.spyOn(translate, 'use').mockReturnValue(throwError(() => new Error('the bundle is absent')));
     const selector = languageSelector();
@@ -365,8 +340,7 @@ describe('NavbarComponent', () => {
   });
 
   it('shows a language switched by another switcher', () => {
-    // The selector reads the library's own active language, so a switch made elsewhere — the login
-    // screen's switcher — is reflected here without a second copy of that state.
+    // The selector reads the library's own active language, so a switch made elsewhere — the login screen's switcher — is reflected here without a second copy of that state.
     translate.use('fr');
     fixture.detectChanges();
 
@@ -383,8 +357,7 @@ describe('NavbarComponent', () => {
       navigate.mock.invocationCallOrder[0],
     );
     expect(fixture.componentInstance.userMenuOpen()).toBe(false);
-    // AAP 0.2.3's `(signOut)` prop reports the completed sign-out — once, after the session is gone
-    // and the return to the login screen has started.
+    // AAP 0.2.3's `(signOut)` prop reports the completed sign-out — once, after the session is gone and the return to the login screen has started.
     expect(signOuts).toBe(1);
   });
 
@@ -404,8 +377,6 @@ describe('NavbarComponent', () => {
     find<HTMLElement>('#logout').click();
     fixture.detectChanges();
 
-    // The report follows both steps, so a host reacting to it never precedes the session being
-    // cleared or the navigation starting.
     expect(order).toEqual(['logged out', 'navigating', 'reported']);
   });
 
@@ -414,8 +385,7 @@ describe('NavbarComponent', () => {
     navigate.mockImplementation(() => Promise.reject(new Error(SIGN_OUT_NAVIGATION_FAILURE)));
 
     find<HTMLElement>('#logout').click();
-    // Crosses a macrotask, so the handler the component attached has run and the notification it
-    // raises is queued: that handler is what keeps the rejection from surfacing unhandled.
+    // Crosses a macrotask, so the handler the component attached has run and the notification it raises is queued: that handler is what keeps the rejection from surfacing unhandled.
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 0);
     });
@@ -427,8 +397,7 @@ describe('NavbarComponent', () => {
     );
     expect(notifications.messages()).toHaveLength(1);
     expect(notifications.messages()[0]?.kind).toBe('error');
-    // The bar names the screen the user was being returned to rather than repeating the router's own
-    // wording (AAP 0.14.2).
+    // The bar names the screen the user was being returned to rather than repeating the router's own wording (AAP 0.14.2).
     expect(notifications.messages()[0]?.message).toBe(LOGIN_SCREEN_MESSAGE);
     expect(notifications.messages()[0]?.message).not.toContain(SIGN_OUT_NAVIGATION_FAILURE);
   });
@@ -471,8 +440,6 @@ describe('NavbarComponent', () => {
     expect(dropdown.classList).not.toContain('open');
     expect(userMenuTrigger().getAttribute('aria-expanded')).toBe('false');
 
-    // The panel is hidden by the state change alone, so focus is handed back rather than being left
-    // on a hidden entry.
     expect(document.activeElement).toBe(userMenuTrigger());
   });
 });

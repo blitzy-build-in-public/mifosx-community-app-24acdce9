@@ -2,7 +2,6 @@
 import { defineConfig } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 
-/** UI under test for each project. Both default to the local stack, so the suite can be listed and run with no environment configured at all. */
 const LEGACY_URL = process.env['LEGACY_URL'] ?? 'http://localhost:9090';
 const NEXT_URL = process.env['NEXT_URL'] ?? 'http://localhost:4300';
 

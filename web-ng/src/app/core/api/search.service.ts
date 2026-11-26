@@ -39,7 +39,7 @@ interface SearchData {
   };
 }
 
-/** One row of `GET /search`, narrowed to the three entity types the in-scope scopes can return (AAP 0.7.3 row "Shell: global search", AAP 0.10.5 item 9). **The declared boundary (Rule 1 clause 4).** The payload is. */
+/** One row of `GET /search`, narrowed to the three entity types the in-scope scopes can return (AAP 0.7.3 row "Shell: global search", AAP 0.10.5 item 9). **The declared boundary (Rule 1 clause 4).** The payload is the `SearchData` envelope element, modelled only as far as the in-scope results list reads it, so its remaining members are left unmodelled rather than guessed. */
 export type SearchResult =
   | (SearchData & { readonly entityType: 'CLIENT' })
   | (SearchData & { readonly entityType: 'CLIENTIDENTIFIER' })
@@ -47,7 +47,6 @@ export type SearchResult =
 
 /** The `resource` query parameter a scope sends, and the registered mapping between the three scopes on screen and the values legacy put on the wire (AAP 0.7.3 row "Shell: global search", AAP 0.10.5 item 9). */
 export function toResourceParam(scope: SearchScope): string {
-  // Exhaustive over SearchScope with no default branch, so adding a scope to the union without deciding what it sends is a compile error rather than a silently unsearched one.
   switch (scope) {
     case 'clients':
       return 'clients,clientIdentifiers';

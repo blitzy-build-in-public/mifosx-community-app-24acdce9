@@ -22,6 +22,17 @@
      pointer cursor, the brand-blue fill and white text on hover (Rule 1 clause 3;
      app/views/clients/clients.html:64).
 
+     Enter and Space on a focused row open the row's own destination, by way of the click the row
+     already carries, so the keyboard reaches the same URL a pointer reaches and one key press
+     navigates once; Space's default is cancelled there so the page does not scroll behind the row,
+     and Enter has no default action on a row. This is the table's one deliberate difference from
+     legacy — whose rows were pointer-only, with no `tabindex` and no key handler
+     (`app/views/clients/clients.html:64-73`) — and it departs from Rule 1 clause 3's "match legacy
+     behaviour; don't improve it" for one reason: a row that can be focused but not opened offers a
+     keyboard user the record it offers a pointer user and then withholds it. The difference is
+     invisible — no pixel, no request, no route — and the row keeps its `<tr>` role and every `aria-*`
+     attribute it had, because a row claiming `role="link"` would lose the table's own row semantics.
+
   Each `<td>` renders the caller's cell template when one is supplied, with the row, the column and
   the column's text as its context, and the column's own text otherwise. The template is how one cell
   of a table becomes a component — the clients list's Status column is a bare colour swatch and no
@@ -44,7 +55,12 @@
     </thead>
     <tbody>
       @for (row of rows(); track rowKey()(row)) {
-        <tr [class]="rowClass()" [routerLink]="rowTarget(row)">
+        <tr
+          [class]="rowClass()"
+          [routerLink]="rowTarget(row)"
+          (keydown.enter)="activateRow(row, $event)"
+          (keydown.space)="activateRow(row, $event)"
+        >
           @for (column of columns(); track column.key) {
             <td>
               @if (cellTemplate(); as cell) {

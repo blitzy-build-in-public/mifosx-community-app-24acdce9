@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
-import { Router } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { provideTranslateService, TranslateService } from '@ngx-translate/core';
 import { Subject, of, throwError } from 'rxjs';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
@@ -82,9 +82,14 @@ interface ClientServiceStub {
   readonly template: Mock<ClientService['template']>;
   readonly create: Mock<ClientService['create']>;
 }
-/** `Router` as this screen uses it: one navigation command list per outcome. */
+/**
+ * `Router` as this screen and its cancel link use it: the two navigation entry points, each replaced by a spy so no case performs a navigation and every command list and target the screen sends is observable.
+ * `navigate` is the component's own call on a successful create; `navigateByUrl` is what `RouterLink` asks for when the cancel anchor is activated.
+ *
+ */
 interface RouterStub {
-  readonly navigate: Mock<(commands: readonly unknown[]) => Promise<boolean>>;
+  readonly navigate: Mock<Router['navigate']>;
+  readonly navigateByUrl: Mock<Router['navigateByUrl']>;
 }
 
 describe('ClientCreateComponent', () => {
@@ -143,10 +148,17 @@ describe('ClientCreateComponent', () => {
         // The application runs zoneless (Angular 22's default), so the fixture is told the same and every async case settles with `whenStable()` rather than with a zone (Rule 1 clause 5).
         provideZonelessChangeDetection(),
         { provide: ClientService, useValue: clients },
-        { provide: Router, useValue: router },
+        // The cancel control is a `RouterLink`, which resolves its target through the real router's `createUrlTree`, so the router has to exist for the template to
+        // render at all; its two navigation entry points are replaced by the spies below, so no case navigates anywhere.
+        provideRouter([]),
         provideTranslateService(),
       ],
     });
+    const applicationRouter = TestBed.inject(Router);
+    router = {
+      navigate: vi.spyOn(applicationRouter, 'navigate').mockResolvedValue(true),
+      navigateByUrl: vi.spyOn(applicationRouter, 'navigateByUrl').mockResolvedValue(true),
+    };
     const translate = TestBed.inject(TranslateService);
     translate.setTranslation('en', TRANSLATIONS, true);
     translate.use('en');
@@ -178,9 +190,6 @@ describe('ClientCreateComponent', () => {
   }
   beforeEach(async () => {
     clients = { template: vi.fn<ClientService['template']>(), create: vi.fn<ClientService['create']>(), };
-    router = {
-      navigate: vi.fn<(commands: readonly unknown[]) => Promise<boolean>>(() => Promise.resolve(true)),
-    };
     clients.template.mockReturnValue(of(HEAD_OFFICE_TEMPLATE));
     await open();
   });
@@ -207,7 +216,6 @@ describe('ClientCreateComponent', () => {
   });
   it('re-reads the template once per office change, replacing the lists and clearing the officer', async () => {
     component.form.controls.staffId.setValue(PARITY_OFFICER_ID);
-    // Re-selecting the office the form already holds is not a change, so it costs no request.
     component.form.controls.officeId.setValue(HEAD_OFFICE_ID);
     expect(clients.template).toHaveBeenCalledTimes(1);
     clients.template.mockReturnValueOnce(of(BRANCH_TEMPLATE));
@@ -216,15 +224,12 @@ describe('ClientCreateComponent', () => {
     expect(clients.template).toHaveBeenCalledTimes(2);
     // The office travels with the staff narrowing, which is the call the legacy form makes on the same event (AAP 0.7.3 row "W2 create and activate client").
     expect(clients.template).toHaveBeenNthCalledWith(2, BRANCH_OFFICE_ID, true);
-    // The pickers carry the second office's lists, in the order its template sent them.
     expect(optionLabels(selectById('officeId'))).toEqual(BRANCH_OFFICE_NAMES);
     expect(
       optionLabels(selectById('staffId')).filter((label) => BRANCH_STAFF_NAMES.includes(label)),
     ).toEqual(BRANCH_STAFF_NAMES);
-    // The officer chosen under the previous office is gone with the list that carried it.
     expect(component.form.controls.staffId.value).toBeNull();
     expect(component.form.controls.officeId.value).toBe(BRANCH_OFFICE_ID);
-    // Re-selecting the new office is not a change either.
     component.form.controls.officeId.setValue(BRANCH_OFFICE_ID);
     await settle();
     expect(clients.template).toHaveBeenCalledTimes(2);
@@ -242,14 +247,11 @@ describe('ClientCreateComponent', () => {
     expect(component.form.controls.active.value).toBe(true);
     expect(component.form.controls.officeId.value).toBe(BRANCH_OFFICE_ID);
     expect(component.form.controls.staffId.value).toBeNull();
-    // The field the active flag reveals is still on screen with the chosen date in it.
     expect(host().querySelector('#activationDate')).not.toBeNull();
   });
   it('renders the legacy captions through the translation stack, never a raw key', () => {
     const rendered = host().textContent ?? '';
-    // The heading resolves through the bundle this screen registers…
     expect(host().querySelector('h3.panel-title')).not.toBeNull();
-    // …and no caption reached the user as the dotted key a bundle holds it under.
     expect(rendered).not.toContain('label.');
     expect(rendered).not.toContain('validation.');
     // Every control the workflow fills carries the id the legacy form gives it, so the parity harness addresses the same field on both applications.
@@ -290,7 +292,6 @@ describe('ClientCreateComponent', () => {
       expect(component.form.controls.firstname.hasError('pattern')).toBe(true);
       expect(host().querySelector('#firstname')?.getAttribute('aria-invalid')).toBe('true');
       expect(host().querySelector('#firstname-pattern-error')).not.toBeNull();
-      // A value that is present but malformed reports the rule it breaks, not the missing one.
       expect(host().querySelector('#firstname-error')).toBeNull();
     },
   );
@@ -311,7 +312,6 @@ describe('ClientCreateComponent', () => {
   it('accepts the multi-word names and the numeric mobile number the legacy rules allow', async () => {
     fillValidForm();
     clients.create.mockReturnValue(of(CREATED));
-    // Legacy's expression is unanchored at the end, so only the first character is constrained: a space, an apostrophe and a hyphen all stay inside a value it accepts.
     component.form.controls.firstname.setValue('Ada Okafor');
     component.form.controls.lastname.setValue("O'Kafo-Bennett");
     await component.submit();
@@ -327,16 +327,13 @@ describe('ClientCreateComponent', () => {
     await component.submit();
     expect(clients.create).toHaveBeenCalledTimes(1);
     const body: ClientCreateRequest = clients.create.mock.calls[0][0];
-    // Every value is handed over as the control holds it: the numeric ids stay numbers…
     expect(body.officeId).toBe(HEAD_OFFICE_ID);
     expect(typeof body.officeId).toBe('number');
     expect(body.staffId).toBe(PARITY_OFFICER_ID);
     expect(typeof body.staffId).toBe('number');
-    // …the screen creates an individual client, the legal form whose name set this form fills…
     expect(body.legalFormId).toBe(1);
     expect(body.firstname).toBe('Parity');
     expect(body.lastname).toBe('Client');
-    // …and no string is trimmed or defaulted.
     expect(body.externalId).toBe('EXT-1');
     expect(body.mobileNo).toBe('2025550101');
     // The dates leave the screen as the `Date` its control holds; the service serialises them.
@@ -356,7 +353,6 @@ describe('ClientCreateComponent', () => {
     expect(clients.create).not.toHaveBeenCalled();
     expect(router.navigate).not.toHaveBeenCalled();
     expect(component.form.controls.officeId.touched).toBe(true);
-    // The refusal closed nothing off: the same form, on a real office, still creates the client.
     component.form.controls.officeId.setValue(HEAD_OFFICE_ID);
     await component.submit();
     expect(clients.create).toHaveBeenCalledTimes(1);
@@ -425,7 +421,6 @@ describe('ClientCreateComponent', () => {
     expect(component.guard.busy()).toBe(false);
     expect(submitButton().disabled).toBe(false);
     expect(clients.create).toHaveBeenCalledTimes(1);
-    // One click, one record: the refused click never navigated anywhere.
     expect(router.navigate).toHaveBeenCalledTimes(1);
     expect(router.navigate).toHaveBeenCalledWith(['/viewclient', 42]);
   });
@@ -449,7 +444,6 @@ describe('ClientCreateComponent', () => {
     expect(alerts).toHaveLength(1);
     // The message reaches the user unmodified — no prefix, suffix, trim or translation — because workflow W7 compares it character for character with the server's own text.
     expect(alerts[0].textContent?.trim()).toBe(REJECTED_MESSAGE);
-    // The screen stays mounted with what the operator typed, so the failure can be corrected in place.
     expect(component.form.getRawValue()).toMatchObject({
       officeId: HEAD_OFFICE_ID,
       staffId: PARITY_OFFICER_ID,
@@ -458,6 +452,37 @@ describe('ClientCreateComponent', () => {
       externalId: 'EXT-1',
       mobileNo: '2025550101',
     });
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
+  it('retires the rejected message on the operator’s next edit and keeps the rest of the form', async () => {
+    clients.create.mockReturnValue(
+      throwError(() =>
+        toApiError(
+          new HttpErrorResponse({
+            status: 400,
+            statusText: 'Bad Request',
+            error: { defaultUserMessage: REJECTED_MESSAGE, errors: [{ defaultUserMessage: REJECTED_MESSAGE }], },
+          }),
+        ),
+      ),
+    );
+    fillValidForm();
+    await component.submit();
+    fixture.detectChanges();
+    expect(host().querySelectorAll('.alert.alert-danger')).toHaveLength(1);
+    component.form.controls.lastname.setValue('Corrected');
+    fixture.detectChanges();
+    expect(component.error()).toBeNull();
+    expect(host().querySelector('.alert.alert-danger')).toBeNull();
+    expect(component.form.getRawValue()).toMatchObject({
+      officeId: HEAD_OFFICE_ID,
+      staffId: PARITY_OFFICER_ID,
+      firstname: 'Parity',
+      lastname: 'Corrected',
+      externalId: 'EXT-1',
+      mobileNo: '2025550101',
+    });
+    expect(clients.create).toHaveBeenCalledTimes(1);
     expect(router.navigate).not.toHaveBeenCalled();
   });
   it('leaves a 5xx to the interceptor’s notification and keeps the entered values', async () => {
@@ -473,7 +498,6 @@ describe('ClientCreateComponent', () => {
     expect(router.navigate).not.toHaveBeenCalled();
   });
   it('paints no message when the create cannot be sent at all', async () => {
-    // A transport failure arrives with status 0 and with Angular's own wording, which embeds the failed request's address: the screen must render neither.
     clients.create.mockReturnValue(
       throwError(() => new HttpErrorResponse({ status: 0, error: new ProgressEvent('error') })),
     );
@@ -499,10 +523,21 @@ describe('ClientCreateComponent', () => {
     expect(host().querySelector('.alert.alert-danger')?.textContent?.trim()).toBe(NAVIGATION_FAILURE_MESSAGE,);
   });
   it('returns to the list on cancel without creating anything', () => {
-    const cancel = host().querySelector<HTMLButtonElement>('#cancel2');
+    // Cancel navigates rather than acts, so it is the anchor every cancel control in the application is, which is also the element type this form's own legacy original renders (Rule 1 clause 3).
+    const cancel = host().querySelector<HTMLElement>('#cancel2');
+
     expect(cancel).not.toBeNull();
+    expect(cancel?.tagName).toBe('A');
+    expect(cancel?.classList.contains('btn')).toBe(true);
+    expect(cancel?.classList.contains('btn-default')).toBe(true);
+    // Its navigation target is the clients list, resolved by `RouterLink` and rendered as the anchor's own `href`, so the control says where it goes before it is used.
+    expect(cancel?.getAttribute('href')).toBe('/clients');
+
     cancel?.click();
-    expect(router.navigate).toHaveBeenCalledWith(['/clients']);
+
+    expect(router.navigateByUrl).toHaveBeenCalledTimes(1);
+    expect(router.navigateByUrl.mock.calls[0]?.[0]?.toString()).toBe('/clients');
+    expect(router.navigate).not.toHaveBeenCalled();
     expect(clients.create).not.toHaveBeenCalled();
   });
   it('reports a failed template read and leaves the form usable', async () => {
@@ -521,13 +556,11 @@ describe('ClientCreateComponent', () => {
     await open();
     expect(clients.template).toHaveBeenCalledTimes(1);
     expect(component.error()).toBe(TEMPLATE_FAILURE_MESSAGE);
-    // One message, painted once, above the form that is still there to be corrected.
     expect(host().querySelectorAll('.alert.alert-danger')).toHaveLength(1);
     expect(host().querySelector('.alert.alert-danger')?.textContent?.trim()).toBe(TEMPLATE_FAILURE_MESSAGE,);
     expect(selects()).toHaveLength(2);
     expect(host().querySelector('#firstname')).not.toBeNull();
     expect(submitButton().disabled).toBe(false);
-    // A failed read raises no notice of its own and creates nothing.
     expect(host().querySelector('app-notification')).toBeNull();
     expect(clients.create).not.toHaveBeenCalled();
   });

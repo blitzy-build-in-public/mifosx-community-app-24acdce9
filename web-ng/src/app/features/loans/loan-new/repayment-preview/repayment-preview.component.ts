@@ -1,8 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import { TranslatePipe } from '@ngx-translate/core';
 
 import { EmptyStateComponent } from '../../../../shared/empty-state/empty-state.component';
+import { MoneyPipe } from '../../../../shared/money/money.pipe';
 import { DISPLAY_DATE_FORMAT, fromFineractDate } from '../../../../shared/date-format.util';
 import type { RepaymentPeriod, RepaymentSchedule } from '../../loan.models';
 
@@ -16,7 +17,7 @@ type RepaymentPreviewRow = Omit<RepaymentPeriod, 'fromDate' | 'dueDate'> & {
 @Component({
   selector: 'app-repayment-preview',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, DecimalPipe, TranslatePipe, EmptyStateComponent],
+  imports: [DatePipe, MoneyPipe, TranslatePipe, EmptyStateComponent],
   templateUrl: './repayment-preview.component.html',
 })
 export class RepaymentPreviewComponent {

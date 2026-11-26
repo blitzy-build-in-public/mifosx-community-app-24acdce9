@@ -156,7 +156,6 @@ describe('AuthService', () => {
   });
 
   afterEach(() => {
-    // Proves no request was left outstanding, so a login that issued a third call fails here.
     httpMock.verify();
     window.localStorage.clear();
   });
@@ -191,7 +190,6 @@ describe('AuthService', () => {
     authentication.flush(authResponse());
     await Promise.resolve();
 
-    // Exactly one read follows, for the id the response named, with no query parameter and no body.
     const users = httpMock.expectOne(byMethodAndUrl('GET', usersUrl(USER_ID)));
     expect(users.request.params.keys()).toEqual([]);
     expect(users.request.body).toBeNull();
@@ -199,7 +197,6 @@ describe('AuthService', () => {
     users.flush(projection());
     await login;
 
-    // The pair of calls is the whole login: a third request would be reported by afterEach's verify().
     expect(service.isAuthenticated()).toBe(true);
   });
 
@@ -250,7 +247,6 @@ describe('AuthService', () => {
     // The label comes from `GET /users/{id}`, not from the submitted account name.
     expect(service.username()).toBe(USERNAME);
     expect(sessions.user()).toEqual({ id: USER_ID, username: USERNAME });
-    // The gate the templates and the route guard ask answers from the login's own list.
     expect(permissions.can('READ_CLIENT')).toBe(true);
     expect(permissions.can('DELETE_CLIENT')).toBe(false);
   });
@@ -261,11 +257,9 @@ describe('AuthService', () => {
   ])(
     'rejects the login with the user projection failure for a $status answer',
     async ({ status, message }: { status: number; message: string }) => {
-      // The post-login read is the login's own last step, so a failure there is a failed sign-in: the
-      // entry stays written, no session is in effect, and the caller is told why instead of navigating
-      // into a guard that sends the user straight back to this form with nothing said. The 403 is the
-      // status the interceptor deliberately leaves silent; the 500 arrives on top of its one
-      // notification, and both reject the same way (AAP 0.14.2).
+      // The post-login read is the login's own last step, so a failure there is a failed sign-in: the entry stays written, no session is in effect, and the caller is
+      // told why instead of navigating into a guard that sends the user straight back to this form with nothing said. The 403 is the status the interceptor
+      // deliberately leaves silent; the 500 arrives on top of its one notification, and both reject the same way (AAP 0.14.2).
       const login = service.login(USERNAME, submittedPassword());
 
       httpMock.expectOne(byMethodAndUrl('POST', AUTHENTICATION_URL)).flush(authResponse());
@@ -279,8 +273,7 @@ describe('AuthService', () => {
       const failure = await rejectionOf(login);
 
       assertApiError(failure);
-      // The server's own text, character for character, and the status it arrived with, so the screen
-      // paints a failed projection read the way it paints a refused credential (AAP 0.4.4 decision 6).
+      // The server's own text, character for character, and the status it arrived with, so the screen paints a failed projection read the way it paints a refused credential (AAP 0.4.4 decision 6).
       expect(failure.message).toBe(message);
       expect(failure.status).toBe(status);
 
@@ -313,7 +306,6 @@ describe('AuthService', () => {
     expect(service.user()).toBeNull();
     expect(service.permissions()).toEqual([]);
     expect(permissions.can('READ_CLIENT')).toBe(false);
-    // A rejected exchange is not followed by the restore read.
     httpMock.expectNone(byMethodAndUrl('GET', usersUrl(USER_ID)));
   });
 
@@ -328,7 +320,6 @@ describe('AuthService', () => {
 
       assertApiError(failure);
       expect(failure.message).toBe(MALFORMED_RESPONSE_MESSAGE);
-      // The exchange succeeded, so the failure is the response body's: status 200 and no field failure.
       expect(failure.status).toBe(200);
       expect(failure.validationErrors).toEqual([]);
 
@@ -385,7 +376,6 @@ describe('AuthService', () => {
     // A start with no entry — the first run after a logout, or a visitor arriving at the login screen — resolves `false`, so the initializer's awaited restore closes the gate instead of opening one over an empty session (AAP (AAP 0.10.1, AAP 0.7.1).
     await expect(service.restore()).resolves.toBe(false);
 
-    // Nothing at all reached the transport: with nothing stored there is no id to read a user for.
     httpMock.expectNone(() => true);
     expect(service.user()).toBeNull();
     expect(service.session()).toBeNull();
@@ -497,7 +487,6 @@ describe('AuthService through the application interceptor', () => {
   });
 
   afterEach(() => {
-    // Proves the refused exchange was not followed by the restore read, and issues no third call.
     httpMock.verify();
     window.localStorage.clear();
   });
@@ -543,7 +532,6 @@ describe('AuthService through the application interceptor', () => {
     expect(failure.status).toBe(401);
     expect(failure.validationErrors).toEqual([]);
 
-    // A refused exchange writes no session, leaves every accessor empty and is not followed by the restore read the interceptor would have attached a credential to.
     expect(window.localStorage.getItem(COMPOSED_KEY)).toBeNull();
     expect(service.isAuthenticated()).toBe(false);
     expect(service.user()).toBeNull();

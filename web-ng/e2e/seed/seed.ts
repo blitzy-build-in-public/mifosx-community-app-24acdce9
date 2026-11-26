@@ -31,7 +31,6 @@ export interface SeedEntityResult {
   readonly id: number;
 }
 
-/** The three entities the seed creates, in creation order. */
 export interface SeedEntities {
   /** `Officer, Parity` — the loan officer the loan workflows select, the name Fineract composes from the AAP 0.10.1 first and last names. */
   readonly staff: SeedEntityResult;
@@ -41,7 +40,6 @@ export interface SeedEntities {
   readonly loanCharge: SeedEntityResult;
 }
 
-/** The narration values the seed created for the client lifecycle actions, one per action that takes a reason. */
 export interface SeedClientActionReasons {
   /** Value created under `ClientClosureReason`, which the close action offers. */
   readonly closure: SeedEntityResult;
@@ -51,7 +49,6 @@ export interface SeedClientActionReasons {
   readonly withdrawal: SeedEntityResult;
 }
 
-/** The client-action datatable gate the seed registered: the table the gate's second call reads, and the check that makes it read it. */
 export interface SeedClientActionGate {
   /** Registered datatable name, e.g. `client_action_check`. */
   readonly datatableName: string;
@@ -67,29 +64,22 @@ export interface SeedClientActionGate {
 export interface SeedResult {
   /** Backend the seed wrote to, so a report can prove which one was seeded (Rule 2). */
   readonly fineractUrl: string;
-  /** Tenant the entities belong to. */
   readonly tenantId: string;
   /** Verification environment, from the shared `detectBackendEnvironment` in `../check-backend`. */
   readonly environment: BackendEnvironment;
-  /** When the seed ran, as an ISO-8601 timestamp — a wall clock, used for provenance only. */
   readonly seededAt: string;
   /** The run date the seed read from Fineract, as `yyyy-mm-dd` (Rule 1 clause 2). */
   readonly runDate: string;
-  /** The four entities, in creation order. */
   readonly entities: SeedEntities;
-  /** The client-action narration values, in code order: closure, rejection, withdrawal. */
   readonly clientActionReasons: SeedClientActionReasons;
-  /** The client-action datatable and the check registered for it. */
   readonly clientActionGate: SeedClientActionGate;
 }
 
 /** Response statuses `POST` accepts: Fineract answers 200 or 201 for every resource this seed creates. */
 const SUCCESS_STATUSES: readonly number[] = [200, 201];
 
-/** Where the run's result is written; resolved from this module, so the working directory is irrelevant. */
 const RESULT_ARTEFACT_URL = new URL('../.captures/seed.json', import.meta.url);
 
-/** Absolute path of the artefact {@link runSeed} writes, resolved from this module's own URL. Exported so a consumer states where the artefact lives instead of re-deriving it, and so a spec that exercises {@link. */
 export const SEED_RESULT_ARTEFACT_PATH: string = fileURLToPath(RESULT_ARTEFACT_URL);
 
 /** The public demo Fineract servers the harness must never talk to (Rule 2), written as escaped-dot patterns anchored on a label boundary: each one matches its host itself and any subdomain of it. */
@@ -166,7 +156,6 @@ interface LoanChargeCreateBody {
 
 /** Body of `POST /codes/name/{codeName}/codevalues`: one narration value under an existing code. */
 interface CodeValueCreateBody {
-  /** Value name, from {@link ClientActionReasonSeed.valueName}. */
   readonly name: string;
   /** `true`, because an inactive value is not offered by the action templates this fixture serves. */
   readonly isActive: boolean;
@@ -198,7 +187,6 @@ interface EntityDatatableCheckCreateBody {
   readonly entity: string;
   /** Client status the check is registered for: `600`, CLOSE. */
   readonly status: number;
-  /** Datatable the gate then reads for that client. */
   readonly datatableName: string;
 }
 
@@ -293,7 +281,6 @@ function readSubResourceId(result: SeedPostResult, path: string): number {
   return readIdentifier(result, 'subResourceId', path);
 }
 
-/** Parses a response body, reporting what was received when it is not JSON. @param text Raw response body. @param source What was called and with which status, used in the error message. */
 function parseJsonBody(text: string, source: string): unknown {
   try {
     // `JSON.parse` answers `any`; widening it to `unknown` is the boundary each caller narrows through isRecord/readText/readResourceId, which keeps `any` out of this module (Rule 1 clause 4).
@@ -504,7 +491,6 @@ async function writeResultArtefact(result: SeedResult): Promise<void> {
   }
 }
 
-/** One line per created record, in creation order — what a successful run prints and nothing more. */
 function entityLines(result: SeedResult): string[] {
   return [
     `staff: ${result.entities.staff.name} id=${result.entities.staff.id}`,
@@ -517,7 +503,6 @@ function entityLines(result: SeedResult): string[] {
   ];
 }
 
-/** Turns whatever a failed run threw into the lines printed to stderr. */
 function describeFailure(error: unknown): string[] {
   if (error instanceof SeedRequestError) {
     return [error.message, ...error.validationMessages.map((message) => `  - ${message}`)];
@@ -530,10 +515,8 @@ function describeFailure(error: unknown): string[] {
 
 /** Seeds the fixed parity data and reports what it created — the module's one entry point, called by the CLI below and by nothing else (AAP 0.10.1, AAP 0.9.1, Rule 1 clause 2, Rule 1 clause 9). */
 export async function runSeed(): Promise<SeedResult> {
-  // The run's first statement, before the backend is vetted and before any request: every later failure path has already passed this point, so none of them can leave an earlier run's artefact readable.
   await discardResultArtefact();
   assertPermittedBackend(FINERACT_URL);
-  // Read before any call so a missing variable fails immediately, naming itself, instead of surfacing as an authentication error against the backend.
   const credentials = readCredentials();
   const secrets: string[] = [credentials.password];
   let context: APIRequestContext | null = null;

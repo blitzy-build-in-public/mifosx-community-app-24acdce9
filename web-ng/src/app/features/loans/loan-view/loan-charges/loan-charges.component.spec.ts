@@ -1,4 +1,4 @@
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import { provideZonelessChangeDetection, signal, type WritableSignal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
@@ -9,7 +9,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ALL_FUNCTIONS, PermissionsService } from '../../../../core/auth/permissions.service';
 import { DISPLAY_DATE_FORMAT } from '../../../../shared/date-format.util';
 import { EmptyStateComponent } from '../../../../shared/empty-state/empty-state.component';
-import type { LoanCharge, LoanStatus } from '../../loan.models';
+import { MoneyPipe } from '../../../../shared/money/money.pipe';
+import type { LoanCharge, LoanCurrency, LoanStatus } from '../../loan.models';
 import { LoanChargesComponent } from './loan-charges.component';
 
 /** Behavioural spec for the charges section of the individual-loan record — `app-loan-charges`, the `LoanChargesComponent` row of AAP 0.7.1's loans feature, rendered inside the record's charge tab (`#/viewloanaccount/:id` (AAP 0.7.4, AAP 0.7.2, AAP 0.7.3, AAP 0.11.1). */
@@ -29,6 +30,7 @@ const TRANSLATIONS = {
   'label.heading.dueasof': 'Due as of',
   'label.heading.amount': 'Amount',
   'label.heading.paid': 'Paid',
+  'label.heading.waived': 'Waived',
   'label.heading.outstanding': 'Outstanding',
   'label.heading.actions': 'Actions',
   'label.button.paycharge': 'Pay Charge',
@@ -36,29 +38,30 @@ const TRANSLATIONS = {
   'label.nodata': 'No Data',
 };
 
-/** The keys of the six column headings, in the template's order. */
+/** The keys of the seven column headings, in the template's order. */
 const HEADING_KEYS = [
   'label.heading.name',
   'label.heading.dueasof',
   'label.heading.amount',
   'label.heading.paid',
+  'label.heading.waived',
   'label.heading.outstanding',
   'label.heading.actions',
 ] as const satisfies readonly (keyof typeof TRANSLATIONS)[];
 
-/** The six headings as the table must render them: the bundle's wording, never the key. */
+/** The seven headings as the table must render them: the bundle's wording, never the key. */
 const HEADINGS: readonly string[] = HEADING_KEYS.map((key) => TRANSLATIONS[key]);
 
-/** The amount format the table uses — `DecimalPipe` at its default `1.0-3` digits, the same grouping the legacy table's `number` filter applies (AAP 0.10.2, Rule 1 clause 3). */
-const AMOUNT_PIPE = new DecimalPipe('en-US');
+/** The currency every fixture charge is denominated in, as `GET /loans/{id}?associations=all` reports it inside each `charges[]` entry: the table prints this symbol in front of each of the charge's figures, with no space between them (Rule 1 clause 3). */
+const CURRENCY: LoanCurrency = {
+  code: 'USD',
+  name: 'US Dollar',
+  displaySymbol: '$',
+  decimalPlaces: 2,
+};
 
 /** The date format the table uses, through the one pattern the application declares (AAP 0.7.2). */
 const DUE_DATE_PIPE = new DatePipe('en-US');
-
-/** Formats `value` exactly as the table's amount cells do. */
-function asAmount(value: number): string | null {
-  return AMOUNT_PIPE.transform(value);
-}
 
 /** Formats `date` exactly as the table's due-date cell does. */
 function asDueDate(date: Date): string | null {
@@ -85,6 +88,7 @@ const CHARGE_DUE: LoanCharge = {
   id: 11,
   chargeId: 5,
   name: 'Parity Fee',
+  currency: CURRENCY,
   amount: 25,
   amountOrPercentage: 25,
   amountPaid: 0,
@@ -103,6 +107,7 @@ const CHARGE_SETTLED: LoanCharge = {
   id: 12,
   chargeId: 6,
   name: 'Service Fee',
+  currency: CURRENCY,
   amount: 1250.5,
   amountOrPercentage: 1250.5,
   amountPaid: 1250.5,
@@ -182,9 +187,15 @@ class PermissionsStub implements Pick<PermissionsService, 'has'> {
 describe('LoanChargesComponent', () => {
   let fixture: ComponentFixture<LoanChargesComponent>;
   let permissions: PermissionsStub;
+  let money: MoneyPipe;
 
   // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines this spec's only cast to one line and keeps every DOM assertion type-checked (Rule 1 clause 4).
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
+
+  /** Formats `value` exactly as the table's amount cells do: through the one shared money pipe, with the charge's own currency, so an expectation built here can never be met by a second formatting rule the table might drift to (AAP 0.10.2, Rule 1 clause 3). */
+  function asAmount(value: number): string | null {
+    return money.transform(value, CURRENCY);
+  }
 
   /** Mounts the section for one loan with the charges the record hands it, on the loan status the record reports — `Active` unless a case is about the state that withholds both actions. */
   function mount(
@@ -239,7 +250,6 @@ describe('LoanChargesComponent', () => {
     // Reset first so each case starts on a fresh root injector: a permission granted by one case must never reach the next, and a second `configureTestingModule` on an instantiated module throws.
     TestBed.resetTestingModule();
     permissions = new PermissionsStub();
-    // Ground state: a user who may pay and waive, so the table cases see the actions the section renders.
     permissions.grant([ACTION_PERMISSION]);
 
     await TestBed.configureTestingModule({
@@ -255,13 +265,16 @@ describe('LoanChargesComponent', () => {
     const translate = TestBed.inject(TranslateService);
     translate.setTranslation('en', TRANSLATIONS, true);
     translate.use('en');
+
+    // The pipe the cells render through, built inside the TestBed's injection context the way the framework builds it, so its locale is the host's default of `en-US` — the locale the expectations below are written in (Rule 1 clause 8).
+    money = TestBed.runInInjectionContext(() => new MoneyPipe());
   });
 
   afterEach(() => {
     TestBed.resetTestingModule();
   });
 
-  it('renders one row per charge, in the payload’s order, in the six legacy columns', () => {
+  it('renders one row per charge, in the payload’s order, in the seven legacy columns', () => {
     mount(CHARGES);
 
     expect(byId('loan-charges')).not.toBeNull();
@@ -270,35 +283,63 @@ describe('LoanChargesComponent', () => {
       host().querySelectorAll<HTMLTableCellElement>('#loan-charges thead th'),
     ).map((cell) => (cell.textContent ?? '').trim());
 
-    // The template's six columns and no seventh: a charge carries no status, no currency symbol and no total column, so none is asserted here (Rule 1 clause 3).
+    // The template's seven columns and no eighth: a charge carries no status and no total column, so none is asserted here (Rule 1 clause 3).
     expect(headings).toEqual(HEADINGS);
-    // Every heading resolved through the pipe: the raw dotted keys never reach the screen.
     expect(host().textContent ?? '').not.toContain('label.heading.');
 
     const rows = renderedRows();
 
     expect(rows).toHaveLength(2);
 
-    // The payload's order is kept — the due charge first, the settled one second — and each cell is the server's own value.
-    expect(cellsOf(rows[0]).slice(0, 5)).toEqual([
+    expect(cellsOf(rows[0]).slice(0, 6)).toEqual([
       CHARGE_DUE.name,
       asDueDate(DUE_DATE) ?? '',
       asAmount(CHARGE_DUE.amount) ?? '',
       asAmount(CHARGE_DUE.amountPaid) ?? '',
+      asAmount(CHARGE_DUE.amountWaived) ?? '',
       asAmount(CHARGE_DUE.amountOutstanding) ?? '',
     ]);
-    expect(cellsOf(rows[1]).slice(0, 5)).toEqual([
+    expect(cellsOf(rows[1]).slice(0, 6)).toEqual([
       CHARGE_SETTLED.name,
       '',
       asAmount(CHARGE_SETTLED.amount) ?? '',
       asAmount(CHARGE_SETTLED.amountPaid) ?? '',
+      asAmount(CHARGE_SETTLED.amountWaived) ?? '',
       asAmount(CHARGE_SETTLED.amountOutstanding) ?? '',
     ]);
-    // The figures the table prints are the pipe's own output for the payload's numbers, thousands grouping included, rather than figures the component derived.
-    expect(cellsOf(rows[1])[2]).toBe('1,250.5');
+    expect(cellsOf(rows[1])[2]).toBe('$1,250.5');
+    // The charge's own currency symbol stands immediately before each figure, with no space between them, which is what the legacy charge table prints (`app/views/loans/viewloanaccountdetails.html:854-857`).
+    expect(cellsOf(rows[0]).slice(2, 6)).toEqual(['$25', '$0', '$0', '$25']);
     expect(cellsOf(rows[0])[1]).toBe('14 March 2026');
-    // The due charge's own name is shown verbatim: a charge's name is the server's, never translated.
     expect(cellsOf(rows[0])[0]).toBe(CHARGE_DUE.name);
+  });
+
+  /** The waived-write-off case: a charge written off at 25 carries that figure in its own column, so its 0 Paid and 0 Outstanding cannot read as a paid charge whose amount went nowhere. The column is legacy's own `label.heading.waived` treatment and no state word, badge, class or aria-label is added beside it (Rule 1 clause 3). */
+  it('renders a waived charge’s written-off amount in the Waived column beside a paid charge’s', () => {
+    mount([CHARGE_WAIVED, CHARGE_SETTLED]);
+
+    const [waived, paid] = renderedRows().map(cellsOf);
+
+    expect(waived.slice(0, 6)).toEqual([
+      CHARGE_WAIVED.name,
+      asDueDate(DUE_DATE) ?? '',
+      asAmount(CHARGE_WAIVED.amount) ?? '',
+      asAmount(CHARGE_WAIVED.amountPaid) ?? '',
+      asAmount(CHARGE_WAIVED.amountWaived) ?? '',
+      asAmount(CHARGE_WAIVED.amountOutstanding) ?? '',
+    ]);
+    expect(paid.slice(0, 6)).toEqual([
+      CHARGE_SETTLED.name,
+      '',
+      asAmount(CHARGE_SETTLED.amount) ?? '',
+      asAmount(CHARGE_SETTLED.amountPaid) ?? '',
+      asAmount(CHARGE_SETTLED.amountWaived) ?? '',
+      asAmount(CHARGE_SETTLED.amountOutstanding) ?? '',
+    ]);
+    expect([waived[3], waived[4], waived[5]]).toEqual(['$0', '$25', '$0']);
+    expect([paid[3], paid[4], paid[5]]).toEqual(['$1,250.5', '$0', '$0']);
+    // Nothing was invented to say so: no status word, badge or tooltip joins the three amounts (Rule 1 clause 3).
+    expect(host().querySelector('#loan-charges tbody .badge, #loan-charges tbody [title]')).toBeNull();
   });
 
   it('renders the explicit empty state and no error for a loan carrying no charges', () => {
@@ -307,9 +348,7 @@ describe('LoanChargesComponent', () => {
     // The shared explicit empty state is the whole body, and the sentence it carries is the legacy bundle's own "No Data" (AAP 0.7.4).
     expect(fixture.debugElement.queryAll(By.directive(EmptyStateComponent))).toHaveLength(1);
     expect(byId('loan-charges-empty')?.textContent?.trim()).toBe(TRANSLATIONS['label.nodata']);
-    // Nothing claims rows the payload never carried: no table at all.
     expect(host().querySelector('table')).toBeNull();
-    // An empty charge list is a state, not a failure: no alert region and no failure wording on screen.
     expect(host().querySelector('.alert')).toBeNull();
     expect(host().querySelector('.alert-danger')).toBeNull();
     expect((host().textContent ?? '').toLowerCase()).not.toContain('error');
@@ -324,12 +363,10 @@ describe('LoanChargesComponent', () => {
       const pay = byId(`loan-charge-pay-${CHARGE_DUE.id}`);
       const waive = byId(`loan-charge-waive-${CHARGE_DUE.id}`);
 
-      // The row is payable and unsettled on an active loan, so the section offers both links…
       expect(pay).not.toBeNull();
       expect(waive).not.toBeNull();
       expect(pay?.classList.contains('hidden')).toBe(false);
       expect(waive?.classList.contains('hidden')).toBe(false);
-      // …and the anchor names the loan it belongs to and the charge the row carries, so one row's action can never point at another loan or another charge.
       expect(pay?.getAttribute('href')).toBe(chargeUrl(loanId, 'pay', CHARGE_DUE.id));
       expect(waive?.getAttribute('href')).toBe(chargeUrl(loanId, 'waive', CHARGE_DUE.id));
       expect(pay?.textContent?.trim()).toBe(TRANSLATIONS['label.button.paycharge']);
@@ -398,13 +435,11 @@ describe('LoanChargesComponent', () => {
     expect(revealed?.style.display).not.toBe('none');
     expect(byId(`loan-charge-waive-${CHARGE_DUE.id}`)?.style.display).not.toBe('none');
 
-    // The permission gate and the row's own eligibility are two independent conditions on the same anchor: on the settled row the directive's inline gate is wide open while the eligibility rule still hides the link, which is what keeps the two reasons for hiding one apart.
     const settledWaive = byId(`loan-charge-waive-${CHARGE_SETTLED.id}`);
 
     expect(settledWaive?.style.display).toBe('');
     expect(settledWaive?.classList.contains('hidden')).toBe(true);
 
-    // Withdrawing it hides them again, still in place.
     permissions.grant([]);
     fixture.detectChanges();
 

@@ -13,11 +13,9 @@ export interface SessionEntrySummary {
   readonly userIdType: 'number' | 'string' | 'missing' | 'other';
   /** Whether the stored value carries an `authenticationKey` field. */
   readonly hasAuthenticationKey: boolean;
-  /** Whether that field holds a non-empty string — the form a usable key has. */
   readonly authenticationKeyIsNonEmptyString: boolean;
   /** Whether the stored value carries a `userPermissions` field. */
   readonly hasUserPermissions: boolean;
-  /** Whether that field holds an array, which is what the permission gate iterates. */
   readonly userPermissionsIsArray: boolean;
 }
 
@@ -25,14 +23,12 @@ export interface SessionEntrySummary {
 export interface LanguageOptionSummary {
   /** The language code the option submits — the code `selectLanguage()` takes. */
   readonly value: string;
-  /** The text the option shows, trimmed. */
   readonly label: string;
 }
 
 /** What the login screen's submit control currently offers: `'absent'` when the screen renders no submit control at all, `'hidden'` when it renders one that is not visible, `'disabled'` when it is visible but cannot be. */
 export type SubmitState = 'absent' | 'hidden' | 'disabled' | 'enabled';
 
-/** Root of the login screen: every other locator in this file is scoped to it. */
 const ROOT_SELECTOR = 'app-login';
 
 /** The language switcher. The screen renders one bare native `<select>` (the Angular-native replacement for the legacy plugin, AAP 0.10.5 item 2), so no wrapper component element is involved and this is the only `<select>`. */
@@ -46,30 +42,25 @@ const USERNAME_SELECTORS: readonly string[] = [
   'input[type="text"]:not([type="search"])',
 ];
 
-/** The password control: its input type is not translated, so the control name is only a fallback. */
 const PASSWORD_SELECTORS: readonly string[] = [
   'input[type="password"]',
   'input[formcontrolname="password"]',
   'input[name="password"]',
 ];
 
-/** The form's single primary submit, in the order it is tried: the Bootstrap primary button the screen renders full width, then the id that button carries, then the type-based fallback. */
 const SUBMIT_SELECTORS: readonly string[] = [
   '.btn.btn-primary',
   'button#login-button',
   'button[type="submit"]',
 ];
 
-/** The form's own error banner, rendered above the form only while a failure is being shown. */
 const FORM_ERROR_SELECTOR = '.alert.alert-danger';
 
 /** The signed-in client list: the landing screen a successful login reaches (AAP 0.10.5 item 3). */
 const CLIENT_LIST_SELECTOR = 'app-client-list';
 
-/** The hash a successful login settles on. */
 const LANDING_HASH = '#/clients';
 
-/** The user menu's toggle, in the order it is tried: its own id, then Bootstrap's toggle class, then the dropdown's direct child anchor. */
 const USER_MENU_TOGGLE_SELECTORS: readonly string[] = [
   '#user-dropdown',
   '.dropdown-toggle',
@@ -79,16 +70,13 @@ const USER_MENU_TOGGLE_SELECTORS: readonly string[] = [
 /** The list the user menu reveals. It is in the DOM while closed and hidden by the `.open` class. */
 const USER_MENU_LIST_SELECTOR = 'app-navbar .dropdown-menu';
 
-/** The menu entry that ends the session, matched on its translated label. */
 const SIGN_OUT_LABEL_PATTERN = /sign\s*out|log\s*out/i;
 
-/** How long the login form is given to appear on a fresh navigation. */
 const LOGIN_FORM_TIMEOUT_MS = 10_000;
 
 /** Ceiling for the post-login landing. The page itself is small; the wait covers `POST /authentication`, the stored session, the redirect and the client list's own `GET /clients`. */
 const LANDING_TIMEOUT_MS = 30_000;
 
-/** Ceiling for the navbar user menu to open and reveal its entry. */
 const USER_MENU_TIMEOUT_MS = 5_000;
 
 /** Runs inside the page: every `<option>` of the language switcher as `{ value, label }`, both trimmed, in document order. */
@@ -251,12 +239,10 @@ export class LoginPage {
     await this.root().waitFor({ state: 'visible', timeout: LOGIN_FORM_TIMEOUT_MS });
   }
 
-  /** The login screen's root element; every other locator on this class is scoped to it. */
   private root(): Locator {
     return this.page.locator(ROOT_SELECTOR).first();
   }
 
-  /** The client list, the landing screen's root element. */
   private clientList(): Locator {
     return this.page.locator(CLIENT_LIST_SELECTOR).first();
   }
@@ -271,7 +257,6 @@ export class LoginPage {
     return this.root().locator(LANGUAGE_SELECT_SELECTOR).first();
   }
 
-  /** The user menu's sign-out entry: the menu's own anchor whose label reads "Sign Out" in the active language, or the menu's last entry when the label is one this file does not recognise — the entry stays addressable either. */
   private signOutEntry(): Locator {
     const menu = this.page.locator(USER_MENU_LIST_SELECTOR).first();
     const labelled = menu.locator('a').filter({ hasText: SIGN_OUT_LABEL_PATTERN });
@@ -292,7 +277,6 @@ export class LoginPage {
     return null;
   }
 
-  /** {@link findControl}, or a throw naming the control and every selector that was tried — the screen renders the control, so a miss is a real failure rather than a state to report. */
   private async resolveControl(
     selectors: readonly string[],
     description: string,

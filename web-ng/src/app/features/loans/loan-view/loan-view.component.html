@@ -70,7 +70,7 @@
   `app/global-translations/locale-*.json` (Rule 1 clause 6; AAP 0.10.2), so no caption can reach the
   user as a humanised key.
 
-  The tabs are the application's one tab component, `app-tab-strip` (AAP 0.2.3 row `TabStrip`). There
+  The tabs are the application's one tab component, the shared `app-tab-strip` (AAP 0.2.3 row `TabStrip`). There
   are exactly three — the repayment schedule, the transactions and the charges, the three sections
   AAP 0.7.4's `#/viewloanaccount/:id` row names after the summary — each rendered by the committed
   read-only component that owns its table: `app-loan-schedule`, `app-loan-transactions` and
@@ -122,19 +122,13 @@
   <div class="row">
     <div class="col-md-12">
       <div appPanelCard id="loan-view">
-        <div class="panel-body">
+        <div class="panel-body" [attr.aria-busy]="loading() ? 'true' : null">
           @if (loading()) {
           } @else if (notFound()) {
-            <!-- The same key and wording `features/not-found/not-found.component.html` renders for the
-                 unknown-path screen, so the two surfaces that mean "no such record" cannot drift. -->
-            <p class="text-center text-muted" id="loan-view-not-found">{{ 'error.msg.resource.not.found' | translate }}</p>
+            <!-- The one not-found presentation every record screen renders, so the surfaces that mean "no such record" cannot drift and no screen words it differently (AAP 0.7.4). The id stays on the host because the end-to-end page objects and this component's spec address `#loan-view-not-found`. -->
+            <app-record-not-found id="loan-view-not-found" />
           } @else {
-            <!--
-              The one failure region this screen renders itself: a 4xx other than 404, in Fineract's
-              own words. It is deliberately un-piped, because workflow W7 compares the message a
-              screen shows character for character with the server's `defaultUserMessage`
-              (AAP 0.4.4 decision 6; Rule 1 clause 3).
-            -->
+            <!-- The one failure region this screen renders itself: a 4xx other than 404, in Fineract's own words. It is deliberately un-piped, because workflow W7 compares the message a screen shows character for character with the server's `defaultUserMessage` (AAP 0.4.4 decision 6; Rule 1 clause 3). -->
             @if (clientError(); as failure) {
               <div class="alert alert-danger" role="alert" id="loan-view-error">{{ failure.message }}</div>
             }
@@ -146,20 +140,17 @@
                   <app-status-swatch [status]="statusKey()" variant="dot" />{{ ' ' }}<strong>{{ record.loanProductName ?? '' }}</strong>
                 </h3>
 
+                <!-- The record's metadata line. Its principal is printed through the one money formatter with the loan's own currency, which is the symbol the legacy record puts in front of this loan's balance (`app/views/loans/viewloanaccountdetails.html:125`), and the figure keeps the `number` filter's digits (Rule 1 clause 3). -->
                 <div class="small text-small">
                   <span>{{ 'label.heading.accnum' | translate }}:</span>{{ ' ' }}<span>{{ record.accountNo }}</span>{{ ' ' }}<span aria-hidden="true">|</span>{{ ' ' }}
                   <span>{{ 'label.heading.clientname' | translate }}:</span>{{ ' ' }}<span>{{ record.clientName ?? '' }}</span>{{ ' ' }}<span aria-hidden="true">|</span>{{ ' ' }}
-                  <span>{{ 'label.heading.principal' | translate }}:</span>{{ ' ' }}<span>{{ record.principal | number }}</span>
+                  <span>{{ 'label.heading.principal' | translate }}:</span>{{ ' ' }}<span>{{ record.principal | money: record.currency }}</span>
                 </div>
               </div>
 
               <hr />
 
-              <!--
-                The joined primary-button group: right-aligned, one link per step the loan's own
-                state allows, each gated on the Fineract code its LOAN_ACTIONS row carries. A state
-                the legacy record offers no action in renders no group at all.
-              -->
+              <!-- The joined primary-button group: right-aligned, one link per step the loan's own state allows, each gated on the Fineract code its LOAN_ACTIONS row carries. A state the legacy record offers no action in renders no group at all. -->
               @if (actions().length > 0) {
                 <div class="pull-right btn-group" id="loan-actions">
                   @for (action of actions(); track action.id) {
@@ -178,7 +169,14 @@
               <!--
                 The summary figures, in a half-width column so a label and its value stay a readable
                 distance apart. Each row is label-then-value; an omitted figure leaves its value
-                column empty rather than printing a zero the payload never carried.
+                column empty rather than printing a zero the payload never carried. Every figure is
+                rendered through the one money formatter with the loan's own currency, which is where
+                the legacy record states the currency for this loan
+                (`app/views/loans/viewloanaccountdetails.html:125`), at the `number` filter's digits
+                (Rule 1 clause 3). Legacy prints that balance heading as `$ 5,200` and its charge
+                amounts as `$25` (`:854`), so one shared formatter cannot reproduce both spacings: it
+                keeps the charge table's no-space form here, and this comment is the record of the
+                one-space heading it departs from.
               -->
               <div class="row">
                 <div class="col-md-6" id="loan-summary">
@@ -187,7 +185,7 @@
                       <div class="col-md-6"><span class="value-key">{{ row.labelKey | translate }}</span></div>
                       <div class="col-md-6">
                         @if (row.value !== null) {
-                          {{ row.value | number }}
+                          {{ row.value | money: record.currency }}
                         }
                       </div>
                     </div>
@@ -199,19 +197,24 @@
                 The three tabs and the section the active one shows. `app-tab-strip` reports the
                 chosen id and the component decides which section that id selects, so an id this
                 record does not serve cannot leave the record showing nothing.
+
+                The section on screen is the panel of the active tab: `role="tabpanel"` with its
+                `aria-labelledby` naming that tab's element through `tabDomId`, the same id the strip
+                put on it, so assistive technology reads the section as the active tab's panel rather
+                than as loose content beside the strip (AAP 0.2.3 row `TabStrip`).
               -->
               <app-tab-strip [tabs]="tabs()" [activeId]="activeTab()" (tabChange)="activateTab($event)" />
 
               @if (showSchedule()) {
-                <div id="loan-schedule-section">
+                <div id="loan-schedule-section" role="tabpanel" [attr.aria-labelledby]="tabDomId(activeTab())">
                   <app-loan-schedule [schedule]="record.repaymentSchedule ?? null" />
                 </div>
               } @else if (showTransactions()) {
-                <div id="loan-transactions-section">
+                <div id="loan-transactions-section" role="tabpanel" [attr.aria-labelledby]="tabDomId(activeTab())">
                   <app-loan-transactions [transactions]="record.transactions ?? []" />
                 </div>
               } @else if (showCharges()) {
-                <div id="loan-charges-section">
+                <div id="loan-charges-section" role="tabpanel" [attr.aria-labelledby]="tabDomId(activeTab())">
                   <app-loan-charges
                     [charges]="charges() ?? []"
                     [loanId]="record.id"

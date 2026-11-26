@@ -12,13 +12,15 @@
         <th scope="col">{{ 'label.heading.fromdate' | translate }}</th>
         <th scope="col">{{ 'label.heading.date' | translate }}</th>
         <th scope="col">{{ 'label.heading.principal' | translate }}</th>
+        <!-- The principal balance the loan still carries, which the legacy schedule heads label.heading.balanceofloan and renders from the period's principalLoanBalanceOutstanding, right after the principal due and before the interest. -->
+        <th scope="col">{{ 'label.heading.balanceofloan' | translate }}</th>
         <th scope="col">{{ 'label.heading.interest' | translate }}</th>
         <th scope="col">{{ 'label.heading.fees' | translate }}</th>
         <th scope="col">{{ 'label.heading.total' | translate }}</th>
         <th scope="col">{{ 'label.heading.outstanding' | translate }}</th>
       </tr>
     </thead>
-    <!-- The server's own periods in the server's order, at the record's one date pattern (the component's `displayFormat`) and through the default `number` pipe, which is what the record page's schedule table and legacy's own `number` filter render. -->
+    <!-- The server's own periods in the server's order, at the record's one date pattern (the component's `displayFormat`) and through the one shared money formatter, which is what the record page's schedule table uses too. The six money cells print no currency symbol, exactly as the legacy preview does (`app/views/loans/previewloanrepaymentschedule.html:52-58`) (Rule 1 clause 3). -->
     <tbody>
       <!-- Keyed by position rather than by period number: the server's order is kept as sent, never re-sorted, filtered or paginated, and the leading disbursement row carries no period number to key on — two such rows would raise NG0955. -->
       @for (row of rows(); track $index) {
@@ -26,11 +28,12 @@
           <td>{{ row.period }}</td>
           <td>{{ row.fromDate | date: displayFormat }}</td>
           <td>{{ row.dueDate | date: displayFormat }}</td>
-          <td>{{ row.principalDue | number }}</td>
-          <td>{{ row.interestDue | number }}</td>
-          <td>{{ row.feeChargesDue | number }}</td>
-          <td>{{ row.totalDueForPeriod | number }}</td>
-          <td>{{ row.totalOutstandingForPeriod | number }}</td>
+          <td>{{ row.principalDue | money }}</td>
+          <td>{{ row.principalLoanBalanceOutstanding | money }}</td>
+          <td>{{ row.interestDue | money }}</td>
+          <td>{{ row.feeChargesDue | money }}</td>
+          <td>{{ row.totalDueForPeriod | money }}</td>
+          <td>{{ row.totalOutstandingForPeriod | money }}</td>
         </tr>
       }
     </tbody>

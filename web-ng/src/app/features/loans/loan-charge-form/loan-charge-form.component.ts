@@ -15,6 +15,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiError, screenFailure, toDisplayableFailure } from '../../../core/http/api-error';
 import { DateFieldComponent } from '../../../shared/date-field/date-field.component';
 import { PanelCardComponent } from '../../../shared/panel-card/panel-card.component';
+import { RecordNotFoundComponent } from '../../../shared/record-not-found/record-not-found.component';
 import {
   SelectFieldComponent,
   type SelectValue,
@@ -42,6 +43,7 @@ type LoanChargeFormMode = 'add' | 'pay' | 'waive' | 'notfound';
     TranslatePipe,
     DateFieldComponent,
     PanelCardComponent,
+    RecordNotFoundComponent,
     SelectFieldComponent,
   ],
   templateUrl: './loan-charge-form.component.html',
@@ -254,7 +256,6 @@ export class LoanChargeFormComponent {
       return;
     }
 
-    // A charge whose amount the server computes arrives without one; the field then stays as the user left it and posts what they typed rather than a value invented here.
     if (option.amount !== undefined) {
       this.amountControl.setValue(option.amount);
     }

@@ -23,7 +23,7 @@ import type {
 import { ClientService } from '../client.service';
 import { ClientViewComponent } from './client-view.component';
 import { RecordHeaderComponent } from './record-header/record-header.component';
-import { TabStripComponent } from './tab-strip/tab-strip.component';
+import { TabStripComponent, tabDomId } from '../../../shared/tab-strip/tab-strip.component';
 
 /** Behaviour of the client record screen — `#/viewclient/:id`, the last step of the "Sign in and open a client record" flow and the entry point of workflow W3's record read (AAP 0.7.4 "Client view"; AAP 0.8.2 feature route (Rule 1 clause 8, Rule 1 clause 5, AAP 0.1.1, AAP 0.7.1). */
 
@@ -71,11 +71,50 @@ const SECOND_CLIENT: Client = {
   timeline: { submittedOnDate: '2026-11-24', activatedOnDate: [2026, 11, 24] },
 };
 
-/** The same client once its record has been closed: the one state on which the record offers `Reactivate`, because that is the state legacy's own action list carries the command for (`app/scripts/models/clientStatus.js` (AAP 0.7.4). */
+/** The same client once its record has been closed: the one state whose action list is `Reactivate` alone, because that is the only entry legacy's `Closed` state carries for a command this build implements (`app/scripts/models/clientStatus.js`; AAP 0.7.4). */
 const CLOSED_CLIENT: Client = {
   ...CLIENT,
   status: { id: 600, code: 'clientStatusType.closed', value: 'Closed' },
 };
+
+/** The same client while its application is still pending: the state that offers the lifecycle commands, and the closest the action row comes to the design's full set. A pending client has no activation date, so the record carries none. */
+const PENDING_CLIENT: Client = {
+  ...CLIENT,
+  status: { id: 100, code: 'clientStatusType.pending', value: 'Pending' },
+  activationDate: undefined,
+};
+
+/** The same client after its application was rejected: legacy answers that state with `undoReject` alone, a command this build does not implement. */
+const REJECTED_CLIENT: Client = {
+  ...CLIENT,
+  status: { id: 200, code: 'clientStatusType.rejected', value: 'Rejected' },
+};
+
+/** The same client after its application was withdrawn: legacy answers that state with `undoWithdrawn`, which this build does not implement either. */
+const WITHDRAWN_CLIENT: Client = {
+  ...CLIENT,
+  status: { id: 700, code: 'clientStatusType.withdraw', value: 'Withdrawn' },
+};
+
+/** The same client while a transfer is in progress: legacy's list for that state holds the transfer commands alone, none of which is in scope (AAP 0.10.5 item 5). */
+const TRANSFERRING_CLIENT: Client = {
+  ...CLIENT,
+  status: { id: 601, code: 'clientStatusType.transfer.in.progress', value: 'Transfer in progress' },
+};
+
+/** The same client with the neutral code the enum declares for a record that is in none of the states above: legacy's list carries no entry for it. */
+const INVALID_CLIENT: Client = {
+  ...CLIENT,
+  status: { id: 0, code: 'clientStatusType.invalid', value: 'Invalid' },
+};
+
+/** Every state whose legacy action list holds only commands this build does not implement, named as `label.button.*`-free prose for the parameterised case below: `undoReject`, `undoWithdrawn` and the transfer commands (AAP 0.10.5 item 5; Rule 1 clause 3). */
+const NO_ACTION_STATES: readonly (readonly [string, Client])[] = [
+  ['rejected', REJECTED_CLIENT],
+  ['withdrawn', WITHDRAWN_CLIENT],
+  ['transferring', TRANSFERRING_CLIENT],
+  ['invalid', INVALID_CLIENT],
+];
 
 /** The account summary the accounts tab reads: a client holding none of either family. */
 const NO_ACCOUNTS: ClientAccountSummary = {};
@@ -168,7 +207,6 @@ describe('ClientViewComponent', () => {
 
     const harness = await RouterTestingHarness.create(url);
 
-    // The read answers synchronously, but the tabs' own effects and the translate-driven labels settle a microtask later, so the first paint is taken after the fixture is stable.
     harness.detectChanges();
     await harness.fixture.whenStable();
     harness.detectChanges();
@@ -208,9 +246,16 @@ describe('ClientViewComponent', () => {
     return Array.from(host.querySelectorAll<HTMLAnchorElement>('.btn-group a'));
   }
 
-  /** The href of every action anchor, in render order. */
+  /** The href of every action anchor, in render order: the visible row's entries first, then the `More` menu's. */
   function actionHrefs(host: HTMLElement): (string | null)[] {
     return actionLinks(host).map((link) => link.getAttribute('href'));
+  }
+
+  /** The href of every anchor of the visible row alone, without the `More` menu's entries, so a case can prove how a state splits its descriptors (AAP 0.7.4). */
+  function rowHrefs(host: HTMLElement): (string | null)[] {
+    return Array.from(host.querySelectorAll<HTMLAnchorElement>('div.btn-group > a.btn.btn-primary')).map(
+      (link) => link.getAttribute('href'),
+    );
   }
 
   /** The lifecycle command a route names — its last path segment — so an assertion can ask which command a link carries without holding a URL-shaped literal of its own for the endpoint gate to read as a bare endpoint path. */
@@ -218,11 +263,15 @@ describe('ClientViewComponent', () => {
     return route.split('/').at(-1) ?? '';
   }
 
-  /** The action hrefs every record shows, for the client id it is showing: the three entries of the joined row and the three lifecycle commands of its `More` menu, in render order. */
-  function expectedHrefs(id: string): string[] {
+  /** The action hrefs an **active** record shows for the client id it is showing: the three entries of the joined row, and no `More` menu at all, because legacy's `Active` list carries no lifecycle command in scope (`app/scripts/models/clientStatus.js`; AAP 0.7.4). */
+  function expectedActiveHrefs(id: string): string[] {
+    return [`/editclient/${id}`, `/newclientloanaccount/${id}`, `/client/${id}/close`];
+  }
+
+  /** The action hrefs a **pending** record shows: `Edit` and `Close` in the row, then `Activate`, `Reject` and `Withdraw` in the `More` menu, in that state's own order. */
+  function expectedPendingHrefs(id: string): string[] {
     return [
       `/editclient/${id}`,
-      `/newclientloanaccount/${id}`,
       `/client/${id}/close`,
       `/client/${id}/activate`,
       `/client/${id}/reject`,
@@ -230,25 +279,33 @@ describe('ClientViewComponent', () => {
     ];
   }
 
-  /** The hrefs a **closed** record adds to that set: `Reactivate`, last in the menu, because reactivation is the one command whose availability follows the record's state (AAP 0.7.4). */
+  /** The one href a **closed** record shows: `Reactivate` in the `More` menu, because reactivation is the command that state answers. */
   function expectedClosedHrefs(id: string): string[] {
-    return [...expectedHrefs(id), `/client/${id}/reactivate`];
+    return [`/client/${id}/reactivate`];
   }
 
-  /** The legacy label keys the record's descriptors carry, in the order the action group renders them: the three entries of the joined row, then the three lifecycle commands of the `More` menu (`label.button.*` in (AAP 0.7.4). */
-  const ACTION_LABEL_KEYS: readonly string[] = [
+  /** The legacy label keys an **active** record's descriptors carry, in render order (`label.button.*` in (AAP 0.7.4). */
+  const ACTIVE_LABEL_KEYS: readonly string[] = [
     'label.button.edit',
     'label.button.newloan',
+    'label.button.close',
+  ];
+
+  /** The permission each active-record descriptor is gated on — legacy's own code per action (`app/scripts/models/clientStatus.js`) — so the plan's gate cannot be widened or swapped silently (AAP 0.1.1; AAP 0.7.4). */
+  const ACTIVE_PERMISSIONS: readonly string[] = ['UPDATE_CLIENT', 'CREATE_LOAN', 'CLOSE_CLIENT'];
+
+  /** The legacy label keys a **pending** record's descriptors carry: the row's two entries, then the menu's three lifecycle commands. */
+  const PENDING_LABEL_KEYS: readonly string[] = [
+    'label.button.edit',
     'label.button.close',
     'label.button.activate',
     'label.button.reject',
     'label.button.withdraw',
   ];
 
-  /** The permission each of those descriptors is gated on — legacy's own code per action, read from `app/scripts/models/clientStatus.js` — so the plan's gate cannot be widened or swapped silently (AAP 0.1.1; AAP 0.7.4). */
-  const ACTION_PERMISSIONS: readonly string[] = [
+  /** The permission each pending-record descriptor is gated on, in the same order. */
+  const PENDING_PERMISSIONS: readonly string[] = [
     'UPDATE_CLIENT',
-    'CREATE_LOAN',
     'CLOSE_CLIENT',
     'ACTIVATE_CLIENT',
     'REJECT_CLIENT',
@@ -389,7 +446,6 @@ describe('ClientViewComponent', () => {
     expect(clients.get).toHaveBeenCalledTimes(1);
     expect(clients.get).toHaveBeenCalledWith(CLIENT_ID);
 
-    // The header receives the record the read returned rather than a copy this screen assembled, so the blocks below it cannot disagree about which client is on screen.
     expect(recordHeaderOf(harness).client()).toEqual(CLIENT);
     expect(host.querySelector('app-record-header h3 strong')?.textContent?.trim()).toBe(
       CLIENT.displayName,
@@ -415,7 +471,6 @@ describe('ClientViewComponent', () => {
       ['Activation Date', '21 November 2026'],
     ]);
 
-    // The performance-history rows are painted with their labels and no invented figure.
     expect(historyRows(host)).toEqual([
       ['No. of Loan Cycle', ''],
       ['Last Loan Amount', ''],
@@ -435,10 +490,14 @@ describe('ClientViewComponent', () => {
     expect(host.querySelector('app-client-identifiers')).toBeNull();
     expect(tabStripOf(harness).activeId()).toBe('general');
 
-    // Only the visible tab loads: its accounts read runs and the identifiers read does not.
     expect(clients.accounts).toHaveBeenCalledTimes(1);
     expect(clients.accounts).toHaveBeenCalledWith(CLIENT_ID);
     expect(clients.identifiers).not.toHaveBeenCalled();
+
+    // The tab body is the panel of the tab on screen and names that tab's element through the id the strip mints, so the body is read as `General`'s panel (AAP 0.2.3 row `TabStrip`).
+    expect(host.querySelector('[role="tabpanel"]')?.getAttribute('aria-labelledby')).toBe(
+      tabDomId('general'),
+    );
   });
 
   it('swaps the body to the Identities section when that tab is chosen', async () => {
@@ -455,9 +514,13 @@ describe('ClientViewComponent', () => {
     expect(tabStripOf(harness).activeId()).toBe('identities');
     expect(host.querySelector('app-record-header')).not.toBeNull();
 
+    // The panel follows the selection: the body is now labelled by the tab that is selected, not by the one it replaced (AAP 0.2.3 row `TabStrip`).
+    expect(host.querySelector('[role="tabpanel"]')?.getAttribute('aria-labelledby')).toBe(
+      tabDomId('identities'),
+    );
+
     expect(clients.identifiers).toHaveBeenCalledTimes(1);
     expect(clients.identifiers).toHaveBeenCalledWith(CLIENT_ID);
-    // Switching tabs re-reads nothing the record already holds.
     expect(clients.get).toHaveBeenCalledTimes(1);
   });
 
@@ -471,7 +534,6 @@ describe('ClientViewComponent', () => {
     expect(renderedText(host)).toContain('Not Available');
     expect(renderedText(host)).toContain('The requested resource is not available.');
 
-    // Nothing of the record is painted: no header, no strip, no action row, no profile card, no card.
     expect(host.querySelector('app-record-header')).toBeNull();
     expect(host.querySelector('app-tab-strip')).toBeNull();
     expect(host.querySelector('app-action-button-group')).toBeNull();
@@ -481,7 +543,6 @@ describe('ClientViewComponent', () => {
     // Fineract's own 404 text is not painted beside the not-found copy: `notFound` owns that state and `clientError` answers `null` for a 404, so the message appears once, in the wording the bundles carry (AAP 0.7.4).
     expect(renderedText(host)).not.toContain(NOT_FOUND_MESSAGE);
 
-    // The shell the record sits in stays mounted, so navigation beside it keeps working.
     expect(host.querySelector('.container-fluid')).not.toBeNull();
   });
 
@@ -496,6 +557,35 @@ describe('ClientViewComponent', () => {
     expect(host.querySelector('.panel')).toBeNull();
   });
 
+  it('paints the not-found message in place of the record for an id that is not a client id', async () => {
+    const harness = await render('/viewclient/abc');
+    const host = hostOf(harness);
+
+    // A route whose id is not a Fineract identifier names no client, so no read is issued for it: the refused value never reaches a path segment, and neither tab section asks for an id the record never received (AAP 0.7.4; Rule 1 clause 2).
+    expect(clients.get).not.toHaveBeenCalled();
+    expect(clients.accounts).not.toHaveBeenCalled();
+    expect(clients.identifiers).not.toHaveBeenCalled();
+
+    // The route still says what happened: the not-found copy the empty id and a 404 paint, in place of the record, rather than the blank content area a refused identifier used to leave inside a working shell (AAP 0.7.4; AAP 0.14.2).
+    expect(host.querySelectorAll('.alert.alert-danger')).toHaveLength(1);
+    expect(renderedText(host)).toContain('Not Available');
+    expect(renderedText(host)).toContain('The requested resource is not available.');
+
+    expect(host.querySelector('app-record-header')).toBeNull();
+    expect(host.querySelector('app-tab-strip')).toBeNull();
+    expect(host.querySelector('app-action-button-group')).toBeNull();
+    expect(host.querySelector('app-profile-card')).toBeNull();
+    expect(host.querySelector('.panel')).toBeNull();
+
+    // No read was started, so nothing is outstanding and nothing was refused: the screen never claims to be loading and never raises a notification of its own (AAP 0.4.2).
+    expect(componentOf(harness).loading()).toBe(false);
+    expect(notifications.show).not.toHaveBeenCalled();
+
+    expect(host.querySelector('.container-fluid')).not.toBeNull();
+    expect(componentOf(harness)).toBeInstanceOf(ClientViewComponent);
+    expect(componentOf(harness).notFound()).toBe(true);
+  });
+
   it('shows a 4xx message verbatim and leaves the screen usable', async () => {
     const refusal = 'The client record is not visible to this user.';
     clients.get.mockReturnValue(throwError(() => failure(403, refusal)));
@@ -508,7 +598,6 @@ describe('ClientViewComponent', () => {
     expect(alerts).toHaveLength(1);
     expect((alerts[0].textContent ?? '').trim()).toBe(refusal);
 
-    // A refused read returns no record, so no record is painted; the 404 sentence stays out of a failure that is not a missing record, and the screen itself did not throw.
     expect(host.querySelector('app-record-header')).toBeNull();
     expect(renderedText(host)).not.toContain('Not Available');
     expect(host.querySelector('.container-fluid')).not.toBeNull();
@@ -529,65 +618,107 @@ describe('ClientViewComponent', () => {
     expect(renderedText(host)).not.toContain(serverFailure);
     expect(renderedText(host)).not.toContain('Not Available');
 
-    // Nothing is claimed against a record that never arrived, and the screen stays mounted so the shell around it keeps working.
     expect(host.querySelector('app-record-header')).toBeNull();
     expect(host.querySelector('app-profile-card')).toBeNull();
     expect(host.querySelector('.container-fluid')).not.toBeNull();
     expect(componentOf(harness)).toBeInstanceOf(ClientViewComponent);
   });
 
-  it('describes and links every in-scope action on its own route', async () => {
+  it('describes and links every action an active record offers, and renders no More menu', async () => {
     const harness = await render(`/viewclient/${CLIENT_ID}`);
     const host = hostOf(harness);
 
     // The descriptors the record computes: the legacy label keys, the permission each is gated on and the route each leads to, in the order the design's joined row paints them (AAP 0.7.4; AAP 0.2.3 row `ActionButtonGroup`).
     const descriptors = componentOf(harness).actionButtons();
 
-    expect(descriptors.map((action) => action.label)).toEqual(ACTION_LABEL_KEYS);
-    expect(descriptors.map((action) => action.permission)).toEqual(ACTION_PERMISSIONS);
-    expect(descriptors.map((action) => action.routerLink)).toEqual(expectedHrefs(CLIENT_ID));
+    expect(descriptors.map((action) => action.label)).toEqual(ACTIVE_LABEL_KEYS);
+    expect(descriptors.map((action) => action.permission)).toEqual(ACTIVE_PERMISSIONS);
+    expect(descriptors.map((action) => action.routerLink)).toEqual(expectedActiveHrefs(CLIENT_ID));
 
-    // Every one of them rendered, so the template has not drifted from the descriptors it was handed.
-    expect(actionHrefs(host)).toEqual(expectedHrefs(CLIENT_ID));
+    expect(actionHrefs(host)).toEqual(expectedActiveHrefs(CLIENT_ID));
 
     // And the route each anchor actually carries, read through its `RouterLink` directive: that is what the router would navigate to, whichever way the href is spelled.
-    expect(renderedRoutes(harness)).toEqual(expectedHrefs(CLIENT_ID));
+    expect(renderedRoutes(harness)).toEqual(expectedActiveHrefs(CLIENT_ID));
+
+    // An active client's own state answers no menu command, so the row is the whole group and no trigger opens an empty list (Rule 1 clause 3).
+    expect(host.querySelector('.dropdown-toggle')).toBeNull();
+    expect(host.querySelector('.dropdown-menu')).toBeNull();
   });
 
-  it('offers Reactivate on a closed record and on no other', async () => {
+  it('offers a pending record the row legacy gives it plus the lifecycle commands in the More menu', async () => {
+    clients.get.mockReturnValue(of(PENDING_CLIENT));
+
+    const harness = await render(`/viewclient/${CLIENT_ID}`);
+    const host = hostOf(harness);
+    const descriptors = componentOf(harness).actionButtons();
+
+    expect(descriptors.map((action) => action.label)).toEqual(PENDING_LABEL_KEYS);
+    expect(descriptors.map((action) => action.permission)).toEqual(PENDING_PERMISSIONS);
+    expect(descriptors.map((action) => action.routerLink)).toEqual(expectedPendingHrefs(CLIENT_ID));
+
+    // The split is legacy's own: `Edit` and `Close` in the visible row, `Activate`, `Reject` and `Withdraw` in the menu, in that state's order (AAP 0.7.4).
+    expect(rowHrefs(host)).toEqual([`/editclient/${CLIENT_ID}`, `/client/${CLIENT_ID}/close`]);
+    expect(actionHrefs(host)).toEqual(expectedPendingHrefs(CLIENT_ID));
+    expect(renderedRoutes(harness)).toEqual(expectedPendingHrefs(CLIENT_ID));
+
+    // Neither a loan application nor a reactivation belongs to a pending client: legacy's `Pending` list holds neither (Rule 1 clause 3).
+    expect(host.querySelector(`a[href="/newclientloanaccount/${CLIENT_ID}"]`)).toBeNull();
+    expect(host.querySelector(`a[href="/client/${CLIENT_ID}/reactivate"]`)).toBeNull();
+  });
+
+  it('offers Reactivate on a closed record alone, in the menu and with no row entry', async () => {
     const active = await render(`/viewclient/${CLIENT_ID}`);
 
-    // An active client: reactivation would be refused, so no descriptor and no anchor names it (AAP 0.7.4 "plus `Reactivate` for the states that allow it").
-    const activeRoutes = componentOf(active)
-      .actionButtons()
-      .map((action) => action.routerLink);
-
-    expect(activeRoutes.filter((route) => commandOf(route) === 'reactivate')).toHaveLength(0);
-    expect(actionHrefs(hostOf(active))).toEqual(expectedHrefs(CLIENT_ID));
+    // An active client's state answers reactivation no more than it answers the other lifecycle commands, so no descriptor and no anchor names one (AAP 0.7.4 "plus `Reactivate` for the states that allow it").
+    expect(
+      componentOf(active)
+        .actionButtons()
+        .filter((action) => commandOf(action.routerLink) === 'reactivate'),
+    ).toHaveLength(0);
+    expect(actionHrefs(hostOf(active))).toEqual(expectedActiveHrefs(CLIENT_ID));
 
     clients.get.mockReturnValue(of(CLOSED_CLIENT));
 
     const closed = await render(`/viewclient/${CLIENT_ID}`);
-    const closedRoutes = componentOf(closed)
-      .actionButtons()
-      .map((action) => action.routerLink);
+    const closedHost = hostOf(closed);
+    const closedDescriptors = componentOf(closed).actionButtons();
 
-    // Exactly one `Reactivate`, last in the menu, with every other entry unchanged.
-    expect(closedRoutes.filter((route) => commandOf(route) === 'reactivate')).toEqual([
-      `/client/${CLIENT_ID}/reactivate`,
-    ]);
-    expect(closedRoutes).toEqual(expectedClosedHrefs(CLIENT_ID));
-    expect(actionHrefs(hostOf(closed))).toEqual(expectedClosedHrefs(CLIENT_ID));
+    // `Reactivate` is the whole list, and it belongs to the menu, so a closed record's row carries nothing (Rule 1 clause 3).
+    expect(closedDescriptors.map((action) => action.routerLink)).toEqual(expectedClosedHrefs(CLIENT_ID));
+    expect(closedDescriptors.map((action) => action.permission)).toEqual(['REACTIVATE_CLIENT']);
+    expect(closedDescriptors.every((action) => action.menu === true)).toBe(true);
+    expect(rowHrefs(closedHost)).toHaveLength(0);
+    expect(actionHrefs(closedHost)).toEqual(expectedClosedHrefs(CLIENT_ID));
   });
+
+  it.each(NO_ACTION_STATES)(
+    'offers no action to a %s record, because legacy answers that state with a command this build does not implement',
+    async (_state: string, record: Client) => {
+      clients.get.mockReturnValue(of(record));
+
+      const harness = await render(`/viewclient/${CLIENT_ID}`);
+      const host = hostOf(harness);
+
+      // No descriptor, so no entry at all — not even a gated one — and no trigger opening an empty menu (Rule 1 clause 3). A rejected or withdrawn record is deliberately among them: Fineract answers those states with `undoReject` and `undoWithdrawn` alone, so the `Reactivate` a closed record offers would be refused there (AAP 0.7.4; AAP 0.2.3).
+      expect(componentOf(harness).actionButtons()).toEqual([]);
+      expect(actionLinks(host)).toHaveLength(0);
+      expect(host.querySelector('.dropdown-toggle')).toBeNull();
+
+      // The record itself still renders: the state removes the actions, never the screen (AAP 0.7.4).
+      expect(host.querySelector('app-record-header')).not.toBeNull();
+      expect(host.querySelector('app-tab-strip')).not.toBeNull();
+    },
+  );
 
   it('hides every action the permission list does not allow', async () => {
     heldCodes = [];
+    clients.get.mockReturnValue(of(PENDING_CLIENT));
 
     const host = hostOf(await render(`/viewclient/${CLIENT_ID}`));
     const links = actionLinks(host);
 
-    // The legacy gate hides rather than removes: every anchor is still in the document, carrying the inline `display: none` `HasPermissionDirective` writes before its first verdict (AAP 0.3.4 claim 12; Rule 1 clause 3).
-    expect(links).toHaveLength(6);
+    // The legacy gate hides rather than removes: every anchor a pending record's descriptors name is still in the document, carrying the inline `display: none` `HasPermissionDirective` writes before its first verdict (AAP 0.3.4 claim 12; Rule 1 clause 3).
+    expect(links).toHaveLength(PENDING_LABEL_KEYS.length);
     expect(links.every((link) => link.style.display === 'none')).toBe(true);
   });
 
@@ -600,6 +731,8 @@ describe('ClientViewComponent', () => {
     expect(linkFor(host, `/newclientloanaccount/${CLIENT_ID}`).style.display).toBe('');
     expect(linkFor(host, `/editclient/${CLIENT_ID}`).style.display).toBe('none');
     expect(linkFor(host, `/client/${CLIENT_ID}/close`).style.display).toBe('none');
+
+    expect(host.querySelector(`a[href="/client/${CLIENT_ID}/activate"]`)).toBeNull();
   });
 
   it('shows both gated entry points once the codes that gate them are held', async () => {
@@ -609,18 +742,28 @@ describe('ClientViewComponent', () => {
 
     expect(linkFor(host, `/editclient/${CLIENT_ID}`).style.display).toBe('');
     expect(linkFor(host, `/client/${CLIENT_ID}/close`).style.display).toBe('');
-    // The lifecycle command this list does not hold stays hidden where it stands.
-    expect(linkFor(host, `/client/${CLIENT_ID}/activate`).style.display).toBe('none');
+    // An active record offers no lifecycle command, held or not (AAP 0.7.4).
+    expect(host.querySelector(`a[href="/client/${CLIENT_ID}/activate"]`)).toBeNull();
   });
 
-  it('shows every action to a session holding only ALL_FUNCTIONS', async () => {
+  it('shows every action a record offers to a session holding only ALL_FUNCTIONS', async () => {
     heldCodes = [ALL_FUNCTIONS];
 
-    const host = hostOf(await render(`/viewclient/${CLIENT_ID}`));
+    const active = hostOf(await render(`/viewclient/${CLIENT_ID}`));
 
-    // The wildcard answers every code, exactly as it does to `permissionGuard` (AAP 0.1.1), and the `More` entries are included because each one carries its own gate.
-    expect(actionLinks(host)).toHaveLength(6);
-    expect(actionLinks(host).every((link) => link.style.display !== 'none')).toBe(true);
+    // The wildcard answers every code, exactly as it does to `permissionGuard` (AAP 0.1.1).
+    expect(actionLinks(active)).toHaveLength(ACTIVE_LABEL_KEYS.length);
+    expect(actionLinks(active).every((link) => link.style.display !== 'none')).toBe(true);
+    expect(active.querySelector('.dropdown-toggle')).toBeNull();
+
+    clients.get.mockReturnValue(of(PENDING_CLIENT));
+
+    const pending = hostOf(await render(`/viewclient/${CLIENT_ID}`));
+
+    // The menu's three entries are included too, because each one carries its own gate (AAP 0.7.4).
+    expect(actionLinks(pending)).toHaveLength(PENDING_LABEL_KEYS.length);
+    expect(actionLinks(pending).every((link) => link.style.display !== 'none')).toBe(true);
+    expect(pending.querySelector('.dropdown-toggle')).not.toBeNull();
   });
 
   it('renders no placeholder where the record carries no value', async () => {
@@ -644,21 +787,17 @@ describe('ClientViewComponent', () => {
       CLIENT.displayName,
     );
 
-    // The router reuses this component when the URL moves from one record to another, so a second emission is what an in-app move between two clients produces.
     await harness.navigateByUrl(`/viewclient/${SECOND_CLIENT_ID}`);
     await settle(harness);
 
     const moved = hostOf(harness);
 
-    // The same instance served both URLs: nothing below could pass by the screen being rebuilt.
     expect(componentOf(harness)).toBe(instance);
 
-    // One load per emission, and each run addresses the client its own URL named.
     expect(clients.get).toHaveBeenCalledTimes(2);
     expect(clients.get).toHaveBeenNthCalledWith(1, CLIENT_ID);
     expect(clients.get).toHaveBeenNthCalledWith(2, SECOND_CLIENT_ID);
 
-    // The second client's own values are on screen, from the header through the profile card.
     expect(moved.querySelector('app-record-header h3 strong')?.textContent?.trim()).toBe(
       SECOND_CLIENT.displayName,
     );
@@ -670,8 +809,7 @@ describe('ClientViewComponent', () => {
       ['Activation Date', '24 November 2026'],
     ]);
 
-    // Every action href, and both tab inputs, address the client the URL names now.
-    expect(actionHrefs(moved)).toEqual(expectedHrefs(SECOND_CLIENT_ID));
+    expect(actionHrefs(moved)).toEqual(expectedActiveHrefs(SECOND_CLIENT_ID));
     expect(clients.accounts).toHaveBeenLastCalledWith(SECOND_CLIENT_ID);
   });
 
@@ -685,12 +823,10 @@ describe('ClientViewComponent', () => {
 
     const harness = await render(`/viewclient/${CLIENT_ID}`);
 
-    // The first read is held open, so nothing is painted for the first client.
     expect(hostOf(harness).querySelector('app-record-header')).toBeNull();
 
     await harness.navigateByUrl(`/viewclient/${SECOND_CLIENT_ID}`);
 
-    // The second read is the one the screen is waiting on; answering it paints the second client.
     second.next(SECOND_CLIENT);
     second.complete();
     await settle(harness);
@@ -699,7 +835,6 @@ describe('ClientViewComponent', () => {
       SECOND_CLIENT.displayName,
     );
 
-    // The earlier client's answer lands last. It is dropped rather than painted, or the first client's record and hrefs would appear under the second client's URL.
     first.next(CLIENT);
     first.complete();
     await settle(harness);
@@ -710,7 +845,7 @@ describe('ClientViewComponent', () => {
       SECOND_CLIENT.displayName,
     );
     expect(profileRows(after)[0]).toEqual(['Client Number', SECOND_CLIENT.accountNo]);
-    expect(actionHrefs(after)).toEqual(expectedHrefs(SECOND_CLIENT_ID));
+    expect(actionHrefs(after)).toEqual(expectedActiveHrefs(SECOND_CLIENT_ID));
   });
 
   it('clears the previous client’s not-found state when the URL moves to a client that exists', async () => {
@@ -729,7 +864,6 @@ describe('ClientViewComponent', () => {
 
     const moved = hostOf(harness);
 
-    // No trace of the missing client is left: the record the URL now names is what renders.
     expect(renderedText(moved)).not.toContain('Not Available');
     expect(moved.querySelector('app-record-header h3 strong')?.textContent?.trim()).toBe(
       SECOND_CLIENT.displayName,
@@ -743,12 +877,10 @@ describe('ClientViewComponent', () => {
 
     const harness = await render(`/viewclient/${CLIENT_ID}`);
 
-    // The read is in flight: the subject the read answers through has a subscriber.
     expect(pending.observed).toBe(true);
 
     harness.fixture.destroy();
 
-    // Nothing is left holding the request open once the screen is gone.
     expect(pending.observed).toBe(false);
   });
 });

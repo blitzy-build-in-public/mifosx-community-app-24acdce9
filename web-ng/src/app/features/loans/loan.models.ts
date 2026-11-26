@@ -1,6 +1,7 @@
 /** The loans family's single model module: one typed model for every request body and every response shape the individual-loan screens use, in Fineract's own wire field names (Rule 1 clause 2, AAP 0.7.2, Rule 1 clause 4, Rule 1 clause 3). */
 import type { AppDateFormat } from '../../core/config/app-config.model';
 import type { FineractDate } from '../../shared/date-format.util';
+import type { MoneyCurrency } from '../../shared/money/money.pipe';
 import { normaliseStatusCode, type StatusKey } from '../../shared/status-key.util';
 
 /** One row of a Fineract option list — `productOptions`, `loanOfficerOptions`, `fundOptions`, `chargeOptions`, `paymentTypeOptions` — which all arrive in this `{id, name}` shape (AAP 0.4.3) (Rule 1 clause 3). */
@@ -11,6 +12,12 @@ export interface OptionItem {
   readonly name: string;
 }
 
+/** The currency object a loan payload sends for the money it carries, as `GET /loans/{id}?associations=all` reports it at the payload's top level, on its `repaymentSchedule` and inside every `charges[]` entry, and `GET /clients/{id}/accounts` on each `loanAccounts[]` entry: `{code: "USD", name: "US Dollar", decimalPlaces: 2, displaySymbol: "$", displayLabel: "US Dollar ($)"}`. `code` is required here because the wire always carries it, while {@link MoneyCurrency} keeps it optional for a reader that only renders a symbol; requiring it keeps a charge's currency a valid `LoanChargeOption` currency, so a template's own charges can stand in for its charge options (Rule 1 clause 4, AAP 0.7.2). */
+export interface LoanCurrency extends MoneyCurrency {
+  /** ISO code the money is denominated in, e.g. `USD` — sent with every currency the loan endpoints report. */
+  readonly code: string;
+}
+
 /** One row of `transactionProcessingStrategyOptions`: the fork's strategy pair, the `code` an application posts and the `name` its picker renders. */
 export interface TransactionProcessingStrategyOption {
   /** Strategy code the application carries, e.g. `'mifos-standard-strategy'`. */
@@ -19,6 +26,28 @@ export interface TransactionProcessingStrategyOption {
   readonly name: string;
   /** Numeric id, for a build that sends one beside the code. */
   readonly id?: number;
+}
+
+/** One row of an enumeration option list — `termFrequencyTypeOptions`, `repaymentFrequencyTypeOptions`, `interestRateFrequencyTypeOptions`, `amortizationTypeOptions`, `interestTypeOptions` or `interestCalculationPeriodTypeOptions` — and the very shape Fineract sends for a persisted enumeration member of the same name, which is why one interface serves both (AAP 0.7.2, Rule 1 clause 2, Rule 1 clause 4). */
+export interface LoanEnumOption {
+  /** Numeric id the posted body carries, e.g. the `repaymentFrequencyType` an application sends. */
+  readonly id: number;
+  /** Message code of the option, e.g. `repaymentFrequency.periodFrequencyType.months`. */
+  readonly code?: string;
+  /** Label exactly as the template endpoint returned it, e.g. `Months`. */
+  readonly value?: string;
+}
+
+/** One row of `loanOfficerOptions`: a staff member the loan may be assigned to, labelled by the server's `displayName` and, where it sent none, by `firstname`/`lastname` (AAP 0.7.2, Rule 1 clause 2). */
+export interface LoanOfficerOption {
+  /** Staff id the body posts as `loanOfficerId`. */
+  readonly id: number;
+  /** Label the server composes, e.g. `Officer, Parity`. */
+  readonly displayName?: string;
+  /** Given name, for a row the server sent without a `displayName`. */
+  readonly firstname?: string;
+  /** Family name, for a row the server sent without a `displayName`. */
+  readonly lastname?: string;
 }
 
 /** A loan's lifecycle status as Fineract sends it: the numeric `LoanStatus` id, its `loanStatusType.*` message code, and the server's display text (AAP 0.10.5). */
@@ -87,6 +116,8 @@ export interface LoanTemplate {
   readonly clientOfficeId?: number;
   /** The selected product; seeded only when the request names a `productId`. */
   readonly product?: LoanTemplateProduct;
+  /** Id of the selected product, which the template sends beside `product` and the application body echoes as its `productId`. */
+  readonly productId?: number;
   /** Products the client may be given, rendered as the product dropdown. */
   readonly productOptions: readonly LoanTemplateProduct[];
   /** Default principal, typically the product's default principal; seeded only when the request names a `productId`. */
@@ -94,37 +125,45 @@ export interface LoanTemplate {
   /** Default term length, in `termPeriodFrequencyType` units — `LoanAccountData.termFrequency` on the template, which `POST /loans` spells `loanTermFrequency` (AAP 0.7.2). */
   readonly termFrequency?: number;
   /** Unit of `termFrequency`, e.g. months — `LoanAccountData.termPeriodFrequencyType` on the template, which `POST /loans` spells `loanTermFrequencyType` and carries as the `id` this object reports, beside the message code. */
-  readonly termPeriodFrequencyType?: {
-    readonly id: number;
-    readonly code?: string;
-    readonly value?: string;
-  };
+  readonly termPeriodFrequencyType?: LoanEnumOption;
+  /** Term units the form's picker offers, rendered in the received order. */
+  readonly termFrequencyTypeOptions?: readonly LoanEnumOption[];
   /** Default number of repayments; seeded only when the request names a `productId`. */
   readonly numberOfRepayments?: number;
   /** Default interval between repayments; seeded only when the request names a `productId`. */
   readonly repaymentEvery?: number;
   /** Unit of `repaymentEvery`, e.g. months. */
-  readonly repaymentFrequencyType?: number;
+  readonly repaymentFrequencyType?: LoanEnumOption;
+  /** Repayment-interval units the form's picker offers, rendered in the received order. */
+  readonly repaymentFrequencyTypeOptions?: readonly LoanEnumOption[];
   /** Default nominal interest rate per `interestRateFrequencyType` period; seeded only when the request names a `productId`. */
   readonly interestRatePerPeriod?: number;
   /** Unit of `interestRatePerPeriod`, e.g. per year. */
-  readonly interestRateFrequencyType?: number;
+  readonly interestRateFrequencyType?: LoanEnumOption;
+  /** Rate units the form's picker offers, rendered in the received order. */
+  readonly interestRateFrequencyTypeOptions?: readonly LoanEnumOption[];
   /** Amortisation method the product prescribes. */
-  readonly amortizationType?: number;
+  readonly amortizationType?: LoanEnumOption;
+  /** Amortisation methods the form's picker offers, rendered in the received order. */
+  readonly amortizationTypeOptions?: readonly LoanEnumOption[];
   /** Interest method the product prescribes. */
-  readonly interestType?: number;
+  readonly interestType?: LoanEnumOption;
+  /** Interest methods the form's picker offers, rendered in the received order. */
+  readonly interestTypeOptions?: readonly LoanEnumOption[];
   /** Interest calculation period the product prescribes. */
-  readonly interestCalculationPeriodType?: number;
+  readonly interestCalculationPeriodType?: LoanEnumOption;
+  /** Interest calculation periods the form's picker offers, rendered in the received order. */
+  readonly interestCalculationPeriodTypeOptions?: readonly LoanEnumOption[];
   /** Strategy the template seeds for the selected product, as the code the application posts (AAP 0.7.2). */
   readonly transactionProcessingStrategyCode?: string;
   /** Strategies the form's picker offers, in the received order. */
   readonly transactionProcessingStrategyOptions?: readonly TransactionProcessingStrategyOption[];
-  /** Charges applicable to the application, under the key this endpoint uses. */
-  readonly charges?: readonly LoanChargeOption[];
-  /** Charges applicable to the application, under the alternative key described above. */
+  /** The charge rows the payload carries, in the server's order: the loan's own charges on an edit seed, in the same `LoanCharge` shape `LoanAccount.charges` declares, which is why the edit form re-posts them unchanged (AAP 0.7.2, AAP 0.3.4). */
+  readonly charges?: readonly LoanCharge[];
+  /** Charges applicable to the application, offered as the application form's charge picker. */
   readonly chargeOptions?: readonly LoanChargeOption[];
-  /** Loan officers the application may be assigned to. */
-  readonly loanOfficerOptions?: readonly OptionItem[];
+  /** Loan officers the application may be assigned to, labelled by `displayName`. */
+  readonly loanOfficerOptions?: readonly LoanOfficerOption[];
   /** Loan officer the template preselects, when the product or client implies one. */
   readonly loanOfficerId?: number;
   /** Funds the loan may draw on, for the tenants that use them. */
@@ -175,6 +214,8 @@ export interface LoanAccount {
   readonly loanProductId?: number;
   /** Product name, the fork's `LoanAccountData.loanProductName`, where AAP 0.7.2 names the member `productName`; displayed on the record. */
   readonly loanProductName?: string;
+  /** The currency the payload reports for the money this record prints — the record's principal and its five summary figures — so the record renders them with the symbol the loan is denominated in and every other surface stays bare, as the legacy record does (Rule 1 clause 3, AAP 0.7.2). */
+  readonly currency?: LoanCurrency;
   /** Principal applied for, the amount every disbursement and schedule is based on. */
   readonly principal: number;
   /** Principal approved, which can differ from the applied amount once the loan is approved. */
@@ -196,6 +237,9 @@ export interface LoanAccount {
   /** Charges attached to the loan, in the server's order — the rows the record's charge section lists and the set `PUT /loans/{id}` takes back, which is why the edit form re-posts them unchanged. */
   readonly charges?: readonly LoanCharge[];
 }
+
+/** `GET /loans/{id}?template=true&associations=charges,collateral,meeting,multiDisburseDetails` — the edit form's one read: the loan record the save re-posts (ids, terms, status, timeline and charges) together with the template members that seed the form (the persisted enumerations, their option lists, the officer and fund pickers). The endpoint answers one shape, so the edit screen reads every member from this type instead of guessing between two (AAP 0.7.3, "Loan edit"). */
+export type LoanEditSeed = LoanAccount & LoanTemplate;
 
 /** One row of a repayment schedule — the `periods[]` of `RepaymentSchedule`, and the rows the preview table renders after `POST /loans?command=calculateLoanSchedule` (AAP 0.7.2) (Rule 1 clause 2). */
 export interface RepaymentPeriod {
@@ -221,6 +265,8 @@ export interface RepaymentPeriod {
   readonly totalOriginalDueForPeriod: number;
   /** Principal still outstanding after this period, the fork's per-period principal balance. */
   readonly principalOutstanding?: number;
+  /** Principal balance the loan still carries after this period, the fork's `LoanSchedulePeriodData.principalLoanBalanceOutstanding`: the member legacy prints in its `label.heading.balanceofloan` ("Balance of Loan") column, which is why both schedules render it as its own column rather than as the row's outstanding total. */
+  readonly principalLoanBalanceOutstanding?: number;
   /** Interest still outstanding after this period. */
   readonly interestOutstanding?: number;
   /** Fees still outstanding after this period, the fork's `feeChargesOutstanding`. */
@@ -299,6 +345,8 @@ export interface LoanCharge {
   readonly chargeId: number;
   /** Charge name, rendered as the server sent it. */
   readonly name: string;
+  /** The currency the payload reports for this charge's own money — `amount`, `amountPaid`, `amountWaived` and `amountOutstanding` — so the record's charge table prefixes their symbol exactly as the legacy table does (Rule 1 clause 3, AAP 0.7.2). */
+  readonly currency?: LoanCurrency;
   /** Amount charged. */
   readonly amount: number;
   /** The amount the charge is defined with, the fork's `LoanChargeData.amountOrPercentage`: the flat amount of a flat charge, or the percentage of a percentage charge. */
@@ -587,18 +635,6 @@ export interface LoanTransactionTemplate {
  * Pure helpers. Same input, same output: no clock read, no dependency, no side effect.
  */
 
-/** Whether a body `GET /loans/{id}` returned is a loan record rather than a loan template. */
-export function isLoanAccount(value: LoanTemplate | LoanAccount): value is LoanAccount {
-  // `in` narrows the union rather than asserting it: a template carries no `status` member, so a body that has one is the loan record, and the members are read from a view typed as `unknown`.
-  if (!('status' in value)) {
-    return false;
-  }
-
-  const { id, status }: { readonly id: unknown; readonly status: unknown } = value;
-
-  return typeof id === 'number' && typeof status === 'object' && status !== null;
-}
-
 /** The id of a persisted enumeration member, which the fork sends either as a plain number or as the `{id, code, value}` object every `…Options` list is built from (AAP 0.7.2, Rule 1 clause 3). */
 export function readSelectedId(value: unknown): number | null {
   if (typeof value === 'number') {
@@ -624,22 +660,24 @@ const STATUS_BY_ID: Readonly<Partial<Record<string, StatusKey>>> = {
   /** Active, i.e. disbursed. */
   '300': 'active',
 
-  /** Withdrawn by the client, rejected, and every closed form, including overpaid. */
-  '400': 'closed',
-  '500': 'closed',
+  /** Withdrawn by the client and rejected: terminal states that are not closed ones, so they paint `other`, as the shared mapping in `web-ng/src/app/shared/status-key.util.ts` paints the same two codes for the client's accounts tab (AAP 0.2.3). */
+  '400': 'other',
+  '500': 'other',
+
+  /** Every closed form, including overpaid. */
   '600': 'closed',
   '601': 'closed',
   '602': 'closed',
   '700': 'closed',
 };
 
-/** The same colours keyed by a `loanStatusType.*` message code, normalised by `normaliseStatusCode` from `web-ng/src/app/shared/status-key.util.ts` — the one normalisation all three families share: lower-cased, a leading `[a-z]+statustype.` prefix removed, and every non-alphanumeric character stripped, so `loanStatusType.closed.reschedule.outstanding.amount` keys `closedrescheduleoutstandingamount`. */
+/** The same colours keyed by a `loanStatusType.*` message code, normalised by `normaliseStatusCode` from `web-ng/src/app/shared/status-key.util.ts` — the one normalisation all three families share: lower-cased, a leading `[a-z]+statustype.` prefix removed, and every non-alphanumeric character stripped, so `loanStatusType.closed.reschedule.outstanding.amount` keys `closedrescheduleoutstandingamount`. The withdrawn and rejected codes answer `other` here too, so a loan paints one colour on its record and on the client's accounts tab. */
 const STATUS_BY_NAME: Readonly<Partial<Record<string, StatusKey>>> = {
   submittedandpendingapproval: 'pending',
   approved: 'pending',
   active: 'active',
-  withdrawnbyclient: 'closed',
-  rejected: 'closed',
+  withdrawnbyclient: 'other',
+  rejected: 'other',
   closedobligationsmet: 'closed',
   closedwrittenoff: 'closed',
   closedrescheduleoutstandingamount: 'closed',
@@ -656,7 +694,6 @@ export function toLoanStatusKey(code: string | number | null | undefined): Statu
     return STATUS_BY_ID[String(code)] ?? 'other';
   }
 
-  // A string may be the message code, or the bare id as text, so the normalised value is tried against the id table as well; normalising leaves a bare number unchanged.
   const normalised = normaliseStatusCode(code);
 
   return STATUS_BY_ID[normalised] ?? STATUS_BY_NAME[normalised] ?? 'other';

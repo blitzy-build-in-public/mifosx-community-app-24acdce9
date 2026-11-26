@@ -1,4 +1,6 @@
 <!-- Charges section of the individual loan record (`#/viewloanaccount/:id`; AAP 0.7.1 row `loans`, AAP 0.7.2 row `LoanCharge`, AAP 0.7.3 row "Loan charges") (Rule 1 clause 2, Rule 2, AAP 0.7.4, Rule 1 clause 3). -->
+<!-- This table stays hand-written rather than rendered through `app-data-table`, for two reasons of its own: its last cell is two permission-gated `routerLink` controls routed through `HasPermissionDirective`, while `app-data-table` renders its single `cellTemplate` for every data cell, so the six text columns would have to re-declare their own text inside a per-column branch; and that component's inert `ColumnDef` — no formatter or renderer, its `value` a plain `string` — would push the money and date pipes below into component code, putting a second money-and-date formatting path inside this one feature. -->
+
 @if (isEmpty()) {
   <app-empty-state id="loan-charges-empty" [message]="'label.nodata' | translate" />
 } @else {
@@ -10,6 +12,8 @@
         <th scope="col">{{ 'label.heading.dueasof' | translate }}</th>
         <th scope="col">{{ 'label.heading.amount' | translate }}</th>
         <th scope="col">{{ 'label.heading.paid' | translate }}</th>
+        <!-- The written-off portion of the charge, which the legacy record heads label.heading.waived and renders from the charge's amountWaived: without it a waived charge reads as a paid one whose amount went nowhere. -->
+        <th scope="col">{{ 'label.heading.waived' | translate }}</th>
         <th scope="col">{{ 'label.heading.outstanding' | translate }}</th>
         <th scope="col">{{ 'label.heading.actions' | translate }}</th>
       </tr>
@@ -19,9 +23,11 @@
         <tr>
           <td>{{ row.name }}</td>
           <td>{{ row.dueDate | date: displayFormat }}</td>
-          <td>{{ row.amount | number }}</td>
-          <td>{{ row.amountPaid | number }}</td>
-          <td>{{ row.amountOutstanding | number }}</td>
+          <!-- The charge's own currency symbol sits immediately before each figure with no space between them, which is how the legacy charge table prints its money cells (`app/views/loans/viewloanaccountdetails.html:854-857`); the figures keep the `number` filter's digits, because the one shared formatter applies them (Rule 1 clause 3). -->
+          <td>{{ row.amount | money: row.currency }}</td>
+          <td>{{ row.amountPaid | money: row.currency }}</td>
+          <td>{{ row.amountWaived | money: row.currency }}</td>
+          <td>{{ row.amountOutstanding | money: row.currency }}</td>
           <td>
             <a
               class="btn btn-primary btn-sm"

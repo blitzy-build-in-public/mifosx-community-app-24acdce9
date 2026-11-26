@@ -59,7 +59,6 @@ describe('NotificationComponent', () => {
 
     service = TestBed.inject(NotificationService);
 
-    // Both bundles are seeded before the first render, so every case sees the close control's name resolved rather than a raw key, exactly as the application does once a bundle has loaded.
     translate = TestBed.inject(TranslateService);
     translate.setTranslation(BASE_LANG, { [CLOSE_LABEL_KEY]: CLOSE_LABEL_EN }, true);
     translate.setTranslation(OTHER_LANG, { [CLOSE_LABEL_KEY]: CLOSE_LABEL_FR }, true);
@@ -110,10 +109,13 @@ describe('NotificationComponent', () => {
     expect(notices[0].classList.contains('notification-error')).toBe(false);
   });
 
-  it('renders no notice and no text while the queue is empty', () => {
+  it('renders no notice and no text while the queue is empty, and keeps its live region in place', () => {
     expect(service.messages()).toHaveLength(0);
     expect(host.querySelectorAll('.notification')).toHaveLength(0);
     expect((host.textContent ?? '').trim()).toBe('');
+
+    expect(host.querySelectorAll('.notification-container')).toHaveLength(1);
+    expect(host.querySelector('.notification-container')?.getAttribute('role')).toBe('alert');
   });
 
   it('drops exactly the notice whose close control was clicked, leaving the other still rendered', () => {
@@ -140,15 +142,20 @@ describe('NotificationComponent', () => {
     expect(service.messages()[0].message).toBe(LONG_ERROR);
   });
 
-  it('marks every rendered notice with role="alert"', () => {
+  it('announces a notice from the container’s own live region rather than from the notice', () => {
     service.show('info', SHORT_INFO);
     service.show('error', LONG_ERROR);
     fixture.detectChanges();
 
+    const container = host.querySelector<HTMLElement>('.notification-container');
     const notices = host.querySelectorAll<HTMLElement>('.notification');
 
+    expect(container?.getAttribute('role')).toBe('alert');
+    expect(container?.getAttribute('aria-live')).toBe('assertive');
+    expect(container?.getAttribute('aria-atomic')).toBe('false');
+
     expect(notices).toHaveLength(2);
-    expect(Array.from(notices, (notice) => notice.getAttribute('role'))).toEqual(['alert', 'alert']);
+    expect(Array.from(notices, (notice) => notice.getAttribute('role'))).toEqual([null, null]);
   });
 
   it('writes nothing to the console while rendering and dismissing a notice', () => {

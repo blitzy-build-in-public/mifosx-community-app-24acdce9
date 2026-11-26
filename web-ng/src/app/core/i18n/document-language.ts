@@ -10,7 +10,6 @@ export function bindDocumentLanguage(translate: TranslateService): void {
   /** The language in force: the active one, or the fallback while no bundle has resolved yet. */
   const languageInForce = (): string => translate.currentLang() ?? FALLBACK_LANG;
 
-  // Written before the effect runs, so the attribute is already correct on the first render rather than only after the first change-detection pass.
   document.documentElement.lang = languageInForce();
 
   effect((): void => {

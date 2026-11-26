@@ -56,7 +56,7 @@
       "
     />
     @if (form.controls.username.invalid && form.controls.username.touched) {
-      <span id="uid-error" class="help-block">
+      <span id="uid-error" class="help-block" role="alert">
         {{ 'label.requiredfield' | translate }}
       </span>
     }
@@ -99,19 +99,14 @@
       "
     />
     @if (form.controls.password.invalid && form.controls.password.touched) {
-      <span id="pwd-error" class="help-block">
+      <span id="pwd-error" class="help-block" role="alert">
         {{ 'label.requiredfield' | translate }}
       </span>
     }
   </div>
 
   <div class="form-group">
-    <!--
-      One full-width primary submit. `[disabled]="busy()"` is the whole duplicate-submission guard:
-      the screen sets it from its submit guard while `POST /authentication` is in flight, because
-      that endpoint is not idempotent and one click sends exactly one request (AAP 0.14.1), and no
-      second spinner, overlay or flag is added beside it.
-    -->
+    <!-- One full-width primary submit. `[disabled]="busy()"` is the whole duplicate-submission guard: the screen sets it from its submit guard while `POST /authentication` is in flight, because that endpoint is not idempotent and one click sends exactly one request (AAP 0.14.1), and no second spinner, overlay or flag is added beside it. -->
     <button id="login-button" type="submit" class="btn btn-primary btn-block" [disabled]="busy()">
       {{ 'label.button.signin' | translate }}
     </button>

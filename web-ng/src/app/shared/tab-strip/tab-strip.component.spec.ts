@@ -1,9 +1,9 @@
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { TabStripComponent, type TabDescriptor } from './tab-strip.component';
+import { TabStripComponent, tabDomId, type TabDescriptor } from './tab-strip.component';
 
-/** Behavioural spec for the client record's tab strip — the `TabStrip` row of the component inventory, whose one state is "one active of N" (AAP 0.2.3), on the record the flow's third screen shows (Figma node `1:4`) (Rule 1 clause 6, AAP 0.11.1, AAP 0.14.1, Rule 1 clause 8). */
+/** Behavioural spec for the shared record tab strip — the `TabStrip` row of the component inventory, whose one state is "one active of N" (AAP 0.2.3), on the client record the flow's third screen shows (Figma node `1:4`) and on the loan record that renders it too (AAP 0.7.4) (Rule 1 clause 6, AAP 0.11.1, AAP 0.14.1, Rule 1 clause 8). */
 
 /** The tabs the client record supplies, in its own order and wording (AAP 0.7.4); the component knows neither, which is what lets the last case prove it adds no tab of its own. */
 const TABS: readonly TabDescriptor[] = [
@@ -39,7 +39,7 @@ describe('TabStripComponent', () => {
     return fixture;
   }
 
-  /** The clickable label of every tab, in render order; the chevron decorations hold none. */
+  /** The label element of every tab, in render order: the tab is the anchor each `li` of the list holds. */
   function tabLinks(fixture: ComponentFixture<TabStripComponent>): HTMLAnchorElement[] {
     return Array.from(host(fixture).querySelectorAll<HTMLAnchorElement>('ul.nav-tabs > li > a'));
   }
@@ -71,9 +71,26 @@ describe('TabStripComponent', () => {
     return emitted;
   }
 
-  /** The two decorative chevron items at either end of the strip, outside the tabs. */
-  function chevronItems(fixture: ComponentFixture<TabStripComponent>): HTMLElement[] {
-    return Array.from(host(fixture).querySelectorAll<HTMLElement>('li[aria-hidden="true"]'));
+  /** Dispatches a cancelable keydown on the tab showing `label`, the way the browser delivers one to the focused tab, and hands the event back so a case can read whether the strip consumed it. */
+  function pressKey(
+    fixture: ComponentFixture<TabStripComponent>,
+    label: string,
+    key: string,
+  ): KeyboardEvent {
+    const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+
+    tabLink(fixture, label).dispatchEvent(event);
+
+    return event;
+  }
+
+  /** Anything the strip paints outside its tabs — a scroll chevron, or an item hidden from the accessibility tree — which the in-scope record never needs (AAP 0.10.5 items 6 and 8). */
+  function extras(fixture: ComponentFixture<TabStripComponent>): HTMLElement[] {
+    return Array.from(
+      host(fixture).querySelectorAll<HTMLElement>(
+        'i.fa-chevron-left, i.fa-chevron-right, li[aria-hidden]',
+      ),
+    );
   }
 
   it('renders one tab per descriptor, in the parent’s order, with its label verbatim', () => {
@@ -97,26 +114,39 @@ describe('TabStripComponent', () => {
     expect(activeLabels(fixture)).toEqual(['Identities']);
   });
 
-  it('keeps legacy’s tab markup, with `.active` on the `li` as the strip’s only state', () => {
+  it('renders one tab list whose tabs carry the tab role, a tab stop, a DOM id and their selection state', () => {
     const fixture = createStrip('general');
     const lists = host(fixture).querySelectorAll('ul.nav-tabs');
 
-    // One plain list, as legacy's tabset renders: no tablist role, no tab-stop attribute, no selection state and no key handler on top of the markup AAP 0.5.2 maps (Rule 1 clause 3; AAP 0.10.5 registers no accessibility.
+    // One tab list, as the ARIA tab pattern requires: the strip's `ul` is the `tablist` its tabs belong to (AAP 0.2.3 row `TabStrip`).
     expect(lists).toHaveLength(1);
-    expect(Array.from(lists, (list) => list.hasAttribute('role'))).toEqual([false]);
-    expect(Array.from(lists, (list) => list.hasAttribute('aria-label'))).toEqual([false]);
+    expect(lists[0].getAttribute('role')).toBe('tablist');
 
-    for (const link of tabLinks(fixture)) {
-      // The anchor is legacy's own link — uib-tab 1.3.2 renders `<a href ng-click="select($event)">` — so the valueless `href` stays, which is what puts the tab in the tab order and lets a real Enter activate it; and the ARIA.
-      expect(link.getAttribute('href')).toBe('');
-      expect(link.tabIndex).toBe(0);
-      expect(link.hasAttribute('role')).toBe(false);
-      expect(link.hasAttribute('tabindex')).toBe(false);
-      expect(link.hasAttribute('aria-selected')).toBe(false);
-    }
+    const links = tabLinks(fixture);
 
+    // Every tab is a `tab` of that list, is its own tab stop, and carries the id a record panel is labelled by — `tabDomId` of the descriptor's own id — so the strip and the panel cannot disagree about which element is which.
+    expect(links.map((link) => link.getAttribute('role'))).toEqual(['tab', 'tab']);
+    expect(links.map((link) => link.tabIndex)).toEqual([0, 0]);
+    expect(links.map((link) => link.id)).toEqual([tabDomId('general'), tabDomId('identities')]);
+    expect(links.map((link) => link.parentElement?.getAttribute('role'))).toEqual([
+      'presentation',
+      'presentation',
+    ]);
+
+    // No tab is a link: an empty `href` would make open-in-new-tab reload the current page instead of doing nothing, while the role, the tab stop and the key handler already keep a tab reachable and operable (Rule 1 clause 3).
+    expect(links.map((link) => link.hasAttribute('href'))).toEqual([false, false]);
+
+    expect(links.map((link) => link.getAttribute('aria-selected'))).toEqual(['true', 'false']);
+
+    fixture.componentRef.setInput('activeId', 'identities');
+    fixture.detectChanges();
+
+    expect(tabLinks(fixture).map((link) => link.getAttribute('aria-selected'))).toEqual([
+      'false',
+      'true',
+    ]);
     expect(host(fixture).querySelectorAll('li.active')).toHaveLength(1);
-    expect(activeLabels(fixture)).toEqual(['General']);
+    expect(activeLabels(fixture)).toEqual(['Identities']);
   });
 
   it('reports an inactive tab’s id once when it is clicked', () => {
@@ -137,7 +167,7 @@ describe('TabStripComponent', () => {
     expect(emitted).toEqual([]);
   });
 
-  /** A tab click selects, it never navigates: the anchor's valueless `href` — legacy's own — would otherwise reload the current URL and drop the hash route, so the default is cancelled on every click, the already-active tab (Rule 1 clause 3). */
+  /** A tab click selects, it never navigates: the tab is no link, so nothing would reload the hash route, and the default is still cancelled on every click — the already-active tab included — so the click cannot reach the page (Rule 1 clause 3). */
   it.each([
     { outcome: 'an inactive tab', label: 'Identities', expected: ['identities'] },
     { outcome: 'the tab already shown', label: 'General', expected: [] as string[] },
@@ -152,25 +182,52 @@ describe('TabStripComponent', () => {
     expect(click.defaultPrevented).toBe(true);
   });
 
-  it('renders both chevrons as inert decoration that cannot change the active tab', () => {
+  /** A tab is not a link, so the browser activates nothing on its own: the strip reads the two keys a button answers to, and consumes them so the space bar cannot scroll the record instead (AAP 0.2.3 row `TabStrip`). */
+  it.each(['Enter', ' '])('activates an inactive tab with %j and consumes the keypress', (key) => {
     const fixture = createStrip('general');
     const emitted = recordChanges(fixture);
-    const items = chevronItems(fixture);
 
-    expect(host(fixture).querySelectorAll('i.fa-chevron-left')).toHaveLength(1);
-    expect(host(fixture).querySelectorAll('i.fa-chevron-right')).toHaveLength(1);
-    expect(items).toHaveLength(2);
+    const event = pressKey(fixture, 'Identities', key);
 
-    for (const item of items) {
-      expect(item.getAttribute('aria-hidden')).toBe('true');
-      expect(item.hasAttribute('tabindex')).toBe(false);
-      expect(item.querySelector('i.fa-chevron-left, i.fa-chevron-right')).not.toBeNull();
+    expect(emitted).toEqual(['identities']);
+    expect(event.defaultPrevented).toBe(true);
+  });
 
-      item.click();
+  it.each(['Enter', ' '])(
+    'consumes %j on the tab already shown without reporting it again',
+    (key) => {
+      const fixture = createStrip('general');
+      const emitted = recordChanges(fixture);
+
+      const event = pressKey(fixture, 'General', key);
+
+      expect(emitted).toEqual([]);
+      expect(event.defaultPrevented).toBe(true);
+      expect(activeLabels(fixture)).toEqual(['General']);
+    },
+  );
+
+  it('leaves every other key alone, so the page keeps its own shortcuts and its scrolling', () => {
+    const fixture = createStrip('general');
+    const emitted = recordChanges(fixture);
+
+    for (const key of ['Tab', 'ArrowRight', 'ArrowLeft', 'Escape', 'a']) {
+      const event = pressKey(fixture, 'Identities', key);
+
+      expect(event.defaultPrevented).toBe(false);
     }
 
     expect(emitted).toEqual([]);
     expect(activeLabels(fixture)).toEqual(['General']);
+  });
+
+  it('renders no scroll chevron and nothing hidden from the accessibility tree', () => {
+    const fixture = createStrip('general');
+
+    // The design's two chevrons are not painted at all: with at most three tabs in scope the strip never scrolls, so they would have nothing to scroll, and a painted control that does nothing is the broken affordance the plan refuses (AAP 0.10.5 items 6 and 8; Rule 1 clause 3).
+    expect(extras(fixture)).toEqual([]);
+
+    expect(host(fixture).querySelectorAll('ul.nav-tabs > li')).toHaveLength(TABS.length);
   });
 
   it('paints nothing at all when the parent supplies no tabs', () => {
@@ -182,7 +239,7 @@ describe('TabStripComponent', () => {
     expect(host(fixture).querySelectorAll('ul.nav-tabs')).toHaveLength(0);
     expect(host(fixture).querySelectorAll('a')).toHaveLength(0);
     expect(tabLinks(fixture)).toHaveLength(0);
-    expect(chevronItems(fixture)).toHaveLength(0);
+    expect(extras(fixture)).toHaveLength(0);
     expect(host(fixture).childElementCount).toBe(0);
   });
 

@@ -53,14 +53,9 @@
 
 <div appPanelCard [title]="'label.heading.loanrepayments' | translate">
   @if (notFound()) {
-    <!--
-      A 404 replaces the form rather than joining the error region: the loan the screen was opened on
-      does not exist or is not visible to this user, so there is nothing to repay and no field worth
-      keeping. The wording is the not-found screen's own body key, reused verbatim so the application
-      has one not-found sentence and not two (AAP 0.7.4).
-    -->
+    <!-- A 404 replaces the form rather than joining the error region: the loan the screen was opened on does not exist or is not visible to this user, so there is nothing to repay and no field worth keeping. `shared/record-not-found` is the one presentation every record screen renders, so the application has one not-found message and not two (AAP 0.7.4). -->
     <div class="panel-body">
-      <div class="text-center text-muted">{{ 'error.msg.resource.not.found' | translate }}</div>
+      <app-record-not-found />
     </div>
   } @else {
     <div class="panel-body">
@@ -83,12 +78,7 @@
           loan's own template answers: the component empties them before every read, so a figure typed
           or seeded for the loan the URL has left is gone by the time the new loan's seeds arrive.
         -->
-        <!--
-          The date field renders its own `.form-group`, `.control-label` and `input[type=date]`, and
-          `inputId` is the id that input and its label share, so the harness addresses `#transactionDate`
-          on both applications. `[required]` marks the label for assistive technology; it adds no
-          validator, because the validator set is the component's (Rule 1 clause 3).
-        -->
+        <!-- The date field renders its own `.form-group`, `.control-label` and `input[type=date]`, and `inputId` is the id that input and its label share, so the harness addresses `#transactionDate` on both applications. `[required]` marks the label for assistive technology; it adds no validator, because the validator set is the component's (Rule 1 clause 3). -->
         <app-date-field
           inputId="transactionDate"
           [control]="form.controls.transactionDate"
@@ -96,12 +86,7 @@
           [required]="true"
         />
 
-        <!--
-          The amount the repayment books, seeded by the component from the repayment transaction
-          template's own `amount` and left editable exactly as legacy leaves it. `step="0.01"` is the
-          browser's own increment for a money figure; `novalidate` on the form keeps it from ever
-          blocking a submit.
-        -->
+        <!-- The amount the repayment books, seeded by the component from the repayment transaction template's own `amount` and left editable exactly as legacy leaves it. `step="0.01"` is the browser's own increment for a money figure; `novalidate` on the form keeps it from ever blocking a submit. -->
         <div class="form-group" [class.has-error]="amountInvalid">
           <label class="col-md-3 control-label" for="transactionAmount">
             {{ 'label.input.transactionamount' | translate }}<span class="required">*</span>
@@ -118,7 +103,7 @@
               [attr.aria-describedby]="amountInvalid ? 'transactionAmount-error' : null"
             />
             @if (amountInvalid) {
-              <span id="transactionAmount-error" class="help-block">{{ 'label.requiredfield' | translate }}</span>
+              <span id="transactionAmount-error" class="help-block" role="alert">{{ 'label.requiredfield' | translate }}</span>
             }
           </div>
         </div>
@@ -157,12 +142,7 @@
     </div>
 
     <div class="panel-footer">
-      <!--
-        Cancel posts nothing and returns to the record through the router, never `window.location`
-        (Rule 1 clause 5). The primary control is associated with the form above through its `form`
-        attribute, which is what lets it stay a real `type="submit"` inside the card's own footer
-        instead of a click handler imitating one.
-      -->
+      <!-- Cancel posts nothing and returns to the record through the router, never `window.location` (Rule 1 clause 5). The primary control is associated with the form above through its `form` attribute, which is what lets it stay a real `type="submit"` inside the card's own footer instead of a click handler imitating one. -->
       <a class="btn btn-default" [routerLink]="['/viewloanaccount', loanId()]">{{ 'label.button.cancel' | translate }}</a>
       <button type="submit" class="btn btn-primary" form="loanRepaymentForm" [disabled]="guard.busy()">
         {{ 'label.button.save' | translate }}

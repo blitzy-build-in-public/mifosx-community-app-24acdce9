@@ -29,51 +29,35 @@ export type ParityPages = LegacyParityPages | NextParityPages;
 
 /** The legacy baseline's four page objects, tagged with the project they drive. */
 export interface LegacyParityPages {
-  /** The discriminant of {@link ParityPages}: these objects drive the AngularJS baseline. */
   readonly uiProject: 'legacy';
   /** Login screen, the entry point of W1 (AAP 0.10.1). */
   readonly login: LegacyLoginPage;
-  /** Client list, its search, the create and edit forms and the lifecycle action forms. */
   readonly clients: LegacyClientsPage;
-  /** One client's record: header, tabs, action group, accounts and identifiers. */
   readonly clientView: LegacyClientViewPage;
-  /** The loan application, its repayment preview, the record, its actions and its charges. */
   readonly loans: LegacyLoansPage;
 }
 
-/** The new application's four page objects, tagged with the project they drive. */
 export interface NextParityPages {
-  /** The discriminant of {@link ParityPages}: these objects drive this application. */
   readonly uiProject: 'next';
   /** Login screen, the entry point of W1 (AAP 0.10.1). */
   readonly login: NextLoginPage;
-  /** Client list, its search, the create and edit forms and the lifecycle action forms. */
   readonly clients: NextClientsPage;
-  /** One client's record: header, tabs, action group, accounts and identifiers. */
   readonly clientView: NextClientViewPage;
-  /** The loan application, its repayment preview, the record, its actions and its charges. */
   readonly loans: NextLoansPage;
 }
 
-/** What a {@link WorkflowBody} is handed: the running side's screens, page, run date and capture. */
 export interface WorkflowTools {
-  /** The four page objects of the running front end. */
   readonly pages: ParityPages;
-  /** The test's own Playwright page, for the navigation a page object does not wrap. */
   readonly page: Page;
   /** The tenant's business date (AAP 0.10.1): the reference every workflow date is an offset from. */
   readonly runDate: Date;
-  /** The running capture, so a body can read what it has recorded so far. */
   readonly capture: CaptureSession;
 }
 
-/** What a {@link WorkflowBody} may return: the backend end state to snapshot once it succeeded. */
 export interface WorkflowArtifacts {
-  /** Client and loan ids whose end state should be read after the body returns. */
   readonly stateTargets?: Partial<StateTargets>;
 }
 
-/** The body of one workflow: the work a spec performs between entry and its end state. */
 export type WorkflowBody = (tools: WorkflowTools) => Promise<WorkflowArtifacts | void>;
 
 /** `runWorkflow(id, body)` — the fixture value a spec calls to run one workflow (AAP 0.10.1). */
@@ -81,7 +65,6 @@ export type RunWorkflow = (workflowId: WorkflowId, body: WorkflowBody) => Promis
 
 /** Per-test paths and facts the fixtures share: the capture names itself at setup, `runWorkflow` writes the artefacts and the record, and the capture's teardown fills in the path it wrote when the body never got that far. */
 export interface EvidenceSink {
-  /** Workflow label the capture artefact is named for, decided at setup from the test's identity. */
   captureLabel?: string;
   /** Workflow id `runWorkflow` was called with in this test. */
   workflow?: WorkflowId;
@@ -93,11 +76,9 @@ export interface EvidenceSink {
   recordPath?: string;
 }
 
-/** Every fixture this module provides, in the order a reader meets them. */
 export interface ParityFixtures {
   /** Which front end the Playwright project drives (AAP 0.8.2). */
   uiProject: UiProject;
-  /** The four page objects of that front end. */
   pages: ParityPages;
   /** The tenant's business date read over the API (Rule 1 clause 2; AAP 0.10.1 "Run date"). */
   runDate: Date;
@@ -105,7 +86,6 @@ export interface ParityFixtures {
   capture: CaptureSession;
   /** Runs one workflow and records its verdict (AAP 0.10.4). */
   runWorkflow: RunWorkflow;
-  /** Internal: the per-test evidence sink. */
   evidence: EvidenceSink;
 }
 
@@ -193,7 +173,6 @@ async function businessDateFor(project: UiProject): Promise<Date> {
   const pending = readBusinessDate();
   RUN_DATES.set(project, pending);
   try {
-    // A copy goes to the caller: a workflow that shifted the date it was handed must not move the run date every later comparison is measured against.
     return new Date((await pending).getTime());
   } catch (error: unknown) {
     RUN_DATES.delete(project);
@@ -219,7 +198,6 @@ function legacyPages(page: Page): LegacyParityPages {
   };
 }
 
-/** The new application's four page objects, all driving one page. */
 function nextPages(page: Page): NextParityPages {
   return {
     uiProject: 'next',
@@ -269,7 +247,6 @@ export const test = base.extend<ParityFixtures>({
     await use(uiProjectOf(testInfo.project.name));
   },
 
-  // The sink is created empty per test: the capture labels itself, runWorkflow fills in the artefact paths, and the capture's teardown supplies the path when the test never reached runWorkflow.
   evidence: async ({}, use) => {
     await use({});
   },
@@ -309,7 +286,6 @@ export const test = base.extend<ParityFixtures>({
       evidence.workflow = workflowId;
       const label = evidence.captureLabel;
       if (label !== undefined && isWorkflowId(label) && label !== workflowId) {
-        // Annotated, never thrown: the record addresses its capture by absolute path, so a differently named file costs a reader some confusion and nothing else, and a workflow that behaved correctly is never failed over an.
         testInfo.annotations.push({
           type: 'capture-name',
           description:

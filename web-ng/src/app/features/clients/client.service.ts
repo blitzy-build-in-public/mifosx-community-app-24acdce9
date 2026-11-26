@@ -47,13 +47,14 @@ interface ClientCreateWire extends ClientDateWire {
   activationDate?: string | null;
 }
 
-/** `PUT /clients/{id}` as it goes on the wire: `ClientEditRequest` with its activation date formatted. */
+/** `PUT /clients/{id}` as it goes on the wire: `ClientEditRequest` with its activation date formatted, and `staffId` kept as the caller sent it — a number assigns an officer and a `null` unassigns one (Rule 1 clause 3). */
 interface ClientEditWire extends ClientDateWire {
   firstname?: string;
   lastname?: string;
   fullname?: string;
   externalId?: string;
   mobileNo?: string;
+  staffId?: number | null;
   activationDate?: string | null;
 }
 
@@ -98,8 +99,10 @@ export type ClientEditInput = Omit<ClientEditRequest, 'dateFormat' | 'locale'>;
 /** What an action screen hands {@link ClientService.action}: one of the five lifecycle bodies without its format members, for the same reason as {@link ClientEditInput}. The union stays discriminated by `command`, so a. */
 export type ClientActionInput = DistributiveOmit<ClientActionRequest, 'dateFormat' | 'locale'>;
 
-/** `template=true`, the one query parameter the edit screen's seed read sends. */
-const TEMPLATE_ONLY_PARAMS = new HttpParams().set('template', true);
+/** The two query parameters the edit screen's seed read sends, legacy's own pair: `template=true` for the record and its option lists, and `staffInSelectedOfficeOnly=true`, which is the flag `EditClientController` reads its staff picker from (`GET /clients/{id}?template=true&staffInSelectedOfficeOnly=true`; Rule 1 clause 2). */
+const RECORD_TEMPLATE_PARAMS = new HttpParams()
+  .set('staffInSelectedOfficeOnly', true)
+  .set('template', true);
 
 /** The clients family's only Fineract caller. Screens inject it; it injects `HttpClient` and the resolved configuration and nothing else (Rule 1 clause 5). */
 @Injectable({ providedIn: 'root' })
@@ -132,12 +135,12 @@ export class ClientService {
     );
   }
 
-  /** One client record with the template folded in: `GET /clients/{id}?template=true` (AAP 0.7.3). */
+  /** One client record with the template folded in: `GET /clients/{id}?template=true&staffInSelectedOfficeOnly=true`, the read legacy's edit form makes so its office and staff pickers come from the same response (AAP 0.7.3; Rule 1 clause 2). */
   getWithTemplate(id: number | string): Observable<ClientTemplate> {
     return defer(() =>
       this.http.get<ClientTemplate>(
         this.config.apiUrl(`clients/${resourceId(id, 'ClientService.getWithTemplate')}`),
-        { params: TEMPLATE_ONLY_PARAMS },
+        { params: RECORD_TEMPLATE_PARAMS },
       ),
     );
   }
@@ -178,7 +181,7 @@ export class ClientService {
     );
   }
 
-  /** Updates a client: `PUT /clients/{id}`. The body carries no office, because the update endpoint refuses one and the model says so; the same `dateFormat`, `locale` and date formatting are applied here as on a create.. */
+  /** Updates a client: `PUT /clients/{id}`. The body carries no office, because the update endpoint refuses one and the model says so, and it carries the loan officer as `staffId` — a number to assign, a `null` to unassign — with the same `dateFormat`, `locale` and date formatting applied here as on a create. */
   update(id: number | string, body: ClientEditInput): Observable<ClientMutationResponse> {
     return defer(() =>
       this.http.put<ClientMutationResponse>(
@@ -286,7 +289,7 @@ export class ClientService {
     };
   }
 
-  /** The caller's {@link ClientEditInput} as the wire body: the same rule as {@link createWire}, so a member the caller left `undefined` stays out of the payload and a `null` date stays `null`. */
+  /** The caller's {@link ClientEditInput} as the wire body: the same rule as {@link createWire}, so a member the caller left `undefined` stays out of the payload and a `null` date stays `null`; `staffId` follows the same pattern, and a `null` there survives to the wire because that is how the operator unassigns an officer (Rule 1 clause 3). */
   private editWire(body: ClientEditInput): ClientEditWire {
     const dates = this.dateWire();
 
@@ -297,6 +300,7 @@ export class ClientService {
       ...(body.fullname === undefined ? {} : { fullname: body.fullname }),
       ...(body.externalId === undefined ? {} : { externalId: body.externalId }),
       ...(body.mobileNo === undefined ? {} : { mobileNo: body.mobileNo }),
+      ...(body.staffId === undefined ? {} : { staffId: body.staffId }),
       ...(body.activationDate === undefined
         ? {}
         : { activationDate: toFineractDate(body.activationDate, dates.locale) }),

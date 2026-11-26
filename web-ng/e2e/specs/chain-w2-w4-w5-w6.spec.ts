@@ -86,7 +86,6 @@ function figureOf(value: string | number | null): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-/** A figure the chain's arithmetic needs, or a failure that names what is missing. */
 function requireFigure(value: number | null, description: string): number {
   if (value === null || !Number.isFinite(value)) {
     throw new Error(
@@ -281,7 +280,6 @@ test.describe('Chain W2 → W4 → W5 → W6 end-to-end proof', () => {
         await pages.clients.fillClientForm({ activationDate: runDateInput });
       }
       await pages.clients.submitAction();
-      // A lifecycle command only navigates back to the record once the server accepted it, so the address is the application's own readiness signal for the state this stage reads next.
       await expect(
         page,
         'W2: a successful activation returns to the client record',
@@ -303,7 +301,6 @@ test.describe('Chain W2 → W4 → W5 → W6 end-to-end proof', () => {
         PAYLOAD_DATE_FORMAT,
       );
       expect(activation['locale'], 'Rule 1 clause 2: the body carries the locale').toBe(LOCALE);
-      // The capture turns every payload date into a day offset from the run date, so the token proves the body carried a date in the run-date format and names the day it carried.
       const sentActivationOffset = offsetOfDateToken(activation['activationDate']);
       expect(
         sentActivationOffset,
@@ -724,7 +721,6 @@ test.describe('Chain W2 → W4 → W5 → W6 end-to-end proof', () => {
       ).toBe(0);
       for (const exchange of capture.capture.exchanges) {
         if (exchange.path === AUTHENTICATION_PATH) {
-          // The credential exchange is the one call that precedes a session, so it carries no credential header of its own.
           continue;
         }
         expect(

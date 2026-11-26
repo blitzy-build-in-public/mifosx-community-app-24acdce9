@@ -12,10 +12,9 @@
   defined. Every other visual value comes from the global Bootstrap 3 layer `web-ng/src/styles.scss`
   compiles: `.container-fluid`, `.row` and `.col-md-*` are the page and its grid; `.panel-body` the
   card's body; `.form-group`, `.control-label` and `.form-control` the form layout at the legacy 34px
-  control height; `.form-control-static` a persisted value the payload sent no option list for;
-  `.has-error` and `.help-block` Bootstrap's own invalid-field treatment; `.alert.alert-danger` the
-  failure banner; `.btn.btn-default` and `.btn.btn-primary` the two footer actions (Rule 1 clause 6;
-  AAP 0.5.2). No style, colour or pixel value is written here.
+  control height; `.has-error` and `.help-block` Bootstrap's own invalid-field treatment;
+  `.alert.alert-danger` the failure banner; `.btn.btn-default` and `.btn.btn-primary` the two footer
+  actions (Rule 1 clause 6; AAP 0.5.2). No style, colour or pixel value is written here.
 
   Layout: the two-column `.row`/`.col-md-6` grid of the sibling create-client form rather than
   `form-horizontal`, because `app-date-field` and `app-select-field` each render their own
@@ -47,10 +46,12 @@
   `error.msg.resource.not.found`, the key `features/not-found` renders, so the message reads alike on
   every screen.
 
-  Error text is Fineract's own: `error()` carries the interceptor's `ApiError`, whose `message` is the
-  server's `errors[].defaultUserMessage` rendered verbatim — no prefix, no translation, no truncation
-  — because workflow W7 compares the rendered text with the server's. The form stays mounted below it
-  with every entered value intact (AAP 0.7.4; AAP 0.14.1 "errors are values").
+  Error text is Fineract's own: `error()` carries the `ApiError` the shared `screenFailure` hands back
+  for a 4xx, whose `message` is the server's `errors[].defaultUserMessage` rendered verbatim — no
+  prefix, no translation, no truncation — because workflow W7 compares the rendered text with the
+  server's. A 5xx or a transport failure is the interceptor's own one notification instead, so no
+  banner repeats it here. The form stays mounted with every entered value intact (AAP 0.7.4;
+  AAP 0.14.1 "errors are values").
 
   Deliberately absent: any `min`, `max` or `pattern` on an amount, since W7 depends on Fineract
   rejecting a 50,000 principal and the browser must not block it (Rule 1 clause 3); a product or
@@ -74,20 +75,11 @@
     <div class="col-md-12">
       <div appPanelCard [title]="'label.heading.editloanapplication' | translate">
         <div class="panel-body" [attr.aria-busy]="loading() ? 'true' : null">
-          <!--
-            A loan that does not exist, or a body the model's guard rejects: the record page's own
-            not-found sentence in place of the form, with the shell still usable around it and no
-            error banner, no retry action and no form (AAP 0.7.4 "States every list and record screen
-            must implement").
-          -->
+          <!-- A loan that does not exist, or a body the model's guard rejects: `shared/record-not-found` in place of the form, with the shell still usable around it and no error banner, no retry action and no form, and the same 404 reading the same way on every record screen (AAP 0.7.4 "States every list and record screen must implement"). -->
           @if (notFound()) {
-            <p class="text-center text-muted">{{ 'error.msg.resource.not.found' | translate }}</p>
+            <app-record-not-found />
           } @else {
-            <!--
-              Fineract's failure text, verbatim and unmoved by any prefix. `role="alert"` announces it
-              without a focus change, and every value the user entered is kept in the form below, so a
-              rejection costs no retyping.
-            -->
+            <!-- Fineract's failure text, verbatim and unmoved by any prefix. `role="alert"` announces it without a focus change, and every value the user entered is kept in the form below, so a rejection costs no retyping. -->
             @if (error(); as apiError) {
               <div class="alert alert-danger" role="alert">{{ apiError.message }}</div>
             }
@@ -99,12 +91,7 @@
                     <label class="control-label" for="principal">
                       {{ 'label.input.principal' | translate }}<span class="required">*</span>
                     </label>
-                    <!--
-                      `type="number"` keeps the control's value a number, which is what the form and
-                      the request body carry. `step="any"` only lifts the browser's whole-number
-                      assumption: no bound is placed on the amount, so a principal above the product's
-                      maximum still reaches Fineract (Rule 1 clause 3; workflow W7).
-                    -->
+                    <!-- `type="number"` keeps the control's value a number, which is what the form and the request body carry. `step="any"` only lifts the browser's whole-number assumption: no bound is placed on the amount, so a principal above the product's maximum still reaches Fineract (Rule 1 clause 3; workflow W7). -->
                     <input
                       id="principal"
                       name="principal"
@@ -117,7 +104,7 @@
                       [attr.aria-describedby]="principalInvalid ? 'principal-error' : null"
                     />
                     @if (principalInvalid) {
-                      <span id="principal-error" class="help-block">{{ 'label.requiredfield' | translate }}</span>
+                      <span id="principal-error" class="help-block" role="alert">{{ 'label.requiredfield' | translate }}</span>
                     }
                   </div>
                 </div>
@@ -138,7 +125,7 @@
                       [attr.aria-describedby]="loanTermInvalid ? 'loanTermFrequency-error' : null"
                     />
                     @if (loanTermInvalid) {
-                      <span id="loanTermFrequency-error" class="help-block">{{ 'label.requiredfield' | translate }}</span>
+                      <span id="loanTermFrequency-error" class="help-block" role="alert">{{ 'label.requiredfield' | translate }}</span>
                     }
                   </div>
                 </div>
@@ -148,28 +135,26 @@
                 <div class="col-md-6">
                   <label
                     class="control-label"
-                    [attr.for]="template().termFrequencyTypeOptions.length > 0 ? 'loanTermFrequencyType' : null"
+                    for="loanTermFrequencyType"
                   >
                     {{ 'label.heading.frequencyType' | translate }}<span class="required">*</span>
                   </label>
                   <!--
                     The options are Fineract's own list, rendered in the order the payload returned it
-                    (Rule 1 clause 3: dropdown sources are the template endpoint's). A payload that
-                    carried no list leaves the persisted value as a static display, because this form
-                    never invents an enumeration the server did not send.
+                    (Rule 1 clause 3: dropdown sources are the template endpoint's). The picker renders
+                    whether or not a list arrived, so the field its control requires always stays on
+                    screen: the control keeps `Validators.required`, which is legacy's own required rule
+                    and nothing added on top of it (Rule 1 clause 3), and a hidden field would leave the
+                    form permanently invalid with nothing visible to correct. A payload that sent no
+                    list therefore renders the honest empty select, in the same seven places the
+                    enumeration pickers always occupy.
                   -->
-                  @if (template().termFrequencyTypeOptions.length > 0) {
-                    <app-select-field
-                      inputId="loanTermFrequencyType"
-                      [control]="controls.loanTermFrequencyType"
-                      [options]="template().termFrequencyTypeOptions"
-                      [required]="true"
-                    />
-                  } @else {
-                    <div class="form-group">
-                      <p class="form-control-static">{{ template().termFrequencyType ?? '' }}</p>
-                    </div>
-                  }
+                  <app-select-field
+                    inputId="loanTermFrequencyType"
+                    [control]="controls.loanTermFrequencyType"
+                    [options]="template().termFrequencyTypeOptions"
+                    [required]="true"
+                  />
                 </div>
                 <div class="col-md-6">
                   <div class="form-group" [class.has-error]="repaymentsInvalid">
@@ -188,7 +173,7 @@
                       [attr.aria-describedby]="repaymentsInvalid ? 'numberOfRepayments-error' : null"
                     />
                     @if (repaymentsInvalid) {
-                      <span id="numberOfRepayments-error" class="help-block">{{ 'label.requiredfield' | translate }}</span>
+                      <span id="numberOfRepayments-error" class="help-block" role="alert">{{ 'label.requiredfield' | translate }}</span>
                     }
                   </div>
                 </div>
@@ -212,29 +197,23 @@
                       [attr.aria-describedby]="repaymentEveryInvalid ? 'repaymentEvery-error' : null"
                     />
                     @if (repaymentEveryInvalid) {
-                      <span id="repaymentEvery-error" class="help-block">{{ 'label.requiredfield' | translate }}</span>
+                      <span id="repaymentEvery-error" class="help-block" role="alert">{{ 'label.requiredfield' | translate }}</span>
                     }
                   </div>
                 </div>
                 <div class="col-md-6">
                   <label
                     class="control-label"
-                    [attr.for]="template().repaymentFrequencyTypeOptions.length > 0 ? 'repaymentFrequencyType' : null"
+                    for="repaymentFrequencyType"
                   >
                     {{ 'label.heading.frequencyType' | translate }}<span class="required">*</span>
                   </label>
-                  @if (template().repaymentFrequencyTypeOptions.length > 0) {
-                    <app-select-field
-                      inputId="repaymentFrequencyType"
-                      [control]="controls.repaymentFrequencyType"
-                      [options]="template().repaymentFrequencyTypeOptions"
-                      [required]="true"
-                    />
-                  } @else {
-                    <div class="form-group">
-                      <p class="form-control-static">{{ template().repaymentFrequencyType ?? '' }}</p>
-                    </div>
-                  }
+                  <app-select-field
+                    inputId="repaymentFrequencyType"
+                    [control]="controls.repaymentFrequencyType"
+                    [options]="template().repaymentFrequencyTypeOptions"
+                    [required]="true"
+                  />
                 </div>
               </div>
 
@@ -256,29 +235,23 @@
                       [attr.aria-describedby]="interestRateInvalid ? 'interestRatePerPeriod-error' : null"
                     />
                     @if (interestRateInvalid) {
-                      <span id="interestRatePerPeriod-error" class="help-block">{{ 'label.requiredfield' | translate }}</span>
+                      <span id="interestRatePerPeriod-error" class="help-block" role="alert">{{ 'label.requiredfield' | translate }}</span>
                     }
                   </div>
                 </div>
                 <div class="col-md-6">
                   <label
                     class="control-label"
-                    [attr.for]="template().interestRateFrequencyTypeOptions.length > 0 ? 'interestRateFrequencyType' : null"
+                    for="interestRateFrequencyType"
                   >
                     {{ 'label.heading.frequencyType' | translate }}<span class="required">*</span>
                   </label>
-                  @if (template().interestRateFrequencyTypeOptions.length > 0) {
-                    <app-select-field
-                      inputId="interestRateFrequencyType"
-                      [control]="controls.interestRateFrequencyType"
-                      [options]="template().interestRateFrequencyTypeOptions"
-                      [required]="true"
-                    />
-                  } @else {
-                    <div class="form-group">
-                      <p class="form-control-static">{{ template().interestRateFrequencyType ?? '' }}</p>
-                    </div>
-                  }
+                  <app-select-field
+                    inputId="interestRateFrequencyType"
+                    [control]="controls.interestRateFrequencyType"
+                    [options]="template().interestRateFrequencyTypeOptions"
+                    [required]="true"
+                  />
                 </div>
               </div>
 
@@ -286,42 +259,30 @@
                 <div class="col-md-6">
                   <label
                     class="control-label"
-                    [attr.for]="template().amortizationTypeOptions.length > 0 ? 'amortizationType' : null"
+                    for="amortizationType"
                   >
                     {{ 'label.input.amortization' | translate }}<span class="required">*</span>
                   </label>
-                  @if (template().amortizationTypeOptions.length > 0) {
-                    <app-select-field
-                      inputId="amortizationType"
-                      [control]="controls.amortizationType"
-                      [options]="template().amortizationTypeOptions"
-                      [required]="true"
-                    />
-                  } @else {
-                    <div class="form-group">
-                      <p class="form-control-static">{{ template().amortizationType ?? '' }}</p>
-                    </div>
-                  }
+                  <app-select-field
+                    inputId="amortizationType"
+                    [control]="controls.amortizationType"
+                    [options]="template().amortizationTypeOptions"
+                    [required]="true"
+                  />
                 </div>
                 <div class="col-md-6">
                   <label
                     class="control-label"
-                    [attr.for]="template().interestTypeOptions.length > 0 ? 'interestType' : null"
+                    for="interestType"
                   >
                     {{ 'label.heading.interesttype' | translate }}<span class="required">*</span>
                   </label>
-                  @if (template().interestTypeOptions.length > 0) {
-                    <app-select-field
-                      inputId="interestType"
-                      [control]="controls.interestType"
-                      [options]="template().interestTypeOptions"
-                      [required]="true"
-                    />
-                  } @else {
-                    <div class="form-group">
-                      <p class="form-control-static">{{ template().interestType ?? '' }}</p>
-                    </div>
-                  }
+                  <app-select-field
+                    inputId="interestType"
+                    [control]="controls.interestType"
+                    [options]="template().interestTypeOptions"
+                    [required]="true"
+                  />
                 </div>
               </div>
 
@@ -329,53 +290,31 @@
                 <div class="col-md-6">
                   <label
                     class="control-label"
-                    [attr.for]="
-                      template().interestCalculationPeriodTypeOptions.length > 0 ? 'interestCalculationPeriodType' : null
-                    "
+                    for="interestCalculationPeriodType"
                   >
                     {{ 'label.input.interestcalculationperiod' | translate }}<span class="required">*</span>
                   </label>
-                  @if (template().interestCalculationPeriodTypeOptions.length > 0) {
-                    <app-select-field
-                      inputId="interestCalculationPeriodType"
-                      [control]="controls.interestCalculationPeriodType"
-                      [options]="template().interestCalculationPeriodTypeOptions"
-                      [required]="true"
-                    />
-                  } @else {
-                    <div class="form-group">
-                      <p class="form-control-static">{{ template().interestCalculationPeriodType ?? '' }}</p>
-                    </div>
-                  }
+                  <app-select-field
+                    inputId="interestCalculationPeriodType"
+                    [control]="controls.interestCalculationPeriodType"
+                    [options]="template().interestCalculationPeriodTypeOptions"
+                    [required]="true"
+                  />
                 </div>
                 <div class="col-md-6">
                   <label
                     class="control-label"
-                    [attr.for]="
-                      template().transactionProcessingStrategyOptions.length > 0
-                        ? 'transactionProcessingStrategyId'
-                        : null
-                    "
+                    for="transactionProcessingStrategyId"
                   >
                     {{ 'label.input.repaymentstrategy' | translate }}<span class="required">*</span>
                   </label>
-                  <!--
-                    The strategy picker is keyed by the option's `code`, which is what the request body
-                    posts (`transactionProcessingStrategyCode`); the control's id stays the legacy
-                    template's `transactionProcessingStrategyId` so the parity page objects find it.
-                  -->
-                  @if (template().transactionProcessingStrategyOptions.length > 0) {
-                    <app-select-field
-                      inputId="transactionProcessingStrategyId"
-                      [control]="controls.transactionProcessingStrategyId"
-                      [options]="template().transactionProcessingStrategyOptions"
-                      [required]="true"
-                    />
-                  } @else {
-                    <div class="form-group">
-                      <p class="form-control-static">{{ template().transactionProcessingStrategyCode ?? '' }}</p>
-                    </div>
-                  }
+                  <!-- The strategy picker is keyed by the option's `code`, which is what the request body posts (`transactionProcessingStrategyCode`); the control's id stays the legacy template's `transactionProcessingStrategyId` so the parity page objects find it. -->
+                  <app-select-field
+                    inputId="transactionProcessingStrategyId"
+                    [control]="controls.transactionProcessingStrategyId"
+                    [options]="template().transactionProcessingStrategyOptions"
+                    [required]="true"
+                  />
                 </div>
               </div>
 
@@ -384,12 +323,7 @@
                   <label class="control-label" for="submittedOnDate">
                     {{ 'label.input.submittedon' | translate }}<span class="required">*</span>
                   </label>
-                  <!--
-                    `app-date-field` replaces the legacy jQuery datepicker (AAP 0.10.5 item 1) and holds
-                    the date as `Date | null`, which `LoanService.update` serialises with `dateFormat`
-                    and the active `locale` at the boundary. No native `required`, `min` or `max`: the
-                    browser must not block a date Fineract alone judges.
-                  -->
+                  <!-- `app-date-field` replaces the legacy jQuery datepicker (AAP 0.10.5 item 1) and holds the date as `Date | null`, which `LoanService.update` serialises with `dateFormat` and the active `locale` at the boundary. No native `required`, `min` or `max`: the browser must not block a date Fineract alone judges. -->
                   <app-date-field
                     inputId="submittedOnDate"
                     [control]="controls.submittedOnDate"
@@ -415,11 +349,7 @@
               <div class="row">
                 <div class="col-md-6">
                   <label class="control-label" for="loanOfficerId">{{ 'label.input.loanofficer' | translate }}</label>
-                  <!--
-                    Optional, and the prompt row returns the picker to empty, as the legacy chosen
-                    control's prompt did. The rows are Fineract's `loanOfficerOptions`, in the order
-                    the payload sent them — not re-sorted here.
-                  -->
+                  <!-- Optional, and the prompt row returns the picker to empty, as the legacy chosen control's prompt did. The rows are Fineract's `loanOfficerOptions`, in the order the payload sent them — not re-sorted here. -->
                   <app-select-field
                     inputId="loanOfficerId"
                     [control]="controls.loanOfficerId"
@@ -440,20 +370,11 @@
 
               <div class="row">
                 <div class="col-md-offset-5 col-md-7">
-                  <!--
-                    Cancel returns to the record and posts nothing: `#/viewloanaccount/:id`, the route
-                    the loan record declares. No history-based "back", so the destination does not
-                    depend on how the user arrived.
-                  -->
+                  <!-- Cancel returns to the record and posts nothing: `#/viewloanaccount/:id`, the route the loan record declares. No history-based "back", so the destination does not depend on how the user arrived. -->
                   <a class="btn btn-default" [routerLink]="['/viewloanaccount', loanId()]">
                     {{ 'label.button.cancel' | translate }}
                   </a>
-                  <!--
-                    `type="submit"` so Enter in any field runs the same `(ngSubmit)` handler. Disabled
-                    while the save is in flight — `PUT /loans/{id}` is not idempotent, so one click
-                    must send exactly one request — and while no record is loaded, so an empty form
-                    cannot be saved before the payload arrives.
-                  -->
+                  <!-- `type="submit"` so Enter in any field runs the same `(ngSubmit)` handler. Disabled while the save is in flight — `PUT /loans/{id}` is not idempotent, so one click must send exactly one request — and while no record is loaded, so an empty form cannot be saved before the payload arrives. -->
                   <button type="submit" class="btn btn-primary" [disabled]="guard.busy() || !account()">
                     {{ 'label.button.save' | translate }}
                   </button>

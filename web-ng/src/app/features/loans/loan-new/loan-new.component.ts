@@ -14,8 +14,8 @@ import { firstValueFrom } from 'rxjs';
 
 import { screenFailure } from '../../../core/http/api-error';
 import { DateFieldComponent } from '../../../shared/date-field/date-field.component';
-import { fromFineractDate } from '../../../shared/date-format.util';
 import { PanelCardComponent } from '../../../shared/panel-card/panel-card.component';
+import { RecordNotFoundComponent } from '../../../shared/record-not-found/record-not-found.component';
 import {
   SelectFieldComponent,
   type SelectOption,
@@ -32,10 +32,14 @@ import { LoanService } from '../loan.service';
 import type { LoanApplicationInput } from '../loan.service';
 import { RepaymentPreviewComponent } from './repayment-preview/repayment-preview.component';
 
-/** The two controls of one charge row of the application's charge list: the charge the applicant picked and the amount the server reports for it (AAP 0.7.2). */
+/** The legacy application screen's own `chargeTimeType.id == 2` test for a charge that falls due on a date the applicant supplies, reproduced because `LoanChargeOption.chargeTimeType` models the id and the display text and not the code (AAP 0.7.2 row `LoanChargeRequest`; Rule 1 clause 3). */
+const SPECIFIED_DUE_DATE_CHARGE_TIME_TYPE_ID = 2;
+
+/** The three controls of one charge row of the application's charge list: the charge the applicant picked, the amount the server reports for it, and the due date a charge that falls due on a specified date is dated with (AAP 0.7.2 rows `LoanApplicationRequest` and `LoanChargeRequest`). */
 interface ChargeRowControls {
   readonly chargeId: FormControl<SelectValue | null>;
   readonly amount: FormControl<number | null>;
+  readonly dueDate: FormControl<Date | null>;
 }
 
 /** Whether a value is a plain object whose members can be read by key (Rule 1 clause 4, AAP 0.14.1). */
@@ -131,6 +135,7 @@ function today(): Date {
     PanelCardComponent,
     SelectFieldComponent,
     RepaymentPreviewComponent,
+    RecordNotFoundComponent,
   ],
   templateUrl: './loan-new.component.html',
 })
@@ -150,7 +155,7 @@ export class LoanNewComponent {
   /** The client the application is opened for, exactly as the route carries it: `null` when the URL names no client. */
   readonly clientId = signal<string | null>(null);
 
-  /** The repayment schedule of the last preview, or `null` before one is asked for and after the product changes. */
+  /** The repayment schedule of the last successful preview, or `null` before one is asked for, after the product changes and after a preview the server refuses — the table never outlives the values it was computed for (AAP 0.7.4). */
   readonly schedule = signal<RepaymentSchedule | null>(null);
 
   /** Fineract's own failure text for the last rejected call, rendered verbatim above the form. */
@@ -319,11 +324,13 @@ export class LoanNewComponent {
       request.fundId = fundId;
     }
 
+    // A row posts its due date only when it holds one, which only a charge that falls due on a specified date ever reveals: a charge dated on disbursement carries no `dueDate` member at all (AAP 0.7.2 row `LoanChargeRequest`; Rule 1 clause 2).
     const charges = values.charges
       .filter((row) => row.chargeId !== null)
       .map((row) => ({
         chargeId: this.requireNumber(row.chargeId, 'chargeId'),
         amount: this.requireNumber(row.amount, 'amount'),
+        ...(row.dueDate === null ? {} : { dueDate: row.dueDate }),
       }));
 
     if (charges.length > 0) {
@@ -339,6 +346,9 @@ export class LoanNewComponent {
       if (!this.isReadyToSend()) {
         return;
       }
+
+      // The table must belong to the values the form holds when the answer arrives, so the schedule of any earlier preview is dropped before this one is asked for: a calculation the server refuses then leaves no table on screen instead of one an earlier principal produced (AAP 0.7.4).
+      this.schedule.set(null);
 
       try {
         const schedule = await firstValueFrom(this.loanService.previewSchedule(this.buildRequest()));
@@ -390,7 +400,7 @@ export class LoanNewComponent {
     void this.loadTemplate(clientId, selected);
   }
 
-  /** Reads the picked charge's own terms and puts the amount the server reports into the row (Rule 1 clause 3). */
+  /** Reads the picked charge's own terms, puts the amount the server reports into the row, and keeps a due date only on the row of a charge that falls due on a specified date (Rule 1 clause 3). */
   onChargeSelect(rowIndex: number, chargeId: SelectValue | null = null): void {
     if (!this.isChargeRow(rowIndex)) {
       return;
@@ -399,20 +409,39 @@ export class LoanNewComponent {
     const row = this.chargeRows.at(rowIndex);
     const selected = chargeId ?? row.controls.chargeId.value;
 
-    // The select writes its own control before this handler runs; writing the value here as well keeps the row coherent for a caller that names the charge directly, so the amount read below always belongs to the charge the body will post.
     if (chargeId !== null && row.controls.chargeId.value !== chargeId) {
       row.controls.chargeId.setValue(chargeId);
     }
 
     if (selected === null) {
       row.controls.amount.setValue(null);
+      row.controls.dueDate.setValue(null);
 
       return;
     }
 
     const option = this.chargeOptions().find((charge) => charge.id === selected);
     row.controls.amount.setValue(option?.amount ?? null);
+
+    // A due date belongs to the charge that falls due on a specified date and to no other, so a row that no longer holds such a charge drops the date it carried rather than posting one charge's date for another (AAP 0.7.2 row `LoanChargeRequest`).
+    if (option?.chargeTimeType?.id !== SPECIFIED_DUE_DATE_CHARGE_TIME_TYPE_ID) {
+      row.controls.dueDate.setValue(null);
+    }
+
     void this.readChargeAmount(rowIndex, selected);
+  }
+
+  /** Whether a charge row's picked charge falls due on a date the applicant supplies — the legacy `chargeTimeType.id == 2` test, which reveals the row's due-date field and is what {@link buildRequest} posts `dueDate` for (AAP 0.7.2 row `LoanChargeRequest`; Rule 1 clause 3). */
+  isSpecifiedDueDate(row: FormGroup<ChargeRowControls>): boolean {
+    const selected = row.controls.chargeId.value;
+
+    if (selected === null) {
+      return false;
+    }
+
+    const option = this.chargeOptions().find((charge) => charge.id === selected);
+
+    return option?.chargeTimeType?.id === SPECIFIED_DUE_DATE_CHARGE_TIME_TYPE_ID;
   }
 
   /** Adds an empty charge row, which the applicant then fills from the charge list — the application screen's counterpart of the legacy wizard's "add charge" step. */
@@ -459,21 +488,20 @@ export class LoanNewComponent {
     return !this.destroyRef.destroyed && sequence === this.templateSequence;
   }
 
-  /** Seeds every option list, every default and every charge row from one template payload (AAP 0.7.2). */
+  /** Seeds every option list, every default and every charge row from one template payload (AAP 0.7.2). Every member is read from the typed `LoanTemplate` this service returns, so a Fineract rename fails the build; the row helpers below still drop any row the server sent in another shape, and a list the payload omitted simply leaves its picker empty. */
   private applyTemplate(template: LoanTemplate): void {
-    // A payload that is not a plain object carries no option list and no default, so the record every read below goes through is then empty and every field keeps the value it already holds.
-    const wire: Readonly<Record<string, unknown>> = isWireObject(template) ? template : {};
-
-    this.productOptions.set(readOptionRows(wire['productOptions']));
-    this.loanOfficerOptions.set(readOptionRows(wire['loanOfficerOptions']));
-    this.fundOptions.set(readOptionRows(wire['fundOptions']));
-    this.termFrequencyTypeOptions.set(readOptionRows(wire['termFrequencyTypeOptions']));
-    this.repaymentFrequencyTypeOptions.set(readOptionRows(wire['repaymentFrequencyTypeOptions']));
-    this.interestRateFrequencyTypeOptions.set(readOptionRows(wire['interestRateFrequencyTypeOptions']));
-    this.amortizationTypeOptions.set(readOptionRows(wire['amortizationTypeOptions']));
-    this.interestTypeOptions.set(readOptionRows(wire['interestTypeOptions']));
+    this.productOptions.set(readOptionRows(template.productOptions));
+    this.loanOfficerOptions.set(readOptionRows(template.loanOfficerOptions));
+    this.fundOptions.set(readOptionRows(template.fundOptions));
+    this.termFrequencyTypeOptions.set(readOptionRows(template.termFrequencyTypeOptions));
+    this.repaymentFrequencyTypeOptions.set(readOptionRows(template.repaymentFrequencyTypeOptions));
+    this.interestRateFrequencyTypeOptions.set(
+      readOptionRows(template.interestRateFrequencyTypeOptions),
+    );
+    this.amortizationTypeOptions.set(readOptionRows(template.amortizationTypeOptions));
+    this.interestTypeOptions.set(readOptionRows(template.interestTypeOptions));
     this.interestCalculationPeriodTypeOptions.set(
-      readOptionRows(wire['interestCalculationPeriodTypeOptions']),
+      readOptionRows(template.interestCalculationPeriodTypeOptions),
     );
     this.transactionProcessingStrategyOptions.set(
       (template.transactionProcessingStrategyOptions ?? []).map((strategy) => ({
@@ -483,24 +511,22 @@ export class LoanNewComponent {
     );
 
     this.form.patchValue({
-      productId: asId(template.product?.id) ?? asId(wire['productId']),
+      productId: asId(template.product?.id) ?? asId(template.productId),
       principal: asNumber(template.principal),
       loanTermFrequency: asNumber(template.termFrequency),
-      loanTermFrequencyType: readSelectedId(wire['termPeriodFrequencyType']),
+      loanTermFrequencyType: readSelectedId(template.termPeriodFrequencyType),
       numberOfRepayments: asNumber(template.numberOfRepayments),
       repaymentEvery: asNumber(template.repaymentEvery),
-      repaymentFrequencyType: readSelectedId(wire['repaymentFrequencyType']),
+      repaymentFrequencyType: readSelectedId(template.repaymentFrequencyType),
       interestRatePerPeriod: asNumber(template.interestRatePerPeriod),
-      interestRateFrequencyType: readSelectedId(wire['interestRateFrequencyType']),
-      amortizationType: readSelectedId(wire['amortizationType']),
-      interestType: readSelectedId(wire['interestType']),
-      interestCalculationPeriodType: readSelectedId(wire['interestCalculationPeriodType']),
+      interestRateFrequencyType: readSelectedId(template.interestRateFrequencyType),
+      amortizationType: readSelectedId(template.amortizationType),
+      interestType: readSelectedId(template.interestType),
+      interestCalculationPeriodType: readSelectedId(template.interestCalculationPeriodType),
       transactionProcessingStrategyId: asText(template.transactionProcessingStrategyCode),
-      expectedDisbursementDate: fromFineractDate(template.expectedDisbursementDate),
-      submittedOnDate:
-        fromFineractDate(template.submittedOnDate) ??
-        this.form.controls.submittedOnDate.value ??
-        today(),
+      // Both default dates come from the browser clock and from nothing else: AAP 0.10.5 item 15 keeps a form's default dates (submission and disbursement among them) on the clock legacy used, and AAP 0.12 leaves the tenant's business date to the harness, which is where the business date the contract asks for is discharged. Reading either member from the template would put the pair on two clocks; reading the business date here would add a request legacy never makes.
+      expectedDisbursementDate: this.form.controls.expectedDisbursementDate.value ?? today(),
+      submittedOnDate: this.form.controls.submittedOnDate.value ?? today(),
       loanOfficerId: asId(template.loanOfficerId),
       fundId: asId(template.fundId),
     });
@@ -540,11 +566,12 @@ export class LoanNewComponent {
     }
   }
 
-  /** Builds one empty or preselected charge row. */
+  /** Builds one empty or preselected charge row. Its due date starts empty on every row, because only a charge that falls due on a specified date reveals the field and the applicant supplies the date (AAP 0.7.2 row `LoanChargeRequest`). */
   private chargeRow(chargeId: SelectValue | null, amount: number | null): FormGroup<ChargeRowControls> {
     return this.formBuilder.group<ChargeRowControls>({
       chargeId: this.formBuilder.control<SelectValue | null>(chargeId, Validators.required),
       amount: this.formBuilder.control<number | null>(amount, Validators.required),
+      dueDate: this.formBuilder.control<Date | null>(null),
     });
   }
 

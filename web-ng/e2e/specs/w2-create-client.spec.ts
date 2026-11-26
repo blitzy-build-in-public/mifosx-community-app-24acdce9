@@ -26,7 +26,6 @@ const CLIENT_RECORD = '/clients/{clientId}';
 /** The lifecycle command this workflow runs (AAP 0.9.1 scope group 2). */
 const ACTIVATE_COMMAND = 'activate';
 
-/** How long a record navigation is allowed to take; the config's own navigation timeout is 45 s. */
 const RECORD_TIMEOUT_MS = 45_000;
 
 /** One field of a captured JSON body, or `undefined` when the body is absent or is not an object (Rule 1 clause 4). */
@@ -76,7 +75,6 @@ function isActiveStatus(status: string): boolean {
   return status.trim().toLowerCase() === 'active';
 }
 
-/** The exchanges of one capture that call a path with a method. @param exchanges The capture as it stands. @param method HTTP method, upper-cased as the capture records it. @param path Path tail the exchange's templated. */
 function exchangesTo(
   exchanges: readonly NormalizedExchange[],
   method: string,
@@ -87,7 +85,6 @@ function exchangesTo(
   );
 }
 
-/** Waits for the client record to be the screen the browser shows, and answers the client id it names. */
 async function awaitClientRecord(
   page: WorkflowTools['page'],
   expectedId: number | null,
@@ -134,7 +131,6 @@ async function enterActivationDate(
     const legacyField = page.locator('#activationDate');
     await legacyField.waitFor({ state: 'visible', timeout: RECORD_TIMEOUT_MS });
     await legacyField.fill(fieldDate);
-    // The datepicker opens on focus; Escape closes the popup and leaves the typed text, which is both what a person sees and what the form submits.
     await legacyField.press('Escape');
     expect(
       await legacyField.inputValue(),
@@ -197,7 +193,6 @@ test.describe('W2 create and activate a client', () => {
         'the form paints the legacy required markers on the fields that are mandatory',
       ).toBeGreaterThanOrEqual(3);
 
-      // The office options are read through the running side's page object.
       const officeOptions = await pages.clients.readSelectOptions('Office');
       const officeLabels: string[] = [];
       for (const option of officeOptions) {
@@ -237,7 +232,6 @@ test.describe('W2 create and activate a client', () => {
       // --------------------------------------------------------------------------------------- 5.
       await pages.clients.submitForm();
       const clientId: number = await awaitClientRecord(page, null);
-      // The record the create opened finishes its own reads before the workflow leaves it, so the captured sequence holds the record read answered rather than cancelled.
       await awaitScreenSettled(page);
 
       const afterCreate: readonly NormalizedExchange[] = capture.capture.exchanges;

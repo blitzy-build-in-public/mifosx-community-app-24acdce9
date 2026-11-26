@@ -28,7 +28,6 @@ export const fineractInterceptor: HttpInterceptorFn = (req, next) => {
   const resolved = config.changes();
 
   if (resolved === null) {
-    // Bootstrap is resolving the configuration this request may be part of, so nothing is read from it.
     return next(req);
   }
 
@@ -41,7 +40,6 @@ export const fineractInterceptor: HttpInterceptorFn = (req, next) => {
     headers = headers.set(AUTHORIZATION_HEADER, `Basic ${current.authenticationKey}`);
   }
 
-  // Headers alone: URL, method and query parameters reach the handler as the service composed them.
   return next(req.clone({ headers })).pipe(
     catchError((error: unknown) => {
       if (!(error instanceof HttpErrorResponse)) {
@@ -51,13 +49,10 @@ export const fineractInterceptor: HttpInterceptorFn = (req, next) => {
       const apiError = toApiError(error);
 
       if (error.status === 401) {
-        // A refused authentication is the login screen's own message, and the user is already there.
         if (!isAuthenticationRequest) {
           session.clear();
 
-          // Left to the login screen while it is showing, rather than re-navigating it into a loop.
           if (!router.url.startsWith('/login')) {
-            // Settled rather than dropped: a navigation the router refuses would otherwise be an unhandled rejection, and the user is told the return to the login screen did not happen instead of being left on a screen the ended.
             void router
               .navigate(['/login'], { queryParams: { returnUrl: router.url } })
               .catch((cause: unknown) => {
@@ -66,7 +61,6 @@ export const fineractInterceptor: HttpInterceptorFn = (req, next) => {
           }
         }
       } else if (error.status === 0 || error.status >= 500) {
-        // One notice for a failure no screen can render itself; a 4xx reaches the caller alone.
         notifications.show('error', apiError.message);
       }
 

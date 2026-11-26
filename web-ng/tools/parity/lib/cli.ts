@@ -5,13 +5,9 @@ import process from 'node:process';
 export interface CliUsage {
   /** Command name as an operator invokes it, e.g. the npm script `check:endpoints`. */
   readonly name: string;
-  /** One sentence stating what running the command does or proves. */
   readonly summary: string;
-  /** What the command does when it runs, one line per effect; a command that writes says so here. */
   readonly effects: readonly string[];
-  /** The environment variables the command reads, one line per variable or alias pair, named only. */
   readonly environment: readonly string[];
-  /** One example invocation per entry, in the form the operator would type it. */
   readonly examples: readonly string[];}
 /** What {@link resolveCliIntent} decided: run the command, or answer the arguments and stop with `exitCode` without running anything. */
 export type CliIntent = | { readonly kind: 'run' } | { readonly kind: 'handled'; readonly exitCode: number };

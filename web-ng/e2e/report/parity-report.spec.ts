@@ -8,7 +8,6 @@ import type { LineBudget, ParityReport, WorkflowRecord } from './parity-report';
 /** The backend address as the entry URL carries it: `encodeURIComponent` of `FINERACT_URL`. */
 const ENCODED_BACKEND_URL: string = encodeURIComponent(FINERACT_URL);
 
-/** The tenant as the entry URL carries it. */
 const ENCODED_TENANT: string = encodeURIComponent(TENANT_ID);
 
 /** AAP 0.10.2's mask marker, and the text every masked value must become. */
@@ -29,15 +28,12 @@ describe('parity-report entry-location redaction', () => {
   it('masks both values of every entry URL in a diagnostic and keeps the host, path, hash and sentence', () => {
     const redacted = redactEntryLocation(LOGIN_MESSAGE);
 
-    // The values are gone, in both URLs the message carries.
     expect(redacted).not.toContain(`tenantIdentifier=${ENCODED_TENANT}`);
     expect(redacted).not.toContain(`baseApiUrl=${ENCODED_BACKEND_URL}`);
     expect(redacted).not.toContain(ENCODED_BACKEND_URL);
 
-    // What makes the reason usable survives: the address, the route, the parameters' names and the prose.
     const maskedEntry = `${LEGACY_URL}/?baseApiUrl=${MASK}&tenantIdentifier=${MASK}`;
     expect(redacted).toContain(`${maskedEntry}#/login`);
-    // Both occurrences are masked — the one carrying the hash and the bare one — not just the first.
     expect(redacted.split(`tenantIdentifier=${MASK}`)).toHaveLength(3);
     expect(redacted).toContain('The legacy login form did not appear at either reading of the login route');
     expect(redacted).toContain('parameters these URLs carry.');
@@ -82,13 +78,11 @@ describe('parity-report entry-location redaction', () => {
 
     const validated = validateRecord(record);
 
-    // The facts the report keys on are untouched.
     expect(validated.workflow).toBe('W2');
     expect(validated.project).toBe('next');
     expect(validated.status).toBe('intentional-diff');
     expect(validated.intentionalDiffId).toBe(15);
 
-    // Both free-text fields lose the values and keep the rest, which criterion 4 needs of a reason.
     expect(validated.reason).not.toContain(`tenantIdentifier=${ENCODED_TENANT}`);
     expect(validated.reason).not.toContain(ENCODED_BACKEND_URL);
     expect(validated.reason).toContain('the legacy baseline was broken at');
@@ -97,7 +91,6 @@ describe('parity-report entry-location redaction', () => {
     expect(validated.failingStep).not.toContain(ENCODED_BACKEND_URL);
     expect(validated.failingStep).toContain('#/clients');
 
-    // The argument itself is not mutated: the caller keeps the text it produced.
     expect(record.reason).toContain(`tenantIdentifier=${ENCODED_TENANT}`);
   });
 });
@@ -125,31 +118,26 @@ describe('parity-report line budget', () => {
     const within = reportWith({ measuredLines: 58_643, measuredFiles: 245, checkScriptLines: 1_479, verdict: 'within' });
     const markdown = renderMarkdown(within);
 
-    // The record states the ceiling, the measured total with its file count and the command that settles it.
     expect(markdown).toContain('## Line budget');
     expect(markdown).toContain('Ceiling: 60,000 generated lines');
     expect(markdown).toContain('58,643 generated lines across 245 tracked files');
     expect(markdown).toContain('git ls-files | grep -v package-lock.json | xargs wc -l');
     expect(markdown).toContain('inside the ceiling by 1,357 lines');
-    // The prose trim and the cut on either side of it, then the crossing of the ceiling that engaged the fixed order.
     expect(markdown).toContain('88,418 lines at `4a13dc7`, the commit the prose trim follows');
     expect(markdown).toContain('58,799 at `c05766d`');
     expect(markdown).toContain('the tree crossed AAP 0.9.3\'s 60,000-line ceiling while the workflow screens landed');
-    // The second trim: the landed fix sets' growth, the crossing it caused and the totals it was measured against.
     expect(markdown).toContain('four fix sets landed after the cut and added 714 net lines');
     expect(markdown).toContain('taking the tree from 59,487 to 60,201 and over AAP 0.9.3\'s ceiling again');
-    // Restoring the cut half: the fixture measures 58,643 lines and the 17 cut files carry 5,214.
+    // The third trim: the ten fix sets that landed after the second cut, the crossing they caused and the fixed order's exhaustion.
+    expect(markdown).toContain('ten fix sets landed at this checkpoint and added 2,636 net lines across 91 files');
+    expect(markdown).toContain('taking the tree from 59,784 to 62,420 and over AAP 0.9.3\'s ceiling again');
     expect(markdown).toContain('the delivered tree plus them measures 63,857');
     expect(markdown).toContain('no Must scope was dropped');
-    // The check scripts' recorded share against the plan's about 600, stated as a revised share.
     expect(markdown).toContain('1,479 lines against AAP 0.9.3\'s share of about 600');
-    // Last section: nothing headed renders after it.
     expect(markdown.split('\n').filter((line) => line.startsWith('## ')).pop()).toBe('## Line budget');
 
-    // Inside the ceiling the record contributes no problem.
     expect(collectProblems(within)).toEqual([]);
 
-    // Over it, one problem names the measured total, the ceiling and the overage — what fails the report step.
     const over = reportWith({ measuredLines: 71_500, measuredFiles: 245, checkScriptLines: 1_479, verdict: 'over' });
     const problems = collectProblems(over);
     expect(problems).toHaveLength(1);

@@ -110,7 +110,6 @@ export class SessionService {
     try {
       parsed = JSON.parse(raw);
     } catch {
-      // Not JSON, so there is no session in it — and the value stays where every other reader finds it.
       return null;
     }
 
@@ -171,16 +170,13 @@ export class SessionService {
     try {
       projection = await firstValueFrom(readUser(stored.userId));
     } catch (cause: unknown) {
-      // A stored entry whose user cannot be read is not a session in effect: nothing is published and the gate is withdrawn rather than left open — unless a later session now owns the signals.
       if (this.state() === stored) {
         const status = failureStatus(cause);
 
         if (status === 401 || status === 0) {
-          // A credential the server refuses ends the session, so its entry goes with the signals instead of
-          // being left behind. That departs from Rule 1 clause 3, whose legacy `SessionManager` keeps an
-          // entry it could not validate, because AAP 0.4.2 requires a refused session to be cleared. The
-          // browser calling the API cross-origin reports this deployment's 401 as status 0 (no proxy,
-          // AAP 0.4.2), so the refusal is recognised where it is observed, not only in the interceptor.
+          // A credential the server refuses ends the session, so its entry goes with the signals instead of being left behind. That departs from Rule 1 clause 3, whose legacy `SessionManager` keeps an entry it
+          // could not validate, because AAP 0.4.2 requires a refused session to be cleared. The browser calling the API cross-origin reports this deployment's 401 as status 0 (no proxy, AAP 0.4.2), so the
+          // refusal is recognised where it is observed, not only in the interceptor.
           this.clear();
         } else {
           this.state.set(null);
@@ -192,7 +188,6 @@ export class SessionService {
     }
 
     if (this.state() !== stored) {
-      // A login replaced this session while the user read was in flight, so this answer describes a session no longer in effect and publishes nothing; the session now in effect owns the signals.
       return false;
     }
 
@@ -250,7 +245,6 @@ export class SessionService {
       store.setItem(sessionStorageKey(), entry);
       this.storageInSync = true;
     } catch {
-      // A full or read-only store leaves the memory copy as the session's home for this page.
       this.storageInSync = false;
     }
   }
@@ -269,7 +263,6 @@ export class SessionService {
       store.removeItem(SESSION_ENTRY_KEY);
       this.storageInSync = true;
     } catch {
-      // Nothing can be removed from a store that refuses access, and the signals are emptied anyway; the memory copy answers.
       this.storageInSync = false;
     }
   }

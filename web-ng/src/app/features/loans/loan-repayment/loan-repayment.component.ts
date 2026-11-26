@@ -16,8 +16,8 @@ import { firstValueFrom } from 'rxjs';
 
 import { ApiError, screenFailure, toDisplayableFailure } from '../../../core/http/api-error';
 import { DateFieldComponent } from '../../../shared/date-field/date-field.component';
-import { fromFineractDate } from '../../../shared/date-format.util';
 import { PanelCardComponent } from '../../../shared/panel-card/panel-card.component';
+import { RecordNotFoundComponent } from '../../../shared/record-not-found/record-not-found.component';
 import { SelectFieldComponent } from '../../../shared/select-field/select-field.component';
 import type { SelectOption, SelectValue } from '../../../shared/select-field/select-field.component';
 import { createSubmitGuard } from '../../../shared/submit-guard.util';
@@ -26,6 +26,13 @@ import { LoanService } from '../loan.service';
 
 /** The body a repayment form posts, taken from `LoanService.repay`'s own parameter type so it follows the service and can neither add `dateFormat`/`locale` nor omit a member the server needs (Rule 1 clause 2; AAP 0.7.2). */
 type RepaymentBody = Parameters<LoanService['repay']>[1];
+
+/** Local midnight of the browser's current date — the default transaction date this form opens on: AAP 0.10.5 item 15 registers a form's own default dates, the repayment date among them, as coming from the browser clock exactly as legacy's form defaults do, and AAP 0.12 keeps the tenant business date out of the application because reading it would add a request legacy never makes and register as a request difference in every workflow (AAP 0.10.5 item 15, AAP 0.12, Rule 1 clauses 2 and 3). */
+function today(): Date {
+  const now = new Date();
+
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
 
 /** The individual-loan repayment form — workflow W6 — mounted at `#/loanaccount/:id/repayment` by `LoanActionComponent`, so it is not a route target itself (AAP 0.7.1 row `loans`, 0.7.4, 0.8.2) (AAP 0.7.3, AAP 0.10.5, AAP 0.10.1, Rule 1 clause 3). */
 @Component({
@@ -37,6 +44,7 @@ type RepaymentBody = Parameters<LoanService['repay']>[1];
     TranslatePipe,
     DateFieldComponent,
     PanelCardComponent,
+    RecordNotFoundComponent,
     SelectFieldComponent,
   ],
   templateUrl: './loan-repayment.component.html',
@@ -79,7 +87,6 @@ export class LoanRepaymentComponent {
   readonly guard = createSubmitGuard();
 
   constructor() {
-    // The load runs from an effect on the loan id rather than in the constructor body, because a required input is not set at construction; only the id is read tracked, so seeding the form cannot re-enter the effect and issue a second read.
     effect(() => {
       const loanId = this.loanId();
 
@@ -129,7 +136,7 @@ export class LoanRepaymentComponent {
     });
   }
 
-  /** Writes one template's seeds onto the form, once the caller knows the run that read it is still the current one: the payment types in the server's order with the first preselected — legacy's own default, which opens the select on a real option where `ng-options` renders no blank row to choose instead (AAP 0.10.5, Rule 1 clause 3). */
+  /** Writes one template's seeds onto the form, once the caller knows the run that read it is still the current one: the payment types in the server's order with the first preselected — legacy's own default, which opens the select on a real option where `ng-options` renders no blank row to choose instead (AAP 0.10.5, Rule 1 clause 3) — and the amount the template defaults to. The transaction date is deliberately not a template seed: the template's `date` is the earliest unpaid instalment's due date on this backend, not the day the repayment is booked, so seeding it would open the form on a future date that an unchanged submit then posts; the form opens on the browser's today at local midnight instead, the default AAP 0.10.5 item 15 registers for the repayment form and the one AAP 0.12 leaves the application once the tenant business date stays the harness's to read (AAP 0.10.5 item 15, AAP 0.12, Rule 1 clause 3). */
   private seedForm(template: LoanTransactionTemplate): void {
     const paymentTypeOptions = template.paymentTypeOptions ?? [];
     const defaultPaymentType: SelectOption | undefined = paymentTypeOptions[0];
@@ -140,7 +147,8 @@ export class LoanRepaymentComponent {
       defaultPaymentType === undefined ? null : defaultPaymentType.id,
     );
 
-    this.form.controls.transactionDate.setValue(fromFineractDate(template.date) ?? new Date());
+    // Today rather than `template.date`, which the fork answers with the first unpaid instalment's due date — see this method's note and {@link today}.
+    this.form.controls.transactionDate.setValue(today());
 
     if (template.amount !== undefined) {
       this.form.controls.transactionAmount.setValue(template.amount);

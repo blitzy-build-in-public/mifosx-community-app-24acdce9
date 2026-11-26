@@ -13,9 +13,9 @@
   `span.required` is the legacy marker rule the global stylesheet carries.
 
   Field ids and `name` attributes are the legacy form's own where the two screens share a field —
-  `firstname`, `lastname`, `fullname`, `externalId`, `mobileNo`, `activationDate`, `cancel`, `save`
-  (`app/views/clients/editclient.html`) — so the parity harness addresses the same controls on both
-  applications and a label's `for` points at the control it names.
+  `officeId`, `staffId`, `firstname`, `lastname`, `fullname`, `externalId`, `mobileNo`,
+  `activationDate`, `cancel`, `save` (`app/views/clients/editclient.html`) — so the parity harness
+  addresses the same controls on both applications and a label's `for` points at the control it names.
 
   One name set renders at a time: an entity is named by `fullname` alone and a person by `firstname`
   and `lastname`, and the server rejects a body carrying both, so the branch is what keeps the posted
@@ -25,11 +25,16 @@
   clause 3; AAP 0.4.4 decision 6).
 
   Captions are the legacy bundle's own keys, translated here; the one untranslated string is
-  Fineract's own failure message, rendered verbatim above the form (Rule 1 clause 9). The controls
-  the legacy template also draws but this build does not render — office, account number, staff,
-  legal form, gender, client type, classification, date of birth, incorporation details, submission
-  date — are absent because the update endpoint accepts none of them or the record's model declares
-  none; rendering a control that cannot post would misrepresent what saving does.
+  Fineract's own failure message, rendered verbatim above the form (Rule 1 clause 9). The first row
+  is legacy's own: the record's office, rendered read-only exactly as the legacy `disabled` select
+  shows it, because `PUT /clients/{id}` refuses an `officeId` and legacy never posts one either; and
+  the loan officer, whose id is posted as `staffId` because the fork declares it in
+  `CLIENT_UPDATE_REQUEST_DATA_PARAMETERS` and validates it with `ignoreIfNull().longGreaterThanZero()`
+  (AAP 0.7.2 `ClientEditRequest`; Rule 1 clauses 2 and 3). The remaining controls the legacy template
+  also draws — account number, legal form, gender, client type, classification, date of birth,
+  incorporation details, submission date, middlename, isStaff — stay out because `ClientEditRequest`
+  declares none of them; rendering a control that cannot post would misrepresent what saving does
+  (AAP 0.7.2).
 
   The Cancel href binds `clientId()`, the id the URL names now, because the router reuses this
   component when the URL moves from one `#/editclient/{id}` to another: the component resets and
@@ -38,36 +43,57 @@
 -->
 <section class="container-fluid">
   <div class="row">
-    <div class="col-md-12">
+    <!-- The column holds the form's states, so it is the region a read in flight marks busy: assistive technology is told the record's own content is being replaced rather than that the whole page is (AAP 0.7.4 state rules; AAP 0.2.4 records that the design carries no loader). -->
+    <div class="col-md-12" [attr.aria-busy]="loading() ? 'true' : null">
       @if (loading()) {
         <!-- Nothing yet: the form is not painted before the record's own values arrive. -->
       } @else if (notFound()) {
-        <!--
-          No such client: the message replaces the form entirely, so no control is offered against a
-          record that was never read. Both strings are keys the shipped legacy bundles carry.
-        -->
-        <div class="alert alert-danger" role="alert">
-          <strong>{{ notFoundHeadingKey | translate }}</strong>{{ ' ' }}<span>{{ notFoundMessageKey | translate }}</span>
-        </div>
+        <!-- No such client: `shared/record-not-found` replaces the form entirely, so no control is offered against a record that was never read and the same 404 reads the same way on every record screen (AAP 0.7.4). -->
+        <app-record-not-found />
       } @else {
         <div appPanelCard [title]="headingKey | translate">
           <div class="panel-body">
-            <!--
-              Fineract's own failure text, verbatim and unmoved by any prefix: a failed save leaves
-              every entered value in the form below (AAP 0.7.4; AAP 0.14.1 "errors are values").
-            -->
+            <!-- Fineract's own failure text, verbatim and unmoved by any prefix: a failed save leaves every entered value in the form below (AAP 0.7.4; AAP 0.14.1 "errors are values"). -->
             @if (error(); as message) {
               <div class="alert alert-danger" role="alert">{{ message }}</div>
             }
 
-            <!-- The form exists only once the seed resolved: an empty form would post values the
-                 user never chose. -->
+            <!-- The form exists only once the seed resolved: an empty form would post values the user never chose. -->
             @if (ready()) {
               <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
                 <fieldset>
+                  <!--
+                    Legacy's own first row (`app/views/clients/editclient.html`): the office the record
+                    is filed under, shown but not offered, and the loan officer the update accepts as
+                    `staffId`. The office control is disabled in the component, exactly as the legacy
+                    select carries `disabled="disabled"`; both lists are the seed read's own options, in
+                    its order, and the officer's prompt is legacy's own caption, which returns the
+                    selection to empty so an assignment can be cleared.
+                  -->
+                  <div class="row">
+                    <div class="col-md-6">
+                      <label class="control-label" for="officeId">
+                        {{ 'label.heading.office' | translate }}<span class="required">*</span>
+                      </label>
+                      <app-select-field
+                        inputId="officeId"
+                        [control]="form.controls.officeId"
+                        [options]="officeOptions()"
+                      />
+                    </div>
+                    <div class="col-md-6">
+                      <label class="control-label" for="staffId">{{ 'label.heading.staff' | translate }}</label>
+                      <app-select-field
+                        inputId="staffId"
+                        [control]="form.controls.staffId"
+                        [options]="staffOptions()"
+                        [placeholder]="'label.menu.selectloanofficer' | translate"
+                      />
+                    </div>
+                  </div>
+
                   @if (isEntity()) {
-                    <!-- `PUT /clients/{id}` for an entity: the business name, and no individual
-                         name parts, which the server rejects beside it. -->
+                    <!-- `PUT /clients/{id}` for an entity: the business name, and no individual name parts, which the server rejects beside it. -->
                     <div class="row">
                       <div class="col-md-6">
                         <div class="form-group" [class.has-error]="showsRequiredError(form.controls.fullname)">
@@ -85,7 +111,7 @@
                             [attr.aria-describedby]="showsRequiredError(form.controls.fullname) ? 'fullname-error' : null"
                           />
                           @if (showsRequiredError(form.controls.fullname)) {
-                            <span id="fullname-error" class="help-block">
+                            <span id="fullname-error" class="help-block" role="alert">
                               {{ 'label.requiredfield' | translate }}
                             </span>
                           }
@@ -111,7 +137,7 @@
                             [attr.aria-describedby]="showsRequiredError(form.controls.firstname) ? 'firstname-error' : null"
                           />
                           @if (showsRequiredError(form.controls.firstname)) {
-                            <span id="firstname-error" class="help-block">
+                            <span id="firstname-error" class="help-block" role="alert">
                               {{ 'label.requiredfield' | translate }}
                             </span>
                           }
@@ -134,7 +160,7 @@
                             [attr.aria-describedby]="showsRequiredError(form.controls.lastname) ? 'lastname-error' : null"
                           />
                           @if (showsRequiredError(form.controls.lastname)) {
-                            <span id="lastname-error" class="help-block">
+                            <span id="lastname-error" class="help-block" role="alert">
                               {{ 'label.requiredfield' | translate }}
                             </span>
                           }
@@ -147,9 +173,7 @@
                     <div class="col-md-6">
                       <div class="form-group">
                         <label class="control-label" for="mobileNo">{{ 'label.input.mobilenumber' | translate }}</label>
-                        <!-- Optional, and a plain text input: the legacy form's own numeric pattern is
-                             not carried over, because Fineract alone decides what a number may look
-                             like and its message is what the user reads (Rule 1 clause 3). -->
+                        <!-- Optional, and a plain text input: the legacy form's own numeric pattern is not carried over, because Fineract alone decides what a number may look like and its message is what the user reads (Rule 1 clause 3). -->
                         <input
                           id="mobileNo"
                           name="mobileNo"
@@ -198,7 +222,7 @@
                           [required]="true"
                         >
                           @if (showsRequiredError(form.controls.activationDate)) {
-                            <span class="help-block">{{ 'label.requiredfield' | translate }}</span>
+                            <span class="help-block" role="alert">{{ 'label.requiredfield' | translate }}</span>
                           }
                         </app-date-field>
                       </div>
@@ -207,16 +231,11 @@
 
                   <div class="row">
                     <div class="col-md-offset-5 col-md-7">
-                      <!-- The way back to the record without posting anything: a router link, never
-                           a location change (AAP 0.14.1), bound to the id the URL names now, so an
-                           in-place move between two edit URLs cannot leave the previous client's
-                           record behind the link. -->
+                      <!-- The way back to the record without posting anything: a router link, never a location change (AAP 0.14.1), bound to the id the URL names now, so an in-place move between two edit URLs cannot leave the previous client's record behind the link. -->
                       <a id="cancel" class="btn btn-default" [routerLink]="['/viewclient', clientId()]">
                         {{ 'label.button.cancel' | translate }}
                       </a>
-                      <!-- Disabled while the save is in flight: `PUT /clients/{id}` is not
-                           idempotent, so the guard's busy signal is what keeps a second click from
-                           sending a second update (AAP 0.1.1; AAP 0.14.1). -->
+                      <!-- Disabled while the save is in flight: `PUT /clients/{id}` is not idempotent, so the guard's busy signal is what keeps a second click from sending a second update (AAP 0.1.1; AAP 0.14.1). -->
                       <button
                         id="save"
                         type="submit"

@@ -3,7 +3,6 @@
 import { request } from '@playwright/test';
 import type { APIResponse } from '@playwright/test';
 
-/** Reads the first non-blank value among a setting's accepted variable names, falling back when none of them is set — the one reader behind every environment setting, so a setting with an alias resolves by the same precedence. */
 function resolveFirstNonBlank(envNames: readonly string[], fallback: string): string {
   for (const envName of envNames) {
     const configured = (process.env[envName] ?? '').trim();
@@ -13,11 +12,9 @@ function resolveFirstNonBlank(envNames: readonly string[], fallback: string): st
   }
   return fallback;
 }
-/** Reads an environment setting that has one accepted name, falling back when it is unset or blank. */
 function resolveSetting(envName: string, fallback: string): string {
   return resolveFirstNonBlank([envName], fallback);
 }
-/** Reads a base address from the environment and drops trailing slashes, so path composition can never produce a doubled slash. */
 function resolveBaseUrl(envName: string, fallback: string): string {
   return resolveSetting(envName, fallback).replace(/\/+$/, '');
 }
@@ -25,7 +22,6 @@ function resolveBaseUrl(envName: string, fallback: string): string {
 export const FINERACT_URL: string = resolveBaseUrl('FINERACT_URL', 'https://localhost:8443');
 /** Base address of the legacy AngularJS application — the parity baseline, read-only and untouched (Rule 1 clause 1); defaults to the port its own container serves on. */
 export const LEGACY_URL: string = resolveBaseUrl('LEGACY_URL', 'http://localhost:9090');
-/** Base address of the new Angular application under test. Defaults to the port its image serves on. */
 export const NEXT_URL: string = resolveBaseUrl('NEXT_URL', 'http://localhost:4300');
 /** The API version segment every Fineract resource path sits below (`apiVer` in the legacy app). */
 export const API_PATH = '/fineract-provider/api/v1';
@@ -92,7 +88,6 @@ export function readCredentials(): Credentials {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
-/** Echoes a payload inside an error message without letting a stringify failure mask the real cause. */
 function describeBody(value: unknown): string {
   try {
     return JSON.stringify(value) ?? String(value);
@@ -100,11 +95,9 @@ function describeBody(value: unknown): string {
     return String(value);
   }
 }
-/** Lists a payload's top-level field names only — see {@link parseAuthenticationKey}, which must never echo an authentication response's values into a message a test runner prints. */
 function describeFields(value: unknown): string {
   return isRecord(value) ? Object.keys(value).sort().join(', ') || '(none)' : typeof value;
 }
-/** Parses a response body as JSON, reporting the raw body when it is not JSON, with the call and its status named in the error. */
 function readJsonBody(text: string, source: string): unknown {
   try {
     // JSON.parse answers `any`; widening it to `unknown` here is the boundary a caller must narrow, which is what keeps `any` out of this module (Rule 1 clause 4).
@@ -185,7 +178,6 @@ export function parseBusinessDateResponse(
 export function parseBusinessDate(body: unknown, source = 'the business-date response'): Date {
   const response = parseBusinessDateResponse(body, source);
   const [year, month, day] = response.date;
-  // Date.UTC takes a 0-based month and rolls impossible values forward, so the round trip below is what rejects 2026-13-45 rather than silently answering a date in 2027.
   const date = new Date(Date.UTC(year, month - 1, day));
   if (
     date.getUTCFullYear() !== year ||
@@ -268,7 +260,6 @@ export async function authenticate(): Promise<string> {
     await context.dispose();
   }
 }
-/** Milliseconds in a whole day; the unit {@link addDays} and {@link dayOffset} work in. */
 const MILLISECONDS_PER_DAY = 86_400_000;
 /** The run date once a read has succeeded, `null` until then and after a reset — per process, because one UI's run must use one run date for every workflow, seed value and comparison it makes. */
 let cachedBusinessDate: Date | null = null;
@@ -316,9 +307,7 @@ export async function readBusinessDate(authenticationKey?: string): Promise<Date
 export interface FineractDatePayload {
   /** The day, zero-padded, e.g. `21 November 2026`. */
   readonly date: string;
-  /** The format the text follows — always {@link PAYLOAD_DATE_FORMAT}. */
   readonly dateFormat: string;
-  /** The language the text must be read in — always {@link LOCALE}. */
   readonly locale: string;
 }
 /** Full English month names in calendar order — a fixed table rather than `Intl`, so the text cannot vary with the host's locale data and the harness behaves identically on macOS and in Codespaces (AAP 0.10.3). */
@@ -420,11 +409,9 @@ export interface StaffSeed {
   readonly lastname: string;
   /** Name the client and loan screens display: Fineract composes the last name, a comma and a space, then the first name (`StaffWriteServiceImpl.createStaff`), so this seed's is `Officer, Parity` rather than the AAP table's `Parity Officer`, and the staff dropdowns label their options with it. */
   readonly displayName: string;
-  /** Office the staff member belongs to: office 1, Head Office. */
   readonly officeId: number;
   /** Name of that office, as Fineract returns it. */
   readonly officeName: string;
-  /** Whether the staff member can be selected as a loan officer, which the plan's workflows require. */
   readonly isLoanOfficer: boolean;
 }
 /** The seed staff member of AAP 0.10.1, consumed by `seed/seed.ts` and by the loan page objects, which select its `displayName` as the loan officer. */
@@ -438,9 +425,7 @@ export const SEED_STAFF = {
 } as const satisfies StaffSeed;
 /** The loan product the seed creates — the AAP 0.10.1 row "Parity Loan, currency USD, principal min 1,000, default 5,000, max 10,000, 12 monthly repayments, flat interest 12% per year", in the table's own vocabulary. The Fineract enum ids these words map to belong to `seed/seed.ts`, which owns the request bodies: this module holds the fixed values, not the mapping. */
 export interface LoanProductSeed {
-  /** Product name the loan workflows select. */
   readonly name: string;
-  /** Product currency. */
   readonly currencyCode: string;
   /** Lowest principal the product accepts; W7 relies on it as the lower bound of the valid range. */
   readonly minPrincipal: number;
@@ -448,13 +433,9 @@ export interface LoanProductSeed {
   readonly principal: number;
   /** Highest principal the product accepts; W7 submits above it to provoke the server's rejection. */
   readonly maxPrincipal: number;
-  /** Number of repayments in the product's default schedule. */
   readonly numberOfRepayments: number;
-  /** Months between repayments. */
   readonly repaymentEveryMonths: number;
-  /** Interest calculation the product uses. */
   readonly interest: 'flat';
-  /** Nominal annual interest rate, in per cent. */
   readonly interestRatePerYear: number;
 }
 /** The seed loan product of AAP 0.10.1, consumed by the seed script, the loan page objects and W4, W5, W6 and W7. */
@@ -471,17 +452,11 @@ export const SEED_LOAN_PRODUCT = {
 } as const satisfies LoanProductSeed;
 /** The loan charge the seed creates — the AAP 0.10.1 row "Parity Fee, flat amount 25, specified due date", in the table's own vocabulary; as with {@link LoanProductSeed}, the Fineract enum ids belong to `seed/seed.ts`. */
 export interface LoanChargeSeed {
-  /** Charge name shown on the loan's charge list. */
   readonly name: string;
-  /** Charge amount, in the product currency. */
   readonly amount: number;
-  /** Currency the amount is denominated in. */
   readonly currencyCode: string;
-  /** What the charge applies to. */
   readonly appliesTo: 'loan';
-  /** When the charge falls due: on a date the application specifies. */
   readonly timeType: 'specified due date';
-  /** How the amount is calculated. */
   readonly calculation: 'flat';
 }
 /** The seed loan charge of AAP 0.10.1, consumed by the seed script and by the loan charge specs. */
@@ -502,11 +477,8 @@ export interface ClientActionReasonSeed {
 }
 /** The narration values the client lifecycle actions need, one per action that takes a reason; `reactivate` is not among them, because it is offered only on a closed client and carries no reason. */
 export interface ClientActionReasonsSeed {
-  /** Reason the close action offers and submits. */
   readonly closure: ClientActionReasonSeed;
-  /** Reason the reject action offers and submits. */
   readonly rejection: ClientActionReasonSeed;
-  /** Reason the withdraw action offers and submits. */
   readonly withdrawal: ClientActionReasonSeed;
 }
 /** The three client-action narration values the seed creates, consumed by `seed/seed.ts` and by the client-action specs, which select a reason by {@link ClientActionReasonSeed.valueName}. */
@@ -521,26 +493,21 @@ export interface ClientActionGateColumnSeed {
   readonly name: string;
   /** Fineract column type. `String` is the free-text type the action's note is stored in. */
   readonly type: 'String';
-  /** Maximum length the column accepts, in characters. */
   readonly length: number;
   /** Whether Fineract refuses a row without a value: `false`, so the row a legacy front end posts before an action can never be rejected on this column. */
   readonly mandatory: boolean;
 }
 /** The client datatable and its entity-datatable check — the fixture the datatable gate is exercised with, and the reason the gate's two calls have rows to read at all (AAP 0.7.3). */
 export interface ClientActionGateSeed {
-  /** Datatable name, which is the table's identity: the create call answers it a name, not an id. */
   readonly datatableName: string;
   /** Entity the table hangs off — `m_client`, the entity the AAP 0.7.3 gate row names. */
   readonly apptableName: string;
   /** Fineract's entity sub-type selector: `none` for a table every client row shares, and mandatory on this fork's create body, which is refused without it. */
   readonly entitySubType: 'none';
-  /** One row per client rather than one row per client and sub-type. */
   readonly multiRow: boolean;
-  /** The table's single column. */
   readonly column: ClientActionGateColumnSeed;
   /** Status the check is registered for: `600`, the CLOSE status, not `300` (ACTIVATE). A legacy client action submits a datatable row before the action when the check's status matches and the client has no row (`submitDatatable`), which would add a request legacy's W2 makes and the new app's does not; CLOSE keeps W2 identical on both front ends and puts the check and its table on the in-scope close screen, where the gate's two-call read is observable. */
   readonly checkStatus: number;
-  /** The status {@link ClientActionGateSeed.checkStatus} encodes, in the fork's own vocabulary. */
   readonly checkStatusMeaning: 'close';
 }
 /** The client-action datatable and its check, consumed by `seed/seed.ts`, which registers both, and by the client-view specs, which read the gate's answer through the API. */
@@ -555,29 +522,21 @@ export const SEED_CLIENT_ACTION_GATE = {
 } as const satisfies ClientActionGateSeed;
 /** The client W2 creates and W3 reads back. */
 export interface ScenarioClient {
-  /** Given name typed into the create form. */
   readonly firstname: string;
-  /** Family name typed into the create form. */
   readonly lastname: string;
   /** Name the client list and record display: Fineract composes it from the two names above under its default name format, and W3 verifies the displayed name against the API's answer rather than trusting this constant. */
   readonly displayName: string;
-  /** Office the client is created in: office 1, Head Office. */
   readonly officeId: number;
-  /** Name of that office, as the record header displays it. */
   readonly officeName: string;
 }
 /** The loan application W4 submits. */
 export interface ScenarioLoanApplication {
-  /** Product the application selects. */
   readonly productName: string;
-  /** Principal the application applies for. */
   readonly principal: number;
 }
 /** How W6 derives its repayment rather than being handed a number: the AAP 0.10.1 row defines it as "the first period's total due from the loan's repayment schedule", a value that exists only once the loan is disbursed, so a fabricated amount would break W6 and the W2-to-W6 chain. */
 export interface ScenarioRepayment {
-  /** Where the repayment amount comes from: the first repayment schedule period's total due. */
   readonly amountSource: 'first-schedule-period-total-due';
-  /** Where the repayment's transaction date comes from: the loan's disbursement date. */
   readonly transactionDateSource: 'disbursement-date';
 }
 /** The fixed test data of AAP 0.10.1 as the workflows that consume it read it — consumed by the seed script, the page objects, the state snapshot and the specs for W2, W3, W4 and W7; only what the table names is here (Rule 1 clause 3), with no extra fixture or field and no rounded or renamed value. */

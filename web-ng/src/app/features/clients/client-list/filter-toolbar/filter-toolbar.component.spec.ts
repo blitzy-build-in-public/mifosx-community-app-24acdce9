@@ -8,22 +8,14 @@ import { PermissionsService } from '../../../../core/auth/permissions.service';
 import { FilterToolbarComponent } from './filter-toolbar.component';
 
 /**
- * Behavioural spec for `FilterToolbarComponent`, the list toolbar AAP 0.2.3's inventory requires the new app
- * to provide (row `FilterToolbar`, whose props are the four outputs; Figma node `1:3`; Rule 1 clause 8,
- * which allows no empty or boilerplate specs).
+ * Behavioural spec for `FilterToolbarComponent`, the list toolbar AAP 0.2.3's inventory requires the new app to provide (row `FilterToolbar`, whose props are the four outputs; Figma node `1:3`; Rule 1 clause
+ * 8, which allows no empty or boilerplate specs). It pins what the extraction must not change: the legacy element ids, names and control names (`#filterText`, `#find`, `#showAll`) the parity page objects and
+ * the clients list's own spec address the toolbar by (Rule 1 clause 3); the legacy Bootstrap 3 structure — `.form-horizontal` > `.form-group`, `.input-group` with `.input-group-btn`, the `fa fa-search` submit,
+ * `.checkbox.form-control` and `a.btn.btn-primary.pull-right` with `fa fa-plus` (Rule 1 clause 6); each of the four outputs publishing on the interaction the inventory names; the create control's own
+ * `routerLink="/createclient"` and `CREATE_CLIENT` gate, so the navigation stays declarative and the gate fails closed; and the search button disabling while a read is in flight (AAP 0.1.1
+ * "duplicate-submission protection"). The permission gate is supplied at its real token with a stub typed against the real service, and the router is provided empty because no case completes a navigation. No
+ * translation bundle is served, so a bound key renders as that key — which makes "the legacy key is the one bound" an assertion, not a guess.
  *
- * It pins what the extraction must not change: the legacy element ids, names and control names
- * (`#filterText`, `#find`, `#showAll`) the parity page objects and the clients list's own spec address the
- * toolbar by (Rule 1 clause 3); the legacy Bootstrap 3 structure — `.form-horizontal` > `.form-group`,
- * `.input-group` with `.input-group-btn`, the `fa fa-search` submit, `.checkbox.form-control` and
- * `a.btn.btn-primary.pull-right` with `fa fa-plus` (Rule 1 clause 6); each of the four outputs publishing on
- * the interaction the inventory names; the create control's own `routerLink="/createclient"` and
- * `CREATE_CLIENT` gate, so the navigation stays declarative and the gate fails closed; and the search button
- * disabling while a read is in flight (AAP 0.1.1 "duplicate-submission protection").
- *
- * The permission gate is supplied at its real token with a stub typed against the real service, and the
- * router is provided empty because no case completes a navigation. No translation bundle is served, so a
- * bound key renders as that key — which makes "the legacy key is the one bound" an assertion, not a guess.
  */
 
 /** The legacy code the create control is gated on in the template. */
@@ -106,23 +98,20 @@ describe('FilterToolbarComponent', () => {
     const showClosed = control<HTMLInputElement>(host, `#${SHOW_CLOSED_ID}`);
     const form = control<HTMLFormElement>(host, 'form');
 
-    // The legacy ids, names and control names, so the harness addresses the same controls on both
-    // applications and the label's `for` points at the input it names (Rule 1 clause 3).
+    // The legacy ids, names and control names, so the harness addresses the same controls on both applications and the label's `for` points at the input it names (Rule 1 clause 3).
     expect(filter.name).toBe(FILTER_ID);
     expect(find.name).toBe(FIND_ID);
     expect(showClosed.name).toBe(SHOW_CLOSED_ID);
     expect(showClosed.type).toBe('checkbox');
 
-    // The legacy layout: `.form-horizontal` over `.form-group`, the find field in an `.input-group`
-    // with its own button, and the boxed checkbox inside that group (Rule 1 clause 6).
+    // The legacy layout: `.form-horizontal` over `.form-group`, the find field in an `.input-group` with its own button, and the boxed checkbox inside that group (Rule 1 clause 6).
     expect(form.classList.contains('form-horizontal')).toBe(true);
     expect(form.querySelectorAll('.form-group')).toHaveLength(1);
     expect(control<HTMLElement>(host, '.input-group').querySelector(`#${FIND_ID}`)).toBe(find);
     expect(control<HTMLElement>(host, '.checkbox').classList.contains('form-control')).toBe(true);
     expect(host.querySelector('label')?.getAttribute('for')).toBe(SHOW_CLOSED_ID);
 
-    // Both text fields carry the legacy bundle's key as their accessible name, because a placeholder
-    // is not a label; with no bundle served the pipe renders the key itself.
+    // Both text fields carry the legacy bundle's key as their accessible name, because a placeholder is not a label; with no bundle served the pipe renders the key itself.
     expect(filter.getAttribute('aria-label')).toBe(FILTER_KEY);
     expect(find.getAttribute('aria-label')).toBe(FIND_KEY);
     expect(filter.getAttribute('placeholder')).toBe(FILTER_KEY);
@@ -162,8 +151,7 @@ describe('FilterToolbarComponent', () => {
     type(control<HTMLInputElement>(host, `#${FIND_ID}`), `  "'Ada'"  `);
     control<HTMLFormElement>(host, 'form').dispatchEvent(new Event('submit'));
 
-    // One submit publishes once, and the text arrives as the field holds it: the quote strip, the
-    // trim and the empty-field reload are the owning screen's (Rule 1 clause 3).
+    // One submit publishes once, and the text arrives as the field holds it: the quote strip, the trim and the empty-field reload are the owning screen's (Rule 1 clause 3).
     expect(emitted).toEqual([`  "'Ada'"  `]);
   });
 
@@ -208,8 +196,7 @@ describe('FilterToolbarComponent', () => {
 
     const anchor = control<HTMLAnchorElement>(host, 'a.pull-right');
 
-    // The primary action in the toolbar's right-hand column, with the legacy glyph beside its label
-    // (Rule 1 clause 6), and its destination declared on the link itself (AAP 0.7.4).
+    // The primary action in the toolbar's right-hand column, with the legacy glyph beside its label (Rule 1 clause 6), and its destination declared on the link itself (AAP 0.7.4).
     expect(anchor.classList.contains('btn')).toBe(true);
     expect(anchor.classList.contains('btn-primary')).toBe(true);
     expect(anchor.querySelector('i.fa.fa-plus')).not.toBeNull();
@@ -217,8 +204,6 @@ describe('FilterToolbarComponent', () => {
 
     anchor.click();
 
-    // The navigation is the link's own and the output only reports it, so a screen observing the
-    // activation never has to intercept the control.
     expect(activations).toHaveLength(1);
     expect(navigate).toHaveBeenCalledTimes(1);
     expect(String(navigate.mock.calls[0][0])).toBe('/createclient');
@@ -229,8 +214,7 @@ describe('FilterToolbarComponent', () => {
 
     const anchor = control<HTMLAnchorElement>(host, 'a.pull-right');
 
-    // The gate fails closed: the control keeps its place in the toolbar and is not offered to a user
-    // the route would refuse (AAP 0.1.1; AAP 0.9.1 item 1).
+    // The gate fails closed: the control keeps its place in the toolbar and is not offered to a user the route would refuse (AAP 0.1.1; AAP 0.9.1 item 1).
     expect(anchor.style.display).toBe('none');
   });
 });

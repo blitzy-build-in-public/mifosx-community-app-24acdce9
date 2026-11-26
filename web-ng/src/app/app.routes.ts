@@ -21,12 +21,10 @@ const inSession: CanMatchFn = (): boolean => inject(AuthService).isAuthenticated
 
 /** The single route table `app.config.ts` hands to `provideRouter`, in declaration order: the public login screen, the two landing redirects, the guarded shell with its lazy feature groups and its own not-found catch-all. */
 export const routes: Routes = [
-  // Outside the shell and unguarded: a signed-out visitor is exactly who must reach it.
   {
     path: 'login',
     loadChildren: () => import('./features/auth/auth.routes').then((m) => m.AUTH_ROUTES),
   },
-  // Dashboards are out of scope, so the post-login landing screen is the clients list.
   { path: '', pathMatch: 'full', redirectTo: 'clients' },
   { path: 'home', pathMatch: 'full', redirectTo: 'clients' },
   {

@@ -346,7 +346,6 @@ describe('LoanActionComponent', () => {
     expect(isLocalMidnightToday(disbursedOn.value)).toBe(true);
     expect(disbursedOn.hasError('required')).toBe(false);
     expect(disbursedOn.hasValidator(Validators.required)).toBe(true);
-// The template's payment types are deliberately not rendered: the disburse body has no member for one, so a picker would collect a choice nothing posts (the departure recorded on the class).
     expect(host().querySelector('select')).toBeNull();
     const amountLabel = host().querySelector('label[for="transactionAmount"]');
     expect(amountLabel?.querySelector('span.required')?.textContent).toBe('*');

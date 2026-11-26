@@ -10,17 +10,25 @@
     </a>
   }
 
-  <!-- The `More` menu. Bootstrap's own rule keeps the list hidden until the `open` class is set, so the menu needs no conditional of its own, and Escape inside the group closes it without opening it — the keyboard leaving the. -->
-  <div class="btn-group dropdown" [class.open]="moreOpen()" (keydown.escape)="closeMore()">
-    <button type="button" class="btn btn-primary dropdown-toggle" aria-haspopup="true" [attr.aria-expanded]="moreOpen()" (click)="toggleMore()">
-      {{ 'label.button.more' | translate }}{{ ' ' }}<span class="caret" aria-hidden="true"></span>
-    </button>
-    <ul class="dropdown-menu" role="menu">
-      @for (action of menuActions(); track action.routerLink) {
-        <li role="none">
-          <a role="menuitem" [routerLink]="action.routerLink" [hasPermission]="action.permission">{{ action.label | translate }}</a>
-        </li>
-      }
-    </ul>
-  </div>
+  <!--
+    The `More` menu, rendered only when the record's own status gives it at least one entry: an active
+    client's state answers no menu command, so the record shows its row alone rather than a trigger
+    that opens an empty list (AAP 0.7.4; Rule 1 clause 3). Bootstrap's own rule keeps the list hidden
+    until the `open` class is set, so the menu needs no conditional of its own, and Escape inside the
+    group closes it without opening it.
+  -->
+  @if (menuActions().length > 0) {
+    <div class="btn-group dropdown" [class.open]="moreOpen()" (keydown.escape)="closeMore()">
+      <button type="button" class="btn btn-primary dropdown-toggle" aria-haspopup="true" [attr.aria-expanded]="moreOpen()" (click)="toggleMore()">
+        {{ 'label.button.more' | translate }}{{ ' ' }}<span class="caret" aria-hidden="true"></span>
+      </button>
+      <ul class="dropdown-menu" role="menu">
+        @for (action of menuActions(); track action.routerLink) {
+          <li role="none">
+            <a role="menuitem" [routerLink]="action.routerLink" [hasPermission]="action.permission">{{ action.label | translate }}</a>
+          </li>
+        }
+      </ul>
+    </div>
+  }
 </div>

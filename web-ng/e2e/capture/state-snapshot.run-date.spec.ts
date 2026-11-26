@@ -8,17 +8,13 @@ const STUB_USER = 'stub-user';
 const STUB_LOGIN = 'stub-login';
 /** The session key the stub answers with, assembled from parts so no scanner reads the result as a real credential (AAP 0.10.4); the assertions below require the thrown message never to carry it. */
 const STUB_SESSION_KEY = ['RkFLRS1TRVNT', 'SU9OLUtFWS1GT1It', 'UkVQUk8='].join('');
-/** The tenant this run uses: the default, so the tenant header the module sends is predictable. */
 const STUB_TENANT = 'default';
 /** How the stub fails the business-date read — the two failure modes the finding and its expectation name. */
 type FailureMode = 'no-response' | 'refused';
-/** One row of the table below: how the stub fails, the status that must surface, and the label. */
 interface FailureCase {
-  /** Shape of the stub's failure. */
   readonly mode: FailureMode;
   /** Status the raised `StateSnapshotError` must carry: `0` when no response arrived at all. */
   readonly status: number;
-  /** What the case does, interpolated into the test name. */
   readonly label: string;
 }
 
@@ -37,7 +33,6 @@ const CASES: FailureCase[] = [
 /** The stub backend every test talks to, and the base address `FINERACT_URL` is pointed at. */
 let stub: Server;
 let stubUrl: string;
-/** The failure the next business-date read meets; armed by each test before it imports the module. */
 let failureMode: FailureMode = 'no-response';
 /** Answers the credential exchange, then fails the business-date read the way {@link failureMode} names; any other call is a request this spec does not expect, so it is refused with `404` rather than mistaken for one of the two the module makes. */
 function handleStubRequest(request: IncomingMessage, response: ServerResponse): void {
@@ -58,7 +53,6 @@ function handleStubRequest(request: IncomingMessage, response: ServerResponse): 
       );
       return;
     }
-    // The transport failure the defect was reproduced with: the socket goes before any response exists.
     request.socket.destroy();
     return;
   }
@@ -82,7 +76,6 @@ beforeAll(async () => {
   stub = createServer(handleStubRequest);
   await new Promise<void>((resolve, reject) => {
     stub.once('error', reject);
-    // Port 0 asks the kernel for a free ephemeral port, so a parallel run on this host cannot collide.
     stub.listen(0, '127.0.0.1', () => resolve());
   });
   const address = stub.address();

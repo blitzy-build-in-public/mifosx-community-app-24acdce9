@@ -70,7 +70,6 @@ function toAnyPermission(declared: object): readonly string[] | null {
 
   const declaredAny: unknown = declared.any;
 
-  // A list of none names no code the route admits, and a value that is not a list is not this shape: neither states a restriction the gate can honour.
   if (!Array.isArray(declaredAny) || declaredAny.length === 0) {
     return null;
   }
@@ -83,7 +82,6 @@ export const permissionGuard: CanActivateFn = (route: ActivatedRouteSnapshot): b
   const permissions = inject(PermissionsService);
   const router = inject(Router);
 
-  // Evaluated only on a denial, so an allowed navigation builds no tree it would then discard.
   const deny = (): UrlTree => router.createUrlTree([DENIED_ROUTE]);
 
   // Read once, into `unknown`. `Data`'s index signature is `any` in the framework's own types and `noPropertyAccessFromIndexSignature` confines it to bracket access, so the annotation is what stops that `any` here instead (Rule 1 clause 4).
@@ -108,7 +106,6 @@ export const permissionGuard: CanActivateFn = (route: ActivatedRouteSnapshot): b
     if (parameterised !== null) {
       const value = route.paramMap.get(parameterised.param);
 
-      // No such parameter in the URL, or a value the map names no code for, leaves no code to ask about.
       if (value === null || !Object.hasOwn(parameterised.codes, value)) {
         return deny();
       }

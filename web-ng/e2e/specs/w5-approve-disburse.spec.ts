@@ -42,7 +42,6 @@ const ACTIVE_STATUS_CLASS: Readonly<Record<'legacy' | 'next', RegExp>> = {
 /** How a legacy notice is recognised as a failure. The baseline's `readNotifications()` answers text only — it has no kind to read — and it does surface success toasts, so the check is on the vocabulary Fineract's own. */
 const LEGACY_FAILURE_NOTICE = /error|fail|invalid|unable|cannot|denied|required/i;
 
-/** One parsed JSON body of a recorded exchange: the shape {@link asRecord} narrows to. */
 type JsonObject = { readonly [field: string]: NormalizedValue };
 
 /** Narrows one normalised payload to a JSON object, or answers `null` for anything else (Rule 1 clause 4). */
@@ -67,7 +66,6 @@ function asAmount(value: NormalizedValue | undefined): number | null {
   return /^\d+(?:\.\d+)?$/.test(text) ? Number(text) : null;
 }
 
-/** The JSON body of one recorded exchange. @param exchange An exchange the capture recorded. @throws Error when the exchange carried no JSON body, naming the call — a command whose payload is missing cannot be compared. */
 function requestBodyOf(exchange: NormalizedExchange): JsonObject {
   const body = asRecord(exchange.requestBody);
   if (body === null) {
@@ -79,7 +77,6 @@ function requestBodyOf(exchange: NormalizedExchange): JsonObject {
   return body;
 }
 
-/** The exchanges one capture recorded for one method and templated path, in the order the page issued them. @param capture The running capture. @param method HTTP method, upper-cased as the capture records it. @param path. */
 function callsTo(
   capture: CaptureSession,
   method: string,
@@ -97,7 +94,6 @@ function commandPosts(capture: CaptureSession, command: string): readonly Normal
   );
 }
 
-/** The loan ids the client record's own accounts read answered with. */
 function loanAccountIds(capture: CaptureSession): readonly number[] {
   const ids: number[] = [];
   for (const exchange of capture.capture.exchanges) {
@@ -120,7 +116,6 @@ function loanAccountIds(capture: CaptureSession): readonly number[] {
   return ids;
 }
 
-/** The id a recorded payload field stands for: the number itself when the capture kept it, or the id its role token replaced. */
 function resourceIdOf(capture: CaptureSession, value: NormalizedValue | undefined): number | null {
   if (typeof value === 'number') {
     return Number.isInteger(value) && value > 0 ? value : null;
@@ -350,7 +345,6 @@ test.describe('W5 approve and disburse the loan', () => {
         'the disburse form must be seeded from the transactions template read with command=disburse',
       ).toBe('disburse');
 
-      // The screen's own default for the disbursed amount is the approved principal; it is stated here rather than inherited so the posted figure is the workflow's own (the page object exposes no reader for the rendered.
       if (pages.uiProject === 'legacy') {
         await pages.loans.fillActionForm({ date: runDate, amount: String(principal) });
       } else {
@@ -457,7 +451,6 @@ test.describe('W5 approve and disburse the loan', () => {
           'no failure notice may be on screen after the two commands were accepted',
         ).toEqual([]);
       } else {
-        // Only the active section is mounted, so an empty answer means the transaction list is showing its rows and no section is claiming to be empty.
         const emptyStates = await pages.loans.readEmptyStates();
         expect(
           emptyStates,

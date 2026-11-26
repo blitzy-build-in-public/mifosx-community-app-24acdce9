@@ -22,11 +22,8 @@ const credentialField: string = ['pass', 'word'].join('');
 const credentialValue: string = ['correct', 'horse', 'battery'].join('-');
 const authenticationKeyField: string = ['base64Encoded', 'AuthenticationKey'].join('');
 const authenticationKeyValue: string = ['c2Vzc2lvbg', 'and', 'a', 'k3y'].join('-');
-/** A tenant header value this spec controls, so a leak of a header value is detectable in the capture. */
 const tenantHeaderValue: string = ['tenant', 'sentinel'].join('-');
-/** The run date every offset assertion below is measured from: 24 November 2026, UTC midnight. */
 const RUN_DATE = new Date(Date.UTC(2026, 10, 24));
-/** A capture directory of this spec's own, under the system temp directory, removed after the run. */
 const outputDir: string = mkdtempSync(join(tmpdir(), 'web-ng-harness-capture-'));
 
 afterAll(() => {
@@ -36,7 +33,6 @@ afterAll(() => {
 type PageHandler = (payload: unknown) => void;
 /** A stand-in for Playwright's `Page` carrying the three events `startCapture` subscribes to: a fake rather than a browser, because what this spec pins are properties of the recorder — whether an exchange is recorded and what its normalised record holds — not of a page. */
 class FakePage {
-  /** Registered handlers per event name. */
   private readonly handlers = new Map<string, Set<PageHandler>>();
   /** Subscribes a handler, as `Page.on` does. */
   on(event: string, handler: PageHandler): void {
@@ -54,20 +50,17 @@ class FakePage {
       handler(payload);
     }
   }
-  /** How many handlers are subscribed to one event, so a test can prove teardown detached them. */
   handlerCount(event: string): number {
     return this.handlers.get(event)?.size ?? 0;
   }
 }
 /** What the capture reads from a request: the subset of Playwright's `Request` it calls. */
 interface FakeRequestOptions {
-  /** Absolute URL the call went to. */
   readonly url: string;
   /** HTTP method; `get` when unset. */
   readonly method?: string;
   /** Playwright resource type; `fetch` when unset, which the recorder accepts. */
   readonly resourceType?: string;
-  /** Headers the browser sent, with the casing the caller chooses. */
   readonly headers?: Record<string, string>;
   /** Raw body text, or `null`/absent when the request carried none. */
   readonly body?: string | null;
@@ -81,15 +74,12 @@ class FakeRequest {
   resourceType(): string {
     return this.options.resourceType ?? 'fetch';
   }
-  /** Absolute URL of the call. */
   url(): string {
     return this.options.url;
   }
-  /** Headers the call carried, keyed with the caller's casing. */
   headers(): Record<string, string> {
     return this.options.headers ?? {};
   }
-  /** HTTP method of the call. */
   method(): string {
     return this.options.method ?? 'get';
   }
@@ -97,7 +87,6 @@ class FakeRequest {
   postData(): string | null {
     return this.options.body ?? null;
   }
-  /** The parsed body, or a throw for a body that is not JSON — as Playwright's own method behaves. */
   postDataJSON(): unknown {
     if (!Object.hasOwn(this.options, 'json')) {
       throw new Error('the request body is not JSON');
@@ -113,37 +102,29 @@ class FakeResponse {
     private readonly headerBag: Record<string, string>,
     private readonly payload: unknown,
   ) {}
-  /** The request this response answers — the same instance the capture recorded, as on a real page. */
   request(): FakeRequest {
     return this.source;
   }
-  /** HTTP status of the answer. */
   status(): number {
     return this.code;
   }
-  /** Response headers, which decide whether the body is read at all. */
   headers(): Record<string, string> {
     return this.headerBag;
   }
-  /** The parsed body, delivered asynchronously as Playwright delivers it. */
   json(): Promise<unknown> {
     return Promise.resolve(this.payload);
   }
 }
-/** A 200 JSON answer to one request. */
 function jsonResponse(request: FakeRequest, payload: unknown): FakeResponse {
   return new FakeResponse(request, 200, { 'content-type': 'application/json;charset=UTF-8' }, payload);
 }
-/** A request carrying a JSON body, with the raw text and the parsed value a browser would provide. */
 function jsonRequest(options: Omit<FakeRequestOptions, 'body' | 'json'>, payload: unknown): FakeRequest {
   return new FakeRequest({ ...options, body: JSON.stringify(payload), json: payload });
 }
-/** One request and, when the request was answered, its response. */
 interface FakeExchange {
   readonly request: FakeRequest;
   readonly response?: FakeResponse;
 }
-/** A capture that has been driven to completion, with everything a test needs to assert on it. */
 interface RecordedCapture {
   readonly page: FakePage;
   readonly session: CaptureSession;
@@ -167,14 +148,12 @@ async function runCapture(
   const settled = await session.settle();
   return { page, session, exchanges: settled, capture: session.capture };
 }
-/** A normalised body as an object, failing the test when the module answered something else. */
 function objectOf(value: NormalizedValue | null | undefined): Record<string, NormalizedValue> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error(`expected a normalised object body, received ${JSON.stringify(value)}`);
   }
   return value;
 }
-/** The only recorded exchange, failing the test when the capture holds any other number of them. */
 function onlyExchange(exchanges: readonly NormalizedExchange[]): NormalizedExchange {
   expect(exchanges).toHaveLength(1);
   return exchanges[0];
@@ -213,7 +192,6 @@ describe('request masking (Rule 1 clause 9, AAP 0.10.2)', () => {
     expect(body[authenticationKeyField]).toBe(MASKED);
     // Array order is significant (AAP 0.10.2), so the permission list is compared element by element.
     expect(body['permissions']).toEqual(['ALL_FUNCTIONS', 'READ_CLIENT', 'CREATE_CLIENT']);
-    // A boolean whose name merely contains a secret word carries no secret, so it is compared as it is.
     expect(body['shouldRenewPassword']).toBe(false);
   });
   it('keeps no credential value and no Basic value anywhere in the serialised capture', async () => {
@@ -290,7 +268,6 @@ describe('static-asset exclusion (AAP 0.10.2)', () => {
     expect(isStaticAssetUrl(`${LEGACY_URL}/global-translations/locale-en.json`)).toBe(true);
     // The API address the harness composes is never a static asset, even though `/assets/` would match any path below it: `apiUrl` is what builds it here, so no API-shaped literal is written down.
     expect(isStaticAssetUrl(apiUrl('/clients'))).toBe(false);
-    // A string a browser could never have produced must not fail the capture that asks about it.
     expect(isStaticAssetUrl('not a url at all')).toBe(false);
   });
 });
@@ -310,7 +287,6 @@ describe('ids by role (AAP 0.10.2: a generated id compares by role, a reference 
     expect(exchange.path).toBe(API_PATH + '/clients/{clientId}');
     const body = objectOf(exchange.requestBody);
     expect(body['clientId']).toBe('{clientId}');
-    // officeId is a reference id: two front ends choosing different offices is a real difference.
     expect(body['officeId']).toBe(1);
     expect(recorded.capture.roles).toEqual({ '57': '{clientId}' });
   });
@@ -323,7 +299,6 @@ describe('ids by role (AAP 0.10.2: a generated id compares by role, a reference 
     const exchange = onlyExchange(recorded.exchanges);
     expect(objectOf(exchange.requestBody)['clientId']).toBe('{clientId}');
     expect(objectOf(exchange.responseBody)['clientId']).toBe('{clientId_2}');
-    // The role map names the real ids the run created and the token each one became.
     expect(recorded.capture.roles).toEqual({ '57': '{clientId}', '58': '{clientId_2}' });
   });
 });
@@ -382,7 +357,6 @@ describe('canonical key order and array order (AAP 0.10.2)', () => {
     const body = objectOf(onlyExchange(recorded.exchanges).requestBody);
     expect(Object.keys(body)).toEqual(['alpha', 'list', 'nested', 'zebra']);
     expect(Object.keys(objectOf(body['nested']))).toEqual(['first', 'second']);
-    // Schedule periods, transactions and charges are ordered data, so array order is preserved.
     expect(body['list']).toEqual([3, 1, 2]);
   });
 });

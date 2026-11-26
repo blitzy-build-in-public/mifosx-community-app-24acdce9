@@ -197,7 +197,6 @@ describe('SessionService', () => {
     expect(service.username()).toBe(USERNAME);
     expect(service.read()).toEqual(fixture);
 
-    // A write replaces the session, so the label of the session it replaced does not survive it.
     service.write(legacyFixture());
     expect(service.user()).toBeNull();
     expect(service.username()).toBeNull();
@@ -242,13 +241,11 @@ describe('SessionService', () => {
     seedEntry(JSON.stringify(fixture));
 
     expect(service.read()).toEqual(fixture);
-    // A read reports what is stored and puts nothing into effect.
     expect(service.session()).toBeNull();
   });
 
   it('sees an entry written before it was constructed, and puts it into effect on restore', async () => {
     const fixture = legacyFixture();
-    // The entry is written first, by a previous page load of either front end, and only then does the service exist — the state a reload of the application starts from.
     seedEntry(JSON.stringify(fixture));
 
     const { service, permissions } = harnessFor();
@@ -258,7 +255,6 @@ describe('SessionService', () => {
     expect(service.session()).toBeNull();
 
     await expect(service.restore()).resolves.toBe(true);
-    // The signal now carries the entry that predates the instance, and the gate answers from its list.
     expect(service.session()).toEqual(fixture);
     expect(permissions.can('READ_CLIENT')).toBe(true);
   });
@@ -287,7 +283,6 @@ describe('SessionService', () => {
     seedEntry('not a session');
     seedEntry(JSON.stringify(fixture), BARE_KEY);
 
-    // The composed key is read first, and a corrupted session beside a valid one is not a session.
     expect(service.read()).toBeNull();
     // A read is not a repair: the legacy wrapper parses the entry and throws without writing, so the corrupt value stays under the composed key and no difference registered in AAP 0.10.5 lets this service delete it (Rule 1 (Rule 1 clause 3).
     expect(window.localStorage.getItem(COMPOSED_KEY)).toBe('not a session');
@@ -308,7 +303,6 @@ describe('SessionService', () => {
   it('resolves false and reads no user when no session is stored', async () => {
     const { service, permissions } = harnessFor();
     const calls: number[] = [];
-    // A list from an earlier session must not outlive it: the gate fails closed, not open.
     permissions.setPermissions(['READ_CLIENT']);
 
     const restored = await service.restore(recordingReader(projection(), calls));
@@ -360,9 +354,7 @@ describe('SessionService', () => {
       const { service, permissions } = harnessFor();
       const fixture = legacyFixture();
       service.write(fixture);
-      // Both spellings are seeded, so the refusal is proven to remove the entry under either key a release of the library may have written.
       seedEntry(JSON.stringify(fixture), BARE_KEY);
-      // A list from an earlier session must not outlive the refused one.
       permissions.setPermissions(fixture.userPermissions);
 
       // The `ApiError` the interceptor builds from the failed read, and for status 0 the form this deployment's cross-origin 401 arrives in, since Fineract's 401 carries no CORS header (AAP 0.4.2). Awaiting without a `catch` is the assertion that it does not reject.
@@ -422,7 +414,6 @@ describe('SessionService', () => {
     service.write(replacement);
     permissions.setPermissions(replacement.userPermissions);
 
-    // The refusal describes the session the login replaced, so it ends nothing: the replacement keeps its entry, its signals and its permission list.
     pending.error(new ApiError('The credential was refused', 401));
 
     await expect(restore).resolves.toBe(false);
@@ -451,12 +442,10 @@ describe('SessionService', () => {
     const laterAnswer = new Subject<SessionUserResponse>();
     const laterRestore = service.restore(() => laterAnswer.asObservable());
 
-    // The later session's answer arrives first, so its label and permission list are what is in effect.
     laterAnswer.next({ id: later.userId, username: 'later-user' });
     laterAnswer.complete();
     await expect(laterRestore).resolves.toBe(true);
 
-    // The earlier session's answer arrives last and publishes nothing: its restore did not establish a session, so the earlier username and permission list cannot sit behind the later authorization.
     earlierAnswer.next({ id: earlier.userId, username: USERNAME });
     earlierAnswer.complete();
     await expect(earlierRestore).resolves.toBe(false);
@@ -494,7 +483,6 @@ describe('SessionService', () => {
     service.clear();
 
     expect(window.localStorage.getItem(COMPOSED_KEY)).toBeNull();
-    // Both spellings are gone, so the store is empty rather than holding an entry under the other key that the next restore would read as a session.
     expect(window.localStorage.length).toBe(0);
     expect(service.session()).toBeNull();
     expect(service.user()).toBeNull();
@@ -518,7 +506,6 @@ describe('SessionService', () => {
     expect(noStorage.defaultView).toBeNull();
 
     service.write(fixture);
-    // Nothing reached the browser's own store, so the session lives in memory alone.
     expect(window.localStorage.getItem(COMPOSED_KEY)).toBeNull();
     expect(service.read()).toEqual(fixture);
 
@@ -551,7 +538,6 @@ describe('SessionService restore over HTTP', () => {
   });
 
   afterEach(() => {
-    // Proves no request was left outstanding: a restore that read the user twice, or issued a call it never reported, fails here as well as in the case that made it.
     httpMock.verify();
   });
 
@@ -561,7 +547,6 @@ describe('SessionService restore over HTTP', () => {
     await expect(service.restore(httpReader(handler, calls))).resolves.toBe(false);
 
     expect(calls).toEqual([]);
-    // Nothing at all reached the transport: with no entry there is no user to read.
     httpMock.expectNone(anyRequest);
     expect(service.session()).toBeNull();
   });
@@ -584,7 +569,6 @@ describe('SessionService restore over HTTP', () => {
     await expect(restored).resolves.toBe(true);
     expect(calls).toEqual([USER_ID]);
     expect(service.session()).toEqual(fixture);
-    // The label the user menu shows, and the permissions the gate answers.
     expect(service.username()).toBe(USERNAME);
     expect(permissions.can('READ_CLIENT')).toBe(true);
     httpMock.expectNone(anyRequest);

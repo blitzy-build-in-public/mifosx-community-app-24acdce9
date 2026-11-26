@@ -20,12 +20,7 @@
     <form [formGroup]="form" (ngSubmit)="onSubmit()" class="form-horizontal">
       <div class="form-group">
         <div class="col-md-4">
-          <!--
-            The two text controls carry the legacy field's own placeholder and, in addition, the same
-            words as an `aria-label`: a placeholder is not a label, so the associated name is what a
-            screen reader announces for the field. The label is invisible — no pixel changes — and
-            reuses the bundle's own words rather than inventing copy.
-          -->
+          <!-- The two text controls carry the legacy field's own placeholder and, in addition, the same words as an `aria-label`: a placeholder is not a label, so the associated name is what a screen reader announces for the field. The label is invisible — no pixel changes — and reuses the bundle's own words rather than inventing copy. -->
           <input
             type="text"
             class="form-control"
@@ -48,12 +43,7 @@
               [attr.aria-label]="'label.input.searchByNameAccNo' | translate"
             />
             <span class="input-group-btn">
-              <!--
-                The button's only content is the search glyph, which is decorative, so the accessible
-                name comes from the legacy bundle's own word for it rather than from the icon (AAP
-                0.7.4's find control; Rule 1 clause 6). It disables while a read is in flight, so one
-                click sends one request (AAP 0.1.1 "duplicate-submission protection").
-              -->
+              <!-- The button's only content is the search glyph, which is decorative, so the accessible name comes from the legacy bundle's own word for it rather than from the icon (AAP 0.7.4's find control; Rule 1 clause 6). It disables while a read is in flight, so one click sends one request (AAP 0.1.1 "duplicate-submission protection"). -->
               <button
                 type="submit"
                 class="btn btn-primary"
@@ -63,12 +53,7 @@
                 <i class="fa fa-search" aria-hidden="true"></i>
               </button>
             </span>
-            <!--
-              `showAll` is the legacy checkbox's own id (`app/views/clients/clients.html:34`), so the
-              harness addresses the same control on both applications and the `label for` points at
-              the input it names. The browser draws the box itself; the stylesheet declares no rule
-              for it, because the design shows the native control (AAP 0.5.2).
-            -->
+            <!-- `showAll` is the legacy checkbox's own id (`app/views/clients/clients.html:34`), so the harness addresses the same control on both applications and the `label for` points at the input it names. The browser draws the box itself; the stylesheet declares no rule for it, because the design shows the native control (AAP 0.5.2). -->
             <div class="checkbox form-control">
               <label for="showAll">
                 <input type="checkbox" id="showAll" name="showAll" formControlName="showClosed" />

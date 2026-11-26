@@ -34,11 +34,7 @@
     <div class="col-md-12">
       <div appPanelCard [title]="'label.heading.createclient' | translate">
         <div class="panel-body">
-          <!--
-            Fineract's own failure text, verbatim and unmoved by any prefix: a failed template read
-            or a rejected create. `role="alert"` announces it without a focus change, and the form
-            below keeps every entered value (AAP 0.7.4; AAP 0.14.1 "errors are values").
-          -->
+          <!-- Fineract's own failure text, verbatim and unmoved by any prefix: a failed template read or a rejected create. `role="alert"` announces it without a focus change, and the form below keeps every entered value (AAP 0.7.4; AAP 0.14.1 "errors are values"). -->
           @if (error(); as message) {
             <div class="alert alert-danger" role="alert">{{ message }}</div>
           }
@@ -50,11 +46,7 @@
                   <label class="control-label" for="officeId">
                     {{ 'label.input.office' | translate }}<span class="required">*</span>
                   </label>
-                  <!--
-                    No `label` input: this template renders the `<label for>` above, so the select is
-                    named by it and the field adds no second name of its own. The office list is the
-                    template's, in its order, and a change re-reads the template for that office.
-                  -->
+                  <!-- No `label` input: this template renders the `<label for>` above, so the select is named by it and the field adds no second name of its own. The office list is the template's, in its order, and a change re-reads the template for that office. -->
                   <app-select-field
                     inputId="officeId"
                     [control]="form.controls.officeId"
@@ -64,9 +56,7 @@
                 </div>
                 <div class="col-md-6">
                   <label class="control-label" for="staffId">{{ 'label.input.staff' | translate }}</label>
-                  <!-- Optional: Fineract assigns no staff to a client whose officer the operator left
-                       unset, and the prompt row returns the picker to empty, as the legacy chosen
-                       control's prompt does. -->
+                  <!-- Optional: Fineract assigns no staff to a client whose officer the operator left unset, and the prompt row returns the picker to empty, as the legacy chosen control's prompt does. -->
                   <app-select-field
                     inputId="staffId"
                     [control]="form.controls.staffId"
@@ -94,14 +84,13 @@
                       [attr.aria-describedby]="errorMessageId(form.controls.firstname, 'firstname-error', 'firstname-pattern-error')"
                     />
                     @if (showsRequiredError(form.controls.firstname)) {
-                      <span id="firstname-error" class="help-block">
+                      <span id="firstname-error" class="help-block" role="alert">
                         {{ 'label.requiredfield' | translate }}
                       </span>
                     }
-                    <!-- The legacy form's own name rule and its message: a name may not start with a
-                         digit or a special character (`app/views/clients/createclient.html`). -->
+                    <!-- The legacy form's own name rule and its message: a name may not start with a digit or a special character (`app/views/clients/createclient.html`). -->
                     @if (showsPatternError(form.controls.firstname)) {
-                      <span id="firstname-pattern-error" class="help-block">
+                      <span id="firstname-pattern-error" class="help-block" role="alert">
                         {{ 'validation.msg.client.name.cannot.start.specialchar.ornumber' | translate }}
                       </span>
                     }
@@ -124,13 +113,13 @@
                       [attr.aria-describedby]="errorMessageId(form.controls.lastname, 'lastname-error', 'lastname-pattern-error')"
                     />
                     @if (showsRequiredError(form.controls.lastname)) {
-                      <span id="lastname-error" class="help-block">
+                      <span id="lastname-error" class="help-block" role="alert">
                         {{ 'label.requiredfield' | translate }}
                       </span>
                     }
                     <!-- The same legacy name rule on the second name field. -->
                     @if (showsPatternError(form.controls.lastname)) {
-                      <span id="lastname-pattern-error" class="help-block">
+                      <span id="lastname-pattern-error" class="help-block" role="alert">
                         {{ 'validation.msg.client.name.cannot.start.specialchar.ornumber' | translate }}
                       </span>
                     }
@@ -142,9 +131,7 @@
                 <div class="col-md-6">
                   <div class="form-group" [class.has-error]="showsError(form.controls.mobileNo)">
                     <label class="control-label" for="mobileNo">{{ 'label.input.mobilenumber' | translate }}</label>
-                    <!-- The legacy form's own numeric rule with its `label.mustbenumeric` message,
-                         carried as it stands (Rule 1 clause 3). The control stays a plain text input,
-                         as the legacy one is (Rule 1 clause 6). -->
+                    <!-- The legacy form's own numeric rule with its `label.mustbenumeric` message, carried as it stands (Rule 1 clause 3). The control stays a plain text input, as the legacy one is (Rule 1 clause 6). -->
                     <input
                       id="mobileNo"
                       name="mobileNo"
@@ -156,7 +143,7 @@
                       [attr.aria-describedby]="showsPatternError(form.controls.mobileNo) ? 'mobileNo-pattern-error' : null"
                     />
                     @if (showsPatternError(form.controls.mobileNo)) {
-                      <span id="mobileNo-pattern-error" class="help-block">
+                      <span id="mobileNo-pattern-error" class="help-block" role="alert">
                         {{ 'label.mustbenumeric' | translate }}
                       </span>
                     }
@@ -173,12 +160,7 @@
               <div class="row">
                 <div class="col-md-6">
                   <div class="form-group">
-                    <!--
-                      One label, wrapping the control it names, so the box reads as "Active" and the
-                      parity harness can address it through `#activeCheckbox` or that label. The
-                      legacy row is additionally gated on `ACTIVATE_CLIENT`; this screen is gated once,
-                      per route, on `CREATE_CLIENT`, so the box is not separately hidden here.
-                    -->
+                    <!-- One label, wrapping the control it names, so the box reads as "Active" and the parity harness can address it through `#activeCheckbox` or that label. The legacy row is additionally gated on `ACTIVATE_CLIENT`; this screen is gated once, per route, on `CREATE_CLIENT`, so the box is not separately hidden here. -->
                     <div class="checkbox">
                       <label for="activeCheckbox">
                         <input id="activeCheckbox" name="active" type="checkbox" formControlName="active" />
@@ -188,11 +170,7 @@
                   </div>
                 </div>
                 <div class="col-md-6">
-                  <!--
-                    The activation date exists only while the client is to be created active, which is
-                    what legacy's `setChoice()` shows: an inactive client has no activation date, and
-                    the body leaves the member out entirely.
-                  -->
+                  <!-- The activation date exists only while the client is to be created active, which is what legacy's `setChoice()` shows: an inactive client has no activation date, and the body leaves the member out entirely. -->
                   @if (isActive()) {
                     <label class="control-label" for="activationDate">{{ 'label.input.activationdate' | translate }}</label>
                     <app-date-field inputId="activationDate" [control]="form.controls.activationDate" />
@@ -211,14 +189,11 @@
 
               <div class="row">
                 <div class="col-md-offset-5 col-md-7">
-                  <button id="cancel2" type="button" class="btn btn-default" (click)="cancel()">
+                  <!-- Cancel navigates rather than acts, so it is an anchor bound to the router — never a `location` change — which is the one element type every cancel control in the application carries, and the one this form's own legacy original renders (`<a id="cancel2" ng-href="{{cancel}}" class="btn btn-default">`, `app/views/clients/createclient.html`; Rule 1 clause 3). -->
+                  <a id="cancel2" class="btn btn-default" routerLink="/clients">
                     {{ 'label.button.cancel' | translate }}
-                  </button>
-                  <!--
-                    Disabled while a post is in flight: `POST /clients` is not idempotent, so the
-                    guard's busy signal is the one thing that keeps a second click from creating a
-                    second client (AAP 0.1.1; AAP 0.14.1).
-                  -->
+                  </a>
+                  <!-- Disabled while a post is in flight: `POST /clients` is not idempotent, so the guard's busy signal is the one thing that keeps a second click from creating a second client (AAP 0.1.1; AAP 0.14.1). -->
                   <button id="save2" type="submit" class="btn btn-primary" [disabled]="guard.busy()">
                     {{ 'label.button.save' | translate }}
                   </button>

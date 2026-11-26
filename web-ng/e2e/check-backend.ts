@@ -7,7 +7,6 @@ import { resolveCliIntent, type CliUsage } from '../tools/parity/lib/cli';
 import { FINERACT_URL } from './seed/fixtures';
 /** Where the run happened; the report header names it (AAP 0.10.4). */
 export type BackendEnvironment = 'mac' | 'codespaces';
-/** Provenance of the backend under test: the report header's backend row and the check's own time. */
 export interface BackendInfo {
   remote: string; commit: string; environment: BackendEnvironment;
   fineractUrl: string; checkedAt: string;
@@ -32,7 +31,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function at(value: unknown, path: string): unknown {
   return path.split('.').reduce<unknown>((node, key) => (isRecord(node) ? node[key] : undefined), value);
 }
-/** Every string the payload holds, so a shape the named probes do not reach is still searched. */
 function allStrings(body: unknown): string[] {
   return (JSON.stringify(body) ?? '').match(/"[^"]*"/g)?.map((quoted) => quoted.slice(1, -1)) ?? [];
 }
@@ -70,7 +68,6 @@ function readCommit(body: unknown): string | null {
   if (pinned === null) return null;
   return allStrings(body).map((value) => value.trim()).find((value) => namesSameCommit(value, pinned)) ?? null;
 }
-/** Raised when provenance cannot be proven; the message lists every failed fact and the human's fix. */
 export class BackendProvenanceError extends Error {
   constructor(readonly failures: readonly string[]) {
     super(`Backend provenance check failed for ${FINERACT_URL}:\n- ${failures.join('\n- ')}\n` +
@@ -133,7 +130,6 @@ export function readBackendInfo(): BackendInfo | null {
     const { remote, commit, environment, fineractUrl, checkedAt } = parsed;
     const complete = typeof remote === 'string' && typeof commit === 'string' && typeof fineractUrl === 'string'
       && typeof checkedAt === 'string' && (environment === 'mac' || environment === 'codespaces');
-    // The fields are proven complete above; the cast only re-attaches the shape JSON parsing dropped.
     return complete ? ({ remote, commit, environment, fineractUrl, checkedAt } as BackendInfo) : null;
   } catch {
     return null;
@@ -158,7 +154,6 @@ const BACKEND_USAGE: CliUsage = {
   ],
 };
 
-/** Runs the gate only as the entry point, so importing has no side effect; one line, or the error. */
 const invokedDirectly = process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (invokedDirectly) {
@@ -172,7 +167,6 @@ if (invokedDirectly) {
       writeBackendInfo(info);
       console.log(`backend: ${info.remote} @ ${info.commit.slice(0, 7)} (environment: ${info.environment} via ${info.fineractUrl})`);
     } catch (error) {
-      // Exit codes are set rather than forced, so a piped summary line is never lost to process.exit().
       console.error(error instanceof Error ? error.message : String(error));
       process.exitCode = 1;
     }

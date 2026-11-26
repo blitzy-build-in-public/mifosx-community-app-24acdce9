@@ -72,7 +72,6 @@ export class LanguagePreferenceService {
     try {
       parsed = JSON.parse(raw);
     } catch {
-      // Not JSON, so no language is in it — and the value stays where every other reader finds it.
       return null;
     }
 
@@ -96,7 +95,6 @@ export class LanguagePreferenceService {
     try {
       store.setItem(languagePreferenceKey(), JSON.stringify({ code: language }));
     } catch {
-      // A rejected write is absorbed here: the switch the user made stays in effect for this page and start-up later falls back to the configured language.
     }
   }
 
@@ -113,7 +111,6 @@ export class LanguagePreferenceService {
         // The library has moved `currentLang` and emitted `onLangChange` by now, which is the whole effect a restore asks for, and the switchers read `currentLang` themselves.
       },
       error: (): void => {
-        // A bundle that cannot arrive leaves the previous language in effect; start-up must not fail over a preference, and the failure is the library's own to report.
       },
     });
   }

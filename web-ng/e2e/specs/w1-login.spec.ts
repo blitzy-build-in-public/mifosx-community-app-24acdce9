@@ -34,10 +34,8 @@ const SWITCHABLE_LANGUAGES: readonly { readonly code: string; readonly pattern: 
   { code: 'pt', pattern: /^(?:pt|português|portugues)$/i },
 ];
 
-/** A code-shaped switcher value, the form this application submits. */
 const LANGUAGE_CODE = /^[a-z]{2}(?:[_-][A-Z]{2})?$/;
 
-/** A captured request or response body, narrowed once at the boundary the harness does not model. */
 type CapturedJsonObject = { readonly [field: string]: NormalizedValue };
 
 /** The resource path of a captured exchange with the API root taken off, e.g (AAP 0.7.3). */
@@ -111,19 +109,16 @@ test.describe('W1 log in and log out', () => {
       // 1. The entry screen. The page object composes the URL, query parameters included, so no host literal and no backend address appears in this file (Rule 2).
       await pages.login.open();
 
-      // 2. The language switcher: the i18n smoke this screen owes. The list must offer the fixture locale, and where the switcher offers a second language the switch is exercised in place.
       const languages: readonly LanguageOptionSummary[] = await pages.login.readLanguages();
       expect(languages.length).toBeGreaterThan(0);
       expect(languages.some((option) => namesLocale(option, LOCALE))).toBe(true);
 
-      // A switcher that offers no second language leaves only the assertion above standing, and the fact is recorded here rather than the check being weakened in silence.
       const switchable = pickSwitchableLanguage(languages);
       if (switchable !== null) {
         const hashBeforeSwitch = await pages.login.readCurrentHash();
         const marker = 'w1-language-switch';
         await page.evaluate(
           (entry: { readonly key: string; readonly value: string }) => {
-            // A document-scoped marker: it survives a translation swap and dies with a reload.
             (window as unknown as Record<string, unknown>)[entry.key] = entry.value;
           },
           { key: DOCUMENT_MARKER_KEY, value: marker },
@@ -140,7 +135,6 @@ test.describe('W1 log in and log out', () => {
 
         const switched: readonly LanguageOptionSummary[] = await pages.login.readLanguages();
         expect(switched.length).toBe(languages.length);
-        // A bundle that failed to load is reported by both applications in the form's error region; no message there means the labels the switcher renders came from the new bundle.
         expect(await pages.login.readFormError()).toBe('');
 
         await pages.login.selectLanguage(LOCALE);
@@ -233,7 +227,6 @@ test.describe('W1 log in and log out', () => {
         // The legacy baseline renders its login container at `#/`, which is where its own logout sends the user (Rule 1 clause 3: its behaviour, not an improvement on it).
         expect(LEGACY_LOGIN_HASHES).toContain(loginHash);
       }
-      // The form is back and enabled on both sides, which is the state the step proves: the session is gone and a fresh sign-in is possible.
       expect(await pages.login.readSubmitState()).toBe('enabled');
     });
   });

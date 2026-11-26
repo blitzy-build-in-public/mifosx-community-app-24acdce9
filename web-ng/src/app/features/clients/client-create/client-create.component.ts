@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import type { AbstractControl } from '@angular/forms';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
 
@@ -39,14 +39,21 @@ const LEGACY_MOBILE_PATTERN = /^[0-9]+$/;
 /** The create screen (`#/createclient`), first half of W2: `GET /clients/template` seeded once and re-read on an office change, then one `POST /clients` per click through `ClientService` (AAP 0.7.3 "W2"; AAP 0.8.2 route `createclient`). */
 @Component({
   selector: 'app-client-create',
-  imports: [ReactiveFormsModule, TranslatePipe, DateFieldComponent, SelectFieldComponent, PanelCardComponent],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    TranslatePipe,
+    DateFieldComponent,
+    SelectFieldComponent,
+    PanelCardComponent,
+  ],
   templateUrl: './client-create.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ClientCreateComponent {
   /** The clients family's typed Fineract caller: the template read and the create post (Rule 1 clause 5). */
   private readonly clientService = inject(ClientService);
-  /** Navigation only — to the created record on success, back to the list on cancel. */
+  /** Navigation only — to the record a create opened; the cancel control is a router link, so this screen asks the router for nothing else. */
   private readonly router = inject(Router);
   /** One-request-per-click protection for the submit control (AAP 0.1.1; AAP 0.14.1). */
   readonly guard = createSubmitGuard();
@@ -67,7 +74,7 @@ export class ClientCreateComponent {
     })),
   );
 
-  /** The message above the form: Fineract's own text verbatim for a 4xx `ApiError`, `null` for a 5xx or transport failure the interceptor has already notified, and every entered value stays in the form (AAP 0.7.4). */
+  /** The message above the form: Fineract's own text verbatim for a 4xx `ApiError`, `null` for a 5xx or transport failure the interceptor has already notified, retired by the operator's next edit or next submit, and every entered value stays in the form (AAP 0.7.4). */
   readonly error = signal<string | null>(null);
 
   /** The form, built from explicit controls so `strictTemplates` matches the shared fields' input types and each value type is known: office and staff ids `SelectValue | null`, names strings, dates `Date | null` (Rule 1 clause 4). */
@@ -103,6 +110,13 @@ export class ClientCreateComponent {
 
   /** Reads the template once for the defaults, then again whenever the office control changes to a different office — the legacy form's own sequence (AAP 0.7.3 "W2"). */
   constructor() {
+    // A message describes the values that were submitted, so the operator's next edit retires it, and nothing else does: the first template read's `active` and `activationDate` defaults run before a message can exist, and every re-read writes its controls with `emitEvent: false`, so a failed read's message stays on screen until something is actually edited.
+    this.form.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => {
+      if (this.error() !== null) {
+        this.error.set(null);
+      }
+    });
+
     this.form.controls.officeId.valueChanges
       .pipe(takeUntilDestroyed())
       .subscribe((officeId) => {
@@ -146,11 +160,6 @@ export class ClientCreateComponent {
     }
   }
 
-  /** Leaves the screen without creating anything, returning to the legacy form's own `cancel` target, `#/clients`. */
-  cancel(): void {
-    void this.router.navigate(['/clients']);
-  }
-
   /** Whether a control shows its error state at all: invalid and either visited or already edited, the predicate the shared fields apply, read from the template because those are plain control properties. */
   protected showsError(control: AbstractControl): boolean {
     return control.invalid && (control.touched || control.dirty);
@@ -192,7 +201,6 @@ export class ClientCreateComponent {
       this.form.controls.officeId.setValue(this.loadedOfficeId, { emitEvent: false });
       this.form.controls.staffId.setValue(null, { emitEvent: false });
 
-      // Seeded from the first template read alone: an office change re-reads the template for the staff list and the option lists, so it keeps the operator's own active choice and the activation date they have already chosen.
       if (officeId === undefined) {
         this.form.controls.active.setValue(template.active ?? false);
         this.form.controls.activationDate.setValue(

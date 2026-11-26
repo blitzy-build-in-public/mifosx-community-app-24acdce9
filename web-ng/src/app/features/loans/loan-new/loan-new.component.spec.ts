@@ -34,26 +34,69 @@ const TEMPLATE: LoanTemplate = {
   clientId: CLIENT_ID,
   clientName: 'Ada Okafor',
   product: PRODUCTS[0],
+  productId: PRODUCTS[0].id,
   productOptions: PRODUCTS,
   principal: 5000,
   termFrequency: 12,
-  termPeriodFrequencyType: { id: 2, value: 'Months' },
+  termPeriodFrequencyType: {
+    id: 2,
+    code: 'repaymentFrequency.periodFrequencyType.months',
+    value: 'Months',
+  },
+  termFrequencyTypeOptions: [
+    { id: 0, code: 'loanTermFrequency.periodFrequencyType.days', value: 'Days' },
+    { id: 2, code: 'loanTermFrequency.periodFrequencyType.months', value: 'Months' },
+  ],
   numberOfRepayments: 12,
   repaymentEvery: 1,
-  repaymentFrequencyType: 2,
+  repaymentFrequencyType: {
+    id: 2,
+    code: 'repaymentFrequency.periodFrequencyType.months',
+    value: 'Months',
+  },
+  repaymentFrequencyTypeOptions: [
+    { id: 1, code: 'repaymentFrequency.periodFrequencyType.weeks', value: 'Weeks' },
+    { id: 2, code: 'repaymentFrequency.periodFrequencyType.months', value: 'Months' },
+  ],
   interestRatePerPeriod: 2.5,
-  interestRateFrequencyType: 3,
-  amortizationType: 1,
-  interestType: 0,
-  interestCalculationPeriodType: 1,
+  interestRateFrequencyType: {
+    id: 3,
+    code: 'interestRateFrequency.periodFrequencyType.years',
+    value: 'Per year',
+  },
+  interestRateFrequencyTypeOptions: [
+    { id: 3, code: 'interestRateFrequency.periodFrequencyType.years', value: 'Per year' },
+    { id: 2, code: 'interestRateFrequency.periodFrequencyType.months', value: 'Per month' },
+  ],
+  amortizationType: { id: 1, code: 'amortizationType.equal.installments', value: 'Equal installments' },
+  amortizationTypeOptions: [
+    { id: 1, code: 'amortizationType.equal.installments', value: 'Equal installments' },
+    { id: 0, code: 'amortizationType.equal.principal', value: 'Equal principal payments' },
+  ],
+  interestType: { id: 0, code: 'interestType.declining.balance', value: 'Declining Balance' },
+  interestTypeOptions: [
+    { id: 0, code: 'interestType.declining.balance', value: 'Declining Balance' },
+    { id: 1, code: 'interestType.flat', value: 'Flat' },
+  ],
+  interestCalculationPeriodType: {
+    id: 1,
+    code: 'interestCalculationPeriodType.same.as.repayment.period',
+    value: 'Same as repayment period',
+  },
+  interestCalculationPeriodTypeOptions: [
+    { id: 0, code: 'interestCalculationPeriodType.daily', value: 'Daily' },
+    {
+      id: 1,
+      code: 'interestCalculationPeriodType.same.as.repayment.period',
+      value: 'Same as repayment period',
+    },
+  ],
   transactionProcessingStrategyCode: 'mifos-standard-strategy',
   transactionProcessingStrategyOptions: [
     { code: 'mifos-standard-strategy', name: 'Mifos standard strategy' },
     { code: 'early-repayment-strategy', name: 'Early repayment strategy' },
   ],
-  expectedDisbursementDate: '2026-11-24',
-  submittedOnDate: '2026-11-24',
-  loanOfficerOptions: [{ id: 7, name: 'Officer, Parity' }],
+  loanOfficerOptions: [{ id: 7, displayName: 'Officer, Parity' }],
   fundOptions: [{ id: 2, name: 'Fund' }],
   charges: [],
 };
@@ -70,13 +113,22 @@ const SECOND_TEMPLATE: LoanTemplate = {
 };
 const CHARGES: readonly LoanChargeOption[] = [
   { id: 3, name: 'Parity Fee', amount: 40, chargeTimeType: { id: 2, value: 'Specified due date' } },
+  { id: 4, name: 'Service Fee', amount: 10, chargeTimeType: { id: 1, value: 'Disbursement' } },
 ];
 const PICKED_CHARGE_ID = 3;
+const DISBURSEMENT_CHARGE_ID = 4;
+// The due date the applicant supplies for a charge that falls due on a specified date; only its `Date` identity matters, because the service formats it at the boundary (AAP 0.7.2 row `LoanChargeRequest`).
+const CHARGE_DUE_DATE = new Date(2026, 11, 24);
 const CHARGE_TEMPLATE: ChargeTemplate = { amount: 25 };
 
 // Workflow W7's principal: above the `Parity Loan` product's 10,000 maximum, so only Fineract can refuse it — no bound of this screen's, whose absence W7 exists to prove (Rule 1 clause 3).
 const PRINCIPAL_ABOVE_PRODUCT_MAX = 50_000;
 const SERVER_MESSAGE = 'The principal amount must be between 1,000 and 10,000.00 (inclusive).';
+// Local midnight of the browser's current date: the one clock a form's default dates come from, so a template that carries its own date members is ignored (AAP 0.10.5 item 15; AAP 0.12).
+function localToday(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
 function scheduledPeriod(period: number): RepaymentPeriod {
   return {
     period,
@@ -220,10 +272,22 @@ describe('LoanNewComponent', () => {
     expect(component.form.controls.numberOfRepayments.value).toBe(TEMPLATE.numberOfRepayments);
     expect(component.form.controls.repaymentEvery.value).toBe(TEMPLATE.repaymentEvery);
     expect(component.form.controls.interestRatePerPeriod.value).toBe(TEMPLATE.interestRatePerPeriod);
-    expect(component.form.controls.expectedDisbursementDate.value).toBeInstanceOf(Date);
-    expect(component.form.controls.submittedOnDate.value).toBeInstanceOf(Date);
+    expect(component.form.controls.expectedDisbursementDate.value).toEqual(localToday());
+    expect(component.form.controls.submittedOnDate.value).toEqual(localToday());
     expect(cancelHref()).toBe(`/viewclient/${CLIENT_ID}`);
     expect(loanService.create).not.toHaveBeenCalled();
+  });
+  it('defaults both dates from the browser clock and ignores the template’s own date members', async () => {
+    loanService.template.mockReturnValue(
+      of({ ...TEMPLATE, expectedDisbursementDate: '2026-11-24', submittedOnDate: '2026-11-20' }),
+    );
+    await show(String(CLIENT_ID));
+// A form's default dates (disbursement and submission among them) come from the browser clock exactly as legacy's do, and the application never reads the tenant's business date — deliberately the harness's alone (AAP 0.10.5 item 15; AAP 0.12). The template's members would put the pair on two different clocks, so neither is seeded from it.
+    expect(component.form.controls.expectedDisbursementDate.value).toEqual(localToday());
+    expect(component.form.controls.submittedOnDate.value).toEqual(localToday());
+    expect(component.form.controls.submittedOnDate.value).toEqual(
+      component.form.controls.expectedDisbursementDate.value,
+    );
   });
   it('seeds a picked charge’s amount from the charge template’s own top-level amount', async () => {
     loanService.template.mockReturnValue(of({ ...TEMPLATE, chargeOptions: CHARGES }));
@@ -237,6 +301,46 @@ describe('LoanNewComponent', () => {
 // The charge's own `GET /charges/{id}?template=true` amount is the authority for its row, not the figure `GET /loans/template` publishes for the same charge.
     expect(component.chargeRows.at(0).controls.amount.value).toBe(CHARGE_TEMPLATE.amount);
     expect(component.error()).toBeNull();
+  });
+  it('reveals the due-date field of a charge that falls due on a specified date and posts the date with it', async () => {
+    loanService.template.mockReturnValue(of({ ...TEMPLATE, chargeOptions: CHARGES }));
+    loanService.chargeTemplate.mockReturnValue(of(CHARGE_TEMPLATE));
+    await show(String(CLIENT_ID));
+    component.addCharge();
+    fixture.detectChanges();
+// An empty row names no charge, so it falls due on no date and shows no due-date field (AAP 0.7.2 row `LoanChargeRequest`).
+    expect(host().querySelector('#charge-0-dueDate')).toBeNull();
+    component.onChargeSelect(0, PICKED_CHARGE_ID);
+    await settle();
+    fixture.detectChanges();
+    expect(host().querySelector('#charge-0-dueDate')).not.toBeNull();
+    expect(renderedText()).toContain('label.input.duedate');
+    component.chargeRows.at(0).controls.dueDate.setValue(CHARGE_DUE_DATE);
+    await component.submit();
+    const posted = loanService.create.mock.calls[0]?.[0].charges?.[0];
+    expect(posted?.dueDate).toBeInstanceOf(Date);
+    expect(posted).toEqual({
+      chargeId: PICKED_CHARGE_ID,
+      amount: CHARGE_TEMPLATE.amount,
+      dueDate: CHARGE_DUE_DATE,
+    });
+  });
+  it('posts no due date for a charge that falls due on disbursement, dropping the date an earlier pick carried', async () => {
+    loanService.template.mockReturnValue(of({ ...TEMPLATE, chargeOptions: CHARGES }));
+    loanService.chargeTemplate.mockReturnValue(of(CHARGE_TEMPLATE));
+    await show(String(CLIENT_ID));
+    component.addCharge();
+    component.onChargeSelect(0, PICKED_CHARGE_ID);
+    await settle();
+    component.chargeRows.at(0).controls.dueDate.setValue(CHARGE_DUE_DATE);
+    component.onChargeSelect(0, DISBURSEMENT_CHARGE_ID);
+    await settle();
+    fixture.detectChanges();
+// One charge's date cannot travel with another charge's row, so the pick that carries no date clears the one the row held (AAP 0.7.2 row `LoanChargeRequest`).
+    expect(component.chargeRows.at(0).controls.dueDate.value).toBeNull();
+    expect(host().querySelector('#charge-0-dueDate')).toBeNull();
+    await component.submit();
+    expect(loanService.create.mock.calls[0]?.[0].charges?.[0]).not.toHaveProperty('dueDate');
   });
   it.each(INVALID_CLIENT_ID_SEGMENTS)(
     'shows the not-found message and reads nothing for %s',
@@ -329,6 +433,28 @@ describe('LoanNewComponent', () => {
     expect(optionLabels('#productId')).toEqual(['label.selectloanproduct', ...PRODUCT_NAMES]);
     expect(component.form.controls.productId.value).toBe(PRODUCTS[0].id);
   });
+  it.each<[string, string, readonly string[]]>([
+    ['termFrequencyTypeOptions', '#loanTermFrequencyType', ['Days', 'Months']],
+    ['repaymentFrequencyTypeOptions', '#repaymentFrequencyType', ['Weeks', 'Months']],
+    ['interestRateFrequencyTypeOptions', '#interestRateFrequencyType', ['Per year', 'Per month']],
+    [
+      'amortizationTypeOptions',
+      '#amortizationType',
+      ['Equal installments', 'Equal principal payments'],
+    ],
+    ['interestTypeOptions', '#interestType', ['Declining Balance', 'Flat']],
+    [
+      'interestCalculationPeriodTypeOptions',
+      '#interestCalculationPeriodType',
+      ['Daily', 'Same as repayment period'],
+    ],
+  ])(
+    'renders the template’s own %s rows in the order it sent them',
+    async (_member: string, selector: string, labels: readonly string[]) => {
+      await show(String(CLIENT_ID));
+      expect(optionLabels(selector)).toEqual(labels);
+    },
+  );
   it('offers only the charges the template lists, in its order', async () => {
     loanService.template.mockReturnValue(of({ ...TEMPLATE, chargeOptions: CHARGES }));
     await show(String(CLIENT_ID));
@@ -376,6 +502,28 @@ describe('LoanNewComponent', () => {
     expect(loanService.create).toHaveBeenCalledTimes(1);
     expect(loanService.create.mock.calls[0][0]).toEqual(previewed);
     expect(navigate).toHaveBeenCalledWith(['/viewloanaccount', 42]);
+  });
+  it('clears the previous schedule when the next preview is refused, and renders the server’s message', async () => {
+    loanService.previewSchedule.mockReturnValueOnce(of(SCHEDULE));
+    await show(String(CLIENT_ID));
+    await component.preview();
+    await settle();
+    expect(host().querySelectorAll('#repayment-preview tbody tr')).toHaveLength(
+      SCHEDULE.periods.length,
+    );
+    loanService.previewSchedule.mockReturnValueOnce(
+      throwError(() => new ApiError(SERVER_MESSAGE, 400)),
+    );
+    component.form.controls.principal.setValue(PRINCIPAL_ABOVE_PRODUCT_MAX);
+    await component.preview();
+    await settle();
+// The table on screen must belong to the values on the form, so a refused preview leaves no schedule and the shared empty state instead (AAP 0.7.4).
+    expect(component.schedule()).toBeNull();
+    expect(host().querySelector('#repayment-preview')).toBeNull();
+    expect(host().querySelectorAll('#repayment-preview tbody tr')).toHaveLength(0);
+    expect(host().querySelector('#repayment-preview-empty')).not.toBeNull();
+    expect(host().querySelector('.alert.alert-danger')?.textContent).toBe(SERVER_MESSAGE);
+    expect(component.form.controls.principal.value).toBe(PRINCIPAL_ABOVE_PRODUCT_MAX);
   });
   it('renders a rejected application’s message verbatim and keeps every entered value', async () => {
     loanService.create.mockReturnValue(throwError(() => new ApiError(SERVER_MESSAGE, 400)));

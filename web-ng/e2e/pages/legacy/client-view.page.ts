@@ -19,15 +19,11 @@ export interface ClientViewHeader {
 
 /** One row of the General tab's accounts table (AAP 0.10.1 W3, from `GET /clients/{id}/accounts`). */
 export interface AccountRow {
-  /** Which account family the row belongs to, derived from the route the row links to. */
   accountType: 'loan' | 'savings' | 'other';
-  /** Account number as rendered. */
   accountNo: string;
-  /** Product name as rendered. */
   productName: string;
   /** Raw `class` attribute of the row's status marker; the status is never read as text. */
   statusClass: string;
-  /** Balance the row renders — the balance or loan-balance column, whichever the table carries. */
   balance: string;
 }
 
@@ -35,7 +31,6 @@ export interface AccountRow {
 export interface IdentifierRow {
   /** Document type as rendered, e.g. `National Id`. */
   documentType: string;
-  /** The identifier's key — the document number itself. */
   documentKey: string;
   /** Raw `class` attribute of the status element, `''` when the rendered status carries no class. */
   statusClass: string;
@@ -62,7 +57,6 @@ const TAB_STRIP = '.nav-tabs';
 /** The pane container `uib-tabset` renders beside the strip: `<div class="tab-content"><div class="tab-pane">`. */
 const TAB_PANEL = '.tab-content .tab-pane';
 
-/** The active tab's link, used to tell a tab switch from a click that landed on the wrong tab. */
 const ACTIVE_TAB = `${TAB_STRIP} li.active > a`;
 
 /** AAP 0.2.3 `ActionButtonGroup`: the joined primary-button group of the record (`<div class="col-md-11 col-sm-11 btn-group row pull-right">`, app/views/clients/viewclient.html:183) inside the active tab pane, together. */
@@ -86,7 +80,6 @@ const NEW_LOAN_ROUTE = '#/newclientloanaccount/';
 /** How long a hash jump is given to take effect before the helper drives `location.hash` directly. */
 const HASH_SETTLE_TIMEOUT_MS = 2_000;
 
-/** Collapses the whitespace AngularJS leaves between interpolations, then trims. */
 function normalize(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
@@ -275,7 +268,6 @@ export class ClientViewPage {
   async readActionLabels(): Promise<string[]> {
     const group = this.actionGroup();
     await group.waitFor({ state: 'visible' });
-    // A menu left open by an earlier interaction would otherwise repeat its entries below.
     await this.closeActionMenu();
     const buttons = await this.readVisibleLabels(group.locator('a, button'));
     await this.openActionMenu();

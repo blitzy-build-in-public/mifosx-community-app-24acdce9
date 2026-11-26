@@ -5,21 +5,16 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { LoginFormComponent, type LoginCredentials } from './login-form.component';
 
 /**
- * Behaviour of the login form — the `LoginForm` row of the component inventory (AAP 0.2.3), the form region
- * of the login screen (Figma node `1:5`; AAP 0.7.4 "Login"; AAP 0.10.1 W1).
+ * Behaviour of the login form — the `LoginForm` row of the component inventory (AAP 0.2.3), the form region of the login screen (Figma node `1:5`; AAP 0.7.4 "Login"; AAP 0.10.1 W1).
  *
- * It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with at least
- * one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`). It pins the legacy screen's own
- * two controls and one primary submit — ids, names, classes and the masked credential field the parity page
- * objects address, every caption through the translation stack; an empty form reporting nothing while
- * marking both controls touched, legacy's only client-side rule (Rule 1 clause 3); a valid form reporting the
- * pair typed, once, untrimmed (AAP 0.2.3's `(submit: {username, password})`); the button disabled while
- * `busy`, which is the whole duplicate-submission guard (AAP 0.14.1); and a refused exchange clearing the
- * credential control and nothing else.
+ * It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with at least one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`). It pins the legacy
+ * screen's own two controls and one primary submit — ids, names, classes and the masked credential field the parity page objects address, every caption through the translation stack; an empty form reporting
+ * nothing while marking both controls touched, legacy's only client-side rule (Rule 1 clause 3); a valid form reporting the pair typed, once, untrimmed (AAP 0.2.3's `(submit: {username, password})`); the
+ * button disabled while `busy`, which is the whole duplicate-submission guard (AAP 0.14.1); and a refused exchange clearing the credential control and nothing else.
  *
- * The translate stack is the no-op loader plus the captions this form resolves, so no bundle is requested;
- * there is deliberately no HTTP provider, because the component injects no service beyond `FormBuilder`
+ * The translate stack is the no-op loader plus the captions this form resolves, so no bundle is requested; there is deliberately no HTTP provider, because the component injects no service beyond `FormBuilder`
  * (Rule 1 clause 5).
+ *
  */
 
 /** The account name the form is typed with; obviously a test value rather than a real login. */
@@ -64,8 +59,7 @@ describe('LoginFormComponent', () => {
   /** Every credential pair the form reported, in emission order. */
   let emitted: LoginCredentials[];
 
-  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps every
-  // assertion below type-checked and confines the boundary to this line (Rule 1 clause 4).
+  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps every assertion below type-checked and confines the boundary to this line (Rule 1 clause 4).
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
 
   /** The primary submit control, addressed by the id the legacy screen gives it. */
@@ -150,13 +144,11 @@ describe('LoginFormComponent', () => {
     expect(account.type).toBe('text');
     expect(account.classList.contains('form-control')).toBe(true);
     expect(credential.getAttribute('name')).toBe('password');
-    // Masked on screen and never echoed: the digit the user typed must not be readable (Rule 1
-    // clause 9).
+    // Masked on screen and never echoed: the digit the user typed must not be readable (Rule 1 clause 9).
     expect(credential.type).toBe('password');
     expect(loginButton().type).toBe('submit');
     expect(loginButton().classList.contains('btn-primary')).toBe(true);
     expect(loginButton().classList.contains('btn-block')).toBe(true);
-    // Every caption is resolved through the translation stack and no raw key reaches the user.
     expect(loginButton().textContent?.trim()).toBe(TRANSLATIONS['label.button.signin']);
     expect(host().textContent).not.toContain('label.');
     expect(host().querySelectorAll('label')).toHaveLength(2);
@@ -169,8 +161,7 @@ describe('LoginFormComponent', () => {
     expect(emitted).toEqual([]);
     expect(component.form.controls.username.touched).toBe(true);
     expect(component.form.controls.password.touched).toBe(true);
-    // Both controls show the legacy required message under themselves, which is what
-    // `markAllAsTouched` inside the submit handler is for: the operator sees what stopped it.
+    // Both controls show the legacy required message under themselves, which is what `markAllAsTouched` inside the submit handler is for: the operator sees what stopped it.
     expect(helpBlockTexts()).toEqual([
       TRANSLATIONS['label.requiredfield'],
       TRANSLATIONS['label.requiredfield'],
@@ -183,8 +174,7 @@ describe('LoginFormComponent', () => {
       escaped += 1;
     });
 
-    // The invalid submit is the case that escapes without the guard: the form reports nothing, and a
-    // bubbling event would leave the caller acting on an `Event` where it expects the pair.
+    // The invalid submit is the case that escapes without the guard: the form reports nothing, and a bubbling event would leave the caller acting on an `Event` where it expects the pair.
     submitForm();
 
     expect(escaped).toBe(0);
@@ -194,7 +184,6 @@ describe('LoginFormComponent', () => {
     component.form.controls.password.setValue(TYPED_TEXT);
     submitForm();
 
-    // The valid submit leaves the component as one typed value and no DOM event.
     expect(escaped).toBe(0);
     expect(emitted).toEqual([{ username: ACCOUNT_NAME, password: TYPED_TEXT }]);
   });
@@ -205,10 +194,8 @@ describe('LoginFormComponent', () => {
 
     submitForm();
 
-    // One report per submit, carrying both values unchanged: the screen posts exactly these, and the
-    // inner form's own submit event never reaches the caller as a second value.
+    // One report per submit, carrying both values unchanged: the screen posts exactly these, and the inner form's own submit event never reaches the caller as a second value.
     expect(emitted).toEqual([{ username: ACCOUNT_NAME, password: TYPED_TEXT }]);
-    // A valid submit leaves no required message behind, so the operator sees no stale complaint.
     expect(helpBlockTexts()).toEqual([]);
   });
 
@@ -218,7 +205,6 @@ describe('LoginFormComponent', () => {
 
     submitForm();
 
-    // Legacy posted the field values as they stood; tidying a credential is not this form's work.
     expect(emitted).toEqual([{ username: PADDED_ACCOUNT, password: PADDED_TEXT }]);
   });
 
@@ -233,7 +219,6 @@ describe('LoginFormComponent', () => {
     fixture.componentRef.setInput('busy', false);
     fixture.detectChanges();
 
-    // Released again in both outcomes, so a refused attempt can be retried.
     expect(loginButton().disabled).toBe(false);
   });
 
@@ -251,8 +236,6 @@ describe('LoginFormComponent', () => {
 
     expect(component.form.controls.password.value).toBe('');
     expect(component.form.controls.username.value).toBe(ACCOUNT_NAME);
-    // The field itself shows the cleared value, so the user is not left with a control that still
-    // looks filled on a form the server refused.
     expect(credentialField().value).toBe('');
     expect(accountField().value).toBe(ACCOUNT_NAME);
   });

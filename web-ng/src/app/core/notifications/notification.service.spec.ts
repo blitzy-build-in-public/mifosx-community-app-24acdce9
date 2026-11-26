@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  NotificationService, type NotificationKind, type NotificationMessage,
+  NOTICE_LIFETIME_MS, NotificationService, type NotificationKind, type NotificationMessage,
 } from './notification.service';
 
 /** Behavioural spec for the queue the shared `NotificationComponent` renders and the HTTP interceptor's error mapping feeds. */
@@ -14,6 +14,12 @@ describe('NotificationService', () => {
 
   beforeEach(() => {
     service = new NotificationService();
+  });
+
+  /** Retires whatever a case left armed and puts the real clock back: a notice shown here carries a self-dismissal, and leaving a fake clock installed would hand the next case a queue that expires on a clock nobody advances. */
+  afterEach(() => {
+    service.clear();
+    vi.useRealTimers();
   });
 
   it('queues notices in the order they are shown, keeping each kind', () => {
@@ -53,7 +59,6 @@ describe('NotificationService', () => {
   });
 
   it('keeps two notices carrying identical text apart by their id', () => {
-    // No deduplication: two identical server messages are two notices a user dismisses separately.
     service.show('error', 'same');
     service.show('error', 'same');
     const notices = queue();
@@ -72,7 +77,6 @@ describe('NotificationService', () => {
     expect(second).toBeGreaterThan(first);
     expect(third).toBeGreaterThan(second);
 
-    // A stale template reference must never pick up a newer notice.
     service.clear();
     service.show('info', 'after the clear');
     const afterClear = ids();
@@ -100,7 +104,6 @@ describe('NotificationService', () => {
     expect(ids()).not.toContain(neverIssuedId);
     service.dismiss(neverIssuedId);
 
-    // Same reference, not merely equal contents: an unchanged snapshot is what keeps the widget from re-rendering for a notice that does not exist.
     expect(service.messages()).toBe(snapshot);
     expect(texts()).toEqual(['only']);
   });
@@ -130,5 +133,79 @@ describe('NotificationService', () => {
     } finally {
       vi.restoreAllMocks();
     }
+  });
+
+  /**
+   * The lifetime every notice carries (QA F29): a notice that nobody closes must leave on its own, because the host is a sibling of the router outlet and a failure the user has already recovered from must not stay painted. Each case runs on a fake clock, so a lifetime is advanced rather than waited out.
+   */
+  describe('the lifetime a notice carries', () => {
+    it('dismisses the notice once NOTICE_LIFETIME_MS has elapsed, holding it until then', () => {
+      vi.useFakeTimers();
+      service.show('error', 'The request failed.');
+      expect(texts()).toEqual(['The request failed.']);
+
+      vi.advanceTimersByTime(NOTICE_LIFETIME_MS - 1);
+      expect(texts()).toEqual(['The request failed.']);
+
+      vi.advanceTimersByTime(1);
+      expect(queue()).toHaveLength(0);
+    });
+
+    it('leaves no timer armed behind a notice that has already expired', () => {
+      vi.useFakeTimers();
+      service.show('info', 'Saved.');
+      const [expired] = queue();
+
+      vi.advanceTimersByTime(NOTICE_LIFETIME_MS);
+
+      expect(queue()).toHaveLength(0);
+      expect(vi.getTimerCount()).toBe(0);
+      const emptied = queue();
+      service.dismiss(expired.id);
+      expect(queue()).toBe(emptied);
+    });
+
+    it('cancels only the dismissed notice’s timer, so the notices left keep their own lifetime', () => {
+      vi.useFakeTimers();
+      service.show('info', 'first');
+      const [firstNotice] = queue();
+      vi.advanceTimersByTime(2_000);
+      service.show('error', 'second');
+      expect(vi.getTimerCount()).toBe(2);
+
+      service.dismiss(firstNotice.id);
+
+      expect(texts()).toEqual(['second']);
+      expect(vi.getTimerCount()).toBe(1);
+
+      const afterDismiss = queue();
+      vi.advanceTimersByTime(NOTICE_LIFETIME_MS - 2_000);
+      expect(queue()).toBe(afterDismiss);
+      expect(texts()).toEqual(['second']);
+
+      // The notice that stayed keeps the whole lifetime from its own `show`, 2s after the dismissed one would have gone.
+      vi.advanceTimersByTime(2_000 - 1);
+      expect(texts()).toEqual(['second']);
+
+      vi.advanceTimersByTime(1);
+      expect(queue()).toHaveLength(0);
+    });
+
+    it('cancels every timer on clear, so nothing is published for a notice it removed', () => {
+      vi.useFakeTimers();
+      service.show('info', 'first');
+      service.show('error', 'second');
+      expect(vi.getTimerCount()).toBe(2);
+
+      service.clear();
+      const cleared = queue();
+
+      expect(cleared).toHaveLength(0);
+      expect(vi.getTimerCount()).toBe(0);
+
+      vi.advanceTimersByTime(NOTICE_LIFETIME_MS * 2);
+
+      expect(queue()).toBe(cleared);
+    });
   });
 });

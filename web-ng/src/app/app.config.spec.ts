@@ -81,7 +81,6 @@ describe('appConfig', () => {
 
     expect(resolved.tenantId).toBe('spec-tenant');
     expect(resolved.idleMinutes).toBe(7);
-    // The same value the service holds, so the token cannot drift from the resolved configuration.
     expect(TestBed.inject(AppConfigService).config).toEqual(resolved);
   });
 
@@ -121,8 +120,6 @@ describe('appConfig', () => {
 
     await runStartUp();
 
-    // Start-up did not wait for the bundle: the configured language stays in force until the bundle the
-    // remembered code names actually arrives.
     const translate = TestBed.inject(TranslateService);
     expect(translate.currentLang()).toBe(DEFAULT_APP_CONFIG.locale);
 
@@ -153,10 +150,8 @@ describe('appConfig', () => {
       userPermissions: ['READ_CLIENT'],
     });
 
-    // Start-up is awaited only after its request has been answered: the restore blocks on the projection read, exactly as it does in the browser.
     const startUp = runStartUp();
 
-    // One macrotask lets the configuration read resolve and the restore issue its request.
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     const http = TestBed.inject(HttpTestingController);

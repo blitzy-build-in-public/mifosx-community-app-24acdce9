@@ -26,7 +26,6 @@ export function toFineractDate(value: Date | null | undefined, locale: string): 
 /** Reads a date Fineract returned into the local-midnight `Date` a field or a table cell holds: what `GET /clients/{id}` sends as `'1988-03-14'`, what `GET /businessdate/BUSINESS_DATE` sends as `[2026, 11, 21]`, and an (Rule 1 clause 4). */
 export function fromFineractDate(value: unknown): Date | null {
   if (value instanceof Date) {
-    // A copy, so a caller that later mutates its own instance cannot change what was parsed; an invalid Date is still "no date".
     return Number.isNaN(value.getTime()) ? null : new Date(value.getTime());
   }
 
@@ -62,7 +61,6 @@ function isDateTriple(value: unknown): value is readonly [number, number, number
 
 /** Builds a local-midnight `Date` from a year, a one-based month and a day, or `null` when no calendar holds that combination — `'2026-02-30'`, month 13 — instead of letting `Date` roll it into the following month, which would report an event on a day the user never entered; the date field's own input parser calls this too, so the two cannot disagree about which days exist. */
 export function fromCalendarParts(year: number, month: number, day: number): Date | null {
-  // The year is applied separately because the constructor maps a year of 0-99 to 1900-1999.
   const date = new Date(2000, month - 1, day);
   date.setFullYear(year);
 

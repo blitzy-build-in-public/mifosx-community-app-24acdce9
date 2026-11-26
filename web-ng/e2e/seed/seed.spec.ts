@@ -35,7 +35,6 @@ async function isReadable(path: string): Promise<boolean> {
 
 describe('discardResultArtefact', () => {
   it('removes the artefact a previous run left, which the run clears before its first request', async () => {
-    // The default target is the artefact itself; asserting it against this spec's own resolution proves the module and a consumer name the same file without this test writing to it.
     expect(SEED_RESULT_ARTEFACT_PATH).toBe(ARTEFACT_PATH);
     await mkdir(dirname(SCRATCH_PATH), { recursive: true });
     await writeFile(SCRATCH_PATH, STALE_ARTEFACT, 'utf8');

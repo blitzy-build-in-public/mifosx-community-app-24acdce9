@@ -13,7 +13,6 @@ describe('EmptyStateComponent', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
-  // The template's single root element: the DIV that carries the classes and the message.
   function root(host: HTMLElement): HTMLElement {
     const element = host.firstElementChild as HTMLElement | null;
     if (element === null) {
@@ -38,6 +37,14 @@ describe('EmptyStateComponent', () => {
     expect(element.tagName).toBe('DIV');
     expect(element.classList.contains('text-center')).toBe(true);
     expect(element.classList.contains('text-muted')).toBe(true);
+    expect(element.classList.length).toBe(2);
+  });
+
+  it('announces itself as a polite status region, with no visual change', () => {
+    const element = root(render('No clients found.'));
+
+    // The empty state is a state, not an error: `role="status"` is the polite live region that announces it when it replaces the rows, and it is an attribute rather than a class or an extra element, so nothing about the look changes (AAP 0.7.4 state rules).
+    expect(element.getAttribute('role')).toBe('status');
     expect(element.classList.length).toBe(2);
   });
 

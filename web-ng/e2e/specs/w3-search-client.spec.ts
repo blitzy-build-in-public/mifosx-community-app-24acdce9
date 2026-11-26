@@ -8,9 +8,7 @@ import type { SearchResultRow as NextSearchResultRow } from '../pages/next/clien
 import { API_PATH, SCENARIO, readCredentials } from '../seed/fixtures';
 /** The text W3 searches for: the client's first name, which both search controls match and the list's find box is given (AAP 0.10.1 fixed data, `Parity Client`). */
 const SEARCH_TEXT: string = SCENARIO.client.firstname;
-/** The client's display name, the label both applications render in a list row and in the record. */
 const CLIENT_NAME: string = SCENARIO.client.displayName;
-/** A find that cannot match a seeded client, spelled so no display name, client number, external id or office could contain it. */
 const NO_SUCH_CLIENT = 'zzz-no-such-client-zzz';
 /** The API root as an optional regex prefix on every captured path, built from `seed/fixtures.ts`'s `API_PATH` so the harness declares the root once (Rule 1 clause 2). */
 const API_ROOT = `(?:${API_PATH})?`;
@@ -37,10 +35,8 @@ const CLIENT_RECORD_ROUTE = /#\/viewclient\/(\d+)/;
 /** The active tab of the record's strip. Both applications are Bootstrap 3 and move Bootstrap's own `active` class onto the tab item, and each page object names the same selector internally (AAP 0.2.3). */
 const ACTIVE_TAB = '.nav-tabs li.active > a';
 
-/** One row of either application's global search results. */
 type SearchRow = NextSearchResultRow | LegacySearchResultRow;
 
-/** Collapses the whitespace a template leaves between elements, then trims — as the page objects do. */
 function normalize(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
@@ -50,7 +46,6 @@ function searchLabelOf(row: SearchRow): string {
   return 'name' in row ? row.name : row.primaryText;
 }
 
-/** Whether a rendered label is the client this workflow is about. */
 function namesScenarioClient(label: string): boolean {
   return label.trim().toLowerCase().includes(CLIENT_NAME.toLowerCase());
 }
@@ -153,7 +148,6 @@ test.describe('W3 search for a client and view details', () => {
         'the search carries the Fineract tenant header (Rule 1 clause 2)',
       ).toBe(true);
 
-      // How many searches the capture already holds, so the find below can be proved to have issued its own read rather than inheriting this one.
       const searchesAfterGlobalSearch = getCalls(capture, SEARCH_CALL).length;
 
       // --------------------------------------------------------------------------------------- 3 (AAP 0.7.4).
@@ -279,7 +273,6 @@ test.describe('W3 search for a client and view details', () => {
         parityRow.office.trim().length,
         'the list row carries the client\'s office name',
       ).toBeGreaterThan(0);
-      // Containment, not equality: the trail is the office and, for a staffed client, the staff member's name after it (both page objects document that), while the list row carries the office alone.
       expect(
         breadcrumb.toLowerCase(),
         'the record trail names the office the list row carries',

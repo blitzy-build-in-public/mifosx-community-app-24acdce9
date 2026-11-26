@@ -16,6 +16,7 @@ import type {
   LoanChargeActionCommand,
   LoanChargeRequest,
   LoanCommand,
+  LoanEditSeed,
   LoanTemplate,
   LoanTransactionTemplate,
   RepaymentPeriod,
@@ -585,7 +586,6 @@ describe('LoanService', () => {
   });
 
   afterEach(() => {
-    // A request the service issued but this spec never saw fails here, and so does one it should have issued and did not.
     httpMock.verify();
   });
 
@@ -710,6 +710,28 @@ describe('LoanService', () => {
     request.flush(ACTION_RESULT);
   });
 
+  it.each<[string, LoanApplicationRequest]>([
+    ['expectedDisbursementDate', { ...APPLICATION, expectedDisbursementDate: new Date('nope') }],
+    ['submittedOnDate', { ...APPLICATION, submittedOnDate: new Date('nope') }],
+  ])(
+    'leaves an unreadable %s out of the body rather than posting it as null',
+    (member: string, application: LoanApplicationRequest) => {
+      service.create(application).subscribe();
+
+      const request = httpMock.expectOne(isRequest('POST', loanUrl('loans')));
+
+      // The formatted value is what the spread tests, so a date the parser cannot read is absent from the body instead of travelling as `null` — the rule the charge rows already followed, now every dated member's (AAP 0.7.2 "Date handling", Rule 1 clause 2).
+      const expected = Object.fromEntries(
+        Object.entries(APPLICATION_WIRE).filter(([key]) => key !== member),
+      );
+
+      expect(bodyKeys(request.request)).not.toContain(member);
+      expect(request.request.body).toEqual(expected);
+
+      request.flush(ACTION_RESULT);
+    },
+  );
+
   it('fills the date-format pair from the configuration and the active language, never from the caller', () => {
     service.create(CALLER_LOCALE_APPLICATION).subscribe();
 
@@ -738,7 +760,7 @@ describe('LoanService', () => {
 
   for (const id of [LOAN_ID, LOAN_ID_TEXT] as const) {
     it(`reads the edit seed by its ${typeof id} route parameter`, () => {
-      const received: (LoanTemplate | LoanAccount)[] = [];
+      const received: LoanEditSeed[] = [];
 
       service.getWithTemplate(id).subscribe((seed) => received.push(seed));
 
@@ -911,7 +933,6 @@ describe('LoanService', () => {
 
     expect(sent.request.params.keys()).toEqual(['command']);
     expect(sent.request.params.get('command')).toBe('undodisbursal');
-    // No body was assembled, so nothing is invented: the command's own empty object is posted.
     expect(sent.request.body).toEqual({});
 
     sent.flush(ACTION_RESULT);
@@ -989,7 +1010,6 @@ describe('LoanService', () => {
     );
 
     expect(bodyKeys(sent.request)).not.toContain('paymentTypeId');
-    // The rest of the wire body is untouched: the date with its format pair, the amount and the note.
     expect(sent.request.body).toEqual({
       transactionDate: DISBURSEMENT_TEXT,
       transactionAmount: 467,
@@ -1065,7 +1085,6 @@ describe('LoanService', () => {
 
     const sent = httpMock.expectOne(isRequest('POST', loanUrl('loans', LOAN_ID, 'charges')));
 
-    // A member the form left unset is omitted, so the charge posts no date rather than an empty one.
     expect(bodyKeys(sent.request)).not.toContain('dueDate');
     expect(sent.request.body).toEqual({
       chargeId: PICKED_CHARGE_ID,

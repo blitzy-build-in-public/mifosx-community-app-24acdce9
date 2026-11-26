@@ -14,12 +14,13 @@ const SPEC_LANG = 'en';
 /** Locale the two pipes format with, pinned so the assertions hold on any host. */
 const SPEC_LOCALE = 'en-US';
 
-/** The eight header keys `loan-schedule.component.html` translates, in render order. */
+/** The nine header keys `loan-schedule.component.html` translates, in render order. */
 const COLUMN_KEYS: readonly string[] = [
   'label.heading.no',
   'label.heading.fromdate',
   'label.heading.date',
   'label.heading.principal',
+  'label.heading.balanceofloan',
   'label.heading.interest',
   'label.heading.fees',
   'label.heading.total',
@@ -32,6 +33,7 @@ const COLUMN_LABELS: Readonly<Record<string, string>> = {
   'label.heading.fromdate': 'From Date',
   'label.heading.date': 'Due Date',
   'label.heading.principal': 'Principal',
+  'label.heading.balanceofloan': 'Balance of Loan',
   'label.heading.interest': 'Interest',
   'label.heading.fees': 'Fees',
   'label.heading.total': 'Total',
@@ -44,7 +46,7 @@ const EMPTY_STATE_KEY = 'label.nodata';
 /** The message that key resolves to in the in-memory bundle. */
 const EMPTY_STATE_TEXT = 'No repayment schedule is available.';
 
-/** The in-memory bundle: the nine keys the template uses and nothing else, so a key the legacy bundle would not hold renders as itself and fails the assertion reading the label it feeds (AAP 0.10.2). */
+/** The in-memory bundle: the ten keys the template uses and nothing else, so a key the legacy bundle would not hold renders as itself and fails the assertion reading the label it feeds (AAP 0.10.2). */
 const TRANSLATIONS: Readonly<Record<string, string>> = {
   ...COLUMN_LABELS,
   [EMPTY_STATE_KEY]: EMPTY_STATE_TEXT,
@@ -67,6 +69,7 @@ function makePeriod(
     totalDueForPeriod: 466.67,
     totalOriginalDueForPeriod: 466.67,
     principalOutstanding: 4583.33,
+    principalLoanBalanceOutstanding: 4583.33,
     interestOutstanding: 550,
     totalOutstandingForPeriod: 5133.33,
     complete: false,
@@ -167,7 +170,7 @@ describe('LoanScheduleComponent', () => {
     TestBed.resetTestingModule();
   });
 
-  it('renders one row per RepaymentPeriod of the RepaymentSchedule, under the eight schedule columns', async () => {
+  it('renders one row per RepaymentPeriod of the RepaymentSchedule, under the nine schedule columns', async () => {
     const host = hostOf(
       await render(makeSchedule([makePeriod({ period: 1 }), makePeriod({ period: 2 }), makePeriod({ period: 3 })])),
     );
@@ -176,7 +179,7 @@ describe('LoanScheduleComponent', () => {
     expect(tableOf(host)).not.toBeNull();
     expect(headerCells(host).map(textOf)).toEqual(COLUMN_KEYS.map((key) => COLUMN_LABELS[key]));
     expect(rows).toHaveLength(3);
-    expect(rows.map((row) => cellsOf(row).length)).toEqual([8, 8, 8]);
+    expect(rows.map((row) => cellsOf(row).length)).toEqual([9, 9, 9]);
     // Every label resolved: no raw dotted key reaches the user (AAP 0.10.2).
     expect(textOf(host)).not.toContain('label.');
     // A populated schedule shows the table only, never the empty state as well (AAP 0.7.4).
@@ -203,6 +206,7 @@ describe('LoanScheduleComponent', () => {
             fromDate: [2026, 11, 21],
             dueDate: '2026-12-05',
             principalDue: 100,
+            principalLoanBalanceOutstanding: 4900,
             interestDue: 10,
             feeChargesDue: 0,
             totalDueForPeriod: 110,
@@ -214,7 +218,17 @@ describe('LoanScheduleComponent', () => {
     const rows = renderedRows(host);
 
     expect(rows.map((cells) => cells[0])).toEqual(['2', '1']);
-    expect(rows[1]).toEqual(['1', '21 November 2026', '05 December 2026', '100', '10', '0', '110', '990']);
+    expect(rows[1]).toEqual([
+      '1',
+      '21 November 2026',
+      '05 December 2026',
+      '100',
+      '4,900',
+      '10',
+      '0',
+      '110',
+      '990',
+    ]);
   });
 
   /** Locks down contract-loan-period-required-false: the fork's leading disbursement pseudo-period carries no `period` member, so the model declares it optional and the table keys its rows by position — two unnumbered rows in one schedule would otherwise repeat the same absent key, while the period cell prints what the payload sent, which for those rows is nothing. */
@@ -230,13 +244,11 @@ describe('LoanScheduleComponent', () => {
     const fixture = await render(makeSchedule(periods));
     const rows = renderedRows(hostOf(fixture));
 
-    // One row per period row the payload carried, two of which carry no period number.
     expect(rows).toHaveLength(4);
     // The unnumbered rows print an empty cell — no 0, no dash, no renumbering of the periods below them — and the numbered rows keep their own numbers in the server's order (Rule 1 clause 3).
     expect(rows.map((cells) => cells[0])).toEqual(['', '1', '', '2']);
     expect(rows.filter((cells) => cells[0] === '')).toHaveLength(2);
 
-    // The same rows handed over as a new array: the collection is reconciled, which is where a duplicated key is reported, and the table still holds one row per period.
     fixture.componentRef.setInput('schedule', makeSchedule([...periods]));
     fixture.detectChanges();
     await fixture.whenStable();
@@ -273,6 +285,7 @@ describe('LoanScheduleComponent', () => {
         makeSchedule([
           makePeriod({
             principalDue: 4000,
+            principalLoanBalanceOutstanding: 1000,
             interestDue: 10,
             feeChargesDue: 0,
             totalDueForPeriod: 456.78,
@@ -284,13 +297,15 @@ describe('LoanScheduleComponent', () => {
     const [cells] = renderedRows(host);
 
     expect(cells[3]).toBe('4,000');
-    expect(cells[4]).toBe('10');
-    expect(cells[5]).toBe('0');
-    expect(cells[6]).toBe('456.78');
-    expect(cells[7]).toBe('1,234.5');
-    // The total is the server's own figure, not principal plus interest, and the principal cell holds its own member rather than that total (Rule 1 clause 3: match legacy, do not improve on it).
-    expect(cells[6]).not.toBe('4,010');
+    expect(cells[4]).toBe('1,000');
+    expect(cells[5]).toBe('10');
+    expect(cells[6]).toBe('0');
+    expect(cells[7]).toBe('456.78');
+    expect(cells[8]).toBe('1,234.5');
+    // The total is the server's own figure, not principal plus interest, and the principal and balance cells hold their own members rather than that total (Rule 1 clause 3: match legacy, do not improve on it).
+    expect(cells[7]).not.toBe('4,010');
     expect(cells[3]).not.toBe('456.78');
+    expect(cells[4]).not.toBe('4,000');
   });
 
   it('prints every period total due unchanged, row by row', async () => {
@@ -304,7 +319,7 @@ describe('LoanScheduleComponent', () => {
       ),
     );
 
-    expect(renderedRows(host).map((cells) => cells[6])).toEqual(['466.67', '470', '0']);
+    expect(renderedRows(host).map((cells) => cells[7])).toEqual(['466.67', '470', '0']);
   });
 
   it('renders the explicit empty state, and no table, for a schedule the record page has not loaded', async () => {
@@ -314,7 +329,6 @@ describe('LoanScheduleComponent', () => {
     expect(emptyState).not.toBeNull();
     expect(textOf(emptyState)).toBe(EMPTY_STATE_TEXT);
     expect(tableOf(host)).toBeNull();
-    // An absent schedule is not a failure: no alert and no raw key stands in for the message.
     expect(host.querySelectorAll('.alert')).toHaveLength(0);
     expect(textOf(host)).not.toContain(EMPTY_STATE_KEY);
   });

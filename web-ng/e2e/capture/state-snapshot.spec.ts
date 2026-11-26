@@ -13,7 +13,6 @@ import {
 function utcDay(year: number, month: number, day: number): Date {
   return new Date(Date.UTC(year, month - 1, day));
 }
-/** The run date the activation offsets are measured from: 24 November 2026, UTC midnight. */
 const RUN_DATE = utcDay(2026, 11, 24);
 /** The `status` object Fineract attaches to a client, a loan and a savings account alike. */
 function status(value: string): { id: number; code: string; value: string } {
@@ -131,7 +130,6 @@ describe('reduceLoan (AAP 0.10.1 W4 to W7; AAP 0.10.2)', () => {
 });
 
 describe('diffStates (AAP 0.10.1 criterion 4; AAP 0.10.2)', () => {
-  /** A loan end state both sides of the comparison share, so a test can vary one field of it. */
   const loanState: LoanSnapshot = {
     status: 'Active',
     principal: 5000,

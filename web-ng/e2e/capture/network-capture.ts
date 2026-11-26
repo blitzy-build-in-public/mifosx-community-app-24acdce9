@@ -6,7 +6,6 @@ import type { Page, Request, Response } from '@playwright/test';
 
 import { dayOffset, formatDateOnly, parseFineractDate } from '../seed/fixtures';
 
-/** What every masked field becomes: a fixed string, so both front ends' captures compare equal by construction and a reader sees the value was deliberately hidden. */
 export const MASKED = '***';
 /** Extensions of files a page fetches to render: AAP 0.10.2 excludes static assets from the comparison and from the fixture's host assertion, so both sides read this one list via {@link isStaticAssetUrl}. */
 export const STATIC_ASSET_EXTENSIONS: readonly string[] = [
@@ -75,7 +74,6 @@ export type NormalizedValue =
   | { [key: string]: NormalizedValue };
 /** One Fineract API exchange normalised as AAP 0.10.2 requires: no headers (only their presence), no timestamps, no generated ids, no query ordering. */
 export interface NormalizedExchange {
-  /** HTTP method, upper-cased. */
   readonly method: string;
   /** Origin the call went to, e.g. `https://localhost:8443`: the parity fixture proves the run never left the configured backend (Rule 2), and {@link diffExchanges} does not compare it. */
   readonly origin: string;
@@ -85,7 +83,6 @@ export interface NormalizedExchange {
   readonly query: Readonly<Record<string, string>>;
   /** HTTP status, or `0` when no response arrived (a failed request is still evidence). */
   readonly status: number;
-  /** Whether the tenant header was present. Its value is tenant data and is never recorded. */
   readonly hasTenantHeader: boolean;
   /** Whether the credential header was present. Its value is never recorded (Rule 1 clause 9). */
   readonly hasAuthorizationHeader: boolean;
@@ -98,7 +95,6 @@ export interface NormalizedExchange {
 export interface RoleMap {
   readonly [realId: string]: string;
 }
-/** A whole capture: the metadata that makes the written file self-describing, its exchanges, and the role tokens they produced. */
 export interface NormalizedCapture {
   /** Playwright project the capture came from: `legacy` or `next`, `null` when unset. */
   readonly project: string | null;
@@ -108,38 +104,30 @@ export interface NormalizedCapture {
   readonly runDate: string | null;
   /** Exchanges in the order the page issued them — the order AAP 0.10.1 compares. */
   readonly exchanges: readonly NormalizedExchange[];
-  /** Real id to role token, for readers of the written file. */
   readonly roles: RoleMap;
 }
-/** How one capture is started. Every field is optional, so a caller can record first and annotate later. */
 export interface CaptureOptions {
-  /** Playwright project the capture belongs to. */
   project?: 'legacy' | 'next';
   /** Workflow id the capture covers, e.g. `'W2'` or `'CHAIN'`. */
   workflow?: string;
   /** The tenant's business date read from Fineract (AAP 0.10.1), never the browser clock; payload dates become offsets from it, and without it they stay verbatim. */
   runDate?: Date;
-  /** Directory to write into instead of {@link CAPTURES_DIR}; used only by the module's own tests. */
   outputDir?: string;
 }
 /** A running capture: `stop()` and `write()` may be called in either order, and `write()` awaits {@link CaptureSession.settle} so the file carries every body the page had fetched. */
 export interface CaptureSession {
   /** The capture being built; its `exchanges` fills as the page makes calls and its `roles` answers for whatever has been recorded so far. */
   readonly capture: NormalizedCapture;
-  /** Detaches the page listeners and answers with the exchanges as they stand, without freezing them; idempotent. A caller that needs every body uses {@link CaptureSession.settle} or {@link CaptureSession.write}. */
   stop(): NormalizedExchange[];
   /** Detaches the listeners, waits for every in-flight response body read, then freezes the records and answers with the exchanges; idempotent, and the array is the one `stop()` returned. */
   settle(): Promise<NormalizedExchange[]>;
-  /** Writes the capture as JSON once every response body has settled, and resolves with the absolute path of the file it wrote. */
   write(folder?: string): Promise<string>;
 }
 /** One difference between two captures, anchored to the exchange it occurred in — by position, method and path, because AAP 0.10.2 compares the ordered API calls. */
 export interface ExchangeDiff {
-  /** Position of the exchange in both captures, from zero. */
   readonly index: number;
   /** Method of the exchange the difference belongs to; the legacy side's when both exist. */
   readonly method: string;
-  /** Normalised path of that exchange, so a reader can find it without reading the capture. */
   readonly path: string;
   /** What differs, as a value path: `method`, `path`, `query.command`, `status`, `hasTenantHeader`, `hasAuthorizationHeader`, `requestBody.principal`, `responseBody.errors[0].defaultUserMessage`, or `exchange`. */
   readonly field: string;
@@ -164,15 +152,12 @@ export function isStaticAssetUrl(url: string): boolean {
   const dot = lastSegment.lastIndexOf('.');
   return dot >= 0 && STATIC_ASSET_EXTENSIONS.includes(lastSegment.slice(dot + 1));
 }
-/** The role tokens one exchange's ids were mapped to, in the order that exchange presents them — path segments, request body in key order, response body — so the sequence is intrinsic to the payload and two bodies settling in either order cannot differ between the front ends. */
 class RoleRegistry {
   /** `${role}\u0000${realId}` to the token that id was given. */
   private readonly tokens = new Map<string, string>();
   /** Role to the number of distinct ids it has been given, which yields the `_2`, `_3` suffixes. */
   private readonly counts = new Map<string, number>();
-  /** Registrations in the order they happened, so the capture-level {@link RoleMap} is stable. */
   private readonly order: { readonly realId: string; readonly token: string }[] = [];
-  /** The token for one id under one role, registering it when this exchange has not named that id yet. */
   token(role: string, realId: string): string {
     const key = `${role}\u0000${realId}`;
     const known = this.tokens.get(key);
@@ -186,7 +171,6 @@ class RoleRegistry {
     this.order.push({ realId, token: assigned });
     return assigned;
   }
-  /** Every registration this exchange made, in order. */
   entries(): readonly { readonly realId: string; readonly token: string }[] {
     return this.order;
   }
@@ -255,16 +239,12 @@ function dateOffsetToken(date: Date, runDate: Date): string {
   }
   return offset > 0 ? `d+${offset}` : `d${offset}`;
 }
-/** What one body needs to know while it is normalised. */
 interface WalkContext {
-  /** Registry of the exchange the body belongs to. */
   readonly roles: RoleRegistry;
   /** The tenant's business date, or `null` to leave payload dates verbatim. */
   readonly runDate: Date | null;
-  /** Whether to drop the server-side audit block; a response body carries one, a request never does. */
   readonly dropAuditBlock: boolean;
 }
-/** Narrows a parsed JSON payload to a JSON object, leaving the values inside it unmodelled. */
 function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -344,7 +324,6 @@ function normaliseText(value: string, context: WalkContext, key: string, parentK
   }
   return value;
 }
-/** Normalises a number field: an integer under a generated-id key becomes a role token, and every other number — a reference id included — is compared by value. */
 function normaliseNumber(value: number, context: WalkContext, key: string, parentKey: string): NormalizedValue {
   const role = generatedIdRole(key, parentKey);
   if (role !== null && Number.isInteger(value) && value >= 0) {
@@ -362,7 +341,6 @@ function readRequestBody(request: Request, context: WalkContext): NormalizedValu
   try {
     raw = request.postData();
   } catch {
-    // A body that is no longer readable (the page went away, or the browser released the buffer) is recorded as absent instead of failing the capture it belongs to.
     return null;
   }
   if (raw === null || raw.length === 0) {
@@ -379,7 +357,6 @@ function readRequestBody(request: Request, context: WalkContext): NormalizedValu
   }
   return normaliseBody(parsed, context);
 }
-/** One exchange while it is being filled; frozen and handed out as a {@link NormalizedExchange} once {@link CaptureSession.settle} has waited for its body. */
 interface MutableExchange {
   method: string;
   origin: string;
@@ -391,12 +368,10 @@ interface MutableExchange {
   requestBody: NormalizedValue | null;
   responseBody: NormalizedValue | null;
 }
-/** An exchange paired with the registry that normalises it, so a late response body still has one. */
 interface TrackedExchange {
   readonly record: MutableExchange;
   readonly roles: RoleRegistry;
 }
-/** The run date a capture was given, copied so later caller mutation cannot move offsets already written; an invalid date throws here rather than leaving every date verbatim and reporting differences that are not behaviour. */
 function requireRunDate(date: Date): Date {
   if (Number.isNaN(date.getTime())) {
     throw new Error(
@@ -420,7 +395,6 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
   let stopped = false;
   /** The exchanges in record order, built once, so `stop()` answers with the same array however often it is called and `capture.exchanges` agrees with it. */
   let collected: NormalizedExchange[] | null = null;
-  /** Whether the records are frozen; a body read that settles afterwards is skipped rather than assigned to a frozen record, which strict mode would throw on. */
   let frozen = false;
   /** Records one request: only a Fineract API call becomes an exchange, so the document, the legacy `views/**` partials, translations, images and fonts are dropped (AAP 0.10.1 compares the ordered API calls). */
   const onRequest = (request: Request): void => {
@@ -445,7 +419,6 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
       // `headers()` is the synchronous view of the headers the browser actually sent: it omits cookie-related headers only, so both headers that matter here are visible, because the front ends set them from JavaScript on every call.
       headers = request.headers();
     } catch {
-      // A request torn away from its page has no readable headers; it is still recorded, without them.
     }
     const roles = new RoleRegistry();
     const record: MutableExchange = {
@@ -463,7 +436,6 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
     tracked.push(entry);
     byRequest.set(request, entry);
   };
-  /** Reads one response body into the exchange its request created and keeps the read in {@link pendingBodies} until it settles; the callbacks are gated on the freeze and not on detachment, so a late body still lands and one arriving after the freeze is skipped. */
   const readBody = (entry: TrackedExchange, response: Response): void => {
     const context: WalkContext = { roles: entry.roles, runDate, dropAuditBlock: true };
     const read: Promise<void> = response.json().then(
@@ -496,7 +468,6 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
     }
     readBody(entry, response);
   };
-  /** Marks an exchange whose request failed: no status, no body, but a recorded attempt. */
   const onRequestFailed = (request: Request): void => {
     const entry = byRequest.get(request);
     if (entry === undefined || stopped) {
@@ -523,7 +494,6 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
     },
     get roles(): RoleMap {
       const merged: { [realId: string]: string } = {};
-      // Capture order, first registration wins: the map answers "which token did this id get" for a reader of the file, while the tokens themselves were assigned per exchange (RoleRegistry).
       for (const entry of tracked) {
         for (const registration of entry.roles.entries()) {
           if (!Object.hasOwn(merged, registration.realId)) {
@@ -539,7 +509,6 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
     collected ??= tracked.map((entry) => entry.record);
     return collected;
   }
-  /** Detaches the three page listeners and refuses further records; idempotent, tolerant of a page already gone, and it leaves the records held writable because a body read it started is the capture's own work. */
   function detach(): void {
     if (stopped) {
       return;
@@ -553,7 +522,6 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
       // Detaching from a page that is already gone has nothing left to detach; `stopped` above still keeps a receiver that stayed attached from adding to this capture.
     }
   }
-  /** Freezes every record, once, and answers with the exchanges: a body read settling later is skipped rather than written, and a repeat call returns the same array without doing the work twice. */
   function freezeRecords(): NormalizedExchange[] {
     const list = exchanges();
     if (!frozen) {
@@ -564,7 +532,6 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
     }
     return list;
   }
-  /** Detaches the listeners and answers with the exchanges as they stand; idempotent, and it neither freezes the records nor waits for an in-flight body, so a caller that needs every body uses {@link settle} or {@link write}. */
   function stop(): NormalizedExchange[] {
     detach();
     return exchanges();
@@ -573,7 +540,6 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
   async function settle(): Promise<NormalizedExchange[]> {
     detach();
     while (pendingBodies.size > 0) {
-      // A whole round is awaited at once and the loop repeats, because a read that settles may leave another one behind it in the set.
       if (!(await readsSettled([...pendingBodies]))) {
         break;
       }
@@ -592,7 +558,6 @@ export function startCapture(page: Page, options: CaptureOptions = {}): CaptureS
 
   return { capture, stop, settle, write };
 }
-/** Whether a response carries a JSON body and is worth reading; anything else — an empty body, proxy HTML, a binary download — is recorded as absent rather than parsed on a guess. */
 function responseCarriesJson(response: Response): boolean {
   const headers = response.headers();
   const contentType = Object.hasOwn(headers, 'content-type') ? headers['content-type'] : '';
@@ -612,7 +577,6 @@ async function readsSettled(reads: readonly Promise<void>[]): Promise<boolean> {
     }
   }
 }
-/** One exchange rendered as a comparable string, for a call that has no counterpart on the other side. */
 function summariseExchange(exchange: NormalizedExchange): NormalizedValue {
   return `${exchange.method} ${exchange.path} -> ${exchange.status}`;
 }
@@ -639,7 +603,6 @@ function fieldValue(record: { [key: string]: NormalizedValue }, key: string): No
 function elementAt(values: readonly NormalizedValue[], index: number): NormalizedValue {
   return index < values.length ? values[index] : null;
 }
-/** Compares two normalised values and reports every leaf that differs: keys are already sorted, array order is significant, and a shape that changes between the sides is one difference at that node because the leaves below it have no counterpart. */
 function compareValues(
   field: string,
   legacy: NormalizedValue,

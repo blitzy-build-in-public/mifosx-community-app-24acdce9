@@ -14,6 +14,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiError, screenFailure, toDisplayableFailure } from '../../../core/http/api-error';
 import { DateFieldComponent } from '../../../shared/date-field/date-field.component';
 import { PanelCardComponent } from '../../../shared/panel-card/panel-card.component';
+import { RecordNotFoundComponent } from '../../../shared/record-not-found/record-not-found.component';
 import { createSubmitGuard } from '../../../shared/submit-guard.util';
 import type {
   LoanActionRequest,
@@ -130,6 +131,7 @@ function today(): Date {
     DateFieldComponent,
     PanelCardComponent,
     LoanRepaymentComponent,
+    RecordNotFoundComponent,
   ],
   templateUrl: './loan-action.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -167,10 +169,6 @@ export class LoanActionComponent {
   });
   /** Legacy key of the cancel button, which returns to the record without posting anything. */
   readonly cancelKey = 'label.button.cancel';
-  /** Legacy key of the not-found heading, the same one the unknown-path screen renders. */
-  readonly notFoundHeadingKey = 'label.heading.notavailable';
-  /** Legacy key of the not-found sentence, worded as the platform words a missing resource. */
-  readonly notFoundMessageKey = 'error.msg.resource.not.found';
   /** The approve form: `POST /loans/{id}?command=approve`, where `approvedOnDate` is the command's mandatory member and `approvedLoanAmount` the amount this action screen collects, so both carry `Validators.required`; the note is optional and the amount carries no `min`, `max` or `pattern`, because the product bounds the approved principal on the server and nowhere here (AAP 0.4.4, Rule 1 clause 3). */
   readonly approveForm = new FormGroup({
     approvedOnDate: new FormControl<Date | null>(today(), { validators: [Validators.required] }),
@@ -245,7 +243,6 @@ export class LoanActionComponent {
           const template: LoanActionTemplate = await firstValueFrom(
             this.loans.approvalTemplate(loanId).pipe(takeUntilDestroyed(this.destroyRef)),
           );
-          // Checked before the form is written: an answer that arrives after the route moved on describes another loan, and its figure must not reach the current loan's POST.
           if (this.isCurrent(load)) {
             this.seedApproval(template);
           }
@@ -276,7 +273,6 @@ export class LoanActionComponent {
         }
       }
     } finally {
-      // Only the current run owns the loading state, and the run that issued no read ends it here: a superseded one must not clear the flag the newer read set, and no mode may leave the form withheld for ever.
       if (this.isCurrent(load)) {
         this.loading.set(false);
       }

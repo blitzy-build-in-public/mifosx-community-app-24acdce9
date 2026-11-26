@@ -128,10 +128,8 @@ describe('NotFoundComponent', () => {
   });
 
   it('renders for a signed-out user with no application service provided, and carries no signed-in chrome', () => {
-    // The premise is the provider list above: a router and the translate stack, nothing more, which is what shows the screen needs no application service and can render before any guard has run.
     expect(fixture.componentInstance).toBeInstanceOf(NotFoundComponent);
     expect(renderedCopy()).toBe(FALLBACK_COPY);
-    // The shell owns the navbar and the breadcrumb; an unknown path renders outside it.
     expect(host().querySelector('nav, .navbar, .breadcrumb')).toBeNull();
   });
 });

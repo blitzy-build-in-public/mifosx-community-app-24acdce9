@@ -1,4 +1,6 @@
-<!-- Eight columns are this section's whole contract, and each cell prints the payload's own member — `feeChargesDue` and `totalDueForPeriod` are the fork's field names — so no figure is recomputed, rounded, summed or worded (AAP 0.7.4). -->
+<!-- Nine columns are this section's whole contract, and each cell prints the payload's own member — `feeChargesDue` and `totalDueForPeriod` are the fork's field names — so no figure is recomputed, rounded, summed or worded (AAP 0.7.4). -->
+<!-- This table stays hand-written rather than rendered through `app-data-table`: that component's `ColumnDef` is deliberately inert — no width, alignment, formatter or renderer, and its `value` returns a plain `string` — so the money and date columns below, which are `number` and `date` pipes over the payload's own members at the application's `LOCALE_ID`, would have to move their formatting into component code and put a second money-and-date formatting path inside this one feature. -->
+
 @if (rows().length > 0) {
   <table class="table table-striped" id="loan-schedule">
     <thead>
@@ -8,6 +10,8 @@
         <!-- The period's due date is labelled with label.heading.date: no locale file defines label.heading.duedate, and this is the key the legacy schedule heads that column with. -->
         <th scope="col">{{ 'label.heading.date' | translate }}</th>
         <th scope="col">{{ 'label.heading.principal' | translate }}</th>
+        <!-- The principal balance the loan still carries, which the legacy schedule heads label.heading.balanceofloan and renders from the period's principalLoanBalanceOutstanding, right after the principal due and before the interest. -->
+        <th scope="col">{{ 'label.heading.balanceofloan' | translate }}</th>
         <th scope="col">{{ 'label.heading.interest' | translate }}</th>
         <th scope="col">{{ 'label.heading.fees' | translate }}</th>
         <th scope="col">{{ 'label.heading.total' | translate }}</th>
@@ -21,11 +25,13 @@
           <td>{{ row.period }}</td>
           <td>{{ row.fromDate | date: displayFormat }}</td>
           <td>{{ row.dueDate | date: displayFormat }}</td>
-          <td>{{ row.principalDue | number }}</td>
-          <td>{{ row.interestDue | number }}</td>
-          <td>{{ row.feeChargesDue | number }}</td>
-          <td>{{ row.totalDueForPeriod | number }}</td>
-          <td>{{ row.totalOutstandingForPeriod | number }}</td>
+          <!-- The six money cells go through the one shared formatter and print no currency symbol, which is how the legacy schedule tables print their figures (`app/views/loans/viewloanaccountdetails.html:540-560`) (Rule 1 clause 3). -->
+          <td>{{ row.principalDue | money }}</td>
+          <td>{{ row.principalLoanBalanceOutstanding | money }}</td>
+          <td>{{ row.interestDue | money }}</td>
+          <td>{{ row.feeChargesDue | money }}</td>
+          <td>{{ row.totalDueForPeriod | money }}</td>
+          <td>{{ row.totalOutstandingForPeriod | money }}</td>
         </tr>
       }
     </tbody>

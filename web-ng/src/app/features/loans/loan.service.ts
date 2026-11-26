@@ -17,6 +17,7 @@ import type {
   LoanChargeActionRequest,
   LoanChargeRequest,
   LoanCommand,
+  LoanEditSeed,
   LoanRepaymentRequest,
   LoanTemplate,
   LoanTransactionTemplate,
@@ -198,14 +199,14 @@ export class LoanService {
     );
   }
 
-  /** `GET /loans/{id}?template=true&associations=charges,collateral,meeting,multiDisburseDetails` — the edit form's seed (AAP 0.7.3, "Loan edit"). */
-  getWithTemplate(id: number | string): Observable<LoanTemplate | LoanAccount> {
+  /** `GET /loans/{id}?template=true&associations=charges,collateral,meeting,multiDisburseDetails` — the edit form's seed, the loan record and its template members in the one shape the endpoint answers (AAP 0.7.3, "Loan edit"). */
+  getWithTemplate(id: number | string): Observable<LoanEditSeed> {
     const params = new HttpParams()
       .set('template', 'true')
       .set('associations', 'charges,collateral,meeting,multiDisburseDetails');
 
     return defer(() =>
-      this.http.get<LoanTemplate | LoanAccount>(
+      this.http.get<LoanEditSeed>(
         this.config.apiUrl(`/loans/${resourceId(id, 'LoanService.getWithTemplate')}`),
         { params },
       ),
@@ -349,12 +350,8 @@ export class LoanService {
       interestType: body.interestType,
       interestCalculationPeriodType: body.interestCalculationPeriodType,
       transactionProcessingStrategyCode: body.transactionProcessingStrategyCode,
-      ...(body.expectedDisbursementDate === null
-        ? {}
-        : { expectedDisbursementDate: toFineractDate(body.expectedDisbursementDate, dates.locale) }),
-      ...(body.submittedOnDate === null
-        ? {}
-        : { submittedOnDate: toFineractDate(body.submittedOnDate, dates.locale) }),
+      ...this.dateMember('expectedDisbursementDate', body.expectedDisbursementDate, dates.locale),
+      ...this.dateMember('submittedOnDate', body.submittedOnDate, dates.locale),
       ...(body.loanOfficerId === undefined ? {} : { loanOfficerId: body.loanOfficerId }),
       ...(body.fundId === undefined ? {} : { fundId: body.fundId }),
       ...(body.charges === undefined ? {} : { charges: this.toChargeRows(body.charges, dates.locale) }),
@@ -366,20 +363,35 @@ export class LoanService {
     rows: NonNullable<LoanApplicationRequest['charges']>,
     locale: string,
   ): readonly LoanChargeRowBody[] {
-    return rows.map((row) => {
-      const dueDate =
-        row.dueDate === undefined || row.dueDate === null
-          ? null
-          : toFineractDate(row.dueDate, locale);
+    return rows.map((row) => ({
+      ...(row.id === undefined ? {} : { id: row.id }),
+      chargeId: row.chargeId,
+      amount: row.amount,
+      ...this.dateMember('dueDate', row.dueDate, locale),
+    }));
+  }
 
-      return {
-        ...(row.id === undefined ? {} : { id: row.id }),
-        chargeId: row.chargeId,
-        amount: row.amount,
-        // A date the parser cannot read is left out rather than posted as `null`, the same rule every other member of a body follows; Fineract's own required-field rule then reports it.
-        ...(dueDate === null ? {} : { dueDate }),
-      };
-    });
+  /**
+   * One dated member of a body: the date formatted with the body's `dateFormat` and `locale`, or no member at all when the form holds no date or the value is one the parser cannot read. The formatted value is
+   * computed first and the member spread only when it exists, so no dated member of any body reaches the wire as `null`: Fineract's own required-field rule then reports the missing date, where a `null` would
+   * be a value the server has to interpret (AAP 0.7.2 "Date handling", Rule 1 clause 2).
+   *
+   */
+  private dateMember<K extends string>(
+    key: K,
+    value: Date | null | undefined,
+    locale: string,
+  ): Partial<Record<K, string>> {
+    const formatted = toFineractDate(value, locale);
+
+    if (formatted === null) {
+      return {};
+    }
+
+    const member: Partial<Record<K, string>> = {};
+    member[key] = formatted;
+
+    return member;
   }
 
   /** The two members every dated body carries, read once per body so the pattern, the month names and the `locale` member cannot disagree (AAP 0.7.2 "Date handling"; Rule 1 clause 2). */
@@ -415,33 +427,29 @@ export class LoanService {
       case 'approve':
         return {
           ...dates,
-          ...(body.approvedOnDate === null
-            ? {}
-            : { approvedOnDate: toFineractDate(body.approvedOnDate, dates.locale) }),
+          ...this.dateMember('approvedOnDate', body.approvedOnDate, dates.locale),
           ...(body.approvedLoanAmount === undefined
             ? {}
             : { approvedLoanAmount: body.approvedLoanAmount }),
-          ...(body.expectedDisbursementDate === null || body.expectedDisbursementDate === undefined
-            ? {}
-            : { expectedDisbursementDate: toFineractDate(body.expectedDisbursementDate, dates.locale) }),
+          ...this.dateMember(
+            'expectedDisbursementDate',
+            body.expectedDisbursementDate,
+            dates.locale,
+          ),
           ...(body.note === undefined ? {} : { note: body.note }),
         };
 
       case 'reject':
         return {
           ...dates,
-          ...(body.rejectedOnDate === null
-            ? {}
-            : { rejectedOnDate: toFineractDate(body.rejectedOnDate, dates.locale) }),
+          ...this.dateMember('rejectedOnDate', body.rejectedOnDate, dates.locale),
           ...(body.note === undefined ? {} : { note: body.note }),
         };
 
       case 'disburse':
         return {
           ...dates,
-          ...(body.actualDisbursementDate === null
-            ? {}
-            : { actualDisbursementDate: toFineractDate(body.actualDisbursementDate, dates.locale) }),
+          ...this.dateMember('actualDisbursementDate', body.actualDisbursementDate, dates.locale),
           ...(body.transactionAmount === undefined ? {} : { transactionAmount: body.transactionAmount }),
           ...(body.fixedEmiAmount === undefined ? {} : { fixedEmiAmount: body.fixedEmiAmount }),
           ...(body.note === undefined ? {} : { note: body.note }),
@@ -461,9 +469,7 @@ export class LoanService {
 
     return {
       ...dates,
-      ...(body.transactionDate === null
-        ? {}
-        : { transactionDate: toFineractDate(body.transactionDate, dates.locale) }),
+      ...this.dateMember('transactionDate', body.transactionDate, dates.locale),
       transactionAmount: body.transactionAmount,
       ...(body.paymentTypeId === undefined ? {} : { paymentTypeId: body.paymentTypeId }),
       ...(body.note === undefined ? {} : { note: body.note }),
@@ -478,9 +484,7 @@ export class LoanService {
       ...dates,
       chargeId: body.chargeId,
       amount: body.amount,
-      ...(body.dueDate === undefined || body.dueDate === null
-        ? {}
-        : { dueDate: toFineractDate(body.dueDate, dates.locale) }),
+      ...this.dateMember('dueDate', body.dueDate, dates.locale),
     };
   }
 
@@ -503,9 +507,7 @@ export class LoanService {
       case 'pay':
         return {
           ...dates,
-          ...(body.transactionDate === null
-            ? {}
-            : { transactionDate: toFineractDate(body.transactionDate, dates.locale) }),
+          ...this.dateMember('transactionDate', body.transactionDate, dates.locale),
         };
 
       case 'waive':

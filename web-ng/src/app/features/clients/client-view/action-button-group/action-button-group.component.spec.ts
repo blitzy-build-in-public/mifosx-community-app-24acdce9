@@ -9,7 +9,7 @@ import { ALL_FUNCTIONS, PermissionsService } from '../../../../core/auth/permiss
 import { ActionButtonGroupComponent, type ClientActionButton } from './action-button-group.component';
 
 /** Behavioural spec for the client record's joined action group — the `ActionButtonGroup` row of the component inventory (AAP 0.2.3). */
-/** The descriptors the client record supplies for client `1`, in its own order — the four row entries followed by the four lifecycle commands of the `More` menu, with the label keys. */
+/** The descriptors the client record supplies for client `1`, in its own order — the three row entries followed by the four lifecycle commands of the `More` menu, with the label keys. */
 const ACTIONS: readonly ClientActionButton[] = [
   { label: 'label.button.edit', icon: 'fa-edit', permission: 'UPDATE_CLIENT', routerLink: '/editclient/1', },
   {
@@ -46,6 +46,14 @@ const MENU_HREFS: readonly string[] = ACTIONS.filter((action) => action.menu ===
 );
 /** The caption each row entry renders, in render order: the legacy bundle's wording, not the key. */
 const ROW_LABELS: readonly string[] = ['Edit', 'New Loan', 'Close'];
+/** The descriptors an **active** client's record supplies: `Edit`, `New Loan` and `Close` in the row and no menu entry at all (`app/scripts/models/clientStatus.js`; AAP 0.7.4). */
+const ROW_ONLY_ACTIONS: readonly ClientActionButton[] = ACTIONS.filter(
+  (action) => action.menu !== true,
+);
+/** The one descriptor a **closed** client's record supplies: `Reactivate`, in the menu (AAP 0.7.4; Rule 1 clause 3). */
+const CLOSED_ONLY_ACTIONS: readonly ClientActionButton[] = ACTIONS.filter(
+  (action) => action.routerLink === '/client/1/reactivate',
+);
 /** The wording of every key the component resolves, keyed as the shipped legacy bundles key them (`app/global-translations/`), so a raw dotted key would show. */
 const TRANSLATIONS: Readonly<Record<string, string>> = {
   'label.button.edit': 'Edit',
@@ -90,7 +98,6 @@ describe('ActionButtonGroupComponent', () => {
     translate.use('en');
   });
   afterEach(() => {
-    // The group is links and Angular state: whatever a case did, it may not have reached the network.
     httpMock.verify();
     vi.restoreAllMocks();
     TestBed.resetTestingModule();
@@ -156,13 +163,14 @@ describe('ActionButtonGroupComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
   }
-  /** Renders the group with the permission list a login would have supplied, then settles. The list reaches the gate and the component's computeds through the real service, so both read one list. */
+  /** Renders the group with the permission list a login would have supplied and, where a case needs a different set, its own descriptors, then settles. The list reaches the gate and the component's computeds through the real service, so both read one list. */
   async function render(
     codes: readonly string[],
+    actions: readonly ClientActionButton[] = ACTIONS,
   ): Promise<ComponentFixture<ActionButtonGroupComponent>> {
     permissions.setPermissions(codes);
     const fixture = TestBed.createComponent(ActionButtonGroupComponent);
-    fixture.componentRef.setInput('actions', ACTIONS);
+    fixture.componentRef.setInput('actions', actions);
     await settle(fixture);
     return fixture;
   }
@@ -234,7 +242,6 @@ describe('ActionButtonGroupComponent', () => {
     const entries = menuEntries(fixture);
     expect(host(fixture).querySelector('.dropdown-toggle')).not.toBeNull();
     expect(entries.map((entry) => entry.getAttribute('href'))).toEqual([...MENU_HREFS]);
-    // The two codes held are the two entries offered, each still linking to its own route.
     expect(usableHrefs(entries)).toEqual(['/client/1/activate', '/client/1/reject']);
     // The entries left out are gated where they stand: the item and its link stay in the menu rather than being filtered away, which is the legacy arrangement and not an improvement on it.
     expect(menuItems(fixture)).toHaveLength(MENU_HREFS.length);
@@ -258,7 +265,6 @@ describe('ActionButtonGroupComponent', () => {
     await settle(fixture);
     expect(dropdown.classList.contains('open')).toBe(false);
     expect(trigger(fixture).getAttribute('aria-expanded')).toBe('false');
-    // Opening a menu is the group's own state: it navigates nowhere and requests nothing.
     expect(navigate).not.toHaveBeenCalled();
     httpMock.verify();
   });
@@ -280,7 +286,6 @@ describe('ActionButtonGroupComponent', () => {
     expect(
       entryByHref(fixture, '/newclientloanaccount/1').querySelector('i')?.getAttribute('class'),
     ).toBe('fa fa-plus');
-    // A lifecycle entry names no icon in the parent's descriptors, so it renders its label alone.
     expect(entryByHref(fixture, '/client/1/activate').querySelector('i')).toBeNull();
   });
   it('renders no control the plan keeps out of scope and no second action toolbar', async () => {
@@ -289,7 +294,6 @@ describe('ActionButtonGroupComponent', () => {
     // Client charges, transfer, staff assignment and bulk import stay on the legacy record (AAP 0.10.5 items 4, 5, 7 and 8); no descriptor names them, so none may be rendered here.
     for (const label of OUT_OF_SCOPE_LABELS) { expect(text).not.toContain(label); }
     const groups = Array.from(host(fixture).querySelectorAll<HTMLElement>('.btn-group'));
-    // The row and the dropdown that closes it — nothing else, and no entry the descriptors did not supply: one link per descriptor and the single trigger button.
     expect(groups).toHaveLength(2);
     expect(groups[0]).toBe(row(fixture));
     expect(groups[1]?.classList.contains('dropdown')).toBe(true);
@@ -307,8 +311,29 @@ describe('ActionButtonGroupComponent', () => {
   it('splits the descriptors into the row and the menu in the parent’s order', async () => {
     const fixture = await render(EVERY_CODE);
     const component = fixture.componentInstance;
-    // The component holds no action list of its own: the split and the order are the parent's, and both lists stay unfiltered so each entry's own gate remains the single authority.
     expect(component.topLevelActions().map((action) => action.routerLink)).toEqual([...ROW_HREFS]);
     expect(component.menuActions().map((action) => action.routerLink)).toEqual([...MENU_HREFS]);
+  });
+  it('renders no More trigger when no descriptor belongs to the menu', async () => {
+    const fixture = await render(EVERY_CODE, ROW_ONLY_ACTIONS);
+    // An active client's own state answers no menu command, so the group renders the row alone rather than a trigger over an empty list (Rule 1 clause 3).
+    expect(host(fixture).querySelector('.dropdown-toggle')).toBeNull();
+    expect(host(fixture).querySelector('.dropdown-menu')).toBeNull();
+    const groups = Array.from(host(fixture).querySelectorAll<HTMLElement>('.btn-group'));
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toBe(row(fixture));
+    expect(rowEntries(fixture).map((entry) => entry.getAttribute('href'))).toEqual([...ROW_HREFS]);
+    expect(fixture.componentInstance.menuActions()).toEqual([]);
+  });
+  it('renders the menu alone when the record offers only a menu entry', async () => {
+    const fixture = await render(EVERY_CODE, CLOSED_ONLY_ACTIONS);
+    // A closed client's list is `Reactivate` alone, so the group is the dropdown and its single usable item, with no row entry above it (AAP 0.7.4; Rule 1 clause 3).
+    expect(rowEntries(fixture)).toHaveLength(0);
+    expect(menuEntries(fixture).map((entry) => entry.getAttribute('href'))).toEqual([
+      '/client/1/reactivate',
+    ]);
+    expect(usableHrefs(menuEntries(fixture))).toEqual(['/client/1/reactivate']);
+    expect(trigger(fixture).getAttribute('aria-expanded')).toBe('false');
+    expect(fixture.componentInstance.hasMore()).toBe(true);
   });
 });

@@ -60,12 +60,8 @@
           the `.panel-heading` band and its `h3.panel-title` are the component's own markup
           (AAP 0.2.3 row `PanelCard`).
         -->
-        <div class="panel-body">
-          <!--
-            Fineract's own failure text, verbatim and untranslated, above whatever the screen holds: a
-            failed read leaves the card mounted and its toolbar usable. `role="alert"` announces it
-            without a focus change (AAP 0.7.4; AAP 0.14.1 "errors are values").
-          -->
+        <div class="panel-body" [attr.aria-busy]="loading() ? 'true' : null">
+          <!-- Fineract's own failure text, verbatim and untranslated, above whatever the screen holds: a failed read leaves the card mounted and its toolbar usable. `role="alert"` announces it without a focus change (AAP 0.7.4; AAP 0.14.1 "errors are values"). -->
           @if (errorMessage(); as message) {
             <div class="alert alert-danger" id="client-list-error" role="alert">{{ message }}</div>
           }
@@ -89,15 +85,10 @@
 
           <hr />
 
-          <!-- Four mutually exclusive states. While a read is in flight nothing is painted: the design
-               shows no spinner, skeleton or placeholder, and AAP 0.2.4 records that the flow carries no
-               such asset, so emitting nothing is the faithful state rather than a missing one. -->
+          <!-- Four mutually exclusive states. While a read is in flight nothing is painted: the design shows no spinner, skeleton or placeholder, and AAP 0.2.4 records that the flow carries no such asset, so emitting nothing is the faithful state rather than a missing one. -->
           @if (loading()) {
           } @else if (failed()) {
-            <!-- A failed read paints no rows. A 4xx has already published Fineract's own message in
-                 the alert above; a 5xx or a transport fault has raised the interceptor's single
-                 notification instead. Either way the table must not claim "no clients" about a read
-                 that failed (AAP 0.7.4). -->
+            <!-- A failed read paints no rows. A 4xx has already published Fineract's own message in the alert above; a 5xx or a transport fault has raised the interceptor's single notification instead. Either way the table must not claim "no clients" about a read that failed (AAP 0.7.4). -->
           } @else if (isEmpty()) {
             <app-empty-state id="client-list-empty" [message]="'label.nodata' | translate" />
           } @else {
@@ -117,12 +108,14 @@
               on hover (`_content.scss:413-417`), so the row keeps the treatment it has in the
               application being migrated (Rule 1 clause 3).
 
-              BLITZY [A11Y]: the row's `routerLink` is activated by a pointer click, exactly as the
-              legacy cells were. `RouterLink` gives a non-anchor host a tab stop, so the row can be
-              focused, but it binds no Enter/Space activation — a keyboard user can therefore reach a
-              row without being able to open it. Adding that activation, or a link in the name cell,
-              would be an interaction the legacy screen does not have (Rule 1 clause 3); a
-              keyboard-operable row is a design decision for the design owner.
+              The row is the record's link for a pointer and for a keyboard alike, and `app-data-table`
+              owns both affordances: the `routerLink` a click follows, and the Enter and Space
+              activation it binds on the same `<tr>`, which opens that row's own destination and
+              suppresses the key's default so Space cannot scroll the page — a row with no destination
+              stays inert. The tab stop the row carries is therefore the design's row-as-link rather
+              than an extra stop beside it, and a row a keyboard user can focus is a row they can open
+              (AAP 0.7.4; Figma screen `1:3`). No key handler lives here: the interaction belongs to
+              the table.
             -->
             <app-data-table
               [rows]="visibleRows()"
@@ -141,8 +134,19 @@
               text, which this template takes from the context's `value`, so the five text cells read
               exactly as they did before the extraction, and a value the payload did not carry leaves
               its cell empty, with no zero, dash or placeholder in its place (Rule 1 clause 3).
+
+              `appClientListCell` is what types that context: a template reference variable on its
+              own is a `TemplateRef<any>`, so `row.statusKey` below would be unchecked and a rename
+              of that row member would paint every swatch grey instead of failing the build
+              (Rule 1 clause 4).
             -->
-            <ng-template #statusCell let-row let-column="column" let-value="value">
+            <ng-template
+              #statusCell
+              let-row
+              let-column="column"
+              let-value="value"
+              appClientListCell
+            >
               @if (column.key === 'status') {
                 <app-status-swatch [status]="row.statusKey" />
               } @else {
@@ -160,25 +164,42 @@
             `dir-pagination-controls` auto-hides to one page, and the design's capture of five
             clients consequently paints no pager at all — so a single-page result keeps the card
             exactly as the design shows it.
+
+            Each page link is an anchor that paging made a read: it carries no `href`, so
+            open-in-new-tab has nothing to follow instead of reloading this screen, and it keeps
+            `tabindex="0"` and the Enter and Space activation `goToPage` gives it so it stays a tab
+            stop and a keyboard-operable control.
+
+            It is withheld while the rows on screen are none, which is the one place this pager is
+            deliberately different from the legacy screen (Rule 1 clause 3). Legacy's
+            `dir-pagination-controls` counts `total-items` off the server's `filteredRecords`, so a
+            filter that matches nothing leaves it painted beneath the empty table, offering pages of
+            a result set no longer on screen; this screen's empty state is instead an explicit
+            statement about the rows the display filters actually produced, and a pager under it
+            would contradict that statement with pages that lead nowhere. The condition is the empty
+            state's own, so the pager returns the moment a row matches again.
           -->
-          @if (pageCount() > 1) {
-            <!-- The landmark's name is English and invisible: no shipped bundle carries a key for it,
-                 and `aria-label` is the only way to distinguish this navigation from the breadcrumb's
-                 (the same wording decision `client-view.component.html` records). -->
+          @if (pageCount() > 1 && !isEmpty()) {
+            <!-- The landmark's name is English and invisible: no shipped bundle carries a key for it, and `aria-label` is the only way to distinguish this navigation from the breadcrumb's (the same wording decision `client-view.component.html` records). -->
             <div class="text-center">
               <ul class="pagination">
                 @for (pageNumber of pageNumbers(); track pageNumber) {
                   <li [class.active]="pageNumber === page()">
                     <!--
-                      `href` exists so the control is a focusable, Enter-activatable link rather than
-                      a click-only div, and `goToPage` always prevents the default: paging is a read,
-                      never a navigation, so the hash route cannot change. `aria-current` marks the
-                      page being shown, and the anchor's own text — the page number — is its
-                      accessible name.
+                      No `href` at all: the hash route the screen was reached by cannot change, so a
+                      middle click has nothing to open and no default to reload. `[attr.aria-current]`
+                      writes `page` on the anchor whose page is the one in view and nothing on the
+                      rest, so assistive technology is told which page is showing rather than being
+                      left to infer it from the list item's class; the anchor's own text — the page
+                      number — is its accessible name, and `tabindex` with the Enter and Space
+                      activation `goToPage` gives it keep the control in the tab order and operable
+                      from the keyboard without one.
                     -->
                     <a
-                      href=""
+                      tabindex="0"
+                      [attr.aria-current]="pageNumber === page() ? 'page' : null"
                       (click)="goToPage($event, pageNumber)"
+                      (keydown)="goToPage($event, pageNumber)"
                     >{{ pageNumber }}</a>
                   </li>
                 }

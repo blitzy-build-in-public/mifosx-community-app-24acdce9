@@ -1,4 +1,6 @@
 <!-- Transactions section of the individual loan record (`#/viewloanaccount/:id`; AAP 0.7.1 row `loans`, 0.7.2 row `LoanTransaction`, 0.7.3 row "W6 repayment"): it renders the `transactions` slice the parent already loaded (Rule 1 clause 2, Rule 2, AAP 0.7.4, Rule 1 clause 3). -->
+<!-- This table stays hand-written rather than rendered through `app-data-table`: that component's `ColumnDef` is deliberately inert — no width, alignment, formatter or renderer, and its `value` returns a plain `string` — so the money and date columns below, which are `number` and `date` pipes over the payload's own members at the application's `LOCALE_ID`, would have to move their formatting into component code and put a second money-and-date formatting path inside this one feature. -->
+
 @if (isEmpty()) {
   <app-empty-state
     id="loan-transactions-empty"
@@ -22,11 +24,12 @@
         <tr>
           <td>{{ row.date | date: displayFormat }}</td>
           <td>{{ row.type.value }}</td>
-          <td>{{ row.amount | number }}</td>
-          <td>{{ row.principalPortion | number }}</td>
-          <td>{{ row.interestPortion | number }}</td>
-          <td>{{ row.feeChargesPortion | number }}</td>
-          <td>{{ row.outstandingLoanBalance | number }}</td>
+          <!-- Every money cell goes through the application's one money formatter, which keeps the `number` filter's digits (AAP 0.10.2) and prints no currency here: the legacy transaction table prints these same figures bare (`app/views/loans/viewloanaccountdetails.html:679-694`), so the row's figures are unchanged by the shared formatter (Rule 1 clause 3). -->
+          <td>{{ row.amount | money }}</td>
+          <td>{{ row.principalPortion | money }}</td>
+          <td>{{ row.interestPortion | money }}</td>
+          <td>{{ row.feeChargesPortion | money }}</td>
+          <td>{{ row.outstandingLoanBalance | money }}</td>
         </tr>
       }
     </tbody>

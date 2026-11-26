@@ -139,7 +139,6 @@ describe('IdleService', () => {
       expect(emissions.warnings).toEqual([WARNING_DELAY_MS]);
       expect(emissions.timeouts).toEqual([IDLE_DELAY_MS]);
 
-      // A further idle window reaches no subscriber: the timeout disarms the schedule before it emits.
       vi.advanceTimersByTime(IDLE_DELAY_MS);
 
       expect(emissions.warnings).toHaveLength(1);
@@ -156,7 +155,6 @@ describe('IdleService', () => {
       vi.advanceTimersByTime(TEN_MINUTES_MS);
       service.reset();
 
-      // 1 789 999 ms after the reset is 2 389 999 ms into the session: the original 29:50 and 30:00 have both passed in silence, and the re-armed warning has not yet arrived.
       vi.advanceTimersByTime(WARNING_DELAY_MS - 1);
       expect(emissions.warnings).toEqual([]);
       expect(emissions.timeouts).toEqual([]);
@@ -177,10 +175,8 @@ describe('IdleService', () => {
 
       service.start();
 
-      // The warning, the timeout and the heartbeat: the three handles a started schedule holds.
       expect(vi.getTimerCount()).toBe(3);
 
-      // The 15-minute heartbeat fires here and arms the next one. It emits nothing and moves no deadline.
       vi.advanceTimersByTime(KEEPALIVE_DELAY_MS);
       expect(emissions.warnings).toEqual([]);
       expect(emissions.timeouts).toEqual([]);
@@ -189,13 +185,11 @@ describe('IdleService', () => {
       vi.advanceTimersByTime(WARNING_DELAY_MS - KEEPALIVE_DELAY_MS);
       expect(emissions.warnings).toEqual([WARNING_DELAY_MS]);
 
-      // Going idle stops the heartbeat, exactly as ng-idle halts its keepalive at $idleStart; only the timeout is still armed.
       expect(vi.getTimerCount()).toBe(1);
 
       vi.advanceTimersByTime(IDLE_DELAY_MS - WARNING_DELAY_MS);
       expect(emissions.timeouts).toEqual([IDLE_DELAY_MS]);
 
-      // Nothing repeats: two further heartbeat intervals bring no warning and no second timeout.
       vi.advanceTimersByTime(KEEPALIVE_DELAY_MS * 2);
       expect(emissions.warnings).toHaveLength(1);
       expect(emissions.timeouts).toHaveLength(1);
@@ -208,7 +202,6 @@ describe('IdleService', () => {
       service.start();
       service.start();
 
-      // One schedule, not two: the second call cleared the first one's three handles before arming.
       expect(vi.getTimerCount()).toBe(3);
 
       vi.advanceTimersByTime(WARNING_DELAY_MS);
@@ -226,7 +219,6 @@ describe('IdleService', () => {
 
       expect(vi.getTimerCount()).toBe(0);
 
-      // An hour past the stop, including the two deadlines and four heartbeat intervals.
       vi.advanceTimersByTime(TEN_MINUTES_MS + 60 * MS_PER_MINUTE);
 
       expect(emissions.warnings).toEqual([]);
@@ -243,14 +235,12 @@ describe('IdleService', () => {
         keepaliveMinutes: KEEPALIVE_MINUTES,
       });
 
-      // The three instants every case above asserts, restated as the arithmetic they come from.
       expect(IDLE_DELAY_MS).toBe(1_800_000);
       expect(WARNING_DELAY_MS).toBe(1_790_000);
       expect(KEEPALIVE_DELAY_MS).toBe(900_000);
     });
 
     it('derives every deadline from the configured durations instead of hard-coding them', () => {
-      // One minute of idle, a ten-second warning and a one-minute heartbeat: the same expressions the service uses now produce 50 000 / 60 000 rather than 1 790 000 / 1 800 000.
       const shortened = createHarness(
         configFor({ idleMinutes: 1, warningSeconds: 10, keepaliveMinutes: 1 }),
       );

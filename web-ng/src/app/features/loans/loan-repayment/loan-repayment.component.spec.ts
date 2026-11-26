@@ -10,7 +10,7 @@ import type { LoanActionResult, LoanTransactionTemplate, OptionItem } from '../l
 import { LoanService, type LoanRepaymentInput } from '../loan.service';
 import { LoanRepaymentComponent } from './loan-repayment.component';
 
-/** Behaviour of the repayment screen — workflow W6, mounted by `LoanActionComponent` at `#/loanaccount/:id/repayment` (AAP 0.7.3 "W6 repayment"; AAP 0.7.4): the template's payment types, amount and date seed the form, a re-bound `[loanId]` replaces them, one click sends one POST, and a rejected amount renders Fineract's own sentence with every entered value kept. */
+/** Behaviour of the repayment screen — workflow W6, mounted by `LoanActionComponent` at `#/loanaccount/:id/repayment` (AAP 0.7.3 "W6 repayment"; AAP 0.7.4): the template's payment types and amount seed the form, the transaction date opens on the browser's today rather than on the template's due date, a re-bound `[loanId]` replaces those seeds, one click sends one POST, and a rejected amount renders Fineract's own sentence with every entered value kept. */
 
 const LOAN_ID = '5';
 const SECOND_LOAN_ID = '6';
@@ -21,7 +21,6 @@ const PAYMENT_TYPES: readonly OptionItem[] = [
 const PAYMENT_TYPE_NAMES: readonly string[] = PAYMENT_TYPES.map((option) => option.name);
 const FIRST_PAYMENT_TYPE = PAYMENT_TYPES[0];
 const TEMPLATE_AMOUNT = 466.67;
-const TEMPLATE_DATE = new Date(2026, 11, 24);
 const TEMPLATE: LoanTransactionTemplate = {
   paymentTypeOptions: PAYMENT_TYPES,
   date: [2026, 12, 24],
@@ -87,6 +86,27 @@ function deferredResponse<T>(): { readonly response: Observable<T>; resolve(valu
       settle(value);
     },
   };
+}
+
+/** Local midnight of the browser's current date: the transaction date the form opens on, because a form's own default date comes from the browser clock and the tenant business date stays the harness's to read (AAP 0.10.5 item 15, AAP 0.12). Computed from the running clock rather than pinned to a literal, so the assertion holds on whatever day the suite runs. */
+function todayAtMidnight(): Date {
+  const now = new Date();
+
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+/** The `yyyy-MM-dd` string a native `input[type=date]` shows for a `Date`, which is how `DateFieldComponent` writes the control's value onto the element. */
+function inputValueOf(date: Date): string {
+  const year = String(date.getFullYear()).padStart(4, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+}
+
+/** The `[year, month, day]` triple Fineract sends a template's `date` in, for a local-midnight `Date`. */
+function dateTriple(date: Date): readonly [number, number, number] {
+  return [date.getFullYear(), date.getMonth() + 1, date.getDate()];
 }
 
 describe('LoanRepaymentComponent', () => {
@@ -158,7 +178,7 @@ describe('LoanRepaymentComponent', () => {
     });
     navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
   });
-  it('seeds the form from the loan’s repayment template, first payment type included', async () => {
+  it('seeds the amount and payment types from the loan’s repayment template and the date from the browser clock', async () => {
     await show(LOAN_ID);
 
 // One read, for the loan the input names and the repayment command: this screen issues no record read, because the legacy repayment action reads its template and nothing else, so the schedule is never its source (Rule 1 clauses 2 and 3).
@@ -170,13 +190,26 @@ describe('LoanRepaymentComponent', () => {
     );
     expect(component.form.controls.paymentTypeId.value).toBe(FIRST_PAYMENT_TYPE.id);
     expect(component.form.controls.transactionAmount.value).toBe(TEMPLATE_AMOUNT);
-    expect(component.form.controls.transactionDate.value).toEqual(TEMPLATE_DATE);
+// The date is not the template's: a form's own default comes from the browser clock at local midnight, not from the template's `date`, which this backend answers with the first unpaid instalment's due date (AAP 0.10.5 item 15, AAP 0.12).
+    expect(component.form.controls.transactionDate.value).toEqual(todayAtMidnight());
     expect(amountInput()?.value).toBe(String(TEMPLATE_AMOUNT));
-    expect(dateInput()?.value).toBe('2026-12-24');
+    expect(dateInput()?.value).toBe(inputValueOf(todayAtMidnight()));
     const select = paymentSelect();
     expect(select).not.toBeNull();
     expect(optionTexts(select as HTMLSelectElement)).toEqual(PAYMENT_TYPE_NAMES);
     expect(selectedText(select as HTMLSelectElement)).toBe(FIRST_PAYMENT_TYPE.name);
+  });
+  it('opens on the browser’s today, not on the due date the template answers', async () => {
+// The finding's own reproduction: this backend answers the first unpaid instalment's due date — a month ahead of the business date on the seeded fixture — so a template-seeded form would post a future-dated repayment unchanged (AAP 0.10.5 item 15, AAP 0.12).
+    const dueDate = todayAtMidnight();
+    dueDate.setDate(dueDate.getDate() + 30);
+    loan.actionTemplate.mockReturnValue(of({ ...TEMPLATE, date: dateTriple(dueDate) }));
+    await show(LOAN_ID);
+    const seeded = component.form.controls.transactionDate.value;
+    expect(seeded).toEqual(todayAtMidnight());
+    expect(seeded).not.toEqual(dueDate);
+    expect(component.form.controls.transactionDate.valid).toBe(true);
+    expect(dateInput()?.value).toBe(inputValueOf(todayAtMidnight()));
   });
   it('re-seeds the form when the loan id changes, keeping nothing of the previous loan', async () => {
     loan.actionTemplate.mockImplementation((id) =>
@@ -191,7 +224,8 @@ describe('LoanRepaymentComponent', () => {
     ]);
     expect(component.form.controls.transactionAmount.value).toBe(SECOND_TEMPLATE_AMOUNT);
     expect(component.form.controls.paymentTypeId.value).toBe(SECOND_PAYMENT_TYPE.id);
-    expect(component.form.controls.transactionDate.value).toEqual(new Date(2027, 0, 15));
+// The date is the browser's today for every loan, so it carries the same value across the move; the re-seed of the other two controls above is what this case proves, and the date's own seeding is proved separately (AAP 0.10.5 item 15).
+    expect(component.form.controls.transactionDate.value).toEqual(todayAtMidnight());
     expect(component.paymentTypeOptions().map((option) => option.id)).toEqual([
       SECOND_PAYMENT_TYPE.id,
     ]);
@@ -234,7 +268,7 @@ describe('LoanRepaymentComponent', () => {
     await component.submit();
     expect(loan.repay).toHaveBeenCalledTimes(1);
     expect(loan.repay).toHaveBeenCalledWith(LOAN_ID, {
-      transactionDate: TEMPLATE_DATE,
+      transactionDate: todayAtMidnight(),
       transactionAmount: NO_PAYMENT_TYPE_TEMPLATE.amount,
     });
     const [, postedBody] = loan.repay.mock.calls[0];

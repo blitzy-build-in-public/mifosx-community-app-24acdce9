@@ -8,8 +8,9 @@
   this file carries no style, no colour and no pixel: `.container-fluid` and `.row`/`.col-md-*` are
   the page and its grid, the record card is `app-panel-card` (AAP 0.2.3 row `PanelCard`), whose
   `.panel` host is the white square surface with its shadow and whose `.panel-body` is its 13px body,
-  `.nav-tabs` the strip, `.alert.alert-danger` the failure and not-found banners, and `.fa` the
-  Font Awesome 4 glyphs (Rule 1 clause 6; AAP 0.5.2). The blocks the record composes —
+  `.nav-tabs` the strip, `.alert.alert-danger` the failure banner and the shared
+  `app-record-not-found` the not-found one, and `.fa` the Font Awesome 4 glyphs (Rule 1 clause 6;
+  AAP 0.5.2). The blocks the record composes —
   `app-record-header`, `app-tab-strip`, `app-action-button-group`, `app-client-summary`,
   `app-client-accounts`, `app-client-identifiers` and `app-profile-card` — own their own markup and
   take the loaded record, its id or its action descriptors as an input.
@@ -50,26 +51,15 @@
   }
 
   <div class="row">
-    <div class="col-md-12">
+    <!-- The column holds the record's four states, so it is the region a read in flight marks busy: assistive technology is told the record's own content is being replaced rather than that the whole page is (AAP 0.7.4 state rules; AAP 0.2.4 records that the design carries no loader). -->
+    <div class="col-md-12" [attr.aria-busy]="loading() ? 'true' : null">
       @if (loading()) {
         <!-- Nothing yet: the record is not half-painted and no empty state is claimed. -->
       } @else if (notFound()) {
-        <!--
-          No such client: the message replaces the record entirely, with no card, no tab strip and
-          no action row, so no control is offered against a record that was never read. Both strings
-          are keys the shipped legacy bundles carry, so the missing-translation handler never has to
-          humanise one.
-        -->
-        <div class="alert alert-danger" role="alert">
-          <strong>{{ notFoundHeadingKey | translate }}</strong>{{ ' ' }}<span>{{ notFoundMessageKey | translate }}</span>
-        </div>
+        <!-- No such client: `shared/record-not-found` replaces the record entirely, with no card, no tab strip and no action row, so no control is offered against a record that was never read and the same 404 reads the same way on every record screen (AAP 0.7.4). -->
+        <app-record-not-found />
       } @else {
-        <!--
-          The one failure this screen renders itself: a 4xx other than 404, in the server's own
-          words and with no pipe, because it is Fineract's text and not a key. It stands outside the
-          record branch because a read that was refused leaves no record to paint, and its message
-          is still what the user must read (AAP 0.7.4; workflow W7's rule).
-        -->
+        <!-- The one failure this screen renders itself: a 4xx other than 404, in the server's own words and with no pipe, because it is Fineract's text and not a key. It stands outside the record branch because a read that was refused leaves no record to paint, and its message is still what the user must read (AAP 0.7.4; workflow W7's rule). -->
         @if (clientError(); as failure) {
           <div class="alert alert-danger" role="alert">{{ failure.message }}</div>
         }
@@ -87,9 +77,10 @@
                 <div class="col-md-12">
                   <!--
                     The design's joined action row, rendered by `app-action-button-group` from the
-                    descriptors `actionButtons()` builds: `Edit`, `New Loan` and `Close`
-                    in the group and the four lifecycle commands in its `More` menu, which is the
-                    arrangement AAP 0.7.4 records. The group owns that markup — the joined
+                    descriptors `actionButtons()` builds — `Edit`, `New Loan` and `Close` in the
+                    group, the lifecycle commands in its `More` menu, which is the arrangement AAP
+                    0.7.4 records, and only the entries the record's own status allows as legacy
+                    builds them per state. The group owns that markup — the joined
                     `.btn-group`, the `More` menu with its Angular open state and each entry's own
                     permission gate — while this record owns which actions exist and where they lead,
                     so the ids in their hrefs are the ones the URL names now. Client charges,
@@ -106,9 +97,18 @@
                 heading is the caller's, because `app-client-accounts` renders the card body alone.
                 Switching tabs paints the other section and leaves the record header, the strip and
                 the action row in place.
+
+                The body is the panel of whichever tab is showing: `role="tabpanel"` with its
+                `aria-labelledby` naming that tab's element through `tabDomId`, the same id the strip
+                put on it, so assistive technology reads this column as the active tab's panel (AAP
+                0.2.3 row `TabStrip`).
               -->
               <div class="row">
-                <div class="col-md-9">
+                <div
+                  class="col-md-9"
+                  role="tabpanel"
+                  [attr.aria-labelledby]="tabDomId(activeTabId())"
+                >
                   @if (activeTabId() === 'general') {
                     <app-client-summary [client]="record" />
                     <hr />
@@ -128,8 +128,7 @@
                   }
                 </div>
                 <div class="col-md-3">
-                  <!-- The card's own rows and, under its `Performance History` sub-heading, the rows
-                       whose values the client payload does not carry. -->
+                  <!-- The card's own rows and, under its `Performance History` sub-heading, the rows whose values the client payload does not carry. -->
                   <app-profile-card
                     [displayName]="record.displayName"
                     [fields]="profileFields()"

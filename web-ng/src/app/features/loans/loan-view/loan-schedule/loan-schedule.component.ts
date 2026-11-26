@@ -1,11 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import { TranslatePipe } from '@ngx-translate/core';
 
 // The loans feature keeps one model module at its root, two levels above this table's folder (Rule 1 clause 2).
 import type { RepaymentPeriod, RepaymentSchedule } from '../../loan.models';
 import { DISPLAY_DATE_FORMAT, fromFineractDate } from '../../../../shared/date-format.util';
 import { EmptyStateComponent } from '../../../../shared/empty-state/empty-state.component';
+import { MoneyPipe } from '../../../../shared/money/money.pipe';
 
 /** A payment period as the table renders it: every member the payload's period carries, with the two date members parsed, derived from `RepaymentPeriod` so the columns cannot drift from the wire (AAP 0.7.2). */
 type LoanScheduleRow = Omit<RepaymentPeriod, 'fromDate' | 'dueDate'> & {
@@ -16,7 +17,7 @@ type LoanScheduleRow = Omit<RepaymentPeriod, 'fromDate' | 'dueDate'> & {
 /** Repayment-schedule section of the loan record: one row per period of the `repaymentSchedule` that `GET /loans/{id}?associations=all` returns, rendered as the server computed it (AAP 0.7.1, 0.7.4) (AAP 0.10.1, AAP 0.14.1). */
 @Component({
   selector: 'app-loan-schedule',
-  imports: [DatePipe, DecimalPipe, TranslatePipe, EmptyStateComponent],
+  imports: [DatePipe, MoneyPipe, TranslatePipe, EmptyStateComponent],
   templateUrl: './loan-schedule.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })

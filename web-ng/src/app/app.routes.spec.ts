@@ -83,7 +83,6 @@ function declaredCodes(declared: unknown): readonly string[] {
   if (isDeclarationObject(declared)) {
     const any: unknown = declared['any'];
 
-    // The any-of list: one held code of it admits the screen, so every entry of it is a code the route names.
     if (Array.isArray(any)) {
       return any.filter((code: unknown): code is string => typeof code === 'string');
     }
@@ -224,7 +223,6 @@ describe('APP_ROUTES', () => {
     const unique: readonly string[] = [...new Set(composed)];
 
     expect([...unique].sort()).toEqual([...IN_SCOPE_PATHS].sort());
-    // One path, two placements: the shell's own catch-all and the unguarded one beside the shell.
     expect(composed.filter((path: string): boolean => path === '**')).toHaveLength(2);
     expect(composed).toHaveLength(IN_SCOPE_PATHS.length + 1);
   });
@@ -238,9 +236,7 @@ describe('APP_ROUTES', () => {
     expect(mounts).toHaveLength(2);
 
     for (const mount of mounts) {
-      // Still a lazy group: the predicate decides which chunk is fetched, never whether it is one.
       expect(mount.loadChildren).toBeTypeOf('function');
-      // A mount with no predicate accepts every URL, which is the fetch this case pins.
       expect(mount.canMatch ?? []).not.toHaveLength(0);
     }
 
@@ -253,7 +249,6 @@ describe('APP_ROUTES', () => {
             guard(mount, [new UrlSegment(segment, {})], MATCH_SNAPSHOT) === true,
         );
 
-    // Every path a feature group serves — the list's entries that are not the login screen, a redirect, the search screen or a catch-all — is accepted by exactly one mount, its own, so a deep link can neither lose its group.
     const grouped: readonly string[] = IN_SCOPE_PATHS.filter(
       (path: string): boolean =>
         path !== 'login' && path !== '' && path !== 'home' && path !== 'search/:query' && path !== '**',
@@ -266,13 +261,11 @@ describe('APP_ROUTES', () => {
       const accepting: readonly Route[] = mounts.filter((mount: Route): boolean => accepts(mount, first));
 
       expect(accepting).toHaveLength(1);
-      // The accepting mount really owns the path: its own array declares it, which is the agreement between the list a predicate carries and the feature array it guards.
       const loaded: unknown = await accepting[0]?.loadChildren?.();
       expect(Array.isArray(loaded)).toBe(true);
       expect((loaded as readonly Route[]).some((route: Route): boolean => route.path === path)).toBe(true);
     }
 
-    // The search route keeps its own URL, and a URL no group serves matches no mount at all.
     for (const mount of mounts) {
       expect(accepts(mount, 'search')).toBe(false);
       expect(accepts(mount, UNKNOWN_SEGMENT)).toBe(false);
@@ -284,7 +277,6 @@ describe('APP_ROUTES', () => {
 
     expect(login).toBeDefined();
     expect(login?.loadChildren).toBeTypeOf('function');
-    // The login branch is a top-level sibling: it carries no guard, because a signed-out visitor is exactly who must reach it (auth.guard.ts documents the same placement).
     expect(login?.canActivate).toBeUndefined();
   });
 
@@ -312,7 +304,6 @@ describe('APP_ROUTES', () => {
     // Either read code admits the screen, because the scope the user picks at run time decides which rows they may read: the search control offers an "all" scope and a loans scope and is rendered for every user, and the results screen gates each row on its own family's read code, so a READ_LOAN-only user must reach the loan rows they may read (AAP 0.1.1, AAP 0.10.5 item 9, AAP 0.14.1).
     expect(search?.data?.['permission']).toEqual({ any: ['READ_CLIENT', 'READ_LOAN'] });
     expect(search?.canActivate ?? []).toContain(permissionGuard);
-    // The declaration changes neither the trail nor the lazily loaded screen.
     expect(search?.data?.['breadcrumb']).toEqual(['label.heading.search']);
     expect(search?.loadComponent).toBeTypeOf('function');
   });
@@ -336,9 +327,7 @@ describe('APP_ROUTES', () => {
 
     expect(wildcards).toHaveLength(1);
     expect(wildcards[0]?.component).toBe(NotFoundComponent);
-    // Last in the array, so it can never shadow a declared screen.
     expect(APP_ROUTES.at(-1)).toBe(wildcards[0]);
-    // Top level, outside the guarded shell: a path that does not exist is not a permission problem, so a signed-out visitor sees the not-found screen instead of the login form.
     expect(wildcards[0]?.canActivate ?? []).not.toContain(authGuard);
 
     const shell = APP_ROUTES.find((route: Route): boolean => route.component === ShellComponent);
@@ -349,7 +338,6 @@ describe('APP_ROUTES', () => {
     expect(inShell?.path).toBe('**');
     expect(inShell?.component).toBe(NotFoundComponent);
     expect(children.filter((route: Route): boolean => route.path === '**')).toHaveLength(1);
-    // Neither wildcard declares an access code or a trail: the screen renders no data and names no capability, so a code would deny a path that does not exist.
     expect(inShell?.data).toBeUndefined();
     expect(wildcards[0]?.data).toBeUndefined();
     expect(inShell?.canActivate ?? []).not.toContain(permissionGuard);
@@ -381,7 +369,6 @@ describe('APP_ROUTES', () => {
     for (const route of gated) {
       const codes: readonly string[] = declaredCodes(route.data?.['permission']);
 
-      // A gated route names at least one code: a declaration shape this file cannot read, or one that names nothing, states no restriction at all, so it fails here rather than passing unnoticed.
       expect(codes.length).toBeGreaterThan(0);
 
       for (const code of codes) {
@@ -389,7 +376,6 @@ describe('APP_ROUTES', () => {
       }
 
       if (route.path === 'clients') {
-        // The landing screen declares its code for the navigation entry but carries no guard: it is the destination permissionGuard sends a denied navigation to (clients.routes.ts states it).
         expect(route.canActivate ?? []).not.toContain(permissionGuard);
         continue;
       }
@@ -404,7 +390,6 @@ describe('APP_ROUTES', () => {
 
     // The declaration is the parameter name plus the five legacy codes, whole: a code widened, swapped, added or dropped here changes which command a user may post, so the case states the object rather than sampling it.
     expect(declared).toEqual({ param: 'action', codes: CLIENT_ACTION_CODES });
-    // And the guard is what reads it, so the route is gated rather than merely labelled.
     expect(route?.canActivate ?? []).toContain(permissionGuard);
   });
 
@@ -431,7 +416,6 @@ describe('APP_ROUTES', () => {
     const router = routerFor(true);
     TestBed.inject(PermissionsService).setPermissions(['CREATE_CLIENT']);
 
-    // The screen is still gated: a user who may read neither family is denied, and the denial lands where permissionGuard sends every denial.
     await router.navigateByUrl('/search/ada');
 
     expect(router.url).toBe('/clients');
@@ -517,7 +501,6 @@ describe('permissionGuard', () => {
   });
 
   it('denies an :action value the codes map names no code for, a prototype key included', () => {
-    // The wildcard passes every code the guard asks about, so a denial here can only come from the lookups before that question: the map names nothing for this segment.
     TestBed.inject(PermissionsService).setPermissions(['ALL_FUNCTIONS']);
 
     expect(denialTarget(runGuard(routeFor('nonsense')))).toBe('/clients');
@@ -538,24 +521,19 @@ describe('permissionGuard', () => {
   it('denies a malformed parameterised declaration rather than honouring half of it', () => {
     TestBed.inject(PermissionsService).setPermissions(['CLOSE_CLIENT']);
 
-    // No parameter name to read the command from.
     expect(
       denialTarget(runGuard(routeFor('close', { param: '', codes: CLIENT_ACTION_CODES }))),
     ).toBe('/clients');
-    // A map entry that is not a code.
     expect(denialTarget(runGuard(routeFor('close', { param: 'action', codes: { close: 7 } })))).toBe(
       '/clients',
     );
-    // A map that is not a map.
     expect(denialTarget(runGuard(routeFor('close', { param: 'action', codes: null })))).toBe(
       '/clients',
     );
-    // An object naming neither member.
     expect(denialTarget(runGuard(routeFor('close', {})))).toBe('/clients');
   });
 
   it('denies the parameterised declaration while no session is present', () => {
-    // The gate fails closed: no login, no answer but a denial, whatever the segment names.
     expect(denialTarget(runGuard(routeFor('close')))).toBe('/clients');
     expect(denialTarget(runGuard(routeFor('activate')))).toBe('/clients');
   });
@@ -570,26 +548,20 @@ describe('permissionGuard', () => {
   it('admits the search screen on the clients read code alone', () => {
     TestBed.inject(PermissionsService).setPermissions(['READ_CLIENT']);
 
-    // The client rows are the ones a READ_CLIENT user may see, and the screen was already open to them.
     expect(runGuard(routeFor('ada', SEARCH_DECLARATION))).toBe(true);
   });
 
   it('denies the any-of declaration when the user holds neither code, sending the navigation to the clients list', () => {
     TestBed.inject(PermissionsService).setPermissions(['CREATE_CLIENT']);
 
-    // Neither family's rows are readable, so the screen has nothing to show and the guard keeps the gate it declares.
     expect(denialTarget(runGuard(routeFor('ada', SEARCH_DECLARATION)))).toBe('/clients');
   });
 
   it('denies a malformed any-of declaration rather than admitting a screen on a list it cannot read', () => {
-    // Both codes are held, so every denial below can only come from the declaration: a shape the gate cannot read states no restriction it can honour.
     TestBed.inject(PermissionsService).setPermissions(['READ_CLIENT', 'READ_LOAN']);
 
-    // A list that names no code.
     expect(denialTarget(runGuard(routeFor('ada', { any: [] })))).toBe('/clients');
-    // An entry that is not a code.
     expect(denialTarget(runGuard(routeFor('ada', { any: [7] })))).toBe('/clients');
-    // A value that is not a list at all.
     expect(denialTarget(runGuard(routeFor('ada', { any: 'READ_CLIENT' })))).toBe('/clients');
   });
 

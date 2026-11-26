@@ -154,7 +154,6 @@ describe('ClientAccountsComponent', () => {
     // No query parameter travels with the read: the endpoint takes the id in its path alone.
     expect(read.request.params.keys()).toEqual([]);
     expect(read.request.body).toBeNull();
-    // The section reads only this: no record read, no template read, no client list.
     expect(httpMock.match(() => true)).toHaveLength(0);
     // While the read is outstanding the section paints neither a table nor a "no accounts" claim: `loading` starts true so the empty state cannot flash before the first answer has been read.
     expect(component.loading()).toBe(true);
@@ -163,7 +162,6 @@ describe('ClientAccountsComponent', () => {
     read.flush(ACCOUNTS);
     await fixture.whenStable();
     fixture.detectChanges();
-    // A further change-detection pass — the record re-rendered for any reason at all — asks for the accounts no second time.
     fixture.detectChanges();
     expect(httpMock.match(() => true)).toHaveLength(0);
   });
@@ -179,12 +177,10 @@ describe('ClientAccountsComponent', () => {
       SAVINGS_ACCOUNT.accountNo,
       SAVINGS_WITHOUT_FIGURE.accountNo,
     ]);
-    // Each figure is the one its own family reports, not a derived total.
     expect(component.rows().map((row) => row.balance)).toEqual([5000, 1200.5, null]);
     expect(component.loading()).toBe(false);
     expect(component.failed()).toBe(false);
     expect(renderedRows()).toHaveLength(3);
-    // The design's four columns — account number, product, status and balance — and no fifth.
     expect(Array.from(host().querySelectorAll('#client-accounts thead th'))).toHaveLength(4);
   });
   it('leaves the balance cell empty for a row whose family reported no figure', async () => {
@@ -193,10 +189,8 @@ describe('ClientAccountsComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
     const cells = renderedRows().map((row) => Array.from(row.cells));
-    // The figure cells are the fourth of each row, beneath the right-aligned balance heading.
     expect(cells[0]?.[3]?.textContent?.trim()).toBe('5,000');
     expect(cells[1]?.[3]?.textContent?.trim()).toBe('1,200.5');
-    // A missing figure is an empty cell: no zero the server never reported, no dash, no placeholder.
     expect(cells[2]?.[3]?.textContent?.trim()).toBe('');
     expect(cells[2]?.[3]?.textContent ?? '').not.toMatch(LONE_DASH);
   });
@@ -213,13 +207,10 @@ describe('ClientAccountsComponent', () => {
       expect(swatch).not.toBeNull();
       expect(swatch?.classList.contains('status-active')).toBe(true);
       expect(cell?.textContent?.trim()).toBe('');
-      // No tooltip and no accessible name turn the colour back into a word — not on the indicator, not on its host component and not anywhere else in the cell.
       expect(cell?.querySelector('[title], [aria-label]')).toBeNull();
-      // Decorative, so the accessible content of the row stays with the cells that carry data.
       expect(swatch?.getAttribute('aria-hidden')).toBe('true');
       const text = (row.textContent ?? '').toLowerCase();
       for (const statusWord of STATUS_TEXT) { expect(text).not.toContain(statusWord); }
-      // The server's own label for the state is on the payload and is deliberately not shown.
       expect(text).not.toContain(LOAN_STATUS.value.toLowerCase());
     }
   });
@@ -230,10 +221,8 @@ describe('ClientAccountsComponent', () => {
     fixture.detectChanges();
     expect(component.rows()).toEqual([]);
     expect(component.failed()).toBe(false);
-    // The shared explicit empty state sits inside the section's own body, and no table claims rows there are none of.
     expect(host().querySelector('.panel-body app-empty-state')).not.toBeNull();
     expect(host().querySelector('#client-accounts')).toBeNull();
-    // An empty result is not a failure: no alert region and no failure wording anywhere on screen.
     expect(host().querySelector('.alert')).toBeNull();
     expect((host().textContent ?? '').toLowerCase()).not.toContain('error');
   });
@@ -242,12 +231,10 @@ describe('ClientAccountsComponent', () => {
     httpMock.expectOne(isAccountsRead(CLIENT_ID)).flush({}, { status: 503, statusText: 'Service Unavailable' });
     await fixture.whenStable();
     fixture.detectChanges();
-    // The failure is state, not an exception: the section flags it, holds no rows, and renders no table.
     expect(component.failed()).toBe(true);
     expect(component.rows()).toEqual([]);
     expect(component.loading()).toBe(false);
     expect(host().querySelector('#client-accounts')).toBeNull();
-    // The screen stays usable: the section's body is still mounted, it raises no alert of its own — the interceptor has already notified with that same text for a 5xx.
     expect(host().querySelector('.panel-body')).not.toBeNull();
     expect(host().querySelector('.alert')).toBeNull();
     expect(host().querySelector('app-empty-state')).toBeNull();
@@ -261,7 +248,6 @@ describe('ClientAccountsComponent', () => {
     // A 4xx is the failure the interceptor does not notify, so the section renders the server's own `defaultUserMessage` itself: exactly one region, carrying the text unaltered — no prefix, no suffix.
     expect(alerts).toHaveLength(1);
     expect(alerts[0]?.textContent?.trim()).toBe(FINERACT_REFUSAL.defaultUserMessage);
-    // A refusal is not an empty account list: no table, no empty state, no rows.
     expect(component.failed()).toBe(true);
     expect(component.rows()).toEqual([]);
     expect(host().querySelector('#client-accounts')).toBeNull();
@@ -270,14 +256,12 @@ describe('ClientAccountsComponent', () => {
   it('abandons the read a rebinding supersedes, so a late answer cannot replace the newer rows', async () => {
     mount(CLIENT_ID);
     const superseded = httpMock.expectOne(isAccountsRead(CLIENT_ID));
-    // The record was navigated to another client before the first client's read had answered.
     fixture.componentRef.setInput('clientId', OTHER_CLIENT_ID);
     fixture.detectChanges();
     const current = httpMock.expectOne(isAccountsRead(OTHER_CLIENT_ID));
     // `switchMap` abandons the first read instead of racing it: the transport reports that read cancelled and refuses to deliver any body for it.
     expect(superseded.cancelled).toBe(true);
     expect(() => superseded.flush(ACCOUNTS)).toThrow(/cancelled/i);
-    // The newer read is the one that lands, and the three-account summary the superseded read would have carried never reaches the table.
     current.flush({ loanAccounts: [LOAN_ACCOUNT] });
     await fixture.whenStable();
     fixture.detectChanges();
@@ -290,12 +274,10 @@ describe('ClientAccountsComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
     expect(component.rows()).toHaveLength(3);
-    // The record was navigated to another client, which binds the same input with that client's id.
     fixture.componentRef.setInput('clientId', OTHER_CLIENT_ID);
     fixture.detectChanges();
     const reRead = httpMock.expectOne(isAccountsRead(OTHER_CLIENT_ID));
     expect(reRead.request.method).toBe('GET');
-    // The previous client's rows are not left on screen while the new read is outstanding.
     expect(component.loading()).toBe(true);
     reRead.flush({ loanAccounts: [LOAN_ACCOUNT] });
     await fixture.whenStable();

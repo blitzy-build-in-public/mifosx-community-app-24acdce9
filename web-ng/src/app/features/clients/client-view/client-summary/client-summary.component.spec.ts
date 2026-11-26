@@ -2,12 +2,13 @@ import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { MissingTranslationHandler, TranslateService, provideTranslateService, } from '@ngx-translate/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { FineractMissingTranslationHandler } from '../../../../core/i18n/missing-translation.handler';
+import { toFineractDate } from '../../../../shared/date-format.util';
 import type { Client } from '../../client.models';
 import { ClientSummaryComponent } from './client-summary.component';
 
 /** Behavioural spec for the client record's summary block: the `General` tab's label/value rows, fed by the one `GET /clients/{id}` response (AAP 0.7.1, AAP 0.7.4; workflow W3). */
-/** Labels of the block's five rows, in render order: the four text rows in the template's loop followed by the date row the template writes out. */
-const ROW_LABELS: readonly string[] = ['Client Number', 'External ID', 'Office', 'Staff', 'Activation Date',];
+/** Labels of the block's five rows, in render order: the four text rows in the template's loop followed by the date row the template writes out. The date row carries the profile card's own wording, `label.input.activationdate`, so one field has one label on the record (Rule 1 clause 3). */
+const ROW_LABELS: readonly string[] = ['Client Number', 'External ID', 'Office', 'Staff', 'Activation date',];
 /** The four legacy keys the template's loop binds, in the component's row order, asserted against `ClientSummaryRow.labelKey` so a row cannot lose its key and fall back to literal copy. */
 const ROW_LABEL_KEYS: readonly string[] = [
   'label.heading.clientno',
@@ -15,21 +16,23 @@ const ROW_LABEL_KEYS: readonly string[] = [
   'label.heading.office',
   'label.input.staff',
 ];
-/** The wording the shipped `app/global-translations/locale-en.json` bundle carries for the five keys, served to `TranslateService` so the labels resolve in the spec exactly as they do on the record. */
+/** The wording the shipped `app/global-translations/locale-en.json` bundle carries for the five keys, served to `TranslateService` so the labels resolve in the spec exactly as they do on the record. Both activation-date keys are carried verbatim — `Activation Date` and `Activation date` — because their different wording is the only thing that shows which of the two the row binds, and the row must bind the profile card's `label.input.activationdate`. */
 const EN_BUNDLE: Readonly<Record<string, string>> = {
   'label.heading.clientno': 'Client Number',
   'label.input.externalid': ' External ID',
   'label.heading.office': 'Office',
   'label.input.staff': 'Staff',
   'label.heading.activationdate': 'Activation Date',
+  'label.input.activationdate': 'Activation date',
 };
-/** The wording the same bundle's French file carries for the same five keys — what the language switcher must put on screen once `fr` is active, and what a label hardcoded in English could never render. */
+/** The wording the same bundle's French file carries for the same keys — what the language switcher must put on screen once `fr` is active, and what a label hardcoded in English could never render. */
 const FR_BUNDLE: Readonly<Record<string, string>> = {
   'label.heading.clientno': 'Numéro de client',
   'label.input.externalid': 'Identifiant externe',
   'label.heading.office': 'Bureau',
   'label.input.staff': 'Équipe',
   'label.heading.activationdate': 'Date d’activation',
+  'label.input.activationdate': 'Date d’activation',
 };
 /** Labels of the five rows in the language the switcher selects, in render order. */
 const FR_ROW_LABELS: readonly string[] = [
@@ -49,8 +52,12 @@ const OFFICE_NAME = 'Head Office';
 const STAFF_NAME = 'Spec Officer';
 /** Activation date in the wire form `Client.activationDate` carries: a `'yyyy-MM-dd'` string. */
 const ACTIVATION_DATE_WIRE = '2026-11-21';
-/** The same day as the record renders it at `dd MMMM yyyy`. */
+/** The same day as the local-midnight `Date` every display pattern is computed from: month index 10 is November. */
+const ACTIVATION_DATE = new Date(2026, 10, 21);
+/** The same day as the record renders it at `dd MMMM yyyy` in `en`, the pattern the design prints. */
 const ACTIVATION_DATE_TEXT = '21 November 2026';
+/** The same day at the same pattern in the language the switcher can select, French: the month name the row has to re-render, and the one a `DatePipe` bound to `LOCALE_ID` could never print (AAP 0.7.2 "Date handling"). */
+const ACTIVATION_DATE_TEXT_FR = '21 novembre 2026';
 /** A client with every field the block renders: the state four of the design's five rows show, and the only one whose activation date row carries a value. */
 const ACTIVE_CLIENT: Client = {
   id: 2,
@@ -91,7 +98,7 @@ describe('ClientSummaryComponent', () => {
   const host = (fixture: ComponentFixture<ClientSummaryComponent>): HTMLElement =>
     fixture.nativeElement as HTMLElement;
   beforeEach(async () => {
-    // The block is presentational, so the spec provides no HTTP client, no testing-controller double, no service double and no router: a render that needed any of them would throw here instead of passing.
+    // The block is presentational, so the spec provides no HTTP client, no testing-controller double and no router: a render that needed any of them would throw here instead of passing. The one service the component reads is the app-wide `AppConfigService`, whose `activeLocale` issues no request and follows the translate provider configured below (AAP 0.7.2 "Date handling").
     await TestBed.configureTestingModule({
       imports: [ClientSummaryComponent],
       providers: [
@@ -139,7 +146,6 @@ describe('ClientSummaryComponent', () => {
     const fixture = createSummary(ACTIVE_CLIENT);
     expect(rows(fixture)).toHaveLength(ROW_LABELS.length);
     expect(labels(fixture)).toEqual(ROW_LABELS);
-    // The date is the fifth row's value and is asserted on its own below, so the four text rows are compared here and no extra row can appear between them unnoticed.
     expect(values(fixture)).toHaveLength(ROW_LABELS.length);
     expect(values(fixture).slice(0, 4)).toEqual([
       ACTIVE_CLIENT.accountNo,
@@ -148,39 +154,55 @@ describe('ClientSummaryComponent', () => {
       ACTIVE_CLIENT.staffName,
     ]);
   });
-  it('renders the activation date as dd MMMM yyyy', () => {
+  it('renders the activation date at dd MMMM yyyy in the active locale, under the profile card’s own label', () => {
     const fixture = createSummary(ACTIVE_CLIENT);
+    const activationLabel = labels(fixture)[4];
     const activationCell = values(fixture)[4];
-    expect(labels(fixture)[4]).toBe('Activation Date');
+    // The row binds the key the profile card prints beside the same value, not the heading's longer wording, so one field carries one label on the record (Rule 1 clause 3).
+    expect(activationLabel).toBe(EN_BUNDLE['label.input.activationdate']);
+    expect(activationLabel).not.toBe(EN_BUNDLE['label.heading.activationdate']);
+    // The cell is the shared util's `dd MMMM yyyy` string for the active locale — in `en` the pattern the design prints — and not a locale-defaulted `DatePipe` rendering of the `Date`, whose format string alone would leave the month name in `LOCALE_ID` (AAP 0.7.2 "Date handling").
+    expect(activationCell).toBe(toFineractDate(ACTIVATION_DATE, 'en'));
     expect(activationCell).toBe(ACTIVATION_DATE_TEXT);
     // The rendered value is the display pattern, not the `'yyyy-MM-dd'` wire form the model holds.
     expect(activationCell).not.toContain(ACTIVATION_DATE_WIRE);
     expect(activationCell).not.toContain('GMT');
     expect(activationCell).not.toContain('T00:00');
   });
+  it('re-renders the activation date in the language the switcher selects', async () => {
+    const fixture = createSummary(ACTIVE_CLIENT);
+    const translate = TestBed.inject(TranslateService);
+    expect(values(fixture)[4]).toBe(ACTIVATION_DATE_TEXT);
+    translate.use('fr');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const localizedCell = values(fixture)[4];
+    // The French month name at the same `dd MMMM yyyy` pattern: the row followed the switcher, where a `DatePipe` given only a format string would have gone on printing the injected locale's English month beside the translated profile card (AAP 0.7.2 "Date handling").
+    expect(localizedCell).toBe(toFineractDate(ACTIVATION_DATE, 'fr'));
+    expect(localizedCell).toBe(ACTIVATION_DATE_TEXT_FR);
+    expect(localizedCell).not.toBe(ACTIVATION_DATE_TEXT);
+    expect(labels(fixture)[4]).toBe(FR_BUNDLE['label.input.activationdate']);
+  });
   it('re-words every label when the switcher activates another language', async () => {
     const fixture = createSummary(ACTIVE_CLIENT);
     const translate = TestBed.inject(TranslateService);
-    // The keys are the component's own contract, so a row that stopped carrying one could not pass this case on the strength of its rendered English text alone.
     expect(fixture.componentInstance.rows().map((row) => row.labelKey)).toEqual(ROW_LABEL_KEYS);
     expect(labels(fixture)).toEqual(ROW_LABELS);
     translate.use('fr');
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
-    // Every label is the French wording the bundle carries for its key: a label that ever went back to a hardcoded English string fails here, even where the English assertions pass.
     expect(labels(fixture)).toEqual(FR_ROW_LABELS);
   });
   it('renders a field the payload omits as an empty value, never a placeholder', () => {
     const fixture = createSummary(PENDING_CLIENT);
     const renderedValues = values(fixture);
-    // The labels are unaffected by a missing value: each row still renders its key.
     expect(labels(fixture)).toEqual(ROW_LABELS);
     expect(renderedValues[0]).toBe(PENDING_CLIENT.accountNo);
     expect(renderedValues[1]).toBe('');
     expect(renderedValues[2]).toBe(OFFICE_NAME);
     expect(renderedValues[3]).toBe('');
-    // A pending client carries no activation date, so the date row keeps its label and stays empty.
     expect(renderedValues[4]).toBe('');
     const renderedCells = [...labels(fixture),...renderedValues];
     for (const cell of renderedCells) {
@@ -213,14 +235,14 @@ describe('ClientSummaryComponent', () => {
       expect(activeText).not.toContain(statusWord);
       expect(pendingText).not.toContain(statusWord);
     }
-    // The server's own label for the pending state is on the payload and is deliberately not shown.
     expect(pendingText).not.toContain(PENDING_CLIENT.status.value.toLowerCase());
   });
-  it('renders with no service, router or HTTP provider configured', () => {
+  it('renders with no HTTP client, router or client-service provider configured', () => {
     const active = createSummary(ACTIVE_CLIENT);
     const pending = createSummary(PENDING_CLIENT);
     expect(rows(active)).toHaveLength(ROW_LABELS.length);
     expect(rows(pending)).toHaveLength(ROW_LABELS.length);
+    expect(values(active)[4]).toBe(ACTIVATION_DATE_TEXT);
     expect(values(pending)[1]).toBe('');
   });
 });

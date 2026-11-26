@@ -111,7 +111,6 @@ describe('authGuard', () => {
   });
 
   it('builds no redirect tree while the session is in effect', () => {
-    // The happy path answers before the router is asked for anything: a tree built here would be a redirect the navigation discards, and would mean the session check ran after the tree was made.
     const createUrlTree = vi.spyOn(router(), 'createUrlTree');
     auth.signIn();
 
@@ -185,14 +184,12 @@ describe('authGuard', () => {
       thrown = error instanceof Error ? error : null;
     }
 
-    // The read is unwrapped, so the very instance the session raised is what leaves the guard.
     expect(thrown).toBe(failure);
     // No answer at all — neither `true` nor a tree — so the navigation never proceeds authenticated.
     expect(answer).toBeNull();
     expect(navigate).not.toHaveBeenCalled();
     expect(navigateByUrl).not.toHaveBeenCalled();
 
-    // The failure belongs to the read and not to the guard: with the read answering again, the guard gives the ordinary denial answer, so it carries no error state from one call to the next.
     auth.stopFailing();
 
     expect(router().serializeUrl(asUrlTree(runGuard(stateFor(CLIENT_VIEW_URL))))).toBe(

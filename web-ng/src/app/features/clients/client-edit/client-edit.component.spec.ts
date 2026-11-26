@@ -27,14 +27,27 @@ const CLIENT_ID = '2';
 /** The edit read's payload: the template members `ClientTemplate` declares plus the client's own values the same response folds in, which is what legacy's `EditClientController` seeds its form from. */
 const PAYLOAD = {
   officeId: 1,
-  officeOptions: [{ id: 1, name: 'Head Office' }],
-  staffOptions: [{ id: 7, displayName: 'Officer, Parity' }],
+  officeOptions: [
+    { id: 1, name: 'Head Office' },
+    { id: 2, name: 'Branch One' },
+  ],
+  staffOptions: [
+    { id: 7, displayName: 'Officer, Parity' },
+    { id: 9, displayName: 'Officer, Field' },
+  ],
+  staffId: 7,
   activationDate: [2026, 11, 21],
   active: true,
   firstname: 'Ada',
   lastname: 'Okafor',
   externalId: 'EXT-2',
   mobileNo: '2025550102',
+} satisfies ClientTemplate & Record<string, unknown>;
+
+/** The same read for a client no officer is assigned to: the staff list still arrives, and the record carries no `staffId`. */
+const UNASSIGNED_PAYLOAD = {
+  ...PAYLOAD,
+  staffId: undefined,
 } satisfies ClientTemplate & Record<string, unknown>;
 
 /** The same read for an entity client: named by `fullname` alone, and pending rather than active. */
@@ -69,6 +82,12 @@ const SECOND_PAYLOAD = {
 /** The message a rejected save answers with, quoted from the server's own wording. */
 const REJECTED_MESSAGE = 'The client name is already in use by another client.';
 
+/** The message a failed save answers with when the server itself broke, which the interceptor notifies rather than the form. */
+const SERVER_FAILURE_MESSAGE = 'An unexpected error occurred on the server.';
+
+/** The text a refused navigation carries, the only kind of rejection that reaches the screen without an HTTP status. */
+const REFUSED_NAVIGATION_MESSAGE = 'Navigation was cancelled before the record could open.';
+
 /** The response a successful save answers with. */
 const SAVED: ClientMutationResponse = { resourceId: 2, clientId: 2 };
 
@@ -76,6 +95,9 @@ const SAVED: ClientMutationResponse = { resourceId: 2, clientId: 2 };
 const TRANSLATIONS: Readonly<Record<string, string>> = {
   'label.heading.editclient': 'Edit Client',
   'label.heading.notavailable': 'Not Available',
+  'label.heading.office': 'Office',
+  'label.heading.staff': 'Staff',
+  'label.menu.selectloanofficer': 'Select Staff',
   'error.msg.resource.not.found': 'The requested resource is not available.',
   'label.input.firstname': 'First name',
   'label.input.lastname': 'Last name',
@@ -160,13 +182,11 @@ describe('ClientEditComponent', () => {
       ],
     });
 
-    // The save's destinations are the router's own; the spy records them instead of navigating.
     navigate = vi.fn<(commands: readonly unknown[]) => Promise<boolean>>(() => Promise.resolve(true));
     vi.spyOn(TestBed.inject(Router), 'navigate').mockImplementation(navigate);
 
     const harness = await RouterTestingHarness.create(url);
 
-    // The seed read resolves in a microtask, so the first paint is taken once the queue has drained and the fixture is stable.
     await settle(harness);
 
     return harness;
@@ -215,6 +235,20 @@ describe('ClientEditComponent', () => {
     return host.querySelector<HTMLInputElement>(`#${id}`)?.value ?? null;
   }
 
+  /** The labels one rendered `<select>` offers, in document order, by the legacy form's own id. */
+  function selectOptions(host: HTMLElement, id: string): string[] {
+    const select = host.querySelector<HTMLSelectElement>(`#${id}`);
+
+    return [...(select?.options ?? [])].map((option) => option.textContent?.trim() ?? '');
+  }
+
+  /** The label the rendered `<select>` currently shows, or `null` when the control is absent. */
+  function selectedOptionText(host: HTMLElement, id: string): string | null {
+    const select = host.querySelector<HTMLSelectElement>(`#${id}`);
+
+    return select === null ? null : (select.selectedOptions[0]?.textContent?.trim() ?? null);
+  }
+
   beforeEach(() => {
     clients = {
       getWithTemplate: vi.fn<(id: number | string) => Observable<ClientTemplate>>(() => of(PAYLOAD)),
@@ -232,7 +266,6 @@ describe('ClientEditComponent', () => {
     expect(clients.getWithTemplate).toHaveBeenCalledTimes(1);
     expect(clients.getWithTemplate).toHaveBeenCalledWith(CLIENT_ID);
 
-    // The rendered controls hold the record's own values, so an operator edits what is stored.
     expect(inputValue(host, 'firstname')).toBe('Ada');
     expect(inputValue(host, 'lastname')).toBe('Okafor');
     expect(inputValue(host, 'externalId')).toBe('EXT-2');
@@ -245,7 +278,6 @@ describe('ClientEditComponent', () => {
     expect(activationDate?.getMonth()).toBe(10);
     expect(activationDate?.getDate()).toBe(21);
 
-    // Nothing has failed, so the failure region is absent — the state is proven rather than assumed, and the rejection case below is the only place a banner may appear.
     expect(host.querySelector('.alert.alert-danger')).toBeNull();
     expect(component.error()).toBeNull();
   });
@@ -255,7 +287,6 @@ describe('ClientEditComponent', () => {
     const host = hostOf(harness);
     const component = componentOf(harness);
 
-    // Two fields are edited — one name and one contact value — so the posted body is the form's and not the payload the read answered with.
     expect(inputValue(host, 'mobileNo')).toBe('2025550102');
     component.form.controls.lastname.setValue('Okafor-Rowe');
     component.form.controls.mobileNo.setValue('2025550199');
@@ -274,10 +305,9 @@ describe('ClientEditComponent', () => {
       externalId: 'EXT-2',
       mobileNo: '2025550199',
     });
-    // An active record posts its activation date.
     expect(body?.activationDate).toBeInstanceOf(Date);
 
-    // Exactly the members `ClientEditRequest` declares, and nothing the form does not own: no office, no client id, no account number (AAP 0.7.2, Rule 1 clause 2).
+    // Exactly the members `ClientEditRequest` declares, and nothing the form does not post: the record's own office is on screen but never in the body, and no client id or account number appears (AAP 0.7.2, Rule 1 clause 2).
     expect(Object.keys(body ?? {}).sort()).toEqual([
       'activationDate',
       'dateFormat',
@@ -286,7 +316,9 @@ describe('ClientEditComponent', () => {
       'lastname',
       'locale',
       'mobileNo',
+      'staffId',
     ]);
+    expect(body?.staffId).toBe(7);
     // `client.service.spec.ts` pins the wire body this endpoint receives — 'dd MMMM yyyy' plus the active locale, in English and moved to French — so the pair asserted here is the one the screen hands `ClientService.update`.
     expect(body?.dateFormat).toBe(DISPLAY_DATE_FORMAT);
     expect(
@@ -299,6 +331,97 @@ describe('ClientEditComponent', () => {
     expect(navigate).toHaveBeenCalledWith(['/viewclient', CLIENT_ID]);
   });
 
+  it('shows the record’s office from the template’s list, read-only, and never posts it', async () => {
+    const harness = await render(`/editclient/${CLIENT_ID}`);
+    const host = hostOf(harness);
+    const component = componentOf(harness);
+
+    const office = host.querySelector<HTMLSelectElement>('#officeId');
+
+    // Legacy's own first control, disabled exactly as `app/views/clients/editclient.html` disables it.
+    expect(office).not.toBeNull();
+    expect(office?.disabled).toBe(true);
+    expect(selectOptions(host, 'officeId')).toEqual(['Head Office', 'Branch One']);
+    expect(selectedOptionText(host, 'officeId')).toBe('Head Office');
+    expect(component.form.controls.officeId.value).toBe(1);
+
+    await component.submit();
+
+    // The update endpoint refuses an `officeId` and legacy never posts one, so the shown value stays off the wire.
+    const body = clients.update.mock.calls[0]?.[1];
+
+    expect(body).toBeDefined();
+    expect(Object.keys(body ?? {})).not.toContain('officeId');
+  });
+
+  it('offers the template’s staff list in order, preselects the record’s officer, and posts the chosen one', async () => {
+    const harness = await render(`/editclient/${CLIENT_ID}`);
+    const host = hostOf(harness);
+    const component = componentOf(harness);
+
+    // The template's own order, each row labelled by its `displayName`, behind legacy's prompt row.
+    expect(selectOptions(host, 'staffId')).toEqual([
+      'Select Staff',
+      'Officer, Parity',
+      'Officer, Field',
+    ]);
+    expect(selectedOptionText(host, 'staffId')).toBe('Officer, Parity');
+    expect(component.form.controls.staffId.value).toBe(7);
+
+    component.form.controls.staffId.setValue(9);
+
+    await component.submit();
+
+    expect(clients.update.mock.calls[0]?.[1]?.staffId).toBe(9);
+  });
+
+  it('omits staffId while the prompt of a record with no officer is left untouched', async () => {
+    clients.getWithTemplate.mockReturnValue(of(UNASSIGNED_PAYLOAD));
+
+    const harness = await render(`/editclient/${CLIENT_ID}`);
+    const host = hostOf(harness);
+    const component = componentOf(harness);
+
+    expect(selectedOptionText(host, 'staffId')).toBe('Select Staff');
+    expect(component.form.controls.staffId.value).toBeNull();
+
+    await component.submit();
+
+    // Legacy's `formData` holds an `undefined` staffId here, which JSON drops: the body carries no member at all.
+    const body = clients.update.mock.calls[0]?.[1];
+
+    expect(body).toBeDefined();
+    expect(Object.keys(body ?? {})).not.toContain('staffId');
+  });
+
+  it('posts a null staffId when the record’s officer is cleared back to the prompt', async () => {
+    const harness = await render(`/editclient/${CLIENT_ID}`);
+    const component = componentOf(harness);
+
+    component.form.controls.staffId.setValue(null);
+
+    await component.submit();
+
+    // `null` is how the fork unassigns an officer, and it must survive rather than be dropped as absent.
+    const body = clients.update.mock.calls[0]?.[1];
+
+    expect(body).toBeDefined();
+    expect(Object.keys(body ?? {})).toContain('staffId');
+    expect(body?.staffId).toBeNull();
+  });
+
+  it('seeds an officer the narrowed staff list does not offer, and posts it back untouched', async () => {
+    clients.getWithTemplate.mockReturnValue(of({ ...PAYLOAD, staffId: 11 }));
+
+    const component = componentOf(await render(`/editclient/${CLIENT_ID}`));
+
+    expect(component.form.controls.staffId.value).toBe(11);
+
+    await component.submit();
+
+    expect(clients.update.mock.calls[0]?.[1]?.staffId).toBe(11);
+  });
+
   it('renders the entity name set for an entity client and posts only that one', async () => {
     clients.getWithTemplate.mockReturnValue(of(ENTITY_PAYLOAD));
 
@@ -308,7 +431,6 @@ describe('ClientEditComponent', () => {
     expect(inputValue(host, 'fullname')).toBe('Blitzy Bakery LLC');
     expect(host.querySelector('#firstname')).toBeNull();
     expect(host.querySelector('#lastname')).toBeNull();
-    // A pending record carries no activation date field, so none is posted.
     expect(host.querySelector('#activationDate')).toBeNull();
 
     await componentOf(harness).submit();
@@ -336,10 +458,8 @@ describe('ClientEditComponent', () => {
     expect(navigate).not.toHaveBeenCalled();
     expect(component.form.controls.firstname.touched).toBe(true);
 
-    // The control's own form-group carries the Bootstrap error state and its message renders beside it.
     expect(host.querySelector('.form-group.has-error #firstname')).not.toBeNull();
     expect(host.querySelector('#firstname-error')?.textContent?.trim()).toBe('Required field');
-    // Nothing was refused by the server, so no failure banner appears.
     expect(host.querySelector('.alert.alert-danger')).toBeNull();
   });
 
@@ -356,7 +476,6 @@ describe('ClientEditComponent', () => {
     await component.submit();
     harness.detectChanges();
 
-    // The entity branch's own required rule is what blocks the request, not the person's two names.
     expect(clients.update).not.toHaveBeenCalled();
     expect(component.form.controls.fullname.touched).toBe(true);
     expect(host.querySelector('#fullname-error')?.textContent?.trim()).toBe('Required field');
@@ -372,7 +491,6 @@ describe('ClientEditComponent', () => {
     await component.submit();
     harness.detectChanges();
 
-    // The date field owns its own error state and projects the message into the slot it renders.
     expect(clients.update).not.toHaveBeenCalled();
     expect(component.form.controls.activationDate.touched).toBe(true);
     expect(host.querySelector('app-date-field .form-group.has-error')).not.toBeNull();
@@ -388,7 +506,6 @@ describe('ClientEditComponent', () => {
     const first = component.submit();
     const second = component.submit();
 
-    // The latch the save control binds is closed while the call is out, so a click that slipped past the disabled button still reaches no second request.
     expect(component.guard.busy()).toBe(true);
 
     save.complete();
@@ -396,7 +513,6 @@ describe('ClientEditComponent', () => {
     await second;
 
     expect(clients.update).toHaveBeenCalledTimes(1);
-    // The latch is released once the call settles, so the screen is usable afterwards.
     expect(component.guard.busy()).toBe(false);
   });
 
@@ -418,7 +534,6 @@ describe('ClientEditComponent', () => {
 
     expect(banners.length).toBe(1);
     expect(banners[0]?.textContent?.trim()).toBe(REJECTED_MESSAGE);
-    // The interceptor owns the notification for a failure, so the screen must not raise a second one.
     expect(host.querySelector('app-notification')).toBeNull();
 
     // The form and the values just entered survive the failure, which is the state AAP 0.7.4 requires.
@@ -428,6 +543,50 @@ describe('ClientEditComponent', () => {
     expect(component.ready()).toBe(true);
     expect(clients.update).toHaveBeenCalledTimes(1);
     expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('leaves the failure region empty for a 500, which the interceptor has already notified', async () => {
+    clients.update.mockReturnValue(throwError(() => new ApiError(SERVER_FAILURE_MESSAGE, 500)));
+
+    const harness = await render(`/editclient/${CLIENT_ID}`);
+    const host = hostOf(harness);
+    const component = componentOf(harness);
+
+    component.form.controls.mobileNo.setValue('2025550199');
+
+    await component.submit();
+    harness.detectChanges();
+
+    // Exactly one report: `fineract.interceptor` raises the single notification for a 5xx, so the screen paints no second copy of the text (AAP 0.7.4; AAP 0.14.2).
+    expect(component.error()).toBeNull();
+    expect(host.querySelector('.alert.alert-danger')).toBeNull();
+    expect(component.ready()).toBe(true);
+    expect(inputValue(host, 'mobileNo')).toBe('2025550199');
+    expect(clients.update).toHaveBeenCalledTimes(1);
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('reports a refused navigation rather than swallowing it', async () => {
+    const harness = await render(`/editclient/${CLIENT_ID}`);
+    const host = hostOf(harness);
+    const component = componentOf(harness);
+
+    navigate.mockImplementation(() =>
+      Promise.reject(new Error(REFUSED_NAVIGATION_MESSAGE)),
+    );
+
+    await component.submit();
+    harness.detectChanges();
+
+    // No `catch` may swallow an error silently, so the refusal reaches the region above the form with its own text (AAP 0.14.1; AAP 0.14.2).
+    expect(component.error()).toBe(REFUSED_NAVIGATION_MESSAGE);
+
+    const banners = host.querySelectorAll('.alert.alert-danger');
+
+    expect(banners.length).toBe(1);
+    expect(banners[0]?.textContent?.trim()).toBe(REFUSED_NAVIGATION_MESSAGE);
+    expect(clients.update).toHaveBeenCalledTimes(1);
+    expect(inputValue(host, 'firstname')).toBe('Ada');
   });
 
   it('renders the not-found message and no form when Fineract answers 404', async () => {
@@ -458,21 +617,17 @@ describe('ClientEditComponent', () => {
 
     expect(inputValue(hostOf(harness), 'firstname')).toBe('Ada');
 
-    // The router reuses this component when the URL moves from one edit route to another, so a second emission is what an in-app move between two edit URLs produces.
     await harness.navigateByUrl(`/editclient/${SECOND_CLIENT_ID}`);
     await settle(harness);
 
     const host = hostOf(harness);
 
-    // The same instance served both URLs: nothing below could pass by the screen being rebuilt.
     expect(componentOf(harness)).toBe(instance);
 
-    // One load per emission, and each run addresses the record its own URL named.
     expect(clients.getWithTemplate).toHaveBeenCalledTimes(2);
     expect(clients.getWithTemplate).toHaveBeenNthCalledWith(1, CLIENT_ID);
     expect(clients.getWithTemplate).toHaveBeenNthCalledWith(2, SECOND_CLIENT_ID);
 
-    // The second client's own values are in the form, and Cancel returns to its record.
     expect(inputValue(host, 'firstname')).toBe('Marcus');
     expect(inputValue(host, 'lastname')).toBe('Rowe-Bennett');
     expect(inputValue(host, 'externalId')).toBe('EXT-25');
@@ -481,7 +636,6 @@ describe('ClientEditComponent', () => {
       `/viewclient/${SECOND_CLIENT_ID}`,
     );
 
-    // The save posts to the client the URL names now, not to the record the screen was opened on.
     await componentOf(harness).submit();
 
     expect(clients.update).toHaveBeenCalledTimes(1);
@@ -500,19 +654,16 @@ describe('ClientEditComponent', () => {
 
     const harness = await render(`/editclient/${CLIENT_ID}`);
 
-    // The first read is held open, so no form is painted for the first client.
     expect(hostOf(harness).querySelector('form')).toBeNull();
 
     await harness.navigateByUrl(`/editclient/${SECOND_CLIENT_ID}`);
 
-    // The second read is the one the screen is waiting on; answering it seeds the second client.
     second.next(SECOND_PAYLOAD);
     second.complete();
     await settle(harness);
 
     expect(inputValue(hostOf(harness), 'firstname')).toBe('Marcus');
 
-    // The earlier client's answer lands last. It is dropped rather than applied, or the first client's values would be edited under the second client's URL.
     first.next(PAYLOAD);
     first.complete();
     await settle(harness);
@@ -547,7 +698,6 @@ describe('ClientEditComponent', () => {
 
     const moved = hostOf(harness);
 
-    // No trace of the missing record is left: the form for the record the URL now names renders.
     expect(renderedText(moved)).not.toContain('Not Available');
     expect(inputValue(moved, 'firstname')).toBe('Marcus');
   });
@@ -559,12 +709,10 @@ describe('ClientEditComponent', () => {
 
     const harness = await render(`/editclient/${CLIENT_ID}`);
 
-    // The read is in flight: the subject the read answers through has a subscriber.
     expect(pending.observed).toBe(true);
 
     harness.fixture.destroy();
 
-    // Nothing is left holding the request open once the screen is gone.
     expect(pending.observed).toBe(false);
   });
 });

@@ -14,12 +14,13 @@ const SPEC_LANG = 'en';
 /** Locale `DatePipe` and `DecimalPipe` format with. Pinned so month names, thousands separators and the decimal point are the assertions below, on any host, under any default locale. */
 const SPEC_LOCALE = 'en-US';
 
-/** The eight header keys the template translates, in render order, read from `repayment-preview.component.html`. */
+/** The nine header keys the template translates, in render order, read from `repayment-preview.component.html`. */
 const COLUMN_KEYS: readonly string[] = [
   'label.heading.no',
   'label.heading.fromdate',
   'label.heading.date',
   'label.heading.principal',
+  'label.heading.balanceofloan',
   'label.heading.interest',
   'label.heading.fees',
   'label.heading.total',
@@ -32,6 +33,7 @@ const COLUMN_LABELS: Readonly<Record<string, string>> = {
   'label.heading.fromdate': 'From Date',
   'label.heading.date': 'Due Date',
   'label.heading.principal': 'Principal',
+  'label.heading.balanceofloan': 'Balance of Loan',
   'label.heading.interest': 'Interest',
   'label.heading.fees': 'Fees',
   'label.heading.total': 'Total',
@@ -44,7 +46,7 @@ const EMPTY_STATE_KEY = 'label.nodata';
 /** The message the empty state renders once that key resolves. */
 const EMPTY_STATE_TEXT = 'No repayment schedule has been calculated.';
 
-/** The in-memory translation bundle. It covers the nine keys the template uses — the eight headers and the no-data label — and nothing else, so serving it is what proves the template's keys are the ones the legacy bundle (AAP 0.10.2). */
+/** The in-memory translation bundle. It covers the ten keys the template uses — the nine headers and the no-data label — and nothing else, so serving it is what proves the template's keys are the ones the legacy bundle (AAP 0.10.2). */
 const TRANSLATIONS: Readonly<Record<string, string>> = {
   ...COLUMN_LABELS,
   [EMPTY_STATE_KEY]: EMPTY_STATE_TEXT,
@@ -67,6 +69,7 @@ function makePeriod(
     totalDueForPeriod: 466.67,
     totalOriginalDueForPeriod: 466.67,
     principalOutstanding: 4583.33,
+    principalLoanBalanceOutstanding: 4583.33,
     interestOutstanding: 550,
     totalOutstandingForPeriod: 5133.33,
     complete: false,
@@ -170,7 +173,7 @@ describe('RepaymentPreviewComponent', () => {
     TestBed.resetTestingModule();
   });
 
-  it('renders one table row per period, under the eight schedule columns', async () => {
+  it('renders one table row per period, under the nine schedule columns', async () => {
     const schedule = makeSchedule([
       makePeriod({ period: 1 }),
       makePeriod({ period: 2 }),
@@ -183,7 +186,7 @@ describe('RepaymentPreviewComponent', () => {
     expect(tableOf(host)).not.toBeNull();
     expect(labels).toEqual(COLUMN_KEYS.map((key) => COLUMN_LABELS[key]));
     expect(rows).toHaveLength(3);
-    expect(rows.map((row) => cellsOf(row).length)).toEqual([8, 8, 8]);
+    expect(rows.map((row) => cellsOf(row).length)).toEqual([9, 9, 9]);
 
     // Every header label resolved: no raw dotted key reaches the user (AAP 0.10.2).
     for (const key of COLUMN_KEYS) {
@@ -217,13 +220,11 @@ describe('RepaymentPreviewComponent', () => {
     const fixture = await render(makeSchedule(periods));
     const rows = renderedCells(hostOf(fixture));
 
-    // One row per period row the payload carried, two of which carry no period number.
     expect(rows).toHaveLength(4);
     // The unnumbered rows print an empty cell — no 0, no dash, no renumbering of the periods below them — and the numbered rows keep their own numbers in the server's order (Rule 1 clause 3).
     expect(rows.map((cells) => cells[0])).toEqual(['', '1', '', '2']);
     expect(rows.filter((cells) => cells[0] === '')).toHaveLength(2);
 
-    // The same rows handed over as a new array: the collection is reconciled, which is where a duplicated key is reported, and the table still holds one row per period.
     fixture.componentRef.setInput('schedule', makeSchedule([...periods]));
     fixture.detectChanges();
     await fixture.whenStable();
@@ -259,6 +260,7 @@ describe('RepaymentPreviewComponent', () => {
       makeSchedule([
         makePeriod({
           principalDue: 1234.5,
+          principalLoanBalanceOutstanding: 4567.89,
           interestDue: 65.5,
           feeChargesDue: 25,
           totalDueForPeriod: 5000,
@@ -270,13 +272,13 @@ describe('RepaymentPreviewComponent', () => {
 
     // Grouping and the payload's own fraction digits, with no forced decimals: the default `number` pipe the record page's schedule table and legacy's own `number` filter use, so 5000 reads 5,000 here exactly as it does there (Rule 1 clause 3, AAP 0.10.2).
     expect(cells[3]).toBe('1,234.5');
-    expect(cells[4]).toBe('65.5');
-    expect(cells[5]).toBe('25');
-    expect(cells[6]).toBe('5,000');
+    expect(cells[4]).toBe('4,567.89');
+    expect(cells[5]).toBe('65.5');
+    expect(cells[6]).toBe('25');
+    expect(cells[7]).toBe('5,000');
 
-    // The total is the server's figure, not the sum of its parts: 1,234.5 + 65.5 + 25 is 1,325, and the outstanding cell holds its own payload value rather than a running balance.
-    expect(cells[6]).not.toBe('1,325');
-    expect(cells[7]).toBe('8,765.43');
+    expect(cells[7]).not.toBe('1,325');
+    expect(cells[8]).toBe('8,765.43');
   });
 
   it('renders the explicit empty state before any schedule has been calculated', async () => {

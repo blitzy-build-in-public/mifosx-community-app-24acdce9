@@ -7,6 +7,21 @@ import { normaliseStatusCode, toStatusKey, type StatusKey } from '../../shared/s
 /** The five lifecycle commands in scope (AAP 0.7.3): the `command` of `POST /clients/{id}` and `ClientActionRequest`'s discriminant. */
 export type ClientActionCommand = 'activate' | 'close' | 'reject' | 'withdraw' | 'reactivate';
 
+/**
+ * The legacy permission each lifecycle command requires, keyed by the command it gates. `satisfies Record<ClientActionCommand, string>` makes a command added to the
+ * union without a permission a compile error, and this record is the one statement of the codes both the client record's action links
+ * (`client-view/client-view.component.ts`) and the action screen's submit control (`client-actions/client-actions.component.ts`) carry, so the link that opens a
+ * command and the button that submits it cannot disagree (AAP 0.9.1 item 1). It sits beside the command union it is keyed on rather than in either screen, so the
+ * record screen and `clients.routes.ts` read the family's models and never another screen's component file (AAP 0.14.1 "One direction of dependency").
+ */
+export const CLIENT_ACTION_PERMISSIONS = {
+  activate: 'ACTIVATE_CLIENT',
+  close: 'CLOSE_CLIENT',
+  reject: 'REJECT_CLIENT',
+  withdraw: 'WITHDRAW_CLIENT',
+  reactivate: 'REACTIVATE_CLIENT',
+} satisfies Record<ClientActionCommand, string>;
+
 /** A client's status object as the client endpoints return it (observed: `{ id: 300, code: 'clientStatusType.active', value: 'Active' }`). */
 export interface ClientStatus {
   /** Fineract status id, e.g. `300` for active. Carried through, never compared. */
@@ -87,6 +102,8 @@ export interface ClientTemplate {
   officeOptions: readonly ClientOption[];
   /** Loan officers selectable for the client, labelled by `displayName`; the key is absent when the tenant has no staff. */
   staffOptions?: readonly ClientStaffOption[];
+  /** Loan officer the record the template was read for already carries, folded into the same response; absent for a client no officer is assigned to, which is the state legacy's picker shows its prompt for (Rule 1 clause 3). */
+  staffId?: number;
   /** Date the template offers as the activation default, observed as a `FineractDate` triple. */
   activationDate: FineractDate;
   /** Whether the record the template was read for is active; absent on the create template. */
@@ -187,7 +204,7 @@ export interface ClientCreateRequest {
   locale?: string;
 }
 
-/** The `PUT /clients/{id}` body: the create set minus the submission date the server keeps, and minus `officeId` — absent because it is not in `CLIENT_UPDATE_REQUEST_DATA_PARAMETERS` and a body carrying it is refused with `error.msg.parameter.unsupported` (AAP 0.7.2 `ClientEditRequest`). */
+/** The `PUT /clients/{id}` body: the create set minus the submission date the server keeps, and minus `officeId` — absent because it is not in `CLIENT_UPDATE_REQUEST_DATA_PARAMETERS` and a body carrying it is refused with `error.msg.parameter.unsupported`, which is also why legacy's edit form shows its office as a disabled select and posts no office at all (AAP 0.7.2 `ClientEditRequest`, AAP 0.7.3; Rule 1 clauses 2 and 3). */
 export interface ClientEditRequest {
   /** First name as edited; required by the server for a person (`legalFormId` 1) and left out for an entity. */
   firstname?: string;
@@ -199,6 +216,8 @@ export interface ClientEditRequest {
   externalId?: string;
   /** Mobile number, when the form holds one. */
   mobileNo?: string;
+  /** Loan officer the edit assigns the client to, from the template's own `staffOptions`: the fork declares `staffIdParamName` in `CLIENT_UPDATE_REQUEST_DATA_PARAMETERS` and validates it with `ignoreIfNull().longGreaterThanZero()`, so an id assigns an officer and an explicit `null` unassigns one, exactly as legacy's edit form posts its picker (AAP 0.7.3; Rule 1 clause 3). */
+  staffId?: number | null;
   /** Activation date the record carries, when the edit is meant to set it; the fork accepts it, but most edits touch names only. */
   activationDate?: Date | null;
   /** Payload date format, filled by `client.service.ts` from `AppConfig.dateFormat`. */
@@ -316,9 +335,17 @@ export function toClientStatusKey(code: string | undefined): StatusKey {
   return toStatusKey(code);
 }
 
-/** Whether a client status code is the `closed` one the list's "Show Closed" checkbox hides — legacy hides that code alone, so a rejected or withdrawn client still shows (Rule 1 clause 3). */
+/** Whether a client status code is the `closed` one the list's "Show Closed" checkbox hides — legacy hides that code alone, so a rejected or withdrawn client still shows (Rule 1 clause 3). This is the checkbox's question and not the swatch's: {@link toClientStatusKey} paints those two states `other`, deliberately apart from the `closed` grey. */
 export function isClosedClientStatus(code: string | undefined): boolean {
   return code !== undefined && normaliseStatusCode(code) === 'closed';
+}
+
+/** The client status codes that end a client's lifecycle: the closed state and the two the server records when an application is refused or withdrawn. Terminal is a different question from colour — {@link toClientStatusKey} paints the first `closed` and the other two `other`, so that the state "Show Closed" hides is distinguishable from the states it leaves on screen — and a different one again from that filter, which tests the closed code alone. */
+const TERMINAL_CLIENT_STATUSES: ReadonlySet<string> = new Set<string>(['closed', 'rejected', 'withdraw']);
+
+/** Whether a client status code names a terminal state — closed, rejected or withdrawn — each of which legacy answers with a command of its own (`undoReject`, `undoWithdrawn`) that this build's action set does not keep, which is why the client view offers those records no entry rather than one the server would refuse (AAP 0.7.4; Rule 1 clause 3). Read from the code and never from the swatch's key: the key separates the closed state from the two it does not hide, so it cannot answer a lifecycle question (AAP 0.10.5 item 11). */
+export function isTerminalClientStatus(code: string | undefined): boolean {
+  return code !== undefined && TERMINAL_CLIENT_STATUSES.has(normaliseStatusCode(code));
 }
 
 /** The status swatch key for a loan or savings account status code, delegating to the same shared mapping; colour only, no status word (AAP 0.10.5 item 11). */

@@ -3,7 +3,6 @@ import type { ElementHandle, Locator, Page } from '@playwright/test';
 import { FINERACT_URL, LEGACY_URL, TENANT_ID, formatFineractDate } from '../../seed/fixtures';
 import { chooseOption } from './chosen';
 
-/** The values an application form is filled with. Only the fields a caller supplies are touched. */
 export interface LoanApplicationValues {
   /** Visible label of the product to choose from `select#productId`, matched by `chooseOption`. */
   productName?: string;
@@ -33,31 +32,23 @@ export interface LoanApplicationValues {
   loanOfficerName?: string;
   /** Visible label of `select#fundId`, the fund the application draws on. */
   fundName?: string;
-  /** One amount per charge row the wizard's Charges step already shows, in document order. */
   chargeAmounts?: string[];
 }
 
-/** One period of the repayment schedule the application form previews. */
 export interface RepaymentPreviewRow {
   /** Period column (`#`), the previewed period's sequence number. */
   period: string;
   /** From-date column; `''` because the legacy preview renders no period start date. */
   fromDate: string;
-  /** Due-date column, the date the period falls due. */
   dueDate: string;
-  /** Principal-due column, the principal this period repays. */
   principalDue: string;
-  /** Interest-due column, the interest this period charges. */
   interestDue: string;
-  /** Fees column, the fee charges this period collects. */
   feesDue: string;
-  /** Total-due column, everything the period demands: principal, interest and fees. */
   totalDue: string;
   /** Total-outstanding column; `''` because the legacy preview renders none. */
   totalOutstandingForPeriod: string;
 }
 
-/** One label/value pair of the loan record's summary. */
 export interface LoanSummaryField {
   /** The cell's label, `"<row> <column>"` such as `Principal Original`. */
   label: string;
@@ -65,37 +56,25 @@ export interface LoanSummaryField {
   value: string;
 }
 
-/** The loan record's status, as the class its indicator carries, beside the summary's pairs. */
 export interface LoanSummary {
   /** The class list of the record's status indicator: legacy shows a colour and no text. */
   statusClass: string;
-  /** The summary matrix's label/value pairs, in document order. */
   fields: LoanSummaryField[];
 }
 
-/** One period of the loan record's repayment schedule. */
 export interface ScheduleRow {
   /** Period column (`#`), the schedule period's sequence number. */
   period: string;
-  /** From-date column, the period's start date. */
   fromDate: string;
-  /** Due-date column, the date the period falls due. */
   dueDate: string;
-  /** Principal-due column, the principal the period repays. */
   principalDue: string;
-  /** Interest column, the interest the period charges. */
   interestDue: string;
-  /** Fees column, the fee charges the period collects. */
   feesDue: string;
-  /** Due column, everything the period demands: principal, interest and fees. */
   totalDue: string;
-  /** Paid column, what has been paid against the period so far. */
   totalPaid: string;
-  /** Outstanding column, what the period still owes. */
   totalOutstandingForPeriod: string;
 }
 
-/** One row of the loan record's transaction list. */
 export interface TransactionRow {
   /** Id column, the transaction's Fineract id. */
   id: string;
@@ -117,11 +96,9 @@ export interface TransactionRow {
   reversed: string;
 }
 
-/** The values an action or repayment form is filled with. */
 export interface LoanActionValues {
   /** The form's transaction or action date control, typed as `dd MMMM yyyy`. */
   date?: Date;
-  /** The transaction amount input, exactly as the caller supplies it. */
   amount?: string;
   /** The note textarea, on the forms whose legacy controller renders one. */
   note?: string;
@@ -140,7 +117,6 @@ export type LoanAccountAction =
   | 'undodisbursal'
   | 'repayment';
 
-/** Positions a period column of the application form's preview table (newloanaccount.html). */
 const PREVIEW_TABLE_HEADERS = ['principal due', 'interest due', 'due'] as const;
 
 /** Positions the record's Repayment Schedule table. It is the only one of the three schedule tables that carries both a `Due` and a `Paid` column (viewloanaccountdetails.html), which is what separates it from the Original. */
@@ -152,7 +128,6 @@ const TRANSACTION_TABLE_HEADERS = ['transaction type', 'amount', 'principal'] as
 /** Positions the record's charge list, the only table headed `Name` that also has `Outstanding`. */
 const CHARGE_TABLE_HEADERS = ['name', 'outstanding'] as const;
 
-/** Positions the record's summary matrix (rows Principal/Interest/Fees/Penalties/Total). */
 const SUMMARY_TABLE_HEADERS = ['original', 'paid', 'outstanding', 'overdue'] as const;
 
 /** The tab headings each read section lives under (viewloanaccountdetails.html `uib-tabset`). */
@@ -174,7 +149,6 @@ const PREVIEW_COLUMNS = {
   totalOutstandingForPeriod: ['total outstanding', 'outstanding'],
 } as const;
 
-/** Column aliases per schedule field, most specific first. */
 const SCHEDULE_COLUMNS = {
   period: ['#', 'period', 'no.'],
   fromDate: ['from date', 'period from'],
@@ -187,7 +161,6 @@ const SCHEDULE_COLUMNS = {
   totalOutstandingForPeriod: ['outstanding', 'total outstanding'],
 } as const;
 
-/** Column aliases per transaction field, most specific first. */
 const TRANSACTION_COLUMNS = {
   id: ['id'],
   date: ['transaction date', 'date'],
@@ -241,20 +214,14 @@ const APPLICATION_SELECTS = {
   transactionProcessingStrategy: 'select#transactionProcessingStrategyId',
 } as const;
 
-/** The table a reader asked for, as the page serialised it: header texts per column, then rows. */
 interface TableGrid {
-  /** One entry per column: every non-empty header text that sits above that column. */
   readonly columns: readonly (readonly string[])[];
-  /** Data rows, each an array of cell texts positioned by column. */
   readonly rows: readonly (readonly string[])[];
-  /** The class attribute of each data row, for the reversal indicator transactions carry. */
   readonly rowClasses: readonly string[];
 }
 
-/** The wizard step whose form a transition starts from, and the one it lands on. */
 type WizardStep = 'Details' | 'Terms' | 'Charges' | 'review';
 
-/** How long a route is given to render its own root locator before the hash fallback is used. */
 const ROUTE_READY_TIMEOUT_MS = 15_000;
 
 /** Runs inside the legacy page, so it references nothing from module scope — Playwright serialises the function and evaluates it in the document. */
@@ -292,7 +259,6 @@ function resolveFieldElement(spec: FieldSpec): Element | null {
         text.indexOf(target + '*') === 0,
     );
     if (!matches) continue;
-    // The shortest matching label wins, so "Principal *" is not confused with a longer label that merely begins with the same word.
     if (bestLabel === null || text.length < bestLength) {
       bestLabel = label;
       bestLength = text.length;
@@ -319,7 +285,6 @@ function resolveFieldElement(spec: FieldSpec): Element | null {
   const byId = document.getElementById(spec.id);
   if (isWritable(byId)) return byId;
 
-  // Angular reactive forms do not keep the attribute in the DOM, so this fallback answers only where a form renders it; it is documented rather than relied on.
   const byFormControl = document.querySelector(`[formcontrolname="${spec.key.toLowerCase()}"]`);
   if (isWritable(byFormControl)) return byFormControl;
 
@@ -359,7 +324,6 @@ function readTableGrid(required: readonly string[]): TableGrid | null {
       const first = body.rows[0];
       const labels = Array.from(first.cells).map((cell) => normalize(cell.textContent));
       const repeated = wanted.filter((alias) => labels.indexOf(alias) >= 0).length;
-      // Two matching labels are enough to tell a label row from a data row.
       if (repeated >= 2) rows.push(first);
     }
     return rows;
@@ -456,7 +420,6 @@ function readStatusIndicatorClass(): string {
   return '';
 }
 
-/** Narrows the grid a page function answered with; the DOM boundary stops at this guard. */
 function isTableGrid(value: unknown): value is TableGrid {
   if (typeof value !== 'object' || value === null) return false;
   const candidate = value as { columns?: unknown; rows?: unknown; rowClasses?: unknown };
@@ -825,7 +788,6 @@ export class LoansPage {
     await ready.first().waitFor({ state: 'visible' });
   }
 
-  /** Whether a locator becomes visible within the route's readiness window. */
   private async settles(ready: Locator): Promise<boolean> {
     return ready
       .first()
@@ -836,12 +798,10 @@ export class LoansPage {
       );
   }
 
-  /** The visible form of one wizard step, which is what marks the step the application shows. */
   private stepMarker(step: WizardStep): Locator {
     return this.page.locator(`form[name="${step}"]:visible`);
   }
 
-  /** Walks the application wizard one step forward. The transition is proved by the step left behind going away and the step awaited appearing, so a click that the form rejected cannot be mistaken for progress. */
   private async stepForward(from: Locator, to: Locator): Promise<void> {
     const next = this.page.locator('button.btn.btn-default.pull-right:visible').first();
     if ((await next.count()) === 0) {
@@ -855,20 +815,17 @@ export class LoansPage {
     await to.first().waitFor({ state: 'visible' });
   }
 
-  /** Reaches the application wizard's Terms step, which carries the terms and interest fields. */
   private async reachTermsStep(): Promise<void> {
     if (await this.stepMarker('Terms').first().isVisible()) return;
     await this.stepForward(this.stepMarker('Details'), this.stepMarker('Terms'));
   }
 
-  /** Reaches the wizard's Charges step, which also carries the repayment-schedule preview. */
   private async reachChargesStep(): Promise<void> {
     if (await this.stepMarker('Charges').first().isVisible()) return;
     await this.reachTermsStep();
     await this.stepForward(this.stepMarker('Terms'), this.stepMarker('Charges'));
   }
 
-  /** Reaches the wizard's Review step, which carries the application's primary submit. */
   private async reachReviewStep(): Promise<void> {
     if (await this.stepMarker('review').first().isVisible()) return;
     await this.reachChargesStep();
@@ -880,12 +837,10 @@ export class LoansPage {
     return this.page.locator('[ng-click="previewRepayments()"]').first();
   }
 
-  /** The link the preview replaces the schedule area with, which proves the preview was rendered. */
   private previewShown(): Locator {
     return this.page.locator('[ng-click="previewRepayment=!previewRepayment"]').first();
   }
 
-  /** Selects the option of one application-form dropdown by its visible label. */
   private async chooseField(
     field: keyof typeof APPLICATION_SELECTS,
     optionText: string,
@@ -919,7 +874,6 @@ export class LoansPage {
     }
   }
 
-  /** The control a field names, resolved in the page; the page raises when nothing matches. */
   private async resolveField(spec: FieldSpec): Promise<ElementHandle<Element>> {
     const handle = await this.page.evaluateHandle(resolveFieldElement, spec);
     const element = handle.asElement();
@@ -933,12 +887,10 @@ export class LoansPage {
     return element;
   }
 
-  /** The amount control of each charge row the Charges step shows. */
   private chargeAmountFields(): Locator {
     return this.page.locator('input.form-control[placeholder="Amount"]:visible');
   }
 
-  /** Fills the charge rows the Charges step already shows, in order. */
   private async fillChargeAmounts(amounts: readonly string[]): Promise<void> {
     const fields = this.chargeAmountFields();
     const count = await fields.count();
@@ -954,12 +906,10 @@ export class LoansPage {
     }
   }
 
-  /** The action forms share one template, and one form name. */
   private actionForm(): Locator {
     return this.page.locator('form[name="loanactionform"]');
   }
 
-  /** Waits for an action form to be shown and for its first control to be on screen, so a read that follows cannot see the previous route's markup. */
   private async waitForActionForm(): Promise<void> {
     const form = this.actionForm().first();
     await form.waitFor({ state: 'visible' });
@@ -979,7 +929,6 @@ export class LoansPage {
     return this.page.locator(ids.map((id) => `input${id}:visible`).join(', '));
   }
 
-  /** The action's amount control, whichever of the template's names the action uses. */
   private actionAmountField(): Locator {
     const ids = ['#transactionAmount', '#approvedAmt', '#approvedAmount', '#amount'];
     return this.page.locator(ids.map((id) => `input${id}:visible`).join(', '));
@@ -990,7 +939,6 @@ export class LoansPage {
     return this.page.locator('select#paymentTypeId:visible');
   }
 
-  /** The action's note control. */
   private noteField(): Locator {
     return this.page.locator('#note:visible');
   }
@@ -1017,7 +965,6 @@ export class LoansPage {
     await save.click();
   }
 
-  /** Reads the table carrying the required columns, answering an empty grid when there is none. */
   private async readTable(required: readonly string[]): Promise<TableGrid> {
     const answer: unknown = await this.page.evaluate(readTableGrid, required);
     return isTableGrid(answer) ? answer : emptyGrid();
@@ -1028,7 +975,6 @@ export class LoansPage {
     return this.page.evaluate(readStatusIndicatorClass);
   }
 
-  /** The pane of one record section, activating its tab when the tab strip does not already show it. */
   private async sectionPane(headings: readonly string[]): Promise<Locator | null> {
     const index = await this.page.evaluate(findTabIndex, headings);
     if (index < 0) return null;

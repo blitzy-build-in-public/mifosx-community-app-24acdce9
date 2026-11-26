@@ -17,7 +17,6 @@ const ALLOWLIST_SHOWN = `web-ng/tools/parity/${ALLOWLIST_FILE}`;
 const LEGACY_ABSENT = 'LEGACY TREE ABSENT: app/scripts could not be read (base commit holds only README.md) — the expected template set is built from AAP 0.7.3 alone, not from a legacy scan.';
 /** Route families this migration delivers; a legacy template call under one of them must have an equivalent here. */
 const IN_SCOPE = ['/clients', '/loans', '/search', '/datatables'];
-/** In-scope prefixes of an out-of-scope feature: collateral stays out of scope even on the in-scope client and loan records. */
 const OUT_OF_SCOPE = ['/clients/{}/collaterals', '/loans/{}/collaterals'];
 /** A legacy token shaped like a resource factory key; a legacy scan's other matches name a property, never a resource. */
 const RESOURCE_REFERENCE = /^[A-Za-z_$][\w$]*Resource$/;
@@ -27,7 +26,6 @@ interface ExpectedTemplate {
   id: string;
   /** Path under apiPath, `{}` for an identifier segment, query string omitted. */
   canonicalPath: string;
-  /** Markers the calling file must also hold: they separate two calls that share one canonical path. */
   markers: Marker[];
   family: string;
   /** Workflow row of the AAP 0.7.3 table this item transcribes. */
@@ -110,7 +108,6 @@ function declaredPaths(apiPath: string, declared: string): string[] {
 async function scanSource(file: string): Promise<FileScan> {
   const text = stripComments(await readText(file));
   const merged = text.replace(CONCATENATED, '{}');
-  // Both passes, so a rewritten concatenation never hides a path the plain literals already name; a literal both report is read once.
   const readings = [...findUrlLiterals(text), ...(merged === text ? [] : findUrlLiterals(merged))];
   const seen = new Set<string>();
   const paths = new Map<string, number>();
@@ -209,7 +206,6 @@ if (intent.kind === 'run') await runCheck(CHECK, async (): Promise<CheckOutcome>
           fail(call.file, call.line, `${call.resource} (${route}) is a legacy template call on an in-scope route that no expected row covers, so the new services fetch nothing for it — add the row and the call its screen needs, rather than an endpoint the plan does not name`);
           continue;
         }
-        // A route this migration does not deliver is a note, keeping the call visible with its site count and first site.
         const key = `${call.resource} ${route}`;
         const seen = elsewhere.get(key);
         if (seen === undefined) elsewhere.set(key, { count: 1, first: `${call.file}:${call.line}`, resource: call.resource, route });

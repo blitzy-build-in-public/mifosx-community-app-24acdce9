@@ -138,6 +138,7 @@ const CLIENT_TEMPLATE: ClientTemplate = {
     { id: 2, name: 'Branch 01' },
   ],
   staffOptions: [{ id: 7, displayName: 'Officer, Parity' }],
+  staffId: 7,
   activationDate: [2026, 11, 21],
   datatables: [{ registeredTableName: 'client_extra_details' }],
 };
@@ -333,7 +334,6 @@ const EDIT_CASES: readonly {
     },
   },
   {
-    // The remaining branch of the body builder: every optional member absent, so none of them reaches the payload and the server alone decides what an edit needs.
     label: 'its activation date alone',
     request: {
       activationDate: CLIENT_DATE,
@@ -355,6 +355,37 @@ const EDIT_CASES: readonly {
       locale: APP_LOCALE,
       fullname: 'Blitzy Bakery LLC',
       mobileNo: '2025550101',
+    },
+  },
+  {
+    label: 'an assigned loan officer',
+    request: {
+      firstname: 'Ada',
+      lastname: 'Okonkwo',
+      staffId: 7,
+    },
+    wire: {
+      dateFormat: FINERACT_DATE_FORMAT,
+      locale: APP_LOCALE,
+      firstname: 'Ada',
+      lastname: 'Okonkwo',
+      staffId: 7,
+    },
+  },
+  {
+    // The officer the operator cleared back to the prompt: a `null` that must reach the wire, since it is how the fork unassigns one.
+    label: 'a loan officer that was unassigned',
+    request: {
+      firstname: 'Ada',
+      lastname: 'Okonkwo',
+      staffId: null,
+    },
+    wire: {
+      dateFormat: FINERACT_DATE_FORMAT,
+      locale: APP_LOCALE,
+      firstname: 'Ada',
+      lastname: 'Okonkwo',
+      staffId: null,
     },
   },
 ];
@@ -538,7 +569,6 @@ describe('ClientService', () => {
   let activeLocale: WritableSignal<string>;
 
   beforeEach(() => {
-    // A fresh spy and a fresh language per test, so one case's composition and its calls are never read by the next case's assertions.
     apiUrl = vi.fn((path: string): string => API_ROOT + SEPARATOR + path);
     activeLocale = signal(APP_LOCALE);
 
@@ -555,7 +585,6 @@ describe('ClientService', () => {
   });
 
   afterEach(() => {
-    // A request the service issued but this spec never saw fails here, and so does one it should have issued and did not.
     httpMock.verify();
   });
 
@@ -650,7 +679,7 @@ describe('ClientService', () => {
     });
   }
 
-  it('reads the client record with template=true as its only parameter', () => {
+  it('reads the client record with the template and the staff narrowing, which is legacy’s own pair', () => {
     const received: ClientTemplate[] = [];
 
     service.getWithTemplate(CLIENT_ID).subscribe((template) => received.push(template));
@@ -659,12 +688,13 @@ describe('ClientService', () => {
 
     const request = httpMock.expectOne(isRequest('GET', clientUrl('clients', CLIENT_ID)));
 
-    expect(request.request.params.keys()).toEqual(['template']);
+    // Exactly the two parameters `EditClientController` sends: the record with its option lists, and the staff list narrowed to the selected office (Rule 1 clause 2).
+    expect(request.request.params.keys()).toEqual(['staffInSelectedOfficeOnly', 'template']);
+    expect(request.request.params.get('staffInSelectedOfficeOnly')).toBe('true');
     expect(request.request.params.get('template')).toBe('true');
 
     request.flush(CLIENT_TEMPLATE);
 
-    // The caller receives the record merged with its template, its option lists included, so a projection that dropped, emptied or reordered them fails here as well as below.
     expect(received).toEqual([CLIENT_TEMPLATE]);
     expect(received[0]?.officeOptions.map((option) => option.name)).toEqual([
       'Head Office',
@@ -833,7 +863,6 @@ describe('ClientService', () => {
     it(`fills the ${label} body's date-format pair from the active language, never from a fixed language`, () => {
       const received: ClientMutationResponse[] = [];
 
-      // The language is selected before the call, because the body is built when the service method runs and not when the caller subscribed; the two members and the month names of that body are then asserted together, so a.
       activeLocale.set('fr');
 
       send(service).subscribe((result) => received.push(result));
@@ -879,6 +908,12 @@ describe('ClientService', () => {
       // The update endpoint refuses an office and keeps the submission date, so neither is posted (client.models.ts, `ClientEditRequest`).
       expect(bodyKeys(sent.request)).not.toContain('officeId');
       expect(bodyKeys(sent.request)).not.toContain('submittedOnDate');
+      // A body the caller left without a staff id keeps the member off the wire, and one carrying the record's own assignment or a cleared `null` posts it unchanged (Rule 1 clause 3).
+      if ('staffId' in wire) {
+        expect(bodyKeys(sent.request)).toContain('staffId');
+      } else {
+        expect(bodyKeys(sent.request)).not.toContain('staffId');
+      }
 
       sent.flush(MUTATION_RESULT);
     });
@@ -981,7 +1016,6 @@ describe('ClientService', () => {
     expect(messages).toHaveLength(1);
     expect(messages[0]).toMatch(/describes the 'close' command but the request issues 'activate'/);
     httpMock.expectNone(isRequest('POST', clientUrl('clients', CLIENT_ID)));
-    // No request of any other shape was issued either: the guard runs before the URL is composed.
     httpMock.expectNone(() => true);
   });
 
@@ -1002,12 +1036,10 @@ describe('ClientService', () => {
 
     expect(emissions).toBe(0);
     expect(refusals).toHaveLength(1);
-    // The message is the guard's fixed sentence, which names neither the rejected value nor the call that composed the segment: it is the text a screen renders, so neither diagnostic may be in it.
     expect(refusals[0].message).not.toContain(crafted);
     expect(refusals[0].message).not.toContain('ClientService.get');
     expect(String(refusals[0].cause)).toContain(`'${crafted}'`);
     expect(String(refusals[0].cause)).toContain('ClientService.get');
-    // Nothing was sent: no read of the family this call owns, and no request of any other shape.
     httpMock.expectNone(isRequest('GET', clientUrl('clients', crafted)));
     httpMock.expectNone(() => true);
   });

@@ -211,7 +211,6 @@ export class DataTableGateService {
         switchMap((response: EntityDatatableCheckPage) => {
           const tables = applicableTableNames(response, status);
 
-          // An answer the gate cannot read fails with one described sentence rather than passing as an empty gate.
           if (tables === null) {
             return throwError(
               () =>

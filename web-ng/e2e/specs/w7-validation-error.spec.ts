@@ -14,10 +14,8 @@ import {
 /** The application screen W7 is driven from, as the hash the route produces (AAP 0.8.2). */
 const APPLICATION_ROUTE = '#/newclientloanaccount/';
 
-/** The loan record a *successful* submission opens; a refused one must never reach it. */
 const LOAN_RECORD_ROUTE = '#/viewloanaccount/';
 
-/** The client record's hash, whose id segment is the client every step below applies to. */
 const CLIENT_RECORD_HASH = /\/viewclient\/(\d+)/;
 
 /** The principal control, rendered as `#principal` on both front ends (`LoanNewComponent`). */
@@ -32,13 +30,10 @@ const LOAN_COLLECTION_PATH = '/loans';
 /** The statuses AAP 0.10.1's W7 row accepts for the refusal. A 400 is what this fork answers for an out-of-range principal; a 403 is accepted as well because the row names both. */
 const ACCEPTED_REFUSAL_STATUSES: readonly number[] = [400, 403];
 
-/** How long the submission's answer is awaited: the request, the server's validation and the paint. */
 const SUBMIT_TIMEOUT_MS = 30_000;
 
-/** How long the banner is given to appear once the answer has landed. */
 const BANNER_TIMEOUT_MS = 15_000;
 
-/** One refusal, reduced to the two strings the workflow compares. */
 interface ServerErrorEnvelope {
   /** The message the application renders: the first field-level `defaultUserMessage`, else its top-level one. */
   readonly rendered: string;
@@ -76,7 +71,6 @@ function loanSubmits(exchanges: readonly NormalizedExchange[]): readonly Normali
   return exchanges.filter(isLoanSubmit);
 }
 
-/** The single application submission a capture holds. @param exchanges The exchanges one capture recorded. @throws When the capture holds none or more than one, naming how many it found. */
 function onlyLoanSubmit(exchanges: readonly NormalizedExchange[]): NormalizedExchange {
   const submits = loanSubmits(exchanges);
   if (submits.length !== 1) {
@@ -136,7 +130,6 @@ function readErrorEnvelope(body: unknown): ServerErrorEnvelope {
         .filter((message) => message.length > 0)
     : [];
 
-  // The field-level text first, the envelope's generic one only when no entry carries text: the same order the application applies, so the comparison uses the string the screen is showing.
   const rendered = fieldMessages[0] ?? declared;
   if (rendered.length === 0) {
     throw new Error(
@@ -170,7 +163,6 @@ test.describe('W7 a Fineract validation error is shown to the user', () => {
       expect(applicationHash.startsWith(APPLICATION_ROUTE)).toBe(true);
       expect(applicationHash.slice(APPLICATION_ROUTE.length)).toBe(String(clientId));
 
-      // 4. The product decides which template the terms and their defaults come from.
       await pages.loans.selectProduct(SCENARIO.invalidLoanApplication.productName);
 
       // 5. Rule 1 clause 3, read directly off the control: nothing bounds the figure an applicant may enter, so the server — not the form — is what refuses an out-of-range principal.
@@ -180,7 +172,6 @@ test.describe('W7 a Fineract validation error is shown to the user', () => {
       expect(await principal.getAttribute('max')).toBeNull();
       expect(await principal.getAttribute('pattern')).toBeNull();
 
-      // 6. Apply for 50,000 on the product whose maximum is 10,000, with the product's own 12 monthly repayments and both dates taken from the tenant's business date.
       const principalValue = SCENARIO.invalidLoanApplication.principal;
       if (pages.uiProject === 'legacy') {
         await pages.loans.fillApplication({
@@ -205,7 +196,6 @@ test.describe('W7 a Fineract validation error is shown to the user', () => {
       expect(await principal.inputValue()).toBe(String(principalValue));
       expect(await page.locator(ERROR_BANNER).filter({ visible: true }).count()).toBe(0);
 
-      // 8. Submit once, and wait for the server's answer to be recorded.
       await pages.loans.submitApplication();
       await expect
         .poll(
@@ -234,7 +224,6 @@ test.describe('W7 a Fineract validation error is shown to the user', () => {
       await expect(banner).toBeVisible({ timeout: BANNER_TIMEOUT_MS });
       expect(collapse(await banner.innerText())).toBe(envelope.rendered);
 
-      // 12. The entered values survive the refusal: the principal still reads 50,000 and the screen is still the application, so the applicant can correct one field instead of retyping the form.
       expect(await principal.inputValue()).toBe(String(principalValue));
       const hashAfterSubmit = new URL(page.url()).hash;
       expect(hashAfterSubmit).toBe(applicationHash);

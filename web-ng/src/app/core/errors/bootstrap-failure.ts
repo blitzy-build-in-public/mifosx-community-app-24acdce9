@@ -25,7 +25,6 @@ export function renderBootstrapFailure(error: unknown, target: Document = docume
   try {
     const host: Element = target.querySelector('app-root') ?? target.body;
 
-    // A half-rendered root would otherwise sit above the message, so the host is emptied first.
     host.replaceChildren();
 
     const container = target.createElement('div');
@@ -46,6 +45,5 @@ export function renderBootstrapFailure(error: unknown, target: Document = docume
     container.append(alert);
     host.append(container);
   } catch {
-    // The document offers nowhere to render: it has no host and no body, or the insertion itself failed.
   }
 }

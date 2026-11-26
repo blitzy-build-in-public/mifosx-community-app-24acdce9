@@ -1,12 +1,19 @@
-<!-- One notice per queued message, stacked inside the widget's single `.notification-container` (AAP 0.5.2, Rule 1 clause 3, AAP 0.1.1, AAP 0.7.4). -->
-<div class="notification-container">
+<!--
+  One notice per queued message, stacked inside the widget's single `.notification-container`
+  (AAP 0.5.2, Rule 1 clause 3, AAP 0.1.1, AAP 0.7.4).
+
+  The live region is this container, which is in the document before any notice arrives: assistive
+  technology watches it, so a notice added to it is announced. The notices themselves carry no
+  `role="alert"` of their own, because a role on each of them would be a second, nested region
+  announcing the same text twice — once for the notice and once for the container that received it.
+-->
+<div class="notification-container" role="alert" aria-live="assertive" aria-atomic="false">
   @for (message of messages(); track message.id) {
     <div
       class="notification"
       [class.notification-info]="message.kind === 'info'"
       [class.notification-success]="message.kind === 'success'"
       [class.notification-error]="message.kind === 'error'"
-      role="alert"
     >
       <button
         type="button"

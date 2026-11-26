@@ -2,14 +2,12 @@
 import type { Routes } from '@angular/router';
 
 import { permissionGuard } from '../../core/auth/permission.guard';
-import {
-  CLIENT_ACTION_PERMISSIONS,
-  ClientActionsComponent,
-} from './client-actions/client-actions.component';
+import { ClientActionsComponent } from './client-actions/client-actions.component';
 import { ClientCreateComponent } from './client-create/client-create.component';
 import { ClientEditComponent } from './client-edit/client-edit.component';
 import { ClientListComponent } from './client-list/client-list.component';
 import { ClientViewComponent } from './client-view/client-view.component';
+import { CLIENT_ACTION_PERMISSIONS } from './client.models';
 
 /** The clients family's five screens under their legacy paths. Exported as the array `app.routes.ts` loads lazily, so the family's paths, its access codes and its breadcrumb keys are declared in one place and the parity. */
 export const CLIENTS_ROUTES: Routes = [

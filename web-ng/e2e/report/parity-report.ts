@@ -35,7 +35,6 @@ export type UiProject = 'legacy' | 'next';
 
 /** One difference between the two sides (AAP 0.10.2). A request difference carries the call it belongs to; an end-state difference is anchored to no call, so it carries {@link STATE_DIFF_METHOD} and an empty `path`, and. */
 export interface WorkflowDiff {
-  /** HTTP method of the exchange that differs, or {@link STATE_DIFF_METHOD} for a state difference. */
   method: string;
   /** Normalised request path of that exchange, or `''` for a state difference. */
   path: string;
@@ -49,11 +48,8 @@ export interface WorkflowDiff {
 
 /** One workflow's outcome on one front end — the record every spec writes through {@link writeWorkflowRecord}, and the document the report is built from (AAP 0.10.3 criterion 4). */
 export interface WorkflowRecord {
-  /** Which workflow the record describes. */
   workflow: WorkflowId;
-  /** Which front end it ran against. */
   project: UiProject;
-  /** How it ended. */
   status: WorkflowStatus;
   /** Why: required for `legacy-broken` and `intentional-diff`, optional colour for any other status. */
   reason?: string;
@@ -67,7 +63,6 @@ export interface WorkflowRecord {
   diffs?: WorkflowDiff[];
   /** First failing step of a `fail` row. */
   failingStep?: string;
-  /** When the fixture wrote the record, ISO 8601. */
   recordedAt?: string;
 }
 
@@ -87,7 +82,6 @@ export interface ReportHeader {
   nextUrl: string;
   /** The tenant's business date as `yyyy-mm-dd`; `''` when it could not be read — never a browser date. */
   runDate: string;
-  /** When this report was generated, ISO 8601. */
   generatedAt: string;
   /** Whether provenance was recorded; `false` fails the command (Rule 2). */
   backendVerified: boolean;
@@ -95,9 +89,7 @@ export interface ReportHeader {
 
 /** One cell of the report's workflow matrix: a record as the report sees it, or the `missing` row no record produced. */
 export interface WorkflowRow {
-  /** Which workflow the row describes. */
   workflow: WorkflowId;
-  /** Which front end it ran against. */
   project: UiProject;
   /** How it ended, or `missing` when no record exists. */
   status: WorkflowStatus | 'missing';
@@ -107,29 +99,22 @@ export interface WorkflowRow {
   intentionalDiffId?: number;
   /** First failing step, for a `fail` row. */
   failingStep?: string;
-  /** Differences: the record's own, plus the ones {@link buildReport} computed. */
   diffs?: WorkflowDiff[];
   /** Whether this row's workflow could be compared at all — false when the legacy side is broken or absent. */
   comparable: boolean;
 }
 
-/** A record the report could not read, with the path and the reason it was rejected. */
 export interface UnreadableRecord {
-  /** File the record was read from. */
   readonly path: string;
   /** Why it was rejected, in the module's own words — never the document's content (Rule 1 clause 9). */
   readonly message: string;
 }
 
-/** The report itself: the header a human checks first and one row per workflow and front end. */
 export interface ParityReport {
-  /** The run's environment, backend, addresses and dates. */
   header: ReportHeader;
-  /** Every workflow and front end, in {@link WORKFLOW_IDS} then {@link UI_PROJECTS} order. */
   workflows: WorkflowRow[];
   /** The deliberate-difference register AAP 0.10.5 requires and acceptance criterion 4 has a human read: the readings this run takes more narrowly than the plan's wording, rendered as their own section of `parity-report.md`. */
   readonly differenceRegister: readonly DifferenceRegisterReading[];
-  /** Records that could not be read; absent or empty when every record parsed and validated. */
   readonly unreadable?: readonly UnreadableRecord[];
   /** The measured generated-line total held against AAP 0.9.3's ceiling, with the trim record that keeps the tree there (Rule 1 clause 10). */
   readonly lineBudget?: LineBudget;
@@ -168,6 +153,12 @@ export const LINES_BEFORE_SECOND_TRIM = 60_201;
 /** The net lines those four landed fix sets added, which took the tree over the ceiling: the i18n and language-preference work +574, the session work +101, the loan-charge work +39 and the loans doc comments 0 (AAP 0.9.3). */
 export const SECOND_TRIM_ADDED_LINES = 714;
 
+/** Generated lines the tracked tree carried before this checkpoint's third prose trim: 59,784 at the previous checkpoint plus the net lines of the ten fix sets that landed with it — the third crossing of AAP 0.9.3's ceiling, which engaged the plan's fixed cut order again (AAP 0.9.3, Rule 1 clause 10). */
+export const LINES_BEFORE_THIRD_TRIM = 62_420;
+
+/** The net lines those ten landed fix sets added across 91 files, which took the tree over the ceiling: 3,748 added and 1,112 removed over the whole set (AAP 0.9.3). */
+export const THIRD_TRIM_ADDED_LINES = 2_636;
+
 /** The repository root every measurement below is taken from — `web-ng/`'s parent — resolved from this module's own URL so `git ls-files` sees the whole delivered tree. */
 const REPO_ROOT_DIR = fileURLToPath(new URL('../../../', import.meta.url));
 
@@ -180,18 +171,15 @@ const STATE_DIFF_METHOD = 'STATE';
 /** Directory the harness's artefacts live in, resolved from this module's own location so the suite finds them however it is launched — `npm run e2e` launches it from `web-ng/`, and a caller may launch it from anywhere. */
 const CAPTURES_DIR = fileURLToPath(new URL('../.captures', import.meta.url));
 
-/** Where {@link writeWorkflowRecord} writes and {@link readWorkflowRecords} reads. */
 const WORKFLOWS_DIR = join(CAPTURES_DIR, 'workflows');
 
 /** The Markdown report, at the package root as AAP 0.10.4 names it. */
 const MARKDOWN_PATH = fileURLToPath(new URL('../../parity-report.md', import.meta.url));
 
-/** The JSON report, beside the Markdown one. */
 const JSON_PATH = fileURLToPath(new URL('../../parity-report.json', import.meta.url));
 
 /** Raised when a record cannot be trusted: an unknown workflow, project or status, or an acknowledged difference without the reason and AAP 0.10.5 item criterion 4 requires. */
 export class ParityRecordError extends Error {
-  /** The record that was rejected, exactly as it arrived. */
   readonly record: unknown;
 
   constructor(message: string, record: unknown) {
@@ -209,7 +197,6 @@ export class ParityReportError extends Error {
   }
 }
 
-/** Narrows a parsed JSON value to an object with unknown fields — the harness's one unmodelled boundary. */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -225,7 +212,6 @@ function typeName(value: unknown): string {
   return typeof value === 'object' ? 'an object' : `a ${typeof value}`;
 }
 
-/** Whether a value is one of the eight workflow ids. */
 function isWorkflowId(value: unknown): value is WorkflowId {
   return typeof value === 'string' && (WORKFLOW_IDS as readonly string[]).includes(value);
 }
@@ -235,7 +221,6 @@ function isWorkflowStatus(value: unknown): value is WorkflowStatus {
   return typeof value === 'string' && (WORKFLOW_STATUSES as readonly string[]).includes(value);
 }
 
-/** Whether a value is one of the two Playwright projects. */
 function isUiProject(value: unknown): value is UiProject {
   return typeof value === 'string' && (UI_PROJECTS as readonly string[]).includes(value);
 }
@@ -250,7 +235,6 @@ function isIntentionalDiffId(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= MAX_INTENTIONAL_DIFF_ID;
 }
 
-/** Whether an optional text field carries something; a blank or absent one does not. */
 function hasText(value: string | undefined): boolean {
   return value !== undefined && value.trim().length > 0;
 }
@@ -303,13 +287,11 @@ export function redactEntryLocation(text: string): string {
   );
 }
 
-/** An optional free-text field of a parsed record with its entry-URL values masked: {@link optionalText}'s narrowing, then {@link redactEntryLocation}. Used for the record's two free-text fields, because those are where a. */
 function redactedText(source: Record<string, unknown>, field: string): string | undefined {
   const text = optionalText(source, field);
   return text === undefined ? undefined : redactEntryLocation(text);
 }
 
-/** Narrows a parsed document to a {@link WorkflowRecord}, throwing {@link ParityRecordError} on anything the report could not read back faithfully. */
 function narrowRecord(value: unknown): WorkflowRecord {
   if (!isRecord(value)) {
     throw new ParityRecordError(`a workflow record must be a JSON object, not ${typeName(value)}`, value);
@@ -328,7 +310,6 @@ function narrowRecord(value: unknown): WorkflowRecord {
   const reason = redactedText(value, 'reason');
   const intentionalDiffId = value['intentionalDiffId'];
   if (requiresReason(status) && !hasText(reason)) {
-    // Criterion 4: an acknowledged difference is only readable next to the reason it was accepted for.
     throw new ParityRecordError(`a ${project}/${workflow} ${status} record needs a non-empty reason`, value);
   }
   if (intentionalDiffId !== undefined && !isIntentionalDiffId(intentionalDiffId)) {
@@ -384,7 +365,6 @@ export async function writeWorkflowRecord(record: WorkflowRecord): Promise<strin
   return path;
 }
 
-/** Whether a filesystem error means the file or directory is simply not there. */
 function isMissingFileError(error: unknown): boolean {
   return isRecord(error) && error['code'] === 'ENOENT';
 }
@@ -419,7 +399,6 @@ export async function readWorkflowRecords(): Promise<{ records: WorkflowRecord[]
   return { records, unreadable };
 }
 
-/** How one artefact of a run was found: read back, legitimately absent, or present but unusable. */
 type Artifact<T> =
   | { readonly kind: 'loaded'; readonly value: T }
   | { readonly kind: 'absent'; readonly path: string }
@@ -446,7 +425,6 @@ async function readArtifact<T>(
   try {
     parsed = JSON.parse(text);
   } catch {
-    // The parser's own message quotes the document it rejected, so only the shape is reported.
     return { kind: 'unreadable', path, message: `the ${label} is not valid JSON` };
   }
   const value = parse(parsed);
@@ -515,12 +493,10 @@ function toStateSnapshot(value: unknown): StateSnapshot | null {
       return null;
     }
   }
-  // The metadata is proven above and the sections are the reducers' shapes; the cast re-attaches what the top-level guard deliberately does not enumerate.
   return value as unknown as StateSnapshot;
 }
 
 
-/** Key a row or record is indexed by; one workflow and one front end identify exactly one of each. */
 function rowKey(workflow: WorkflowId, project: UiProject): string {
   return `${workflow}::${project}`;
 }
@@ -561,7 +537,6 @@ async function resolveHeader(): Promise<ReportHeader> {
   const [backend, fixtures] = await Promise.all([import('../check-backend'), import('../seed/fixtures')]);
   let info = backend.readBackendInfo();
   if (info === null) {
-    // One fallback read: a run whose check:backend step was skipped still gets a verified header.
     try {
       info = await backend.resolveBackendInfo();
     } catch {
@@ -587,7 +562,6 @@ async function resolveHeader(): Promise<ReportHeader> {
   };
 }
 
-/** The problem an absent or unusable artefact represents; a loaded one represents none. */
 function problemsOf(artifact: Artifact<unknown>, absentIsProblem = true): UnreadableRecord[] {
   if (artifact.kind === 'loaded' || (artifact.kind === 'absent' && !absentIsProblem)) {
     return [];
@@ -595,19 +569,16 @@ function problemsOf(artifact: Artifact<unknown>, absentIsProblem = true): Unread
   return [{ path: artifact.path, message: artifact.kind === 'absent' ? 'not written by the run' : artifact.message }];
 }
 
-/** Whether one side of a comparison recorded an end state, for the asymmetry a one-sided snapshot is. */
 function presenceOf(artifact: Artifact<unknown>): string {
   return artifact.kind === 'loaded' ? 'recorded' : artifact.kind === 'absent' ? 'not recorded' : 'unreadable';
 }
 
-/** Whether two differences say the same thing, so a merged list holds each one once. */
 function sameDiff(left: WorkflowDiff, right: WorkflowDiff): boolean {
   return left.method === right.method && left.path === right.path && left.field === right.field
     && JSON.stringify(left.legacy) === JSON.stringify(right.legacy)
     && JSON.stringify(left.next) === JSON.stringify(right.next);
 }
 
-/** The record's own differences first, then the ones computed here that it does not already hold. */
 function mergeDiffs(own: readonly WorkflowDiff[], computed: readonly WorkflowDiff[]): WorkflowDiff[] {
   const merged = [...own];
   for (const diff of computed) {
@@ -657,7 +628,6 @@ async function compareSides(
     }
   } else if (legacyState.kind !== 'unreadable' && nextState.kind !== 'unreadable'
     && legacyState.kind !== nextState.kind) {
-    // One side snapshotted an end state and the other did not. A workflow that targets no resource records none on either side, which is why only a one-sided snapshot is a difference.
     diffs.push({
       method: STATE_DIFF_METHOD,
       path: '',
@@ -783,10 +753,8 @@ export async function buildReport(): Promise<ParityReport> {
 }
 
 
-/** Most diff rows one table shows; beyond it the table says how many it left out so the file stays readable. */
 const MAX_DIFF_ROWS = 25;
 
-/** A table cell: one line of text, pipes escaped, long values cut. */
 function cell(value: unknown, limit = 120): string {
   const text = value === undefined || value === null
     ? '—'
@@ -795,7 +763,6 @@ function cell(value: unknown, limit = 120): string {
   return flat.length > limit ? `${flat.slice(0, limit - 1)}…` : flat;
 }
 
-/** Appends one Markdown table, capped at {@link MAX_DIFF_ROWS} rows, or nothing when it has no rows. */
 function pushTable(
   lines: string[],
   title: string,
@@ -816,12 +783,10 @@ function pushTable(
   }
 }
 
-/** The row of one workflow on one front end; every matrix cell the report renders has one. */
 function rowAt(rows: readonly WorkflowRow[], workflow: WorkflowId, project: UiProject): WorkflowRow | undefined {
   return rows.find((row) => row.workflow === workflow && row.project === project);
 }
 
-/** A count with its thousands separators, so every budget figure in the report reads with them wherever the host is localised. */
 function group(value: number): string {
   return value.toLocaleString('en-US');
 }
@@ -841,6 +806,7 @@ function lineBudgetLines(budget: LineBudget | undefined): string[] {
     `- Measured: ${group(measured)} generated lines across ${group(budget.measuredFiles)} tracked files, \`package-lock.json\` aside — \`git ls-files | grep -v package-lock.json | xargs wc -l\`, the plan's own basis; the tree stands ${standing}.`,
     '- Trim applied: the documentation prose was compressed to one line per declaration across the delivered tree, keeping a doc comment on every exported service method, component input/output and model field (AAP 0.14.2), every recorded decision and every citation a comment carries — the multi-line blocks collapsed, the facts they stated did not.',
     `- Second trim: four fix sets landed after the cut and added ${group(SECOND_TRIM_ADDED_LINES)} net lines — the i18n and language-preference work +574, the session work +101, the loan-charge work +39 and the completed loans doc comments 0 — taking the tree from ${group(LINES_BEFORE_SECOND_TRIM - SECOND_TRIM_ADDED_LINES)} to ${group(LINES_BEFORE_SECOND_TRIM)} and over AAP 0.9.3's ceiling again (Rule 1 clause 10). The fixed order had nothing left to cut there: Stretch was already dropped at the earlier crossing, and the e2e suite holds only the Must workflows and their chain. The cut was comment prose again — every multi-line rationale block in the largest tracked files was condensed to its load-bearing statements, keeping a doc comment naming the Fineract endpoint or design element on every exported service method, component input/output and model field (AAP 0.14.2), every recorded decision, every citation a comment carries and every statement complete. No code line changed: stripping whole-line comments from the tree before and after the trim yields the same code, so the trim narrowed comments and nothing else.`,
+    `- Third trim: ten fix sets landed at this checkpoint and added ${group(THIRD_TRIM_ADDED_LINES)} net lines across 91 files, taking the tree from ${group(LINES_BEFORE_THIRD_TRIM - THIRD_TRIM_ADDED_LINES)} to ${group(LINES_BEFORE_THIRD_TRIM)} and over AAP 0.9.3's ceiling again (Rule 1 clause 10). The fixed order had nothing left to cut there: Stretch was dropped at the first crossing and the e2e suite holds only the Must workflows and their chain. The cut was comment prose once more — every multi-line rationale block condensed to its load-bearing statements, the survivors reflowed to the widest line the tree already uses, and the commentary that only restated the code beside it removed — keeping a doc comment naming the Fineract endpoint or design element on every exported service method, component input/output and model field (AAP 0.14.2), every recorded decision, every citation a comment carries and every statement complete. No code line changed: stripping the comments from the tree before and after the trim yields the same code, so the trim narrowed and removed comments and nothing else.`,
     `- Revised totals: ${group(LINES_BEFORE_TRIM)} lines at \`4a13dc7\`, the commit the prose trim follows, ${group(LINES_AT_CUT_COMMIT)} at \`c05766d\`, the trim itself and the commit the cut follows, and ${group(measured)} in the delivered tree as measured above.`,
     `- Scope cut: the tree crossed AAP 0.9.3's ${group(LINE_CEILING)}-line ceiling while the workflow screens landed — ${group(LINES_BEFORE_TRIM)} lines before the prose trim — which engaged the plan's fixed cut order, so its first step — drop Stretch — was applied and the second is contained in it, because the savings workflow (W8) was the only Stretch workflow and its spec the only Stretch spec. Restoring what was cut would cross that ceiling again: the 17 cut files carry ${group(SAVINGS_CUT_LINES)} lines, so the delivered tree plus them measures ${group(measured + SAVINGS_CUT_LINES)}. The savings screens, their three routes, their e2e page objects, their seed product and the client record's "New Saving" entry point are therefore not delivered, and the eight W8 savings rows were removed from \`endpoint-allowlist.json\` so that list stays a true statement about the application (AAP 0.10.4). Every Must workflow (W1–W7 and the W2→W4→W5→W6 chain) keeps its screen and its spec: no Must scope was dropped, and the three check scripts are untouched.`,
     `- Check scripts and their \`lib/\` helpers: ${group(budget.checkScriptLines)} lines against AAP 0.9.3's share of about 600. That share was estimated for skeleton checks, while the delivered gates enforce 0.10.4's whole rules over the tree (endpoint allowlist, template coverage, wiring, scope and credential), so the figure above is the revised share: it is recorded here, never met by weakening a gate (Rule 1 clauses 2 and 8).`,
@@ -1002,11 +968,11 @@ const CREDENTIAL_ENV_NAMES: readonly string[] = ['E2E_PASSWORD', 'E2E_USER', 'FI
 const UNMASKED_CREDENTIAL_PATTERN =
   /(password|passcode|authorization|authenticationKey|base64EncodedAuthenticationKey|token|secret|apiKey)\s*["']?\s*[:=]\s*["']?(?!\*\*\*)[^\s"',}|]+/i;
 
-/** An entry URL's `baseApiUrl` or `tenantIdentifier` value written unmasked anywhere in a document (Rule 1 clause 9; AAP 0.10.4). {@link redactEntryLocation} is what keeps it out, and this is the independent check that it. */
+/** An entry URL's `baseApiUrl` or `tenantIdentifier` value written unmasked anywhere in a document (Rule 1 clause 9; AAP 0.10.4). {@link redactEntryLocation} is what keeps it out, and this is the independent check that it does. */
 const UNMASKED_ENTRY_LOCATION_PATTERN =
   /\b(baseApiUrl|tenantIdentifier)(?:["']?\s*[:=]\s*["']?)(?!\*\*\*)[^\s"'&#,;)|}\]]+/i;
 
-/** Refuses to write a report that carries a credential (Rule 1 clause 9): the value of a credential environment variable, a credential-shaped pair that is not the mask marker, a diff whose field names a credential while (AAP 0.10.4). */
+/** Refuses to write a report that carries a credential (Rule 1 clause 9): the value of a credential environment variable, a credential-shaped pair that is not the mask marker, and a diff whose field names a credential while the value beside it is unmasked (AAP 0.10.4). */
 async function assertNoCredential(report: ParityReport, markdown: string, json: string): Promise<void> {
   const documents: readonly { readonly document: string; readonly text: string }[] = [
     { document: MARKDOWN_PATH, text: markdown },
@@ -1024,7 +990,6 @@ async function assertNoCredential(report: ParityReport, markdown: string, json: 
     }
     const unmaskedEntryLocation = UNMASKED_ENTRY_LOCATION_PATTERN.exec(text);
     if (unmaskedEntryLocation !== null) {
-      // The parameter is named and the value is not: the matched text is never repeated into a message.
       throw new ParityReportError(
         `${document} would carry the value of the entry URL's ${unmaskedEntryLocation[1]} parameter; `
           + 'refusing to write it (Rule 1 clause 9)',
@@ -1131,7 +1096,6 @@ export async function main(): Promise<number> {
 const entryPoint = process.argv[1];
 
 if (entryPoint !== undefined && pathToFileURL(entryPoint).href === import.meta.url) {
-  // The exit code is set rather than forced, so the summary lines already printed are never lost.
   process.exitCode = await main();
 }
 

@@ -50,36 +50,27 @@ export interface LoanSnapshot {
   readonly firstPeriodTotalDue: number | null;
   /** Transactions the loan carries; a repayment adds one (W6). */
   readonly transactionCount: number;
-  /** Charges attached to the loan; the charge form adds one. */
   readonly chargeCount: number;
 }
 /** One workflow's end state on one front end plus the metadata that makes the file self-describing; `client` and `loan` appear only when the caller asked for them, and nothing names the machine the run happened on. */
 export interface StateSnapshot {
-  /** Playwright project the snapshot came from. */
   readonly project: 'legacy' | 'next';
   /** Workflow id the snapshot covers, e.g. `W2` or `CHAIN`. */
   readonly workflow: string;
   /** The run date the dates were offset from, `yyyy-mm-dd`. */
   readonly runDate: string;
-  /** Client end state, when the workflow targeted a client. */
   readonly client?: ClientSnapshot;
-  /** Loan end state, when the workflow targeted a loan. */
   readonly loan?: LoanSnapshot;
 }
-/** A snapshot as {@link captureState} returns it: the written document plus the file's absolute path, the one field kept out of the file because it differs between two runs by construction ({@link diffStates} compares plain snapshots). */
 export interface WrittenStateSnapshot extends StateSnapshot {
-  /** Absolute path of the file this snapshot was written to. */
   readonly path: string;
 }
 /** What {@link captureState} is asked to read; every target is optional and independent, so a workflow that touched only a client writes `client` alone. */
 export interface StateTargets {
-  /** Playwright project the snapshot belongs to. */
   project: 'legacy' | 'next';
   /** Workflow id the snapshot covers, e.g. `'W1'` … `'W7'` or `'CHAIN'`. */
   workflow: string;
-  /** Client to read; validated as a positive integer before any call is made. */
   clientId?: number;
-  /** Loan to read; validated the same way. */
   loanId?: number;
   /** Run date to offset dates against; defaults to {@link readBusinessDate} — the tenant's business date, never the browser clock (Rule 1 clause 2). */
   runDate?: Date;
@@ -279,7 +270,6 @@ function requireResourceId(value: number, name: string): number {
   }
   return value;
 }
-/** An optional resource id, validated only when the caller supplied one. */
 function optionalResourceId(value: number | undefined, name: string): number | undefined {
   return value === undefined ? undefined : requireResourceId(value, name);
 }
@@ -365,7 +355,6 @@ export async function captureState(targets: StateTargets): Promise<WrittenStateS
       loanId === undefined
         ? undefined
         : reduceLoan(await readJson(context, `/loans/${loanId}`, ALL_ASSOCIATIONS));
-    // The written document is the metadata and the sections the workflow reached, in that order; the absolute path is added to the returned object only, because recording it in the file would put a machine-specific path into an artefact two runs are expected to compare byte for byte.
     const written = {
       project: targets.project,
       workflow,
@@ -380,7 +369,6 @@ export async function captureState(targets: StateTargets): Promise<WrittenStateS
     return { ...written, path: file };
   });
 }
-/** The fields compared for each section, in the order a reader expects them, typed as the snapshot's own keys so a renamed interface field fails to compile here. */
 const CLIENT_FIELDS: readonly (keyof ClientSnapshot)[] = [
   'status',
   'activationDateOffset',
@@ -390,7 +378,6 @@ const CLIENT_FIELDS: readonly (keyof ClientSnapshot)[] = [
   'savingsAccountCount',
   'identifierCount',
 ];
-/** {@link LoanSnapshot}'s compared fields, in comparison order. */
 const LOAN_FIELDS: readonly (keyof LoanSnapshot)[] = [
   'status',
   'principal',

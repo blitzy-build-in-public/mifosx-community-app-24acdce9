@@ -8,22 +8,14 @@ import {
 } from './global-search.component';
 
 /**
- * Behaviour of the navbar's global search control — the `GlobalSearch` row of the component inventory (AAP 0.2.3)
- * and part of the clients list screen of the "Sign in and open a client record" flow (Figma node `1:3`, file
- * `DKm5TBFbXypfqyx4xUdhBw`).
+ * Behaviour of the navbar's global search control — the `GlobalSearch` row of the component inventory (AAP 0.2.3) and part of the clients list screen of the "Sign in and open a client record" flow (Figma node
+ * `1:3`, file `DKm5TBFbXypfqyx4xUdhBw`). It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with at least one behavioural spec") and Rule 1 clause 8 (no spec without
+ * an `expect`, nothing boilerplate). It proves the contract its parent depends on: one trimmed query, the scope the user selected and legacy's exact-match flag derived from the quotes legacy stripped on
+ * submit; nothing reported when there is nothing to search for; never a search while the user is still typing; and no text the user typed changed. It also proves the inventory's props (AAP 0.2.3
+ * `GlobalSearch`: `query: string, scope, (search)`): the two inputs seed the field and the selector, typing is not written back into them, and a host that changes one re-seeds the control. The translate stack
+ * is provided because the placeholder, the scope labels and the two accessible names resolve through `TranslatePipe`, and `provideTranslateService()` installs the no-op loader so no bundle is requested. There
+ * is deliberately no HTTP provider: the component injects no service at all, so reaching Fineract from it would fail with NG0201 instead of silently passing (Rule 1 clause 5).
  *
- * It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with at least one
- * behavioural spec") and Rule 1 clause 8 (no spec without an `expect`, nothing boilerplate). It proves the
- * contract its parent depends on: one trimmed query, the scope the user selected and legacy's exact-match flag
- * derived from the quotes legacy stripped on submit; nothing reported when there is nothing to search for; never
- * a search while the user is still typing; and no text the user typed changed. It also proves the inventory's
- * props (AAP 0.2.3 `GlobalSearch`: `query: string, scope, (search)`): the two inputs seed the field and the
- * selector, typing is not written back into them, and a host that changes one re-seeds the control.
- *
- * The translate stack is provided because the placeholder, the scope labels and the two accessible names resolve
- * through `TranslatePipe`, and `provideTranslateService()` installs the no-op loader so no bundle is requested.
- * There is deliberately no HTTP provider: the component injects no service at all, so reaching Fineract from it
- * would fail with NG0201 instead of silently passing (Rule 1 clause 5).
  */
 
 /** Legacy key of the field's placeholder, and the text this spec serves for it. */
@@ -67,10 +59,9 @@ const SPEC_BUNDLE: Record<string, string> = {
 };
 
 /**
- * The inputs whose surrounding quotes legacy strips before searching, with what it then searched
- * for. `app/scripts/controllers/main/MainController.js:208-217` removes one leading and one trailing
- * double quote — either on its own as well as both — and sets `exactMatch` when that removal changed
- * the text, so each row is one arm of that single derivation.
+ * The inputs whose surrounding quotes legacy strips before searching, with what it then searched for. `app/scripts/controllers/main/MainController.js:208-217` removes one leading and one trailing double quote
+ * — either on its own as well as both — and sets `exactMatch` when that removal changed the text, so each row is one arm of that single derivation.
+ *
  */
 const QUOTED_INPUTS: readonly {
   readonly label: string;
@@ -89,8 +80,7 @@ describe('GlobalSearchComponent', () => {
   /** Every payload the control has emitted, in emission order. */
   let emitted: GlobalSearchSubmission[];
 
-  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps every
-  // assertion below type-checked and confines the boundary cast to this line (Rule 1 clause 4).
+  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here keeps every assertion below type-checked and confines the boundary cast to this line (Rule 1 clause 4).
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
 
   /** The text field, which is the only `<input>` the control renders. */
@@ -167,12 +157,10 @@ describe('GlobalSearchComponent', () => {
     expect(host().querySelectorAll('select')).toHaveLength(1);
     expect(field().getAttribute('id')).toBe('search');
     expect(field().getAttribute('type')).toBe('text');
-    // Both controls carry an id: the field's is legacy's own (`#search`), and the selector's makes
-    // it addressable without depending on its position among the field's siblings.
+    // Both controls carry an id: the field's is legacy's own (`#search`), and the selector's makes it addressable without depending on its position among the field's siblings.
     expect(selector().getAttribute('id')).toBe('search-scope');
-    // The height, border and radius are the global navbar/form-control rules', not this
-    // component's: it carries no style of its own and names the Bootstrap classes those rules key
-    // off (AAP 0.2.2's `space-nav-control` token, Rule 1 clause 6).
+    // The height, border and radius are the global navbar/form-control rules', not this component's: it carries no style of its own and names the Bootstrap classes
+    // those rules key off (AAP 0.2.2's `space-nav-control` token, Rule 1 clause 6).
     expect(field().classList.contains('form-control')).toBe(true);
     expect(selector().classList.contains('form-control')).toBe(true);
   });
@@ -191,11 +179,9 @@ describe('GlobalSearchComponent', () => {
   it('resolves its placeholder and its accessible names through the translation stack', () => {
     expect(field().getAttribute('placeholder')).toBe(PLACEHOLDER_TEXT);
     expect(field().getAttribute('aria-label')).toBe(FIELD_LABEL_TEXT);
-    // The selector is named from the legacy bundle's own "Filter" label: a key that exists in every
-    // shipped bundle, so nothing here can fall through to the missing-translation handler.
+    // The selector is named from the legacy bundle's own "Filter" label: a key that exists in every shipped bundle, so nothing here can fall through to the missing-translation handler.
     expect(selector().getAttribute('aria-label')).toBe(SCOPE_FILTER_TEXT);
-    // Every piece of text this control shows or announces is translated: no dotted key survives in
-    // the rendered copy or in either accessible name (AAP 0.10.2 "every label resolves").
+    // Every piece of text this control shows or announces is translated: no dotted key survives in the rendered copy or in either accessible name (AAP 0.10.2 "every label resolves").
     expect(host().textContent).not.toContain('.');
     expect(field().getAttribute('placeholder')).not.toContain('.');
     expect(field().getAttribute('aria-label')).not.toContain('.');
@@ -212,8 +198,7 @@ describe('GlobalSearchComponent', () => {
   });
 
   it('seeds the field and the selector from its inputs, and reports the seeded pair on submit', async () => {
-    // AAP 0.2.3's `GlobalSearch` props `query: string` and `scope`: the host decides what the user
-    // meets, and the control's own state starts there.
+    // AAP 0.2.3's `GlobalSearch` props `query: string` and `scope`: the host decides what the user meets, and the control's own state starts there.
     fixture.componentRef.setInput('query', 'Ada Okafor');
     fixture.componentRef.setInput('scope', 'loans');
     fixture.detectChanges();
@@ -229,8 +214,7 @@ describe('GlobalSearchComponent', () => {
   });
 
   it('does not write what the user types back into the input that seeded it', () => {
-    // There is no two-way binding on either prop, so typing moves the control and leaves the seed
-    // alone: a host re-rendering with the same seed cannot clobber text the user is still editing.
+    // There is no two-way binding on either prop, so typing moves the control and leaves the seed alone: a host re-rendering with the same seed cannot clobber text the user is still editing.
     fixture.componentRef.setInput('query', 'seeded');
     fixture.detectChanges();
 
@@ -257,15 +241,13 @@ describe('GlobalSearchComponent', () => {
 
     expect(document.activeElement).not.toBe(input);
 
-    // The chord legacy bound to `document.getElementById('search').focus()`
-    // (app/scripts/controllers/main/MainController.js:330) and the one the placeholder advertises.
+    // The chord legacy bound to `document.getElementById('search').focus()` (app/scripts/controllers/main/MainController.js:330) and the one the placeholder advertises.
     document.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'x', altKey: true, bubbles: true, cancelable: true }),
     );
     fixture.detectChanges();
 
     expect(document.activeElement).toBe(input);
-    // The shortcut moves the caret and nothing else: no submission, and the text stays as typed.
     expect(input.value).toBe('Marcus');
     expect(emitted).toEqual([]);
   });
@@ -281,8 +263,7 @@ describe('GlobalSearchComponent', () => {
     type('  Parity Client  ');
     submitForm();
 
-    // Trimming is the emitted payload's business, not the field's: rewriting the input would move
-    // the caret under the user while the component is still in front of them.
+    // Trimming is the emitted payload's business, not the field's: rewriting the input would move the caret under the user while the component is still in front of them.
     expect(field().value).toBe('  Parity Client  ');
     expect(component.queryControl.value).toBe('  Parity Client  ');
   });
@@ -293,15 +274,13 @@ describe('GlobalSearchComponent', () => {
       submitForm();
 
       expect(emitted).toEqual([{ query, scope: 'all', exactMatch: true }]);
-      // Only the emitted text is unquoted: the field keeps exactly what the user typed, quotes and
-      // all, so nothing changes under them while the component is still in front of them.
+      // Only the emitted text is unquoted: the field keeps exactly what the user typed, quotes and all, so nothing changes under them while the component is still in front of them.
       expect(field().value).toBe(typed);
     });
   }
 
   it('emits nothing for a query that is nothing but its own quotes', () => {
-    // Stripped to nothing, it is the blank search the control already refuses rather than a
-    // navigation to an empty `/search/` segment.
+    // Stripped to nothing, it is the blank search the control already refuses rather than a navigation to an empty `/search/` segment.
     type('""');
     submitForm();
 

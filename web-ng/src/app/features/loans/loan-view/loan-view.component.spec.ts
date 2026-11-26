@@ -21,7 +21,7 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { permissionGuard } from '../../../core/auth/permission.guard';
 import { PermissionsService } from '../../../core/auth/permissions.service';
 import { ApiError, toApiError } from '../../../core/http/api-error';
-import type { LoanAccount, LoanCharge, LoanTransaction, RepaymentSchedule } from '../loan.models';
+import type { LoanAccount, LoanCharge, LoanCurrency, LoanTransaction, RepaymentSchedule } from '../loan.models';
 import { LoanService } from '../loan.service';
 import { LOANS_ROUTES } from '../loans.routes';
 import { LoanChargesComponent } from './loan-charges/loan-charges.component';
@@ -75,6 +75,8 @@ const TRANSLATIONS: Readonly<Record<string, string>> = {
   'label.heading.name': 'Name',
   'label.heading.dueasof': 'Due as of',
   'label.heading.paid': 'Paid',
+  'label.heading.waived': 'Waived',
+  'label.heading.balanceofloan': 'Balance of Loan',
   'label.heading.actions': 'Actions',
   'label.heading.no': 'No',
   'label.heading.fromdate': 'From Date',
@@ -90,7 +92,16 @@ const TRANSLATIONS: Readonly<Record<string, string>> = {
   'label.button.paycharge': 'Pay Charge',
   'label.button.waivecharge': 'Waive Charge',
   'label.nodata': 'No Data',
+  'label.heading.notavailable': 'Not Available',
   'error.msg.resource.not.found': 'The requested resource is not available.',
+};
+
+/** The currency `GET /loans/{id}?associations=all` reports at the payload's top level and inside each `charges[]` entry, member for member: the record prints this symbol in front of the principal, the five summary figures and every charge amount, which is where the legacy record prints it too (Rule 1 clause 3). */
+const CURRENCY: LoanCurrency = {
+  code: 'USD',
+  name: 'US Dollar',
+  displaySymbol: '$',
+  decimalPlaces: 2,
 };
 
 /** The two-period schedule the payload of the fixture loan carries, shaped as `GET /loans/{id}?associations=all` answers it: the loan-wide totals beside the periods, and the per-period outstanding members the record's three balances are summed from. The first period is paid and carries every member at zero; the second omits the fee and penalty members entirely, which is how the fork reports a period no fee is outstanding against. */
@@ -108,6 +119,7 @@ const SCHEDULE: RepaymentSchedule = {
       totalDueForPeriod: 491.67,
       totalOriginalDueForPeriod: 491.67,
       principalOutstanding: 0,
+      principalLoanBalanceOutstanding: 0,
       interestOutstanding: 0,
       feeChargesOutstanding: 0,
       penaltyChargesOutstanding: 0,
@@ -126,6 +138,7 @@ const SCHEDULE: RepaymentSchedule = {
       totalDueForPeriod: 5133.33,
       totalOriginalDueForPeriod: 5133.33,
       principalOutstanding: 4583.33,
+      principalLoanBalanceOutstanding: 4583.33,
       interestOutstanding: 550,
       totalOutstandingForPeriod: 5133.33,
       complete: false,
@@ -166,6 +179,7 @@ const LOAN_CHARGES: readonly LoanCharge[] = [
     id: 21,
     chargeId: 3,
     name: 'Parity Fee',
+    currency: CURRENCY,
     amount: 25,
     amountOrPercentage: 25,
     amountPaid: 0,
@@ -182,6 +196,7 @@ const LOAN_CHARGES: readonly LoanCharge[] = [
     id: 22,
     chargeId: 1,
     name: 'Parity Fee W8',
+    currency: CURRENCY,
     amount: 40,
     amountOrPercentage: 40,
     amountPaid: 40,
@@ -203,6 +218,7 @@ const LOAN: LoanAccount = {
   clientName: 'Spec Borrower',
   loanProductId: 3,
   loanProductName: 'Spec Loan Product',
+  currency: CURRENCY,
   principal: 5000,
   numberOfRepayments: 1,
   repaymentEvery: 1,
@@ -221,6 +237,7 @@ const SECOND_LOAN_CHARGE: LoanCharge = {
   id: 31,
   chargeId: 4,
   name: 'Second Fee',
+  currency: CURRENCY,
   amount: 60,
   amountOrPercentage: 60,
   amountPaid: 0,
@@ -396,12 +413,12 @@ describe('LoanViewComponent', () => {
     return Array.from(host().querySelectorAll<HTMLAnchorElement>('.btn-group a'));
   }
 
-  /** The charges table's rows, as the five data cells the user reads — the actions column excluded. */
+  /** The charges table's rows, as the six data cells the user reads — the actions column excluded. */
   function chargeRows(): readonly (readonly string[])[] {
     return Array.from(host().querySelectorAll<HTMLTableRowElement>('#loan-charges tbody tr')).map(
       (row): readonly string[] =>
         Array.from(row.querySelectorAll<HTMLTableCellElement>('td'))
-          .slice(0, 5)
+          .slice(0, 6)
           .map((cell) => cell.textContent?.trim() ?? ''),
     );
   }
@@ -499,16 +516,15 @@ describe('LoanViewComponent', () => {
     expect(component.loanId()).toBe(LOAN_ID);
     expect(component.loading()).toBe(false);
     expect(component.notFound()).toBe(false);
-    // The charges the payload carried are the record's charge list, taken from that one answer.
     expect(component.charges()).toEqual(LOAN_CHARGES);
 
-    // The record's own identity, as the payload reported it, inside the record's head.
     const head = (): string => host().querySelector('#loan-view-header')?.textContent ?? '';
 
     expect(head()).toContain(LOAN.accountNo);
     expect(head()).toContain('Spec Loan Product');
     expect(head()).toContain('Spec Borrower');
-    expect(head()).toContain('5,000');
+    // The principal carries the loan's own currency symbol, with no space, as the legacy record prints the currency beside this loan's balance (`app/views/loans/viewloanaccountdetails.html:125`).
+    expect(head()).toContain('$5,000');
 
     // The status indicator is the design's colour and nothing else: the record's dot geometry with the active key's class, decorative and wordless (AAP 0.10.5 deliberate difference 11).
     const swatch = host().querySelector('#loan-view-header app-status-swatch span');
@@ -533,7 +549,6 @@ describe('LoanViewComponent', () => {
 
     expect(schedule).not.toBeNull();
     expect((schedule.componentInstance as LoanScheduleComponent).schedule()).toEqual(SCHEDULE);
-    // The record opens on the schedule, so neither other section is instantiated at all.
     expect(fixture.debugElement.query(By.directive(LoanTransactionsComponent))).toBeNull();
     expect(fixture.debugElement.query(By.directive(LoanChargesComponent))).toBeNull();
 
@@ -561,7 +576,6 @@ describe('LoanViewComponent', () => {
     // The child is handed the loan's own lifecycle state beside its rows, because the section's two actions are offered only on an `Active` loan, exactly as the legacy record decides them (Rule 1 clause 3).
     expect((charges.componentInstance as LoanChargesComponent).loanStatus()).toEqual(LOAN.status);
     expect(fixture.debugElement.query(By.directive(LoanTransactionsComponent))).toBeNull();
-    // Switching tabs reads nothing: the one answer already carried every section.
     expect(readLoan).toHaveBeenCalledTimes(1);
   });
 
@@ -572,15 +586,20 @@ describe('LoanViewComponent', () => {
     await show(id, () => throwError(() => failure(404, NOT_FOUND_MESSAGE)));
 
     expect(component.notFound()).toBe(true);
-    expect(host().querySelector('#loan-view-not-found')?.textContent?.trim()).toBe(NOT_FOUND_TEXT);
-    // The record is replaced, not annotated: no head, no tabs, no action group, no alert beside it.
+
+    // The shared presentation `shared/record-not-found` renders, at the id the page objects address: one danger alert carrying the heading and then the sentence, in that order.
+    const notFound = host().querySelector('#loan-view-not-found');
+    expect(notFound?.querySelectorAll('.alert.alert-danger')).toHaveLength(1);
+    expect((notFound?.textContent ?? '').trim()).toBe(
+      `${TRANSLATIONS['label.heading.notavailable']} ${NOT_FOUND_TEXT}`,
+    );
+
     expect(host().querySelector('#loan-view-header')).toBeNull();
     expect(host().querySelector('#loan-actions')).toBeNull();
     expect(host().querySelector('ul.nav-tabs')).toBeNull();
     expect(host().querySelector('.btn-group')).toBeNull();
-    expect(host().querySelector('.alert')).toBeNull();
+    expect(host().querySelectorAll('.alert')).toHaveLength(1);
 
-    // A route with no id issues no request at all; a 404 is the answer to exactly one, and a record the server does not have leaves no charge list behind.
     expect(readLoan).toHaveBeenCalledTimes(id === null ? 0 : 1);
     expect(component.charges()).toBeNull();
   });
@@ -598,12 +617,10 @@ describe('LoanViewComponent', () => {
     // The charge section's pay and waive links keep the record's own code; the entry points above each answer to the code their `LOAN_ACTIONS` row carries.
     expect(component.actionPermission).toBe('UPDATE_LOAN');
 
-    // The gate fails closed: without the codes no entry point is visible…
     permissions.grant([]);
     fixture.detectChanges();
     expect(actionLinks().every((link) => link.style.display === 'none')).toBe(true);
 
-    // …and it is per action, so holding the repayment code alone reveals the repayment form only.
     permissions.grant(['REPAYMENT_LOAN']);
     fixture.detectChanges();
     expect(
@@ -644,12 +661,11 @@ describe('LoanViewComponent', () => {
 
     // The fork answers a `summary` object for an active loan only, so the block reads the schedule every state carries: the total is `totalRepaymentExpected`, the outstanding balance is `totalOutstanding`, and the three.
     expect(renderedSummary().map(([caption, value]) => [caption, value])).toEqual([
-      ['Total', '5,625'],
-      ['Outstanding', '5,133.33'],
-      ['Principal Outstanding', '4,583.33'],
-      ['Interest Outstanding', '550'],
-      // A zero the payload did report is a figure: it renders as zero, never as an empty cell.
-      ['Fees', '0'],
+      ['Total', '$5,625'],
+      ['Outstanding', '$5,133.33'],
+      ['Principal Outstanding', '$4,583.33'],
+      ['Interest Outstanding', '$550'],
+      ['Fees', '$0'],
     ]);
   });
 
@@ -661,7 +677,7 @@ describe('LoanViewComponent', () => {
     // The captions are the legacy bundles' own, in the record's order…
     expect(rows.map(([caption]) => caption)).toEqual(SUMMARY_CAPTIONS);
     // …the one figure the schedule reports renders as reported… …and the four it omits render nothing at all (Rule 1 clause 3).
-    expect(rows.map(([, value]) => value)).toEqual(['', '', '5,000', '', '']);
+    expect(rows.map(([, value]) => value)).toEqual(['', '', '$5,000', '', '']);
     expect(rows.map(([, value]) => value)).not.toContain('0');
   });
 
@@ -671,12 +687,10 @@ describe('LoanViewComponent', () => {
     expect(host().querySelector('#loan-view-error')?.textContent?.trim()).toBe(VALIDATION_MESSAGE);
     expect(host().querySelector('.alert.alert-danger')?.textContent?.trim()).toBe(VALIDATION_MESSAGE);
     expect(component.clientError()?.message).toBe(VALIDATION_MESSAGE);
-    // A refusal is not an absent record, and the record card that holds the message is still there.
     expect(component.notFound()).toBe(false);
     expect(host().querySelector('#loan-view')).not.toBeNull();
     expect(host().querySelector('#loan-view-not-found')).toBeNull();
     expect(host().querySelector('.panel-body')).not.toBeNull();
-    // A record that could not be read leaves no charge list behind, so the charge tab can neither list rows nor claim the loan carries none.
     expect(component.charges()).toBeNull();
   });
 
@@ -691,7 +705,6 @@ describe('LoanViewComponent', () => {
     expect(host().querySelector('#loan-view-error')).toBeNull();
     expect(host().querySelector('#loan-view-not-found')).toBeNull();
     expect(host().querySelector('.panel-body')).not.toBeNull();
-    // Nothing of a record that never arrived is painted: no figures, no links, no charges.
     expect(component.loan()).toBeNull();
     expect(component.charges()).toBeNull();
     expect(actionLinks()).toEqual([]);
@@ -702,13 +715,11 @@ describe('LoanViewComponent', () => {
 
     openChargesTab();
 
-    // The server's own values: the name verbatim, the due date through the shared display pattern — an empty cell for the charge that falls due on disbursement and carries no date — and the amounts as reported.
     expect(chargeRows()).toEqual([
-      ['Parity Fee', '24 December 2026', '25', '0', '25'],
-      ['Parity Fee W8', '', '40', '40', '0'],
+      ['Parity Fee', '24 December 2026', '$25', '$0', '$0', '$25'],
+      ['Parity Fee W8', '', '$40', '$40', '$0', '$0'],
     ]);
 
-    // One pay and one waive entry point per charge, on the route those screens are served under.
     expect(chargeActionLinks().map((link) => link.getAttribute('href'))).toEqual(
       LOAN_CHARGES.flatMap((charge) => [
         `/loanaccountcharge/${LOAN_ID}/pay/${charge.id}`,
@@ -722,12 +733,10 @@ describe('LoanViewComponent', () => {
       'Waive Charge',
     ]);
 
-    // The gate is the record's own permission code, and it fails closed…
     permissions.grant([]);
     fixture.detectChanges();
     expect(chargeActionLinks().every((link) => link.style.display === 'none')).toBe(true);
 
-    // …while the code the route declares opens the directive's own gate on all four: whether a row then offers its action is the section's per-row eligibility rule, which its own spec pins.
     permissions.grant(['UPDATE_LOAN']);
     fixture.detectChanges();
     expect(chargeActionLinks().every((link) => link.style.display === '')).toBe(true);
@@ -750,31 +759,26 @@ describe('LoanViewComponent', () => {
 
     await show(LOAN_ID, answer);
 
-    // The first route's record, with every action link addressed at that loan.
     expect(host().textContent).toContain(LOAN.accountNo);
     expect(actionLinks().map((link) => link.getAttribute('href'))).toEqual(ACTION_PATHS);
 
     await navigateTo(SECOND_LOAN_ID);
 
-    // One load per emission, addressed at the id the URL now names.
     expect(readLoan.mock.calls).toEqual([[LOAN_ID], [SECOND_LOAN_ID]]);
     expect(component.loanId()).toBe(SECOND_LOAN_ID);
 
-    // The second record is what the screen shows, and nothing of the first remains…
     expect(host().textContent).toContain(SECOND_LOAN.accountNo);
     expect(host().textContent).toContain(SECOND_LOAN.clientName);
     expect(host().textContent).not.toContain(LOAN.accountNo);
-    // …including the action links, which followed the record's own id.
     expect(actionLinks().map((link) => link.getAttribute('href'))).toEqual(
       ACTION_PATHS.map((path) => path.replace(LOAN_ID, SECOND_LOAN_ID)),
     );
 
-    // …and the charge list, which is the second payload's own: the first loan's rows are gone, not merely outweighed by the second's.
     expect(component.charges()).toEqual([SECOND_LOAN_CHARGE]);
 
     openChargesTab();
 
-    expect(chargeRows()).toEqual([['Second Fee', '24 January 2027', '60', '0', '60']]);
+    expect(chargeRows()).toEqual([['Second Fee', '24 January 2027', '$60', '$0', '$0', '$60']]);
     expect(host().textContent).not.toContain('Parity Fee');
     expect(component.loading()).toBe(false);
     expect(component.error()).toBeNull();
@@ -787,7 +791,6 @@ describe('LoanViewComponent', () => {
 
     expect(host().textContent).toContain(LOAN.accountNo);
 
-    // The second route's answer is held open, which is the state an in-place move paints first.
     routeParams.next(paramMapFor(SECOND_LOAN_ID));
     await fixture.whenStable();
     fixture.detectChanges();
@@ -796,7 +799,6 @@ describe('LoanViewComponent', () => {
     expect(component.loan()).toBeNull();
     expect(component.charges()).toBeNull();
     expect(component.loading()).toBe(true);
-    // Nothing of the previous loan survives the emission: no figures, no links, no message.
     expect(host().textContent).not.toContain(LOAN.accountNo);
     expect(actionLinks()).toEqual([]);
 
@@ -813,7 +815,6 @@ describe('LoanViewComponent', () => {
 
     await show(LOAN_ID, (id) => (String(id) === SECOND_LOAN_ID ? second.response : first.response));
 
-    // The first loan's read is still unanswered when the URL moves to the second loan, which is what a move between two record URLs produces when the earlier response is the slower one.
     routeParams.next(paramMapFor(SECOND_LOAN_ID));
     await fixture.whenStable();
 
@@ -823,7 +824,6 @@ describe('LoanViewComponent', () => {
     expect(component.loan()?.id).toBe(SECOND_LOAN.id);
     expect(component.loading()).toBe(false);
 
-    // The earlier answer lands last. It is dropped rather than painted, so loan 9's record and its action links can never appear under loan 12's URL.
     first.resolve(LOAN);
     await settle();
 
@@ -840,10 +840,9 @@ describe('LoanViewComponent', () => {
   });
 
   /**
-   * The codes the record's action links are gated on, held against the routes those links open: the
-   * link that offers a command and the guard that admits the screen behind it must ask one code, or a
-   * user is offered an action they are then bounced from and refused one they may take (AAP 0.1.1,
-   * AAP 0.4.2, AAP 0.14.1).
+   * The codes the record's action links are gated on, held against the routes those links open: the link that offers a command and the guard that admits the screen
+   * behind it must ask one code, or a user is offered an action they are then bounced from and refused one they may take (AAP 0.1.1, AAP 0.4.2, AAP 0.14.1).
+   *
    */
   describe('the codes its action links are gated on', () => {
     /** Whether a value is a non-null object that is not an array — the shape a `{ param, codes }` permission declaration has, and the shape its `codes` map has (Rule 1 clause 4). */

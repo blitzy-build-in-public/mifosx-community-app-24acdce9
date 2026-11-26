@@ -116,7 +116,6 @@ describe('StatusSwatchComponent', () => {
   it('carries colour only: no title, no data attribute and no other attribute at all', () => {
     const element = swatchOf('closed', 'dot');
 
-    // The DOM reports the statically written attribute before the class the binding sets, so the names are compared sorted: the contract is which attributes exist, not the order.
     expect(element.getAttributeNames().sort()).toEqual(['aria-hidden', 'class']);
     expect(element.getAttribute('title')).toBeNull();
   });

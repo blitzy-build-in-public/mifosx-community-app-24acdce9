@@ -200,7 +200,6 @@ describe('SelectFieldComponent', () => {
     expect(typeof control.value).toBe('number');
     expect(JSON.stringify({ officeId: control.value })).toBe('{"officeId":1}');
 
-    // 'Head Office' sits at index 0 and carries id 3, so this separates the id from the position.
     chooseOption(select, 'Head Office');
 
     expect(control.value).toBe(3);
@@ -219,7 +218,6 @@ describe('SelectFieldComponent', () => {
     expect(emitted).toEqual([2]);
     expect(emitted[0]).toBe(control.value);
 
-    // 'Head Office' carries id 3 and renders first, so a positional value would report 0 here.
     chooseOption(select, 'Head Office');
 
     expect(emitted).toEqual([2, 3]);
@@ -368,7 +366,6 @@ describe('SelectFieldComponent', () => {
     expect(renderedLabels).toHaveLength(visibleLabel ? 1 : 0);
     expect(select.getAttribute('aria-label')).toBe(accessibleName);
 
-    // A visible label is the name itself, so it still has to point at the control it names.
     if (visibleLabel) {
       expect(renderedLabels[0]?.getAttribute('for')).toBe(select.id);
     }

@@ -1,4 +1,3 @@
-import { DecimalPipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -14,6 +13,7 @@ import { Subject, catchError, map, of, switchMap } from 'rxjs';
 
 import { ApiError } from '../../../../core/http/api-error';
 import { EmptyStateComponent } from '../../../../shared/empty-state/empty-state.component';
+import { MoneyPipe } from '../../../../shared/money/money.pipe';
 import type { StatusKey } from '../../../../shared/status-key.util';
 import { StatusSwatchComponent } from '../../../../shared/status-swatch/status-swatch.component';
 import { toAccountStatusKey, type ClientAccountSummary } from '../../client.models';
@@ -36,7 +36,7 @@ export interface AccountRow {
 /** The `General` tab's read-only accounts table: one `ClientService.accounts` call, `GET /clients/{id}/accounts`, rendered in the endpoint's order with the status as a swatch and every style from the global sheet (AAP 0.7.4; Rule 1 clause 6). */
 @Component({
   selector: 'app-client-accounts',
-  imports: [DecimalPipe, TranslatePipe, StatusSwatchComponent, EmptyStateComponent],
+  imports: [MoneyPipe, TranslatePipe, StatusSwatchComponent, EmptyStateComponent],
   templateUrl: './client-accounts.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })

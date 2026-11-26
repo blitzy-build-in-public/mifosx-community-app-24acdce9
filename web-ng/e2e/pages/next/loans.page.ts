@@ -5,7 +5,6 @@ import { FINERACT_URL, NEXT_URL, TENANT_ID } from '../../seed/fixtures.js';
 
 /** One label/value row of a record as the page renders it: the record's `#loan-summary` block prints a bold key and its figure side by side, and the same pair is what the legacy sibling's summary reader reports for the. */
 export interface LabelValue {
-  /** The row's label text, trimmed. */
   readonly label: string;
   /** The row's rendered value, trimmed; `''` when the row renders no value. */
   readonly value: string;
@@ -15,21 +14,13 @@ export interface LabelValue {
 export interface RepaymentPreviewRow {
   /** Period number from the table's first column, `null` when the cell carries no number. */
   readonly period: number | null;
-  /** The period's start date, exactly as the screen formatted it. */
   readonly fromDate: string;
-  /** The period's due date, exactly as the screen formatted it. */
   readonly dueDate: string;
-  /** Principal due in this period, parsed from its cell. */
   readonly principalDue: number | null;
-  /** Interest due in this period, parsed from its cell. */
   readonly interestDue: number | null;
-  /** Fees due in this period, parsed from its cell. */
   readonly feesDue: number | null;
-  /** The period's total due, parsed from its cell. */
   readonly totalDue: number | null;
-  /** The balance left after this period, parsed from its cell. */
   readonly outstanding: number | null;
-  /** Every cell of the row, trimmed, in column order. */
   readonly cells: readonly string[];
 }
 
@@ -37,37 +28,26 @@ export interface RepaymentPreviewRow {
 export interface LoanSummaryView {
   /** One of `status-active`, `status-pending`, `status-closed`, `status-other`, or `''` if none is painted. */
   readonly statusClass: string;
-  /** Label/value rows in document order, exactly as rendered. */
   readonly fields: readonly LabelValue[];
 }
 
-/** One row of the loan record's repayment-schedule table, with each figure parsed from its cell. */
 export interface LoanScheduleRow {
   /** Period number from the table's first column, `null` when the cell carries no number. */
   readonly period: number | null;
-  /** The period's start date, exactly as the screen formatted it. */
   readonly fromDate: string;
-  /** The period's due date, exactly as the screen formatted it. */
   readonly dueDate: string;
-  /** The period's total due, parsed from its cell. */
   readonly totalDue: number | null;
-  /** The balance left after this period, parsed from its cell. */
   readonly outstanding: number | null;
-  /** Every cell of the row, trimmed, in column order. */
   readonly cells: readonly string[];
 }
 
 /** One row of the loan record's transaction list. After W6's repayment the list must carry the new transaction and the balance it left, which is the figure the workflow compares (AAP 0.10.1). */
 export interface LoanTransactionRow {
-  /** The transaction date, exactly as the screen formatted it. */
   readonly date: string;
   /** Fineract's own label for the transaction type, passed through untranslated. */
   readonly type: string;
-  /** The transaction amount, parsed from its cell. */
   readonly amount: number | null;
-  /** The loan balance after the transaction, parsed from its cell. */
   readonly outstandingBalance: number | null;
-  /** Every cell of the row, trimmed, in column order. */
   readonly cells: readonly string[];
 }
 
@@ -77,13 +57,9 @@ export interface LoanApplicationValues {
   readonly productId?: number | string;
   /** Principal applied for, passed through exactly as supplied — W7 relies on that for 50,000. */
   readonly principal?: number | string;
-  /** Loan term, in the unit the frequency select states. */
   readonly loanTermFrequency?: number | string;
-  /** Number of repayments in the schedule. */
   readonly numberOfRepayments?: number | string;
-  /** How often a repayment falls due. */
   readonly repaymentEvery?: number | string;
-  /** Nominal interest rate per period. */
   readonly interestRatePerPeriod?: number | string;
   /** Loan officer to attach, by the id of one of the template's `loanOfficerOptions`. */
   readonly loanOfficerId?: number | string;
@@ -99,15 +75,12 @@ export interface LoanApplicationValues {
 export interface LoanActionValues {
   /** `yyyy-mm-dd` approval date, typed into the approve form's date field. */
   readonly approvedOnDate?: string;
-  /** Approved amount, typed into the amount field the approve form renders. */
   readonly approvedPrincipal?: number | string;
   /** `yyyy-mm-dd` rejection date, typed into the reject form's date field. */
   readonly rejectedOnDate?: string;
   /** `yyyy-mm-dd` disbursement date, typed into the disburse form's date field. */
   readonly actualDisbursementDate?: string;
-  /** Amount disbursed, typed into the disburse form's amount field. */
   readonly transactionAmount?: number | string;
-  /** Optional note the command carries. */
   readonly note?: string;
 }
 
@@ -115,11 +88,8 @@ export interface LoanActionValues {
 export interface LoanRepaymentValues {
   /** `yyyy-mm-dd` transaction date, typed into the repayment form's date field. */
   readonly transactionDate?: string;
-  /** Amount repaid, passed through exactly as supplied when the caller states one. */
   readonly transactionAmount?: number | string;
-  /** Payment type, by the id of one of the options the transactions template returned. */
   readonly paymentTypeId?: number | string;
-  /** Optional note the repayment carries. */
   readonly note?: string;
 }
 
@@ -156,7 +126,6 @@ const ACTION_ROOT = 'app-loan-action';
 /** Root element of the repayment form, `LoanRepaymentComponent`. */
 const REPAYMENT_ROOT = 'app-loan-repayment';
 
-/** The screens this object drives, by root element, with the words an error message uses for each. */
 const SCREENS: Readonly<Record<string, string>> = {
   [APPLICATION_ROOT]: 'the loan application screen',
   [PREVIEW_ROOT]: 'the repayment-schedule preview',
@@ -181,45 +150,34 @@ const LOAN_ACTIONS: readonly string[] = [
 /** `yyyy-mm-dd`, the only form a native date control accepts and the form this object requires. */
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Ceiling for a screen's root element to paint after a navigation has been requested. */
 const SCREEN_TIMEOUT_MS = 30_000;
 
 /** Ceiling for a template-driven option list to arrive. The product, officer, fund and payment-type options all come from Fineract template endpoints the screen requests on entry, so a select is empty for a moment after. */
 const TEMPLATE_TIMEOUT_MS = 30_000;
 
-/** How long one attempt to read a template-driven option list waits before the next, when a selection has to be matched on the option's logical value rather than on its DOM value. */
 const OPTION_POLL_INTERVAL_MS = 100;
 
-/** How long to give the application form's own busy marker to appear after a product is selected. */
 const TEMPLATE_BUSY_GRACE_MS = 2_000;
 
 /** One `<option>` of a native select, as the page renders it. Internal to this module. */
 interface RenderedOption {
-  /** The option's position in the select, from zero. */
   readonly index: number;
   /** The value the application bound, with Angular's `${position}: ` prefix removed. */
   readonly value: string;
-  /** The option's visible text, trimmed — what a caller matches by label. */
   readonly label: string;
 }
 
-/** A table as the page serialised it: the header texts that caption each column, then the data rows. */
 interface TableGrid {
   /** One entry per `<th>` of the header row, lower-cased with runs of non-alphanumerics collapsed. */
   readonly columns: readonly string[];
-  /** Data rows, each an array of trimmed cell texts in column order. */
   readonly rows: readonly (readonly string[])[];
 }
 
-/** How one control of a screen is filled. Internal to this module. */
 interface FieldSpec {
-  /** The ids the template ships for the control, most specific first. */
   readonly ids: readonly string[];
   /** Pattern the control's `.control-label` carries, matched case-insensitively. */
   readonly label: string;
-  /** What the control holds, which decides how it is filled. */
   readonly kind: 'date' | 'select' | 'text';
-  /** What the field is, used in error messages. */
   readonly description: string;
 }
 
@@ -237,7 +195,6 @@ const APPLICATION_FIELDS = {
   submittedOnDate: { ids: ['submittedOnDate'], label: 'submitted', kind: 'date', description: 'submitted-on date field' },
 } as const satisfies Readonly<Record<keyof LoanApplicationValues, FieldSpec>>;
 
-/** The order the application's fields are filled in: the product first, then the terms. */
 const APPLICATION_FIELD_ORDER: readonly (keyof LoanApplicationValues)[] = [
   'productId',
   'principal',
@@ -261,7 +218,6 @@ const ACTION_FIELDS = {
   note: { ids: ['note'], label: 'note', kind: 'text', description: 'note field' },
 } as const satisfies Readonly<Record<keyof LoanActionValues, FieldSpec>>;
 
-/** The order the action form's controls are filled in: every field is independent, so any order holds. */
 const ACTION_FIELD_ORDER: readonly (keyof LoanActionValues)[] = [
   'approvedOnDate',
   'approvedPrincipal',
@@ -279,7 +235,6 @@ const REPAYMENT_FIELDS = {
   note: { ids: ['note'], label: 'note', kind: 'text', description: 'note field' },
 } as const satisfies Readonly<Record<keyof LoanRepaymentValues, FieldSpec>>;
 
-/** The order the repayment form's controls are filled in: every field is independent. */
 const REPAYMENT_FIELD_ORDER: readonly (keyof LoanRepaymentValues)[] = [
   'transactionDate',
   'transactionAmount',
@@ -287,7 +242,6 @@ const REPAYMENT_FIELD_ORDER: readonly (keyof LoanRepaymentValues)[] = [
   'note',
 ];
 
-/** Column aliases of the application preview and of the record's repayment schedule, most specific first. */
 const SCHEDULE_COLUMNS = {
   period: ['no', 'period'],
   fromDate: ['from date', 'fromdate', 'period from'],
@@ -299,7 +253,6 @@ const SCHEDULE_COLUMNS = {
   outstanding: ['outstanding', 'total outstanding', 'totaloutstanding'],
 } as const;
 
-/** Column aliases of the record's transaction list, most specific first — both caption spellings. */
 const TRANSACTION_COLUMNS = {
   date: ['date', 'transaction date', 'transactiondate'],
   type: ['type', 'transaction type', 'transactiontype'],
@@ -307,12 +260,10 @@ const TRANSACTION_COLUMNS = {
   outstandingBalance: ['outstanding', 'loan balance', 'loanbalance', 'outstanding balance'],
 } as const;
 
-/** Renders an argument a caller passed, for an error message. A string is quoted so a value that is blank, or that carries a separator, is visible in the message. */
 function describeArgument(value: number | string): string {
   return typeof value === 'number' ? String(value) : JSON.stringify(value);
 }
 
-/** Renders the options a select offers — each one's label with the id it carries — so an error message about a label or an id that is missing names what the screen does offer. */
 function describeOptions(options: readonly RenderedOption[]): string {
   if (options.length === 0) {
     return 'no options at all';
@@ -322,7 +273,6 @@ function describeOptions(options: readonly RenderedOption[]): string {
     .join(', ');
 }
 
-/** Renders a route argument as the single segment a hash route may carry, and rejects what could not be one. */
 function requireRouteId(value: number | string, role: string): string {
   const text = (typeof value === 'number' ? (Number.isFinite(value) ? String(value) : '') : value).trim();
   if (text.length === 0) {
@@ -334,7 +284,6 @@ function requireRouteId(value: number | string, role: string): string {
   return text;
 }
 
-/** Narrows an action to the six segments this object serves. Internal to this module. */
 function requireLoanAction(action: LoanAction): LoanAction {
   if (!LOAN_ACTIONS.includes(action)) {
     throw new Error(
@@ -365,13 +314,11 @@ function toAmount(text: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-/** Parses a rendered period number, which is a whole count rather than a figure. */
 function toWholeNumber(text: string): number | null {
   const parsed = toAmount(text);
   return parsed === null ? null : Math.trunc(parsed);
 }
 
-/** Locates a column by the captions above it. Internal to this module. @param columns The grid's header texts, as {@link readGridInPage} normalised them. @param aliases Candidate captions for the column, most specific. */
 function columnIndex(columns: readonly string[], aliases: readonly string[]): number {
   for (const alias of aliases) {
     const index = columns.indexOf(alias);
@@ -382,7 +329,6 @@ function columnIndex(columns: readonly string[], aliases: readonly string[]): nu
   return -1;
 }
 
-/** Reads one cell by column position, answering an empty string for a column the grid does not carry. */
 function cellAt(cells: readonly string[], index: number): string {
   return index >= 0 ? (cells[index] ?? '') : '';
 }
@@ -433,14 +379,12 @@ function readSummaryInPage(root: HTMLElement): LoanSummaryView {
   return { statusClass, fields };
 }
 
-/** Runs inside the page: the first table of a section as its header texts and its data rows. */
 function readGridInPage(root: HTMLElement): TableGrid | null {
   const table = root.querySelector('table');
   if (table === null) {
     return null;
   }
 
-  // The normalisation is written out at each use rather than held in a local function: the whole function is serialised into the page, where a bundler-inserted name helper would be undefined.
   const columns: string[] = [];
   for (const header of Array.from(table.querySelectorAll('thead th'))) {
     columns.push(
@@ -467,7 +411,6 @@ function readGridInPage(root: HTMLElement): TableGrid | null {
 
 /** Drives the new Angular application's individual-loan screens and reads what they render: the `next` side of workflows W4, W5, W6 and W7 (AAP 0.10.1) (Rule 1 clause 9, AAP 0.10.2, Rule 1 clause 3). */
 export class LoansPage {
-  /** @param page The Playwright page the spec has already authenticated on. */
   constructor(private readonly page: Page) {}
 
   /** Chooses the loan product by its visible label, case-insensitively (AAP 0.10.5, AAP 0.10.1). */
@@ -518,7 +461,6 @@ export class LoansPage {
     await this.fillFields(root, APPLICATION_FIELDS, terms, values);
   }
 
-  /** Asks the application screen to calculate the repayment schedule, and waits for it to paint. */
   async previewSchedule(): Promise<void> {
     const root = await this.awaitRoot(APPLICATION_ROOT);
     const labelled = root.locator('.btn.btn-primary').filter({ hasText: /preview/i }).first();
@@ -609,7 +551,6 @@ export class LoansPage {
     return root.evaluate(readSummaryInPage);
   }
 
-  /** Reads the record's repayment-schedule section, one row per period. */
   async readScheduleRows(): Promise<readonly LoanScheduleRow[]> {
     const grid = await this.readGridOf(SCHEDULE_ROOT, /repayment/i);
     if (grid === null) {
@@ -743,7 +684,6 @@ export class LoansPage {
     return view;
   }
 
-  /** Waits for a screen's root element to paint, and reports the hash it settled on when it does not. @param rootSelector Root element of the screen. @returns The root's locator, ready for a caller to read from. @throws When. */
   private async awaitRoot(rootSelector: string): Promise<Locator> {
     const root = this.page.locator(rootSelector).first();
     const description = SCREENS[rootSelector] ?? rootSelector;
@@ -761,7 +701,6 @@ export class LoansPage {
     return root;
   }
 
-  /** Resolves a control through an ordered chain of selectors and waits for it to be usable. */
   private async resolveField(
     root: Locator,
     selectors: readonly string[],
@@ -777,7 +716,6 @@ export class LoansPage {
     throw new Error(`the ${description} is not on the screen; tried ${selectors.join(' | ')}`);
   }
 
-  /** Clicks a screen's primary submit exactly once. Three candidates, in order: the Bootstrap primary button that submits a form, then any primary control — the control-free confirmation submits through a plain button — then. */
   private async clickPrimary(rootSelector: string): Promise<void> {
     const root = await this.awaitRoot(rootSelector);
     const chain = [
@@ -797,7 +735,6 @@ export class LoansPage {
     );
   }
 
-  /** Fills the values a caller supplied, in the order the form needs them filled. @param root The screen's root locator. @param specs The control each member of the values shape resolves to. @param order The order to fill. */
   private async fillFields<K extends string>(
     root: Locator,
     specs: Readonly<Record<K, FieldSpec>>,
@@ -813,7 +750,6 @@ export class LoansPage {
     }
   }
 
-  /** Fills one control with the value a caller supplied, exactly as supplied. */
   private async fillField(root: Locator, spec: FieldSpec, value: number | string): Promise<void> {
     const field = await this.resolveField(root, this.fieldSelectors(spec), spec.description);
     if (spec.kind === 'select') {
@@ -850,7 +786,6 @@ export class LoansPage {
     }
   }
 
-  /** The selector chain for one control: each id the template may ship, then a caption-based fallback that picks the control by the element type the member needs. @param spec The control to resolve. */
   private fieldSelectors(spec: FieldSpec): readonly string[] {
     const chain: string[] = spec.ids.map((id) => `#${id}`);
     const captioned = `.form-group:has(label:text-matches("${spec.label}", "i"))`;
@@ -889,7 +824,6 @@ export class LoansPage {
     await field.selectOption({ index: match.index });
   }
 
-  /** Reads one section's first table as a grid, revealing the section first when another tab of the record is showing. @param rootSelector Root element of the section. @param tab Pattern of the tab that reveals the section. */
   private async readGridOf(rootSelector: string, tab: RegExp | null): Promise<TableGrid | null> {
     if (tab !== null) {
       await this.revealSection(rootSelector, tab);
@@ -901,7 +835,6 @@ export class LoansPage {
     return root.evaluate(readGridInPage);
   }
 
-  /** Brings a tabbed section of the loan record on screen by choosing its tab. */
   private async revealSection(rootSelector: string, tab: RegExp): Promise<void> {
     if ((await this.page.locator(rootSelector).count()) > 0) {
       return;

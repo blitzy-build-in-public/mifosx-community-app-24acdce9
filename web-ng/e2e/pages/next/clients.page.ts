@@ -5,21 +5,17 @@ import { FINERACT_URL, NEXT_URL, TENANT_ID } from '../../seed/fixtures.js';
 
 /** One row of the client list, as the report compares it (AAP 0.10.1 W3; AAP 0.2.1 step 2) (AAP 0.7.2, AAP 0.10.5). */
 export interface ClientRow {
-  /** Name column — the client's display name. */
   readonly name: string;
   /** Client number column, e.g. `000000002`; a string, never a number. */
   readonly clientNumber: string;
-  /** Office column — the client's office name. */
   readonly office: string;
   /** Staff column — the loan officer's name; `''` for a client with no officer assigned. */
   readonly staff: string;
   /** The row's status colour: `status-active`, `status-pending`, `status-closed`, `status-other`, or `''`. */
   readonly statusClass: string;
-  /** Every cell of the row, trimmed, in column order — the external id included, which has no field above. */
   readonly cells: readonly string[];
 }
 
-/** One rendered status indicator: its colour and, always, the empty text the design gives it. */
 export interface StatusSwatchView {
   /** The colour class the indicator carries, or `''` when the element carries none of the four. */
   readonly statusClass: string;
@@ -27,7 +23,6 @@ export interface StatusSwatchView {
   readonly text: string;
 }
 
-/** One message the application's single notification host is showing. */
 export interface NotificationView {
   /** The notice's kind, from the accent class the component binds; `unknown` for an unclassed notice. */
   readonly kind: 'info' | 'success' | 'error' | 'unknown';
@@ -37,7 +32,6 @@ export interface NotificationView {
 
 /** One result of the global search (`#/search/:query`, AAP 0.7.3 "Shell: global search"). */
 export interface SearchResultRow {
-  /** The result's label — a client's display name, or a loan product's name; the block's link text. */
   readonly name: string;
   /** The account number the block prints after its `#`, or `''` when the block prints none. */
   readonly accountNo: string;
@@ -55,9 +49,7 @@ export interface SearchResultRow {
 export interface SelectOptionView {
   /** The option's DOM value; for an `[ngValue]` option Angular prefixes it with the option's key. */
   readonly value: string;
-  /** The option's visible label, trimmed. */
   readonly label: string;
-  /** Whether the option is the one currently selected. */
   readonly selected: boolean;
 }
 
@@ -65,7 +57,6 @@ export interface SelectOptionView {
 export interface ClientFormValues {
   /** Office to select by its id, e.g. `1`; the create form's own first field. */
   readonly officeId?: number | string;
-  /** Loan officer to select by its id; optional on the form itself. */
   readonly staffId?: number | string;
   /** First name (`#firstname`) — required by the form on the person branch. */
   readonly firstname?: string;
@@ -79,56 +70,42 @@ export interface ClientFormValues {
   readonly submittedOnDate?: string;
   /** `yyyy-mm-dd`; rendered only while the client is to be created active, so `active` must be set too. */
   readonly activationDate?: string;
-  /** Whether the creation checkbox is ticked; it decides whether an activation date exists at all. */
   readonly active?: boolean;
 }
 
 /** The five client lifecycle actions the migration keeps (AAP 0.7.2 `ClientActionRequest`; AAP 0.9.1 scope group 2). */
 export type ClientAction = 'activate' | 'close' | 'reject' | 'withdraw' | 'reactivate';
 
-/** The list screen's root, and the element every list locator below is scoped to. */
 const LIST_ROOT = 'app-client-list';
 
-/** The create form's root. */
 const CREATE_ROOT = 'app-client-create';
 
-/** The edit form's root. */
 const EDIT_ROOT = 'app-client-edit';
 
-/** The lifecycle action form's root. */
 const ACTIONS_ROOT = 'app-client-actions';
 
-/** The client record's root — only awaited, never read: the record has its own page object. */
 const VIEW_ROOT = 'app-client-view';
 
-/** The global search results' root. */
 const SEARCH_ROOT = 'app-search-results';
 
 /** One result of the global search: the block legacy renders per result — `div.blockquoteresult` in `app/views/search/glresults.html:10-11` — whose class the product stylesheet reproduces because the partial that declares. */
 const SEARCH_RESULT_BLOCK = '.blockquoteresult';
 
-/** The navbar's global search control. */
 const GLOBAL_SEARCH_ROOT = 'app-global-search';
 
-/** The application's single notification host, rendered by the root component on every route. */
 const NOTIFICATION_HOST = 'app-notification';
 
-/** The shared status indicator, on the list and on the record header. */
 const STATUS_SWATCH = 'app-status-swatch';
 
-/** The shared explicit empty state. */
 const EMPTY_STATE = 'app-empty-state';
 
 // The four colour classes the status indicator paints — `status-active`, `status-pending`, `status-closed` and `status-other` — are the vocabulary `shared/status-swatch` binds (AAP 0.2.3 row `StatusSwatch`).
 
-/** Ceiling for a screen, a row or a settle to appear. */
 const SCREEN_TIMEOUT_MS = 30_000;
 
-/** Ceiling for a list to repaint after the find submitted: the screen paints nothing while its read is in flight, so this is how long the previous rows are given to leave the document. */
 const REPAINT_TIMEOUT_MS = 10_000;
 
 
-/** What one table row reads as, before it is projected onto a public row type. */
 interface RowReading {
   /** Every `td` of the row, trimmed, in document order. */
   readonly cells: readonly string[];
@@ -138,23 +115,17 @@ interface RowReading {
   readonly link: string | null;
 }
 
-/** What one status indicator reads as, before projection. */
 interface SwatchReading {
   /** The colour class the indicator carries, or `''`. */
   readonly statusClass: string;
-  /** The indicator's own text, which the design always leaves empty. */
   readonly text: string;
 }
 
-/** What one notification reads as, before its accent class is mapped to a kind. */
 interface NotificationReading {
-  /** The notice element's whole class attribute, so the mapping stays in Node. */
   readonly className: string;
-  /** The notice's message, with its close control removed. */
   readonly text: string;
 }
 
-/** The arguments a row read carries into the document. */
 interface RowQuery {
   /** Selector of the screen root the table lives in, e.g. `app-client-list`. */
   readonly rootSelector: string;
@@ -162,7 +133,6 @@ interface RowQuery {
   readonly rowSelector: string;
 }
 
-/** The arguments a search-results read carries into the document. */
 interface SearchBlockQuery {
   /** Selector of the results screen's root, e.g. `app-search-results`. */
   readonly rootSelector: string;
@@ -170,9 +140,7 @@ interface SearchBlockQuery {
   readonly blockSelector: string;
 }
 
-/** One search result as the document renders it, before projection. */
 interface SearchBlockReading {
-  /** The block's link text: the name the result carries. */
   readonly primaryText: string;
   /** The line beneath it, e.g. `Entity:Client | Office:Head Office`; `''` when absent. */
   readonly secondaryText: string;
@@ -182,7 +150,6 @@ interface SearchBlockReading {
   readonly link: string | null;
 }
 
-/** Runs inside the page: reads every row of a table as its cells, its status colour and its link. */
 function readRowsInPage(query: RowQuery): RowReading[] {
   const statusTokens: readonly string[] = [
     'status-active',
@@ -237,7 +204,6 @@ function readRowsInPage(query: RowQuery): RowReading[] {
   return readings;
 }
 
-/** Runs inside the page: reads every result block of the search results as the name line, the line beneath it and the account segment the name line carries. */
 function readSearchBlocksInPage(query: SearchBlockQuery): SearchBlockReading[] {
   const readings: SearchBlockReading[] = [];
   const root = document.querySelector(query.rootSelector);
@@ -345,7 +311,6 @@ function readSwatchesInPage(hostSelector: string): SwatchReading[] {
   return readings;
 }
 
-/** Runs inside the page: reads every notice the notification host is showing. */
 function readNotificationsInPage(hostSelector: string): NotificationReading[] {
   const readings: NotificationReading[] = [];
   const host = document.querySelector(hostSelector);
@@ -373,17 +338,14 @@ function readNotificationsInPage(hostSelector: string): NotificationReading[] {
   return readings;
 }
 
-/** Collapses the whitespace a template leaves between its elements, then trims. */
 function normalizeText(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
 
-/** Escapes every character that would otherwise be read as part of a pattern. */
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** Builds the case-insensitive pattern a caller's label is matched with. */
 function labelPattern(label: string): RegExp {
   const tokens: readonly string[] = label
     .trim()
@@ -397,12 +359,10 @@ function labelPattern(label: string): RegExp {
   return new RegExp(tokens.map((token: string): string => escapeRegExp(token)).join('\\s*'), 'i');
 }
 
-/** Renders an argument a caller passed, so an error message shows a blank or odd value as it arrived. */
 function describeArgument(value: number | string): string {
   return typeof value === 'number' ? String(value) : JSON.stringify(value);
 }
 
-/** Renders a client id as the single hash-route segment it has to be. */
 function requireRouteId(value: number | string, role: string): string {
   const text: string = (
     typeof value === 'number' ? (Number.isFinite(value) ? String(value) : '') : value
@@ -423,7 +383,6 @@ function cellAt(cells: readonly string[], index: number): string {
   return index >= 0 && index < cells.length ? cells[index] : '';
 }
 
-/** Maps a notice's class attribute onto the kind the notification queue holds. */
 function notificationKind(className: string): NotificationView['kind'] {
   const has = (accent: string): boolean =>
     new RegExp(`(^|\\s)(notification|alert)-${accent}(\\s|$)`).test(className);
@@ -441,7 +400,6 @@ function notificationKind(className: string): NotificationView['kind'] {
 }
 
 
-/** Drives the new application's client screens and reads what they render. */
 export class ClientsPage {
   /** @param page The Playwright page the `next` project drives. The object holds no other collaborator: it composes the entry URL from `seed/fixtures.ts` and reads the document through this page alone. */
   constructor(private readonly page: Page) {}
@@ -473,7 +431,6 @@ export class ClientsPage {
     await this.awaitScreen(CREATE_ROOT, 'the create-client form');
   }
 
-  /** Submits the navbar's global search for a query. The field is filled and the attached scope selector is set when a caller supplies one; the search is then submitted with the control's own submit button when the build. */
   async searchGlobal(query: string, scope?: 'all' | 'clients' | 'loans'): Promise<void> {
     const field = await this.globalSearchField();
     await field.fill(query);
@@ -500,7 +457,6 @@ export class ClientsPage {
     await this.awaitScreen(SEARCH_ROOT, 'the search results');
   }
 
-  /** Opens the global search results for a query by its own route. */
   async openSearchResults(query: string): Promise<void> {
     await this.navigate(`/search/${encodeURIComponent(query)}`);
     await this.awaitScreen(SEARCH_ROOT, 'the search results');
@@ -536,7 +492,6 @@ export class ClientsPage {
     await filter.fill(text);
   }
 
-  /** Fills the toolbar's find box, whose submission is the screen's server search. */
   async findList(text: string): Promise<void> {
     const find = await this.textField('find', 'find');
     await find.fill(text);
@@ -568,7 +523,6 @@ export class ClientsPage {
     return headers.map((header: string): string => normalizeText(header));
   }
 
-  /** Reads the list's rows, one per client the table renders. The six columns are name, client number, external id, status, office and staff, in that order. */
   async readRows(): Promise<readonly ClientRow[]> {
     await this.awaitListSettled();
 
@@ -607,7 +561,6 @@ export class ClientsPage {
     );
   }
 
-  /** Opens one client's record by clicking the row whose name column carries it. */
   async openClient(name: string): Promise<void> {
     if (name.trim().length === 0) {
       throw new Error('a client name is required: an empty name would open the first row of the list');
@@ -652,7 +605,6 @@ export class ClientsPage {
     return null;
   }
 
-  /** Reads the messages the application's single notification host is showing. */
   async readNotifications(): Promise<readonly NotificationView[]> {
     const readings: readonly NotificationReading[] = await this.page.evaluate(
       readNotificationsInPage,
@@ -772,7 +724,6 @@ export class ClientsPage {
     await this.awaitScreen(ACTIONS_ROOT, `the client ${action} form`);
   }
 
-  /** Submits the open lifecycle action with its own primary control. */
   async submitAction(): Promise<void> {
     const root = this.page.locator(ACTIONS_ROOT).first();
     await this.submitPrimary(root);
@@ -816,7 +767,6 @@ export class ClientsPage {
     }
   }
 
-  /** Finds the navbar's global search field and waits for it to be usable. */
   private async globalSearchField(): Promise<Locator> {
     const field = this.page
       .locator(
@@ -830,7 +780,6 @@ export class ClientsPage {
     return field;
   }
 
-  /** Resolves one of the list toolbar's two text fields. The caption a caller passes is matched against the control's placeholder and its accessible name first, which is what keeps the answer right when a build reorders the. */
   private async textField(caption: string, inputId: string): Promise<Locator> {
     const root = this.page.locator(LIST_ROOT).first();
 
@@ -887,7 +836,6 @@ export class ClientsPage {
     await this.awaitSettled(settled, 'the search results');
   }
 
-  /** Waits for a settled element, reporting the page's hash instead of a bare timeout when it never arrives. @param target The element to wait for. @param description What the element belongs to, used in the error message.. */
   private async awaitSettled(target: Locator, description: string): Promise<void> {
     try {
       await target.waitFor({ state: 'attached', timeout: SCREEN_TIMEOUT_MS });
@@ -902,20 +850,17 @@ export class ClientsPage {
     }
   }
 
-  /** Waits for a submitted find to replace the rows the list was holding. */
   private async awaitListReplaced(): Promise<void> {
     const rows = this.page.locator(`${LIST_ROOT} table tbody tr`);
 
     try {
       await rows.first().waitFor({ state: 'detached', timeout: REPAINT_TIMEOUT_MS });
     } catch {
-      // The rows never left: the answer arrived before the busy state was painted, and the settle below reads the answer that is already on screen.
     }
 
     await this.awaitListSettled();
   }
 
-  /** Settles the list when it is the open screen, and does nothing when another screen is. */
   private async awaitListReadyIfOpen(): Promise<void> {
     const root = this.page.locator(LIST_ROOT).first();
 
@@ -924,7 +869,6 @@ export class ClientsPage {
     }
   }
 
-  /** The client form that is currently open. @returns The visible root of the create, edit or lifecycle action form. @throws When none of the three is on screen — a caller that asks for a form before opening one, or one. */
   private async openForm(): Promise<Locator> {
     for (const selector of [CREATE_ROOT, EDIT_ROOT, ACTIONS_ROOT]) {
       const root = this.page.locator(selector).first();
@@ -1017,7 +961,6 @@ export class ClientsPage {
     await select.selectOption({ index: position });
   }
 
-  /** Clicks a screen's own primary submit, once. The control is awaited before it is clicked, because a lifecycle action form paints no field and no button until its datatable gate has answered. */
   private async submitPrimary(root: Locator): Promise<void> {
     const fallback = root.locator('form button[type="submit"], form .btn.btn-primary').first();
 
@@ -1034,13 +977,10 @@ export class ClientsPage {
   }
 }
 
-/** One option of a dropdown as it is read out of the document. */
 interface OptionReading {
   /** The option's DOM value, Angular's own prefix included when it is bound with `[ngValue]`. */
   readonly value: string;
-  /** The option's visible label, trimmed. */
   readonly label: string;
-  /** Whether the option is the one currently selected. */
   readonly selected: boolean;
 }
 

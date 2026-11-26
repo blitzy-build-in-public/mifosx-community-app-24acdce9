@@ -59,7 +59,6 @@ describe('AppComponent', () => {
       ],
     }).compileComponents();
 
-    // Seeded before the first render, so the close control's accessible name resolves through a bundle exactly as it does in the application once a bundle has loaded.
     const translate = TestBed.inject(TranslateService);
     translate.setTranslation(BASE_LANG, CLOSE_LABEL_BUNDLE, true);
     await firstValueFrom(translate.use(BASE_LANG));
@@ -153,7 +152,7 @@ describe('AppComponent', () => {
     expect(host.querySelector('app-notification router-outlet')).toBeNull();
   });
 
-  it('renders a route and a notice without writing anything to the console', async () => {
+  it('renders the route it navigated to, drops the notice raised before the navigation, and writes nothing to the console', async () => {
     const spies = [
       vi.spyOn(console, 'log'),
       vi.spyOn(console, 'warn'),
@@ -161,12 +160,28 @@ describe('AppComponent', () => {
     ];
 
     notifications.show('error', ERROR_NOTICE);
+    fixture.detectChanges();
+    expect(host.querySelector('.notification-error')).not.toBeNull();
+
     await navigateTo(ROUTED_PATH);
 
     expect(host.querySelector('.routed-marker')).not.toBeNull();
-    expect(host.querySelector('.notification-error')).not.toBeNull();
+    // The queue is a sibling of the outlet rather than a child of the routed screen, so a notice raised on the screen that was just left must not be painted over the next one (QA F29).
+    expect(notifications.messages()).toHaveLength(0);
+    expect(host.querySelector('.notification-error')).toBeNull();
     expect(spies.map((spy) => spy.mock.calls.length)).toEqual([0, 0, 0]);
 
     vi.restoreAllMocks();
+  });
+
+  it('keeps a notice raised after a navigation, because only the navigation event drops the queue', async () => {
+    await navigateTo(ROUTED_PATH);
+
+    notifications.show('error', ERROR_NOTICE);
+    fixture.detectChanges();
+
+    expect(host.querySelector('.routed-marker')).not.toBeNull();
+    expect(notifications.messages()).toHaveLength(1);
+    expect(host.querySelector('.notification-error')).not.toBeNull();
   });
 });

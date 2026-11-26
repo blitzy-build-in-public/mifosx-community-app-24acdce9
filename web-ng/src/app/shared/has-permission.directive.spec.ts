@@ -92,7 +92,6 @@ describe('HasPermissionDirective', () => {
   });
 
   it('hides the gated element without removing it while no permission is held', () => {
-    // Hidden by the constructor, before the code is bound or any verdict exists: a gated control is never painted in the window where its permission is still unknown.
     const gated = buttonWithId(fixture, 'gated');
     expect(gated.style.display).toBe('none');
 
@@ -182,7 +181,6 @@ describe('HasPermissionDirective', () => {
 
     expect(gated.style.display).toBe('');
 
-    // A second grant holding something else entirely: the element closes again, so the verdict follows the code this host bound rather than the arrival of any permission list, and a directive that revealed on any change would.
     stub.grant(['UPDATE_CLIENT']);
     fixture.detectChanges();
 
@@ -190,7 +188,6 @@ describe('HasPermissionDirective', () => {
   });
 
   it('hides both elements while no session is present and reveals only the negated one once one is', () => {
-    // No session has ever been granted, and the service's answer here is the fail-closed one: every question is false, a negated code included, so neither element may be revealed.
     fixture.detectChanges();
 
     const gated = buttonWithId(fixture, 'gated');
@@ -200,14 +197,12 @@ describe('HasPermissionDirective', () => {
     expect(negated.style.display).toBe('none');
     expect(negated.isConnected).toBe(true);
 
-    // A session with an empty list is a different state: the signed-in user genuinely lacks READ_CLIENT, so the negated gate opens while the plain one stays shut.
     stub.grant([]);
     fixture.detectChanges();
 
     expect(negated.style.display).toBe('');
     expect(gated.style.display).toBe('none');
 
-    // A logout or a 401 withdraws the session again, and the gate closes on both shapes: the signed-out answer is not merely the one a stub starts in.
     stub.clear();
     fixture.detectChanges();
 

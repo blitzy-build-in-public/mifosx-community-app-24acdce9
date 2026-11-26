@@ -4,19 +4,19 @@ import { STATUS_KEYS, normaliseStatusCode, toStatusKey, type StatusKey } from '.
 
 /** Behaviour of the one status vocabulary the whole application shares, and of the single mapping from a Fineract status code onto it (AAP 0.2.3 `StatusSwatch` row; AAP 0.7.2 rows `Client`, `ClientAccountSummary` (AAP 0.14.1, Rule 1 clause 8). */
 
-/** Every status code of the three families, paired with the indicator key it must paint: the complete `ClientStatus.java` enumeration, the complete `LoanStatus.java` enumeration and the complete `SavingsAccountStatusType.java` enumeration. Every terminal state is listed separately although they share one colour, so a table that dropped one of them fails here instead of silently painting that record neutral. */
+/** Every status code of the three families, paired with the indicator key it must paint: the complete `ClientStatus.java` enumeration, the complete `LoanStatus.java` enumeration and the complete `SavingsAccountStatusType.java` enumeration. Every terminal state is listed separately, and the closed family is kept apart from the rejected and the withdrawn states, so a table that dropped one of them fails here instead of silently painting that record with the other terminal colour. */
 const STATUS_CASES: readonly (readonly [string, StatusKey])[] = [['clientStatusType.active', 'active'],
-  ['clientStatusType.pending', 'pending'], ['clientStatusType.closed', 'closed'], ['clientStatusType.rejected', 'closed'],
-  ['clientStatusType.withdraw', 'closed'], ['loanStatusType.submitted.and.pending.approval', 'pending'],
-  ['loanStatusType.approved', 'pending'], ['loanStatusType.active', 'active'], ['loanStatusType.withdrawn.by.client', 'closed'],
-  ['loanStatusType.rejected', 'closed'], ['loanStatusType.closed.obligations.met', 'closed'],
+  ['clientStatusType.pending', 'pending'], ['clientStatusType.closed', 'closed'], ['clientStatusType.rejected', 'other'],
+  ['clientStatusType.withdraw', 'other'], ['loanStatusType.submitted.and.pending.approval', 'pending'],
+  ['loanStatusType.approved', 'pending'], ['loanStatusType.active', 'active'], ['loanStatusType.withdrawn.by.client', 'other'],
+  ['loanStatusType.rejected', 'other'], ['loanStatusType.closed.obligations.met', 'closed'],
   ['loanStatusType.closed.written.off', 'closed'], ['loanStatusType.closed.reschedule.outstanding.amount', 'closed'],
   ['savingsAccountStatusType.submitted.and.pending.approval', 'pending'], ['savingsAccountStatusType.approved', 'pending'],
-  ['savingsAccountStatusType.active', 'active'], ['savingsAccountStatusType.withdrawn.by.applicant', 'closed'],
-  ['savingsAccountStatusType.rejected', 'closed'], ['savingsAccountStatusType.closed', 'closed'],
+  ['savingsAccountStatusType.active', 'active'], ['savingsAccountStatusType.withdrawn.by.applicant', 'other'],
+  ['savingsAccountStatusType.rejected', 'other'], ['savingsAccountStatusType.closed', 'closed'],
   ['savingsAccountStatusType.pre.mature.closure', 'closed'], ['savingsAccountStatusType.matured', 'closed'], ];
 
-/** The codes the mapping must leave neutral, labelled for the test's own message: the transitions this four-key vocabulary paints no colour of its own for, an invalid record, an overpaid loan — which only the loan record colours, through its own table — an empty code, and a code no enum declares. */
+/** The codes the mapping must leave neutral, labelled for the test's own message: the transitions this four-key vocabulary paints no colour of its own for, an invalid record, an overpaid loan — which only the loan record colours, through its own table — an empty code, and a code no enum declares. A rejected or withdrawn record is deliberately not here: it reaches `other` on purpose, which the table above asserts. */
 const NEUTRAL_CASES: readonly (readonly [string, string | undefined])[] = [['an invalid client record', 'clientStatusType.invalid'],
   ['a client transfer in progress', 'clientStatusType.transfer.in.progress'],
   ['a client transfer on hold', 'clientStatusType.transfer.on.hold'],
@@ -38,7 +38,6 @@ describe('toStatusKey', () => {
   it.each(STATUS_CASES)('maps %s to the indicator key %s', (code: string, key: StatusKey) => {
     expect(toStatusKey(code)).toBe(key);
 
-    // Whatever a family sends, the answer is a key the indicator accepts.
     expect(STATUS_KEYS.has(toStatusKey(code))).toBe(true);
   });
 
@@ -51,6 +50,24 @@ describe('toStatusKey', () => {
   it.each(SPELLING_CASES)('reads %s as the key %s whatever its prefix, case or separators', (code: string, key: StatusKey) => {
       expect(toStatusKey(code)).toBe(key);
     }, );
+});
+
+/**
+ * The distinction the vocabulary exists to make on the clients list: the state its "Show Closed" checkbox hides is a different key from the states that stay visible beside it, and both are legal keys of the one indicator (AAP 0.2.3 `StatusSwatch` row; AAP 0.7.4 "Show Closed").
+ */
+describe('the closed and rejected states', () => {
+  it('paint different keys, so the state "Show Closed" hides is distinguishable from the two it keeps', () => {
+    const closed = toStatusKey('clientStatusType.closed');
+    const rejected = toStatusKey('clientStatusType.rejected');
+
+    expect(closed).toBe('closed');
+    expect(rejected).toBe('other');
+
+    expect(closed).not.toBe(rejected);
+
+    expect(STATUS_KEYS.has(closed)).toBe(true);
+    expect(STATUS_KEYS.has(rejected)).toBe(true);
+  });
 });
 
 describe('normaliseStatusCode', () => {

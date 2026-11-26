@@ -1,4 +1,3 @@
-import { DecimalPipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -13,14 +12,13 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
 import { ApiError } from '../../../core/http/api-error';
 import { HasPermissionDirective } from '../../../shared/has-permission.directive';
+import { MoneyPipe } from '../../../shared/money/money.pipe';
 import { PanelCardComponent } from '../../../shared/panel-card/panel-card.component';
+import { RecordNotFoundComponent } from '../../../shared/record-not-found/record-not-found.component';
 import type { StatusKey } from '../../../shared/status-key.util';
 import { StatusSwatchComponent } from '../../../shared/status-swatch/status-swatch.component';
+import { TabStripComponent, tabDomId, type TabDescriptor } from '../../../shared/tab-strip/tab-strip.component';
 import { createTranslatedLabels } from '../../../shared/translated-label.util';
-import {
-  TabStripComponent,
-  type TabDescriptor,
-} from '../../clients/client-view/tab-strip/tab-strip.component';
 import {
   toLoanStatusKey,
   type LoanAccount,
@@ -99,20 +97,15 @@ export interface LoanActionDefinition extends Omit<LoanActionLink, 'commands'> {
 }
 
 /**
- * The Fineract code each `loanaccount/:id/:action` command requires, keyed by the `:action` segment
- * that names it.
+ * The Fineract code each `loanaccount/:id/:action` command requires, keyed by the `:action` segment that names it.
  *
- * This record is the one statement of those codes: `loans.routes.ts` declares it as that route's
- * `data.permission` — `{ param: 'action', codes: LOAN_ACTION_PERMISSIONS }` — and every row of
- * {@link LOAN_ACTIONS} opening the route is gated on the same member, so `HasPermissionDirective`
- * and the route's `permissionGuard` ask one question and a user holding `APPROVE_LOAN` both sees
- * the Approve link and reaches the form it opens (AAP 0.1.1, AAP 0.4.2, AAP 0.14.1). The codes are
- * the legacy record's own (`ViewLoanDetailsController.js`) and the ones Fineract enforces for those
- * commands, so nothing here is a difference from legacy (Rule 1 clause 3; AAP 0.10.5 registers
- * none).
+ * This record is the one statement of those codes: `loans.routes.ts` declares it as that route's `data.permission` — `{ param: 'action', codes: LOAN_ACTION_PERMISSIONS }` — and every row of {@link
+ * LOAN_ACTIONS} opening the route is gated on the same member, so `HasPermissionDirective` and the route's `permissionGuard` ask one question and a user holding `APPROVE_LOAN` both sees the Approve link and
+ * reaches the form it opens (AAP 0.1.1, AAP 0.4.2, AAP 0.14.1). The codes are the legacy record's own (`ViewLoanDetailsController.js`) and the ones Fineract enforces for those commands, so nothing here is a
+ * difference from legacy (Rule 1 clause 3; AAP 0.10.5 registers none).
  *
- * `satisfies Record<LoanCommand | 'repayment', string>` makes a command the route serves without a
- * code here a compile error, and a code added for a command the route does not serve one too.
+ * `satisfies Record<LoanCommand | 'repayment', string>` makes a command the route serves without a code here a compile error, and a code added for a command the route does not serve one too.
+ *
  */
 export const LOAN_ACTION_PERMISSIONS = {
   approve: 'APPROVE_LOAN',
@@ -124,10 +117,9 @@ export const LOAN_ACTION_PERMISSIONS = {
 } satisfies Record<LoanCommand | 'repayment', string>;
 
 /**
- * The Fineract code the add-charge form requires: `addloancharge/:id`'s `data.permission` in
- * `loans.routes.ts` and the gate on the record's Add Loan Charge link, so the link and the screen it
- * opens are one permission rather than two (AAP 0.1.1, AAP 0.14.1). It is the legacy record's own
- * code for that form (Rule 1 clause 3).
+ * The Fineract code the add-charge form requires: `addloancharge/:id`'s `data.permission` in `loans.routes.ts` and the gate on the record's Add Loan Charge link, so
+ * the link and the screen it opens are one permission rather than two (AAP 0.1.1, AAP 0.14.1). It is the legacy record's own code for that form (Rule 1 clause 3).
+ *
  */
 export const LOAN_CHARGE_PERMISSION = 'CREATE_LOANCHARGE';
 
@@ -196,7 +188,7 @@ export const LOAN_ACTIONS: readonly LoanActionDefinition[] = [
   selector: 'app-loan-view',
   imports: [
     RouterLink,
-    DecimalPipe,
+    MoneyPipe,
     TranslatePipe,
     StatusSwatchComponent,
     HasPermissionDirective,
@@ -205,6 +197,7 @@ export const LOAN_ACTIONS: readonly LoanActionDefinition[] = [
     LoanScheduleComponent,
     LoanTransactionsComponent,
     LoanChargesComponent,
+    RecordNotFoundComponent,
   ],
   templateUrl: './loan-view.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -251,7 +244,6 @@ export class LoanViewComponent {
   /** The status indicator's key for the loan, reduced by the family's single mapping `toLoanStatusKey`: the Fineract status code never reaches the swatch component, and a loan that is not loaded yet paints the neutral key rather than claiming a state. */
   readonly statusKey = computed<StatusKey>(() => {
     const loaded = this.loan();
-    // The mapper accepts an absent code, so a payload that omits the status paints the neutral key instead of throwing inside a computed and taking the whole record down with it.
     return loaded === null ? 'other' : toLoanStatusKey(loaded.status?.code);
   });
   /** The five figures the summary block prints, in the order the block reads them: the loan-wide total and outstanding balance first, passed through from the schedule untouched, then the three balances {@link sumPeriodBalances} sums over the schedule's periods. Nothing is rounded, recalculated from other members or defaulted — a figure the payload does not report becomes `null`, which the template renders as an empty cell (Rule 1 clause 3; AAP 0.7.2 row `LoanSummary`). */
@@ -306,6 +298,8 @@ export class LoanViewComponent {
   readonly showTransactions = computed<boolean>(() => this.activeTab() === TRANSACTIONS_TAB);
   /** Whether the charges section is the one on screen. */
   readonly showCharges = computed<boolean>(() => this.activeTab() === CHARGES_TAB);
+  /** The id the shared strip gives the tab whose own id is passed in, as each section's `aria-labelledby` uses it: the section on screen is the panel of the active tab and names that tab's element by the same id the strip put on it (AAP 0.2.3 row `TabStrip`). */
+  protected readonly tabDomId = tabDomId;
   constructor() {
     // One subscription, never a `snapshot` read beside it: the router reuses this component when the URL moves from one record to another, and a single read would leave the first loan's record, figures and action links on screen under the second loan's URL. Each emission therefore resets the screen and re-runs the read for the loan the URL now names, the way `loan-edit` and `client-actions` handle the same reuse.
     this.route.paramMap
@@ -350,7 +344,6 @@ export class LoanViewComponent {
       }
       this.error.set(this.asApiError(cause));
     } finally {
-      // Only the current run owns the loading state: the superseded one must not clear the flag the newer read set, or the card would stop reporting that it is still filling.
       if (this.isCurrent(load)) {
         this.loading.set(false);
       }

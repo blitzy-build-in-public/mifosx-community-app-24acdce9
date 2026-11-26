@@ -4,11 +4,9 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 /** `web-ng/`, resolved from this file's URL and never from `process.cwd()`. */
 export const webNgRoot: string = resolve(fileURLToPath(new URL('../../../', import.meta.url)));
-/** Repository root, so every reported path is repo-relative and identical on every machine. */
 export const repoRoot: string = resolve(webNgRoot, '..');
 /** Filters for `walk`: `extensions` keeps matching suffixes, `skip` extends the built-in skip set. */
 export interface WalkOptions { extensions?: readonly string[]; skip?: readonly string[] }
-/** 1-based position in a file, the form every gate reports its violations in. */
 export interface Located { line: number; column: number }
 /** A quoted literal of a scanned file: `start` is the offset of its opening quote and `end` the offset just past its closing quote, both in the text handed to {@link findUrlLiterals}, so a caller can slice the glue between two literals. */
 export interface Literal extends Located { value: string; start: number; end: number }
@@ -20,7 +18,6 @@ export interface InjectableDecl { name: string; line: number }
 export interface ComponentDecl { name: string; selector: string | null; line: number }
 const DEFAULT_SKIP: readonly string[] = ['node_modules', '.git', 'dist', 'out-tsc', '.angular', 'coverage', 'playwright-report', 'test-results', '.captures'];
 const COMMENT_OR_STRING = /(['"`])(?:\\.|(?!\1)[^\\])*\1|\/\/[^\n]*|\/\*[\s\S]*?(?:\*\/|$)/g;
-/** Blanks both comment forms to spaces, keeping every offset, newline and quoted string intact. */
 export function stripComments(text: string): string {
   return text.replace(COMMENT_OR_STRING, (match: string, quote: string | undefined) => (quote === undefined ? match.replace(/[^\n]/g, ' ') : match));}
 /** Recursive, sorted, absolute file list under `root`; consumed by all three parity gates. */
@@ -34,12 +31,10 @@ export async function walk(root: string, options: WalkOptions = {}): Promise<str
       if (entry.isDirectory()) await visit(full);
       else if (!options.extensions || options.extensions.some((suffix) => entry.name.endsWith(suffix))) files.push(full);}};
   try { await visit(root); } catch (error) {
-    // An absent root must fail loudly: an empty list would be a silent pass of whichever gate asked.
     throw new Error(`required scan root is missing or unreadable: ${resolve(root)} (${error instanceof Error ? error.message : String(error)})`);
   }
   return files.sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
 }
-/** UTF-8 contents of one file; a rejection belongs to the caller. */
 export async function readText(file: string): Promise<string> { return readFile(file, 'utf8'); }
 const locate = (text: string, offset: number): Located =>
   ({ line: text.slice(0, offset).split('\n').length, column: offset - text.lastIndexOf('\n', offset - 1) });
@@ -49,7 +44,6 @@ const literalEnd = (text: string, start: number): number => {
   QUOTED.lastIndex = start;
   const match = QUOTED.exec(text);
   return match === null ? text.length : start + match[0].length;};
-/** Every quoted literal in source order, comments excluded; callers decide which are URLs. */
 export function findUrlLiterals(text: string): Literal[] {
   const stripped = stripComments(text);
   return [...stripped.matchAll(STRINGS)].map((match) => {
@@ -61,7 +55,6 @@ export function isStaticAsset(value: string): boolean {
   return STATIC_PREFIXES.some((prefix) => value.toLowerCase().startsWith(prefix)) || /\.[a-z0-9]{1,5}$/i.test(value.split(/[?#]/).at(0) ?? '');}
 const PLACEHOLDER = /^(\$\{[^}]*\}|\{[^}]*\}|:.+|\d+)$/;
 const absolutePathname = (value: string): string | null => { try { return /^[a-z][a-z0-9+.-]*:\/\//i.test(value) ? new URL(value).pathname : null; } catch { return null; } };
-/** Allowlist-comparable path: query, hash and identifier segments dropped, case preserved. */
 export function canonicalPath(value: string): string {
   const path = (absolutePathname(value) ?? value.split(/[?#]/).at(0) ?? '').replace(/\/{2,}/g, '/');
   const segments = path.split('/').map((segment) => (PLACEHOLDER.test(segment) ? '{}' : segment)).filter((segment) => segment !== '');

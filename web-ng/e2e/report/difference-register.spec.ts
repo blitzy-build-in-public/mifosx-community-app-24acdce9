@@ -13,7 +13,6 @@ import {
   type WorkflowRow,
 } from './parity-report';
 
-/** The section heading the report renders the register under, and the line a reader looks for. */
 const REGISTER_HEADING = '## Deliberate-difference register (AAP 0.10.5)';
 
 /** A header holding every `ReportHeader` field, with addresses that name no Fineract endpoint: the register's section is what is under test here, so the run's own provenance is only required to be present and typed. */
@@ -29,7 +28,6 @@ const HEADER: ReportHeader = {
   backendVerified: true,
 };
 
-/** The one row a minimal report needs: a workflow that passed on the new app, so no section fails it. */
 const PASS_ROW: WorkflowRow = { workflow: 'W1', project: 'next', status: 'pass', comparable: true };
 
 /** A report carrying one pass row and the register, which is every field `ParityReport` requires. */
@@ -135,7 +133,6 @@ describe('the rendered register', () => {
     expect(rows).toHaveLength(DIFFERENCE_REGISTER_READINGS.length);
     for (const row of rows) {
       expect(row).not.toContain('\n');
-      // Four cells hold five unescaped pipes: a pipe written inside a reading arrives escaped, so the row keeps its column count however the reading's own text is worded.
       expect(row.match(/(?<!\\)\|/g) ?? []).toHaveLength(5);
     }
   });

@@ -38,12 +38,7 @@
       </a>
     </div>
 
-    <!--
-      `.navbar-collapse` without the `.collapse` class: Bootstrap 3 hides a collapsed navigation
-      only while it also carries `.collapse`, and this application renders no hamburger to expand
-      one, so the navigation must stay visible at every width instead of disappearing below
-      Bootstrap's own collapse breakpoint.
-    -->
+    <!-- `.navbar-collapse` without the `.collapse` class: Bootstrap 3 hides a collapsed navigation only while it also carries `.collapse`, and this application renders no hamburger to expand one, so the navigation must stay visible at every width instead of disappearing below Bootstrap's own collapse breakpoint. -->
     <div class="navbar-collapse">
       <ul class="nav navbar-nav" id="main-menu-left">
         <!--
@@ -61,11 +56,7 @@
         </li>
       </ul>
 
-      <!--
-        The user menu, right-aligned. Order in the source is the order the floats resolve in: this
-        list is declared first, so it takes the right-hand end of the bar and the search control
-        declared after it lands to its left, as the design shows (search, language, user menu).
-      -->
+      <!-- The user menu, right-aligned. Order in the source is the order the floats resolve in: this list is declared first, so it takes the right-hand end of the bar and the search control declared after it lands to its left, as the design shows (search, language, user menu). -->
       <ul class="nav navbar-nav navbar-right" id="main-menu-right">
         <li class="dropdown" [class.open]="userMenuOpen()" (keydown.escape)="closeUserMenu()">
           <!--
@@ -95,12 +86,7 @@
             {{ displayName() }} <span class="caret"></span>
           </a>
 
-          <!--
-            The menu holds one entry: sign-out. Legacy's other entries — help, profile and settings
-            — open screens that stay on the legacy application, so they are absent rather than
-            rendered and refused (AAP 0.10.5 item 8). `role="menu"`/`role="menuitem"` name the
-            structure for assistive technology and change nothing on screen.
-          -->
+          <!-- The menu holds one entry: sign-out. Legacy's other entries — help, profile and settings — open screens that stay on the legacy application, so they are absent rather than rendered and refused (AAP 0.10.5 item 8). `role="menu"`/`role="menuitem"` name the structure for assistive technology and change nothing on screen. -->
           <ul class="dropdown-menu" role="menu" aria-labelledby="user-dropdown">
             <li role="none">
               <a

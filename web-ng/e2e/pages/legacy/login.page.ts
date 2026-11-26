@@ -13,19 +13,15 @@ export interface SessionEntrySummary {
   userIdType: 'number' | 'string' | 'missing' | 'other';
   /** Whether the stored value carries an `authenticationKey` field. */
   hasAuthenticationKey: boolean;
-  /** Whether that field holds a non-empty string — the form a usable key has. */
   authenticationKeyIsNonEmptyString: boolean;
   /** Whether the stored value carries a `userPermissions` field. */
   hasUserPermissions: boolean;
-  /** Whether that field holds an array, which is what the permission gate iterates. */
   userPermissionsIsArray: boolean;
 }
 
 /** One option of the login screen's language switcher (`LanguageSwitcher`, AAP 0.2.3; design node `1:5` shows the row "Change language:" plus its control). */
 export interface LanguageOptionSummary {
-  /** Code the switcher submits, or the visible label when the control exposes no code. */
   value: string;
-  /** Visible option label, trimmed. */
   label: string;
 }
 
@@ -399,7 +395,6 @@ export class LoginPage {
     return this.loginForm.locator('button.btn.btn-primary').first();
   }
 
-  /** Starts waiting for the translation bundle a language change loads and never rejects: the bundle is fetched once per language and served from cache afterwards, so an expired wait is an expected outcome rather than a. */
   private awaitLanguageBundle(code: string): Promise<void> {
     return this.page
       .waitForResponse((response) => response.url().includes(`${LANGUAGE_BUNDLE_PATH}${code}.json`), {

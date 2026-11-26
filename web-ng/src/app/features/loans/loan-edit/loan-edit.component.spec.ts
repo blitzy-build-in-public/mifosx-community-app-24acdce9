@@ -10,6 +10,7 @@ import {
   type TestRequest,
 } from '@angular/common/http/testing';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
+import { Validators } from '@angular/forms';
 import { ActivatedRoute, Router, convertToParamMap, type ParamMap } from '@angular/router';
 import { provideTranslateService, TranslateService } from '@ngx-translate/core';
 import { BehaviorSubject, Subject, catchError, throwError, type Observable } from 'rxjs';
@@ -17,8 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import { DEFAULT_APP_CONFIG } from '../../../core/config/app-config.model';
 import { AppConfigService } from '../../../core/config/app-config.service';
 import { toApiError } from '../../../core/http/api-error';
-import { isLoanAccount } from '../loan.models';
-import type { LoanAccount, LoanCharge, LoanTemplate } from '../loan.models';
+import type { LoanAccount, LoanCharge } from '../loan.models';
 import { LoanEditComponent } from './loan-edit.component';
 
 /** The `#/editloanaccount/:id` screen (AAP 0.7.3 "Loan edit"; AAP 0.7.4): one seed read, whose own `charges` member the save re-posts so `PUT /loans/{id}` keeps the loan's charges instead of deleting them, and a record no body can be built from renders a message rather than a silent no-op (AAP 0.14.2). */
@@ -59,7 +59,6 @@ const APPLICATION_FIELDS: readonly string[] = [
   'submittedOnDate',
   'transactionProcessingStrategyCode',
 ].sort();
-const NON_LOAN_PAYLOAD: LoanTemplate = { productOptions: [] };
 const MAP_FINERACT_FAILURES: HttpInterceptorFn = (request, next) =>
   next(request).pipe(
     catchError((failure: HttpErrorResponse) => throwError(() => toApiError(failure))),
@@ -81,7 +80,7 @@ interface LoanEditSeed extends LoanAccount {
   readonly fundId?: PersistedId;
   /** `loanOfficerOptions` as the seed sends it: rows carrying `id` and a name member. */
   readonly loanOfficerOptions?: readonly Readonly<Record<string, unknown>>[];
-  /** `fundOptions` as the seed sends it: rows carrying `id` and `value`. */
+  /** `fundOptions` as the seed sends it: rows carrying `id` and the label member — `name` as `OptionItem` declares it, or `value` in the enumeration shape. */
   readonly fundOptions?: readonly Readonly<Record<string, unknown>>[];
   /** `termFrequencyTypeOptions` — the term unit's picker rows, shaped `{id, value}`. */
   readonly termFrequencyTypeOptions?: readonly Readonly<Record<string, unknown>>[];
@@ -494,21 +493,8 @@ describe('LoanEditComponent', () => {
     expect(host().querySelector('input')).toBeNull();
     httpMock.expectNone(isEditSave(LOAN_ID));
   });
-  it('renders not found for a payload that is not a loan record', async () => {
-    await show();
-    expect(isLoanAccount(NON_LOAN_PAYLOAD)).toBe(false);
-    const read = httpMock.expectOne(isEditSeedRead(LOAN_ID));
-    read.flush(NON_LOAN_PAYLOAD);
-    await fixture.whenStable();
-    fixture.detectChanges();
-    expect(component.notFound()).toBe(true);
-    expect(component.account()).toBeNull();
-    expect(host().querySelector('form')).toBeNull();
-    httpMock.expectNone(isEditSave(LOAN_ID));
-  });
   it('renders the officer and fund pickers from the seed’s own option lists, in the order it sent them', async () => {
     await show();
-    expect(isLoanAccount(PICKER_SEED)).toBe(true);
     await settle(PICKER_SEED);
     const optionTexts = (inputId: string): readonly string[] =>
       Array.from(host().querySelectorAll<HTMLOptionElement>(`#${inputId} option`)).map(
@@ -518,6 +504,24 @@ describe('LoanEditComponent', () => {
     expect(optionTexts('fundId')).toEqual(['Select Fund', 'Parity Fund', 'Head Office Fund']);
     expect(component.controls.loanOfficerId.value).toBe(7);
     expect(component.controls.fundId.value).toBe(2);
+  });
+  it('labels a fund row by the name member the model declares, and still reads the value-shaped row', async () => {
+    await show();
+    await settle({
+      ...PICKER_SEED,
+      fundId: { id: 4 },
+      fundOptions: [
+        { id: 4, name: 'Named Fund' },
+        { id: 1, value: 'Head Office Fund' },
+        { id: 'five', name: 'Unusable row' },
+        { id: 6 },
+      ],
+    });
+    const optionTexts = Array.from(host().querySelectorAll<HTMLOptionElement>('#fundId option')).map(
+      (option) => option.textContent?.trim() ?? '',
+    );
+    expect(optionTexts).toEqual(['Select Fund', 'Named Fund', 'Head Office Fund']);
+    expect(component.controls.fundId.value).toBe(4);
   });
   it('posts the application field set with the entered values and the configured date grammar (W4/W7 body)', async () => {
     await show();
@@ -592,6 +596,27 @@ describe('LoanEditComponent', () => {
     expect(host().querySelector('app-notification')).toBeNull();
     expect(navigate).not.toHaveBeenCalled();
   });
+  it('leaves a 5xx save to the interceptor’s own notification and keeps every entered value', async () => {
+    await show();
+    await settle(SEED);
+    component.controls.principal.setValue(6000);
+    const submission = component.submit();
+    const save = httpMock.expectOne(isEditSave(LOAN_ID));
+    save.flush(
+      { defaultUserMessage: 'The server could not save the loan.' },
+      { status: 500, statusText: 'Server Error' },
+    );
+    await submission;
+    fixture.detectChanges();
+
+    // One failure, one report: the interceptor notifies a 5xx, so the card paints no second copy of it and the entered values stay in the form (AAP 0.7.4; AAP 0.14.2).
+    expect(component.error()).toBeNull();
+    expect(host().querySelector('.alert.alert-danger')).toBeNull();
+    expect(component.controls.principal.value).toBe(6000);
+    expect(host().querySelector<HTMLInputElement>('#principal')?.value).toBe('6000');
+    expect(host().querySelector('form')).not.toBeNull();
+    expect(navigate).not.toHaveBeenCalled();
+  });
   it('sends one PUT per click and disables Save while the request is in flight', async () => {
     await show();
     await settle(SEED);
@@ -631,6 +656,39 @@ describe('LoanEditComponent', () => {
     expect(component.controls.transactionProcessingStrategyId.value).toBe('mifos-standard-strategy');
     expect(component.form.valid).toBe(true);
   });
+  it('renders each enumeration picker, with no static fallback, when the payload sent no option list', async () => {
+    await show();
+    await settle(SEED);
+    const pickers: readonly string[] = [
+      'loanTermFrequencyType',
+      'repaymentFrequencyType',
+      'interestRateFrequencyType',
+      'amortizationType',
+      'interestType',
+      'interestCalculationPeriodType',
+      'transactionProcessingStrategyId',
+    ];
+    for (const inputId of pickers) {
+      const picker = host().querySelector<HTMLSelectElement>(`#${inputId}`);
+
+      // An empty list is an honest empty select rather than a hidden field: the control keeps the `required` validator asserted below, legacy's own rule with nothing added (Rule 1 clause 3), so a payload that omits a list must still leave the field on screen.
+      expect(picker, `${inputId} picker`).not.toBeNull();
+      expect(picker?.options.length, `${inputId} options`).toBe(0);
+      expect(host().querySelector(`label[for="${inputId}"]`), `${inputId} label`).not.toBeNull();
+    }
+    expect(host().querySelector('.form-control-static')).toBeNull();
+    for (const control of [
+      component.controls.loanTermFrequencyType,
+      component.controls.repaymentFrequencyType,
+      component.controls.interestRateFrequencyType,
+      component.controls.amortizationType,
+      component.controls.interestType,
+      component.controls.interestCalculationPeriodType,
+      component.controls.transactionProcessingStrategyId,
+    ]) {
+      expect(control.hasValidator(Validators.required)).toBe(true);
+    }
+  });
   it('posts the officer and the fund the record carries as the numbers the body takes', async () => {
     await show();
     await settle(PICKER_SEED);
@@ -658,17 +716,40 @@ describe('LoanEditComponent', () => {
     expect(host().querySelector('#loanTermFrequency-error')).not.toBeNull();
     expect(navigate).not.toHaveBeenCalled();
   });
-  it('renders a server failure above the form and leaves the screen usable', async () => {
-    const message = 'The server could not read the loan.';
+  it('leaves a 5xx seed read to the interceptor’s own notification, with no banner and the screen usable', async () => {
     await show();
     const read = httpMock.expectOne(isEditSeedRead(LOAN_ID));
-    read.flush({ defaultUserMessage: message }, { status: 503, statusText: 'Service Unavailable' });
+    read.flush(
+      { defaultUserMessage: 'The server could not read the loan.' },
+      { status: 503, statusText: 'Service Unavailable' },
+    );
     await fixture.whenStable();
     fixture.detectChanges();
     expect(component.notFound()).toBe(false);
     expect(component.loading()).toBe(false);
-    expect(component.error()?.message).toBe(message);
-    expect(host().querySelector('.alert.alert-danger')?.textContent?.trim()).toBe(message);
+
+    // A 5xx is the interceptor's one notification, so the screen paints no banner of its own and keeps the form mounted: the same failure is never reported twice (AAP 0.7.4 "5xx or network failures raise a notification without unmounting the form"; AAP 0.14.2).
+    expect(component.error()).toBeNull();
+    expect(host().querySelector('.alert.alert-danger')).toBeNull();
+    expect(host().querySelector('form')).not.toBeNull();
+  });
+  it('renders Fineract’s own message for a 4xx seed read, verbatim and above the form', async () => {
+    const refusal = 'The loan product is closed for new applications.';
+    await show();
+    const read = httpMock.expectOne(isEditSeedRead(LOAN_ID));
+    read.flush(
+      { errors: [{ defaultUserMessage: refusal, parameterName: 'productId' }] },
+      { status: 400, statusText: 'Bad Request' },
+    );
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(component.notFound()).toBe(false);
+    expect(component.loading()).toBe(false);
+
+    // Any other 4xx is the server's own message, rendered where the user can read it (AAP 0.7.4 "any other 4xx keeps the screen usable and shows Fineract's own message").
+    expect(component.error()?.message).toBe(refusal);
+    expect(component.error()?.status).toBe(400);
+    expect(host().querySelector('.alert.alert-danger')?.textContent?.trim()).toBe(refusal);
     expect(host().querySelector('form')).not.toBeNull();
   });
   it('reads and saves nothing until the route says which loan it is', async () => {

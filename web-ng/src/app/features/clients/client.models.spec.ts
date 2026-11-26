@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { isClosedClientStatus, toAccountStatusKey, toClientStatusKey } from './client.models';
+import {
+  CLIENT_ACTION_PERMISSIONS,
+  isClosedClientStatus,
+  isTerminalClientStatus,
+  toAccountStatusKey,
+  toClientStatusKey,
+  type ClientActionCommand,
+} from './client.models';
 import type { StatusKey } from '../../shared/status-key.util';
 
 /** Every status the fork's `ClientStatus` enum declares (`ClientStatus.java`), with the indicator key it must paint. */
@@ -10,8 +17,8 @@ const STATUS_CASES: readonly { readonly code: string; readonly key: StatusKey }[
   { code: 'clientStatusType.transfer.in.progress', key: 'other' },
   { code: 'clientStatusType.transfer.on.hold', key: 'other' },
   { code: 'clientStatusType.closed', key: 'closed' },
-  { code: 'clientStatusType.rejected', key: 'closed' },
-  { code: 'clientStatusType.withdraw', key: 'closed' },
+  { code: 'clientStatusType.rejected', key: 'other' },
+  { code: 'clientStatusType.withdraw', key: 'other' },
 ];
 
 describe('toClientStatusKey', () => {
@@ -33,7 +40,7 @@ describe('toClientStatusKey', () => {
 describe('isClosedClientStatus', () => {
   it('answers true for the closed code and false for every other state the client enum declares', () => {
     expect(isClosedClientStatus('clientStatusType.closed')).toBe(true);
-    // The two states the colour key folds in with it stay visible on the list (Rule 1 clause 3).
+    // The two states the colour key paints `other` stay visible on the list (Rule 1 clause 3).
     expect(isClosedClientStatus('clientStatusType.rejected')).toBe(false);
     expect(isClosedClientStatus('clientStatusType.withdraw')).toBe(false);
     expect(isClosedClientStatus('clientStatusType.active')).toBe(false);
@@ -51,6 +58,37 @@ describe('isClosedClientStatus', () => {
     expect(isClosedClientStatus('')).toBe(false);
   });
 });
+/** The three codes that end a client's lifecycle, which are the records the client view offers `Reactivate` on. */
+const TERMINAL_CODES: readonly string[] = [
+  'clientStatusType.closed',
+  'clientStatusType.rejected',
+  'clientStatusType.withdraw',
+];
+/** The codes that do not end it: the open states, the two transfers and an invalid record. */
+const OPEN_CODES: readonly string[] = [
+  'clientStatusType.active',
+  'clientStatusType.pending',
+  'clientStatusType.transfer.in.progress',
+  'clientStatusType.transfer.on.hold',
+  'clientStatusType.invalid',
+];
+/** The client record's own question about the status — a lifecycle one, neither the checkbox's question above nor the swatch's colour. */
+describe('isTerminalClientStatus', () => {
+  it('answers true for the closed, the rejected and the withdrawn codes, as the payloads spell them', () => {
+    for (const code of TERMINAL_CODES) { expect(isTerminalClientStatus(code), code).toBe(true); }
+  });
+  it('answers true for the same codes in the upper-cased spelling the server also sends', () => {
+    for (const code of TERMINAL_CODES) { expect(isTerminalClientStatus(code.toUpperCase()), code).toBe(true); }
+  });
+  it('answers false for every state that leaves the record its actions', () => {
+    for (const code of OPEN_CODES) { expect(isTerminalClientStatus(code), code).toBe(false); }
+  });
+  it('answers false for a missing, an empty or an unrecognised code rather than claiming a terminal state', () => {
+    expect(isTerminalClientStatus(undefined)).toBe(false);
+    expect(isTerminalClientStatus('')).toBe(false);
+    expect(isTerminalClientStatus('clientStatusType.notAStateYet')).toBe(false);
+  });
+});
 /** Every status the fork's two account enums declare — `LoanStatus.java` for `loanStatusType.*` and `SavingsAccountStatusType.java` for `savingsAccountStatusType.*`. */
 const ACCOUNT_STATUS_CASES: readonly { readonly code: string; readonly key: StatusKey }[] = [
   { code: 'loanStatusType.active', key: 'active' },
@@ -62,13 +100,13 @@ const ACCOUNT_STATUS_CASES: readonly { readonly code: string; readonly key: Stat
   { code: 'loanStatusType.closed.obligations.met', key: 'closed' },
   { code: 'loanStatusType.closed.written.off', key: 'closed' },
   { code: 'loanStatusType.closed.reschedule.outstanding.amount', key: 'closed' },
-  { code: 'loanStatusType.withdrawn.by.client', key: 'closed' },
-  { code: 'loanStatusType.rejected', key: 'closed' },
+  { code: 'loanStatusType.withdrawn.by.client', key: 'other' },
+  { code: 'loanStatusType.rejected', key: 'other' },
   { code: 'savingsAccountStatusType.closed', key: 'closed' },
   { code: 'savingsAccountStatusType.matured', key: 'closed' },
   { code: 'savingsAccountStatusType.pre.mature.closure', key: 'closed' },
-  { code: 'savingsAccountStatusType.withdrawn.by.applicant', key: 'closed' },
-  { code: 'savingsAccountStatusType.rejected', key: 'closed' },
+  { code: 'savingsAccountStatusType.withdrawn.by.applicant', key: 'other' },
+  { code: 'savingsAccountStatusType.rejected', key: 'other' },
   { code: 'loanStatusType.invalid', key: 'other' },
   { code: 'savingsAccountStatusType.invalid', key: 'other' },
   { code: 'loanStatusType.transfer.in.progress', key: 'other' },
@@ -98,5 +136,26 @@ describe('toAccountStatusKey', () => {
     expect(toAccountStatusKey('')).toBe('other');
     expect(toAccountStatusKey('loanStatusType.notAStateYet')).toBe('other');
     expect(toAccountStatusKey('savingsAccountStatusType.overpaid')).toBe('other');
+  });
+});
+/** The legacy code each of the five in-scope lifecycle commands is gated on: the `taskPermissionName` of that command's entry in `/root/community-app/app/scripts/models/clientStatus.js`. */
+const COMMAND_PERMISSIONS: readonly { readonly command: ClientActionCommand; readonly permission: string }[] = [
+  { command: 'activate', permission: 'ACTIVATE_CLIENT' },
+  { command: 'close', permission: 'CLOSE_CLIENT' },
+  { command: 'reject', permission: 'REJECT_CLIENT' },
+  { command: 'withdraw', permission: 'WITHDRAW_CLIENT' },
+  { command: 'reactivate', permission: 'REACTIVATE_CLIENT' },
+];
+
+describe('CLIENT_ACTION_PERMISSIONS', () => {
+  it('gates each of the five legacy commands on the code legacy gives it', () => {
+    for (const { command, permission } of COMMAND_PERMISSIONS) {
+      expect(CLIENT_ACTION_PERMISSIONS[command], command).toBe(permission);
+    }
+  });
+  it('holds a code for every command of the union and for no other key', () => {
+    expect(Object.keys(CLIENT_ACTION_PERMISSIONS).sort()).toEqual(
+      COMMAND_PERMISSIONS.map((entry) => entry.command).sort(),
+    );
   });
 });

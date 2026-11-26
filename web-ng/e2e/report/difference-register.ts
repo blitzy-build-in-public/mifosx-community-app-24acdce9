@@ -4,9 +4,7 @@
 export interface DifferenceRegisterReading {
   /** The register item and the subject it governs: the AAP section, the item number and what it covers. */
   readonly where: string;
-  /** The plan's wording at that item, so a reader can see exactly what the run reads more narrowly. */
   readonly plan: string;
-  /** What this run delivers, in the terms the specs and the running application show it. */
   readonly delivered: string;
   /** Why the delivered reading holds: the AAP decision and the user Rule behind it, and the code they rest on. */
   readonly why: string;
@@ -86,10 +84,8 @@ export const DIFFERENCE_REGISTER_READINGS: readonly DifferenceRegisterReading[] 
   },
 ];
 
-/** The register table's column headings, in the order a reader compares a reading: where, plan, run, why. */
 const REGISTER_COLUMNS: readonly string[] = ['Where', 'The plan\'s wording', 'What the run delivers', 'Authority'];
 
-/** One table cell: the reading's own text on a single line, with runs of whitespace collapsed and pipes escaped so the cell cannot end its row. */
 function registerCell(value: string): string {
   return value.replace(/\s+/g, ' ').replace(/\|/g, '\\|');
 }

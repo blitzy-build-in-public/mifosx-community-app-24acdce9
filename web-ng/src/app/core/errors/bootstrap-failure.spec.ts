@@ -66,7 +66,6 @@ describe('renderBootstrapFailure', () => {
     expect(heading?.tagName).toBe('H1');
     expect(heading?.className).toBe('h4');
     expect(heading?.textContent).toBe(FAILURE_HEADING);
-    // Document order: the heading first, so a reader meets the state before the detail.
     expect(block?.firstElementChild).toBe(heading);
     expect(messageParagraph()?.textContent).toBe(CONFIG_MESSAGE);
   });
@@ -83,13 +82,11 @@ describe('renderBootstrapFailure', () => {
 
     expect(document.querySelector('.half-rendered')).toBeNull();
     expect(appRoot()?.textContent).not.toContain('a root that began rendering');
-    // The block is the host's whole content, not an addition to it.
     expect(appRoot()?.children).toHaveLength(1);
     expect(dangerBlock()).not.toBeNull();
   });
 
   it('falls back to the document body when the page carries no app-root host', () => {
-    // A document of its own, so the fallback is exercised on a page that has no host at all rather than on one whose host a case removed.
     const page = document.implementation.createHTMLDocument('misconfigured');
 
     expect(page.querySelector('app-root')).toBeNull();
@@ -114,7 +111,6 @@ describe('renderBootstrapFailure', () => {
     const paragraph = messageParagraph();
 
     expect(paragraph?.textContent).toBe(hostile);
-    // One text node and no children: nothing in the message was parsed.
     expect(paragraph?.childNodes).toHaveLength(1);
     expect(paragraph?.children).toHaveLength(0);
     expect(document.querySelector('img')).toBeNull();

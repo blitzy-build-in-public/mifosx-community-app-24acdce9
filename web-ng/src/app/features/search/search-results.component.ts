@@ -115,7 +115,6 @@ export class SearchResultsComponent {
         tap((criteria: SearchCriteria) => {
           this.currentQuery.set(criteria.query);
           this.currentScope.set(criteria.scope);
-          // A new search starts with nothing to report and no completed answer: the previous rows stay on screen while it runs, but a previous message, the failure it recorded, and the empty state they gate do not.
           this.failureMessage.set(null);
           this.failed.set(false);
           this.searchCompleted.set(false);

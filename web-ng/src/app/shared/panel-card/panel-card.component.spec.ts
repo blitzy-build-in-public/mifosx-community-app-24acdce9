@@ -5,27 +5,20 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { PanelCardComponent } from './panel-card.component';
 
 /**
- * Behavioural spec for `PanelCardComponent`, the card every list, record and form surface is drawn on
- * (AAP 0.2.3 component inventory row `PanelCard`, Figma nodes `1:3` and `1:4`; AAP 0.5.2 row "Card / panel").
- * It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with at
- * least one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`, nothing boilerplate).
- *
- * It pins the host as a `div` carrying exactly `panel` by default with no heading band (Rule 1 clause 6); a
- * title rendering `div.panel-heading > h3.panel-title` with the caller's own text, and `titleTag="h4"` moving
- * it to `h4` as the record's profile card does (AAP 0.2.3, AAP 0.10.2); `variant` adding the one modifier
- * class asked for and no other, over the bare `.panel`, `.panel.panel-default` and `.panel.panel-bordered`
- * cards of the delivered markup (AAP 0.5.2, AAP 0.5.3); an empty title rendering no band; and projected
- * content arriving as the host's own children, after the band and in the caller's order.
- *
- * The card declares no stylesheet, no colour and no dimension (Rule 1 clause 6, AAP 0.5.5), so nothing here
- * asserts a computed value: every visual value belongs to `web-ng/src/styles.scss` and is checked there.
+ * Behavioural spec for `PanelCardComponent`, the card every list, record and form surface is drawn on (AAP 0.2.3 component inventory row `PanelCard`, Figma nodes `1:3`
+ * and `1:4`; AAP 0.5.2 row "Card / panel"). It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with at least one behavioural
+ * spec") and Rule 1 clause 8 (no spec without an `expect`, nothing boilerplate). It pins the host as a `div` carrying exactly `panel` by default with no heading band
+ * (Rule 1 clause 6); a title rendering `div.panel-heading > h3.panel-title` with the caller's own text, and `titleTag="h4"` moving it to `h4` as the record's profile
+ * card does (AAP 0.2.3, AAP 0.10.2); `variant` adding the one modifier class asked for and no other, over the bare `.panel`, `.panel.panel-default` and
+ * `.panel.panel-bordered` cards of the delivered markup (AAP 0.5.2, AAP 0.5.3); an empty title rendering no band; and projected content arriving as the host's own
+ * children, after the band and in the caller's order. The card declares no stylesheet, no colour and no dimension (Rule 1 clause 6, AAP 0.5.5), so nothing here asserts
+ * a computed value: every visual value belongs to `web-ng/src/styles.scss` and is checked there.
  */
 
 /**
- * A caller of the card: the record's profile card shape — a bordered card whose heading is an `h4`,
- * holding two bodies and a footer. It is the projection case no direct assertion covers, and its
- * static attributes also pin that the three inputs accept the plain attribute syntax a caller
- * writes. Test input only; it reproduces no shipped screen's copy.
+ * A caller of the card: the record's profile card shape — a bordered card whose heading is an `h4`, holding two bodies and a footer. It is the projection case no direct assertion covers, and its static
+ * attributes also pin that the three inputs accept the plain attribute syntax a caller writes. Test input only; it reproduces no shipped screen's copy.
+ *
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -49,9 +42,8 @@ function hostOf(target: ComponentFixture<unknown>): HTMLElement {
 }
 
 /**
- * Renders the card with the inputs a test needs, each bound before the first change detection.
- * An argument left out is not bound at all, so the component's own default is what the test
- * observes.
+ * Renders the card with the inputs a test needs, each bound before the first change detection. An argument left out is not bound at all, so the component's own default is what the test observes.
+ *
  */
 function createCard(
   title?: string | null,
@@ -155,8 +147,7 @@ describe('PanelCardComponent', () => {
       throw new Error('the caller template rendered no card');
     }
 
-    // The caller wrote the card as the legacy markup writes it, so the only trace the component
-    // leaves in the DOM is the host attribute the selector matches (Rule 1 clause 6).
+    // The caller wrote the card as the legacy markup writes it, so the only trace the component leaves in the DOM is the host attribute the selector matches (Rule 1 clause 6).
     expect(card.hasAttribute('apppanelcard')).toBe(true);
     expect(card.className).toBe('panel panel-bordered');
     expect(Array.from(card.children).map((child) => child.className)).toEqual([

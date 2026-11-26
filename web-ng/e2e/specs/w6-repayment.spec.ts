@@ -27,35 +27,25 @@ const CLIENT_RECORD_ROUTE = /#\/viewclient\/([^/?#]+)/;
 const LOAN_RECORD_ROUTE = /#\/viewloanaccount\/([^/?#]+)/;
 /** The 12 monthly periods the seeded `Parity Loan` schedules (AAP 0.10.1 fixed data), asserted as a count so a wrong product's terms are caught. */
 const SCHEDULED_PERIODS = 12;
-/** How long the capture may take to record an exchange the workflow just caused; the bound turns a defect into a message instead of the 180-second timeout. */
 const EXCHANGE_TIMEOUT_MS = 30_000;
-/** What a captured exchange must look like to be the one an assertion is about. */
 interface ExchangeMatch {
-  /** HTTP method, upper-cased as the capture records it. */
   readonly method: string;
   /** Absolute path with the capture's role tokens, e.g. `/fineract-provider/api/v1/loans/{loanId}`. */
   readonly path: string;
-  /** Query parameters the exchange must carry, compared by value. Omitted when any query will do. */
   readonly query?: Readonly<Record<string, string>>;
 }
-/** A payment type the repayment template offers, as the server sent it. */
 interface PaymentTypeOption {
   /** Fineract's id for the payment type: the value the endpoint takes as `paymentTypeId`. */
   readonly id: number;
   /** Fineract's own name, which is the label the baseline's select shows and selects by. */
   readonly name: string;
 }
-/** One rendered repayment-schedule line of either front end. */
 type ScheduleLine = ScheduleRow | LoanScheduleRow;
-/** One rendered transaction line of either front end. */
 type TransactionLine = TransactionRow | LoanTransactionRow;
-/** * The role of a loan account the workflow selected, with the state read for it. * * Deliberately holds no rendered text and no id of any other resource: the account number is the * handle the client record offers for opening the loan, and the loan id is the role the URL carries. */
 interface LoanCandidate {
   /** Loan id the record's route named — the id every later API read and page-object call uses. */
   readonly loanId: number;
-  /** Account number the client record printed, used by {@link describeCandidate} only. */
   readonly accountNo: string;
-  /** End state read before the repayment, kept for the identities the after-state is measured against. */
   readonly before: LoanSnapshot;
 }
 /** A captured value as a JSON object, or `null`: with the four readers below, the documented boundary where the harness stops narrowing an unmodelled payload (Rule 1 clause 4). */
@@ -87,7 +77,6 @@ function arrayOf(
 function queryOf(exchange: NormalizedExchange, name: string): string | null {
   return Object.hasOwn(exchange.query, name) ? exchange.query[name] : null;
 }
-/** Whether one captured exchange is the call an assertion is about. */
 function matches(exchange: NormalizedExchange, match: ExchangeMatch): boolean {
   if (exchange.method !== match.method || exchange.path !== match.path) {
     return false;
@@ -96,11 +85,9 @@ function matches(exchange: NormalizedExchange, match: ExchangeMatch): boolean {
     ([name, value]) => queryOf(exchange, name) === value,
   );
 }
-/** Every exchange the capture has recorded so far, in page order: its live view, which fills while the workflow continues and the fixture's host check still needs the recording. */
 function captured(capture: CaptureSession): readonly NormalizedExchange[] {
   return capture.capture.exchanges;
 }
-/** The exchanges that satisfy one {@link ExchangeMatch}, in capture order. */
 function findExchanges(
   exchanges: readonly NormalizedExchange[],
   match: ExchangeMatch,
@@ -203,7 +190,6 @@ function lineOfPeriod(rows: readonly ScheduleLine[], period: number): ScheduleLi
   return rows.find((row) => periodOf(row.period) === period) ?? null;
 }
 
-/** The balance a schedule line still owes, as either screen prints it. */
 function outstandingOf(line: ScheduleLine | null): number | null {
   if (line === null) {
     return null;
@@ -272,7 +258,6 @@ test.describe('W6 make a repayment and verify the schedule and transactions', ()
       await pages.login.signIn(credentials.username, credentials.password);
 
       await pages.clients.open();
-      // The toolbar's filter narrows the rows the list already holds and issues no request, so the client is found on the page as rendered without searching the server.
       await pages.clients.filterList(SCENARIO.client.displayName);
       await pages.clients.openClient(SCENARIO.client.displayName);
 
@@ -290,7 +275,6 @@ test.describe('W6 make a repayment and verify the schedule and transactions', ()
       const candidates: LoanCandidate[] = [];
 
       for (const row of accounts) {
-        // The baseline's reader names each row's family; a savings row is not this workflow's and is passed over rather than followed to a record that is not a loan.
         if ('accountType' in row && row.accountType !== 'loan') {
           continue;
         }
@@ -513,7 +497,6 @@ test.describe('W6 make a repayment and verify the schedule and transactions', ()
       if (refreshed === undefined) {
         throw new Error('the record read that followed the repayment was recorded and then lost.');
       }
-      // The record the application re-read is the loan this workflow opened, not another account's: the account number is the one value both the client record and the loan record print.
       expect(textOf(asObject(refreshed.responseBody), 'accountNo')).toBe(candidate.accountNo);
 
       // --- After-state: the plan's identities ---------------------------------------------
@@ -527,7 +510,6 @@ test.describe('W6 make a repayment and verify the schedule and transactions', ()
       // The AAP 0.10.1 W6 outcome, stated twice so a failure says which contract broke: the balance is what the loan expected to collect minus the instalment just paid, and it is what it was before the repayment minus that same.
       expect(afterOutstanding).toBeCloseTo(expectedRepayment - firstPeriodTotalDue, 2);
       expect(afterOutstanding).toBeCloseTo(beforeOutstanding - firstPeriodTotalDue, 2);
-      // A repayment adds one transaction — the disbursement and its accrual are already on the loan.
       expect(after.transactionCount).toBe(before.transactionCount + 1);
 
       // --- The screen shows it: a repayment row, and a settled first period -----------------

@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { provideTranslateService, TranslateService } from '@ngx-translate/core';
@@ -25,9 +26,15 @@ const NO_DATA_KEY = 'label.nodata';
 /** The same key's English wording in the shipped legacy bundle. */
 const NO_DATA_TEXT = 'No Data';
 /** The one key the tab's empty state resolves. */
-const EN_BUNDLE: Readonly<Record<string, string>> = { [NO_DATA_KEY]: NO_DATA_TEXT };
+/** The wording the shipped `app/global-translations/locale-en.json` bundle carries for the two keys the tab resolves: the empty state's message and the identifier-status code the Status cell passes through `TranslatePipe`, exactly as legacy's tab does (Rule 1 clauses 3 and 6). */
+const EN_BUNDLE: Readonly<Record<string, string>> = {
+  [NO_DATA_KEY]: NO_DATA_TEXT,
+  'clientIdentifierStatusType.active': 'Active',
+};
 /** Fineract's own text for a rejected identifier read, synthetic but shaped like the server's `defaultUserMessage`: the tab renders it character for character (Rule 1 clause 3). */
 const SERVER_FAILURE_TEXT = 'The document type is not active for this client.';
+/** The text a 5xx that carried no server message is rendered with — the mapper's own sentence — so the panel is provably not blank even when Fineract sends no `defaultUserMessage`. */
+const SERVER_FAULT_TEXT = 'The request could not be completed.';
 /** A document whose payload already carries its type's name: no resolution is needed for it. */
 const PASSPORT: ClientIdentifier = {
   id: 41,
@@ -53,6 +60,14 @@ const UNNAMED_NATIONAL_ID: ClientIdentifier = {
   documentKey: 'ID-55667788',
   description: 'Renewed at the branch',
   status: 'Active',
+};
+/** The row `GET clients/{id}/identifiers` answered with for a seeded client, copied from the live response: the contract shape the populated state is proved against, `status` included as the endpoint's own code rather than as a display word (the same answer also carries a `clientId` this model does not hold and the tab never renders). */
+const LIVE_IDENTIFIER: ClientIdentifier = {
+  id: 2,
+  documentType: { id: 2, name: 'Id' },
+  documentKey: 'QA02-ID-0001',
+  description: 'Second identity document',
+  status: 'clientIdentifierStatusType.active',
 };
 /** The template's answer: the tenant's document types, in the order the endpoint returned them. */
 const DOCUMENT_TYPES: ClientIdentifierTemplate = {
@@ -105,7 +120,6 @@ describe('ClientIdentifiersComponent', () => {
     identifiersTemplate =
       vi.fn<(id: number | string) => Observable<ClientIdentifierTemplate>>();
     notificationShow = vi.fn<(kind: NotificationKind, message: string) => void>();
-    // The component injects one collaborator, and both stubs stand in for the application's own singletons.
     const clientStub = { identifiers, identifiersTemplate } as unknown as ClientService;
     const notificationStub = {
       show: notificationShow,
@@ -128,7 +142,6 @@ describe('ClientIdentifiersComponent', () => {
   it('renders one row per identifier, in the endpoint’s order, for a single read', async () => {
     identifiers.mockReturnValue(of([PASSPORT, NATIONAL_ID]));
     await mount(CLIENT_ID);
-    // One read for the bound client, and no second one for the payload it answered with.
     expect(identifiers).toHaveBeenCalledTimes(1);
     expect(identifiers).toHaveBeenCalledWith(CLIENT_ID);
     expect(renderedRows()).toHaveLength(2);
@@ -139,6 +152,52 @@ describe('ClientIdentifiersComponent', () => {
     expect(component.failed()).toBe(false);
     expect(component.loading()).toBe(false);
   });
+
+  it('renders the populated state a live read answers with, cell for cell', async () => {
+    identifiers.mockReturnValue(of([LIVE_IDENTIFIER]));
+    await mount(CLIENT_ID);
+    // The one document the endpoint answers with renders as exactly one row: nothing duplicated, dropped or reordered (Rule 1 clause 3).
+    expect(renderedRows()).toHaveLength(1);
+    expect(identifiersTemplate).not.toHaveBeenCalled();
+    // All four cells carry the payload's own values — the type's name, the document key, the description and the status — with the status resolved through the legacy bundle the way legacy's tab resolves it, so the code the endpoint sends prints as its word rather than raw (Rule 1 clauses 3 and 6).
+    expect(cellsAt(0)).toEqual([
+      'Id',
+      'QA02-ID-0001',
+      'Second identity document',
+      'Active',
+    ]);
+    expect(component.rows()).toEqual([
+      {
+        id: LIVE_IDENTIFIER.id,
+        documentTypeName: 'Id',
+        documentKey: 'QA02-ID-0001',
+        description: 'Second identity document',
+        status: 'clientIdentifierStatusType.active',
+      },
+    ]);
+    expect(component.failed()).toBe(false);
+  });
+
+  it('marks its one content element busy while the read is in flight, and adds nothing to it', async () => {
+    const pending = new Subject<ClientIdentifier[]>();
+    identifiers.mockReturnValue(pending);
+    await mount(CLIENT_ID);
+
+    // One wrapper element, and it carries the in-flight marker and nothing else: no class, no style, no second element (AAP 0.7.4 state rules).
+    const region = host().firstElementChild as HTMLElement | null;
+    expect(host().childElementCount).toBe(1);
+    expect(component.loading()).toBe(true);
+    expect(region?.getAttribute('aria-busy')).toBe('true');
+    expect(region?.className).toBe('');
+    expect(region?.hasAttribute('style')).toBe(false);
+
+    pending.next([PASSPORT]);
+    pending.complete();
+    await settle();
+
+    expect(region?.getAttribute('aria-busy')).toBeNull();
+    expect(renderedRows()).toHaveLength(1);
+  });
   it('renders the shared empty state, and no error, for a client with no identity document', async () => {
     identifiers.mockReturnValue(of([]));
     await mount(CLIENT_ID);
@@ -147,7 +206,6 @@ describe('ClientIdentifiersComponent', () => {
     expect(emptyState).not.toBeNull();
     expect(emptyState?.textContent?.trim()).toBe(NO_DATA_TEXT);
     expect(host().textContent ?? '').not.toContain(NO_DATA_KEY);
-    // No table, no alert region and no failure state: "has no document" is not "could not read".
     expect(host().querySelector('table')).toBeNull();
     expect(host().querySelector('[role="alert"]')).toBeNull();
     expect(component.failed()).toBe(false);
@@ -167,7 +225,6 @@ describe('ClientIdentifiersComponent', () => {
     identifiers.mockReturnValue(of([UNNAMED_PASSPORT, UNNAMED_NATIONAL_ID]));
     identifiersTemplate.mockReturnValue(of(DOCUMENT_TYPES));
     await mount(CLIENT_ID);
-    // One read for the whole payload, however many documents needed a name.
     expect(identifiersTemplate).toHaveBeenCalledTimes(1);
     expect(identifiersTemplate).toHaveBeenCalledWith(CLIENT_ID);
     // The name is the template's own for the type's id: not the numeric id, and not a word this component invented (Rule 1 clauses 2 and 3).
@@ -177,7 +234,6 @@ describe('ClientIdentifiersComponent', () => {
     // The members the payload omitted render as empty cells, never as the text `undefined`.
     expect(cellsAt(0)).toEqual(['Passport', 'P-11223344', '', '']);
     expect(host().textContent ?? '').not.toContain('undefined');
-    // A template read that rejects costs the names and nothing else: the rows still render with an empty name column and the tab is not failed, because a missing label is not a missing record.
     identifiersTemplate.mockReturnValue(throwError(() => new ApiError(SERVER_FAILURE_TEXT, 500)));
     await mount(CLIENT_ID);
     expect(component.failed()).toBe(false);
@@ -199,15 +255,24 @@ describe('ClientIdentifiersComponent', () => {
   it('leaves the screen usable and raises no notification when the read is rejected', async () => {
     identifiers.mockReturnValue(throwError(() => new Error('Identity read failed')));
     await mount(CLIENT_ID);
-    // The screen survives the rejection: the host is still in the document, the tab records the failure and paints nothing of its own for a fault the interceptor has already notified.
     expect(document.body.contains(host())).toBe(true);
     expect(component.failed()).toBe(true);
     expect(component.loading()).toBe(false);
     expect(component.rows()).toEqual([]);
     expect(host().querySelector('app-empty-state')).toBeNull();
     expect(host().querySelector('table')).toBeNull();
-    expect(host().querySelector('[role="alert"]')).toBeNull();
-    expect(host().textContent?.trim()).toBe('');
+    expect(host().querySelector('[role="alert"]')?.textContent?.trim()).toBe('Identity read failed');
+    expect(component.errorMessage()).toBe('Identity read failed');
+    expect(notificationShow).not.toHaveBeenCalled();
+    // A 5xx is the failure the interceptor notifies, and it used to leave this panel blank: the alert now carries the failure's own text while the tab still raises no notification of its own (AAP 0.7.4; AAP 0.14.2).
+    identifiers.mockReturnValue(
+      throwError(() => new HttpErrorResponse({ status: 500, statusText: 'Server Error' })),
+    );
+    await mount(CLIENT_ID);
+    expect(host().querySelector('[role="alert"]')?.textContent?.trim()).toBe(SERVER_FAULT_TEXT);
+    expect(component.errorMessage()).toBe(SERVER_FAULT_TEXT);
+    expect(host().querySelector('table')).toBeNull();
+    expect(host().querySelector('app-empty-state')).toBeNull();
     expect(notificationShow).not.toHaveBeenCalled();
     // A 4xx is the one failure the interceptor does not notify, so the tab paints Fineract's own text verbatim in its alert region rather than repeating a notice (AAP 0.7.4, AAP 0.14.2).
     identifiers.mockReturnValue(throwError(() => new ApiError(SERVER_FAILURE_TEXT, 400)));
@@ -224,19 +289,16 @@ describe('ClientIdentifiersComponent', () => {
     identifiers.mockReturnValueOnce(firstClientRead).mockReturnValueOnce(secondClientRead);
     await mount(CLIENT_ID);
     expect(identifiers).toHaveBeenCalledTimes(1);
-    // The record was navigated to another client, which binds the same input with that client's id.
     fixture.componentRef.setInput('clientId', OTHER_CLIENT_ID);
     fixture.detectChanges();
     await settle();
     expect(identifiers).toHaveBeenCalledTimes(2);
     expect(identifiers).toHaveBeenLastCalledWith(OTHER_CLIENT_ID);
-    // The superseded client's response arrives late. It must not reach the tab: the load it belonged to was cancelled, so nothing of the previous client can stand under the new client's record.
     firstClientRead.next([PASSPORT]);
     await settle();
     expect(component.rows()).toEqual([]);
     expect(renderedRows()).toHaveLength(0);
     secondClientRead.next([NATIONAL_ID]);
-    // The read completes as a real response does, which is what ends the in-flight state the template withholds the table for.
     secondClientRead.complete();
     await settle();
     expect(component.rows().map((row) => row.id)).toEqual([NATIONAL_ID.id]);

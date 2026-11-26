@@ -11,21 +11,13 @@ import {
 import { LanguageSwitcherComponent } from './language-switcher.component';
 
 /**
- * Behaviour of the language switcher — the `LanguageSwitcher` row of the component inventory (AAP 0.2.3),
- * the login screen's row (Figma node `1:5`) and the navbar's (node `1:3`).
+ * Behaviour of the language switcher — the `LanguageSwitcher` row of the component inventory (AAP 0.2.3), the login screen's row (Figma node `1:5`) and the navbar's (node `1:3`). It discharges AAP 0.11.1 (a
+ * unit spec beside every component), AAP 0.14.1 ("each screen lands with at least one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`). It pins the caller's label and id with every offered
+ * language in the application's order, the language actually in force, one `TranslateService.use()` per change reported only once the switch took effect, a bundle that cannot load reported rather than
+ * swallowed with the select written back to the language in force (AAP 0.14.2), a blank selection switching and reporting nothing, no colour or dimension of its own (AAP 0.2.3, Rule 1 clause 6), and the choice
+ * remembered in the legacy `ls.Language` entry as the switch is made (`app/scripts/controllers/main/MainController.js:343-345`; Rule 1 clause 3). The translate stack is a typed stand-in for the four members
+ * this component and `TranslatePipe` touch, so a case can make one load fail; no HTTP provider exists, because the component reaches no host itself (Rule 1 clause 5).
  *
- * It discharges AAP 0.11.1 (a unit spec beside every component), AAP 0.14.1 ("each screen lands with at
- * least one behavioural spec") and Rule 1 clause 8 (no spec without an `expect`). It pins the caller's label
- * and id with every offered language in the application's order, the language actually in force, one
- * `TranslateService.use()` per change reported only once the switch took effect, a bundle that cannot load
- * reported rather than swallowed with the select written back to the language in force (AAP 0.14.2), a blank
- * selection switching and reporting nothing, no colour or dimension of its own (AAP 0.2.3, Rule 1 clause 6),
- * and the choice remembered in the legacy `ls.Language` entry as the switch is made
- * (`app/scripts/controllers/main/MainController.js:343-345`; Rule 1 clause 3).
- *
- * The translate stack is a typed stand-in for the four members this component and `TranslatePipe` touch, so
- * a case can make one load fail; no HTTP provider exists, because the component reaches no host itself
- * (Rule 1 clause 5).
  */
 
 /** The offered languages, standing in for `AVAILABLE_LANGS`. */
@@ -59,10 +51,9 @@ const TRANSLATIONS: Readonly<Record<string, string>> = {
 /**
  * The ngx-translate surface this component and `TranslatePipe` use:
  *
- *  - `currentLang` — ngx-translate 18 declares it a `Signal<Language | null>`, `null` until a bundle
- *    is applied; a successful `use` moves it and a failing one leaves it where it was.
- *  - `use` — the load a change performs; subscribing to what it returns is what really switches.
- *  - `translate` — the member `TranslatePipe.transform` resolves the label key through.
+ * - `currentLang` — ngx-translate 18 declares it a `Signal<Language | null>`, `null` until a bundle is applied; a successful `use` moves it and a failing one leaves it where it was. - `use` — the load a change
+ * performs; subscribing to what it returns is what really switches. - `translate` — the member `TranslatePipe.transform` resolves the label key through.
+ *
  */
 interface TranslateStub {
   readonly currentLang: Signal<string | null>;
@@ -157,8 +148,7 @@ describe('LanguageSwitcherComponent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     TestBed.resetTestingModule();
-    // The jsdom store is shared by the whole suite, so a selection another case (or another spec
-    // file) made must not decide what this one reads back; the key string is the i18n service's.
+    // The jsdom store is shared by the whole suite, so a selection another case (or another spec file) made must not decide what this one reads back; the key string is the i18n service's.
     window.localStorage.removeItem(languagePreferenceKey());
     translate = createTranslateStub();
 
@@ -195,8 +185,7 @@ describe('LanguageSwitcherComponent', () => {
     expect(host().querySelector('label')?.getAttribute('for')).toBe('language-switcher');
     expect(Array.from(select.options, (option) => option.value)).toEqual([...LANGS]);
     expect(select.value).toBe(ACTIVE);
-    // No colour and no dimension of the component's own: the global `.language-switcher` rule and
-    // Bootstrap's `.btn.btn-default.btn-xs` supply every visual value (AAP 0.2.3, Rule 1 clause 6).
+    // No colour and no dimension of the component's own: the global `.language-switcher` rule and Bootstrap's `.btn.btn-default.btn-xs` supply every visual value (AAP 0.2.3, Rule 1 clause 6).
     expect(wrapper().getAttribute('style')).toBeNull();
     expect(select.className).toBe('btn btn-default btn-xs');
   });
@@ -236,10 +225,8 @@ describe('LanguageSwitcherComponent', () => {
 
     expect(translate.use).toHaveBeenCalledTimes(1);
     expect(translate.use).toHaveBeenCalledWith(OTHER_LANG);
-    // The observable `use` returned was really subscribed to, so the switch happened rather than
-    // being asked for.
+    // The observable `use` returned was really subscribed to, so the switch happened rather than being asked for.
     expect(translate.applied).toEqual([OTHER_LANG]);
-    // Reported on the success channel, which is the only one a taken switch reaches.
     expect(switched).toEqual([OTHER_LANG]);
     expect(failures).toBe(0);
   });
@@ -252,12 +239,10 @@ describe('LanguageSwitcherComponent', () => {
 
     expect(translate.use).toHaveBeenCalledWith(OTHER_LANG);
     expect(translate.applied).toEqual([OTHER_LANG]);
-    // The switch took no effect, so nothing is reported as switched and the failure is reported
-    // instead of being swallowed (AAP 0.14.2).
+    // The switch took no effect, so nothing is reported as switched and the failure is reported instead of being swallowed (AAP 0.14.2).
     expect(switched).toEqual([]);
     expect(failures).toBe(1);
-    // Written back by hand: the `[value]` binding never rewrites a control whose bound value — the
-    // language in force — did not change.
+    // Written back by hand: the `[value]` binding never rewrites a control whose bound value — the language in force — did not change.
     expect(selector().value).toBe(ACTIVE);
   });
 
@@ -278,7 +263,6 @@ describe('LanguageSwitcherComponent', () => {
 
     choose('');
 
-    // An empty option is not a language: no bundle is loaded and no output fires.
     expect(translate.use).not.toHaveBeenCalled();
     expect(switched).toEqual([]);
     expect(failures).toBe(0);
@@ -290,8 +274,7 @@ describe('LanguageSwitcherComponent', () => {
 
     choose(OTHER_LANG);
 
-    // The entry legacy's own `changeLang` writes (`MainController.js:344`), which the start-up in
-    // `app.config.ts` applies again on the next load.
+    // The entry legacy's own `changeLang` writes (`MainController.js:344`), which the start-up in `app.config.ts` applies again on the next load.
     expect(window.localStorage.getItem(languagePreferenceKey())).toBe(
       JSON.stringify({ code: OTHER_LANG }),
     );
@@ -304,8 +287,7 @@ describe('LanguageSwitcherComponent', () => {
 
     choose(OTHER_LANG);
 
-    // Reported as a failure, and still the language the next page load starts in: it was stored
-    // before the bundle was asked for (`MainController.js:343-345`).
+    // Reported as a failure, and still the language the next page load starts in: it was stored before the bundle was asked for (`MainController.js:343-345`).
     expect(switched).toEqual([]);
     expect(failures).toBe(1);
     expect(TestBed.inject(LanguagePreferenceService).read()).toBe(OTHER_LANG);

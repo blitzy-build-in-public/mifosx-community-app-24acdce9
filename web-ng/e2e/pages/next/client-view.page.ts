@@ -19,60 +19,44 @@ export interface ClientHeaderView {
 
 /** One row of the record's accounts table (AAP 0.10.1 W3, from `GET /clients/{id}/accounts`). */
 export interface AccountRow {
-  /** Account number as rendered — the table's first column. */
   readonly accountNo: string;
-  /** Product name as rendered — the table's second column. */
   readonly product: string;
   /** The row's indicator colour class, or `''` when the row paints none. */
   readonly statusClass: string;
-  /** The balance the row prints — the table's last column, verbatim. */
   readonly balance: string;
-  /** Every cell of the row, trimmed, in column order. */
   readonly cells: readonly string[];
 }
 
 /** One row of the record's identifiers table (AAP 0.10.1 W3, from `GET /clients/{id}/identifiers`). */
 export interface IdentifierRow {
-  /** Document type as rendered — the table's first column. */
   readonly documentType: string;
-  /** The identifier's key, i.e. the document number — the table's second column. */
   readonly documentKey: string;
-  /** Free-text description — the table's third column. */
   readonly description: string;
   /** The row's indicator colour class, or `''` — this table prints its status as text, not as a colour. */
   readonly statusClass: string;
-  /** Every cell of the row, trimmed, in column order. */
   readonly cells: readonly string[];
 }
 
-/** What the record header yields inside the page, before the metadata runs are matched to the three fields {@link ClientHeaderView} names. */
 interface HeaderReading {
-  /** The record title's text, trimmed. */
   readonly displayName: string;
   /** The indicator's colour class, or `''`. */
   readonly statusClass: string;
-  /** The inline metadata runs, in document order, each label stripped of its trailing colon. */
   readonly runs: readonly { readonly label: string; readonly value: string }[];
 }
 
-/** One table row read inside the page: its cells and its indicator's colour class. */
 interface TableRowReading {
-  /** The row's cells, trimmed, in column order. */
   readonly cells: readonly string[];
   /** The row's indicator colour class, or `''`. */
   readonly statusClass: string;
 }
 
-/** Root of the client record: every other locator in this file is scoped to it. */
 const ROOT_SELECTOR = 'app-client-view';
 
 /** The record's own trail (`<ol class="breadcrumb">` holding the client's office). */
 const BREADCRUMB_SELECTOR = '.breadcrumb';
 
-/** The record's head block: the indicator, the name and the three inline metadata runs. */
 const RECORD_HEADER_SELECTOR = 'app-record-header';
 
-/** The record's tab strip. */
 const TAB_STRIP_SELECTOR = 'app-tab-strip';
 
 /** The record's joined action row, with its `More` dropdown. */
@@ -93,16 +77,13 @@ const SUMMARY_SELECTOR = 'app-client-summary';
 /** `Identities` tab's identifiers section. */
 const IDENTIFIERS_SELECTOR = 'app-client-identifiers';
 
-/** A tab of the strip: the anchor of a `.nav-tabs` item. The two decorative chevrons the strip renders are `<li aria-hidden="true">` with no anchor, so they never appear as a label (AAP 0.5.2, AAP 0.10.5, Rule 1 clause 3). */
+/** A tab of the strip: the `role="tab"` anchor a `.nav-tabs` item holds. The strip renders no scroll chevron, because the in-scope record carries at most three tabs and a control that scrolls nothing is the broken affordance the plan refuses (AAP 0.10.5 items 6 and 8, Rule 1 clause 3). */
 const TAB_LINK_SELECTOR = `.nav-tabs li > a`;
 
-/** The strip's whole items, used only if a template stops rendering an anchor inside a tab item. */
 const TAB_ITEM_SELECTOR = `.nav-tabs li`;
 
-/** The tab item the screen currently shows — the target the active class moves to on a switch. */
 const ACTIVE_TAB_SELECTOR = '.nav-tabs li.active > a';
 
-/** An entry of the visible action row: the joined primary-button links. */
 const TOP_LEVEL_ACTION_SELECTOR = 'a.btn.btn-primary';
 
 /** An entry of the action row's `More` menu, which Bootstrap hides until the `.open` class is set. */
@@ -117,10 +98,8 @@ const MENU_SELECTOR = '.dropdown-menu';
 /** The dropdown wrapper whose `.open` class reveals {@link MENU_SELECTOR}. */
 const DROPDOWN_SELECTOR = '.dropdown';
 
-/** The loan account record a loan row opens. */
 const LOAN_VIEW_SELECTOR = 'app-loan-view';
 
-/** Where an action's own screen is, keyed by the route segment of the link the action carries. */
 const ACTION_DESTINATIONS: readonly {
   readonly route: RegExp;
   readonly root: string;
@@ -131,23 +110,19 @@ const ACTION_DESTINATIONS: readonly {
   { route: /\/client\//, root: 'app-client-actions', description: 'the client action screen' },
 ];
 
-/** Ceiling for a screen to appear after a navigation or a click. */
 const SCREEN_TIMEOUT_MS = 30_000;
 
 /** Ceiling for the `More` menu to open, which is a class change and nothing else. */
 const MENU_TIMEOUT_MS = 5_000;
 
-/** Collapses the whitespace a template leaves between its elements, then trims. */
 function normalizeText(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
 
-/** Escapes every character that would otherwise be read as part of a pattern. */
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** Builds the case-insensitive pattern a caller's label is matched with. */
 function labelPattern(label: string): RegExp {
   const tokens = label
     .trim()
@@ -159,12 +134,10 @@ function labelPattern(label: string): RegExp {
   return new RegExp(tokens.map(escapeRegExp).join('\\s*'), 'i');
 }
 
-/** Renders an argument a caller passed, so an error message shows a blank or odd value as it arrived. */
 function describeArgument(value: number | string): string {
   return typeof value === 'number' ? String(value) : JSON.stringify(value);
 }
 
-/** Renders a client or loan account id as the single hash-route segment it has to be. */
 function requireRouteId(value: number | string, role: string): string {
   const text = (typeof value === 'number' ? (Number.isFinite(value) ? String(value) : '') : value).trim();
   if (text.length === 0) {
@@ -194,7 +167,6 @@ function valueOfRun(
   return '';
 }
 
-/** Renders a list of labels for an error message, so a caller that asked for a label the screen does not show is told what the screen does show. */
 function describeLabels(labels: readonly string[]): string {
   return labels.length === 0 ? 'no labels at all' : labels.map((label) => `"${label}"`).join(', ');
 }
@@ -282,7 +254,6 @@ function readTableRowsInPage(element: HTMLElement): TableRowReading[] {
 
 /** Drives the new Angular application's client record and reads what it renders: the `next` side of workflow W3 and the entry point every in-scope client action and every loan and savings workflow uses (AAP 0.10.1, AAP (AAP 0.7.4, Rule 1 clause 9, Rule 1 clause 8). */
 export class ClientViewPage {
-  /** @param page The Playwright page the spec has already authenticated on. */
   constructor(private readonly page: Page) {}
 
   /** Opens the record of one client on `#/viewclient/:id` (the entry step of AAP 0.10.1 W3) (AAP 0.7.4). */
@@ -332,7 +303,6 @@ export class ClientViewPage {
     return (await items.allInnerTexts()).map(normalizeText).filter((label) => label.length > 0);
   }
 
-  /** Switches the record to the tab whose label a caller names, and waits for the section it shows. */
   async selectTab(label: string): Promise<void> {
     const pattern = labelPattern(label);
     const root = await this.record();
@@ -392,7 +362,6 @@ export class ClientViewPage {
     await menu.waitFor({ state: 'visible', timeout: MENU_TIMEOUT_MS });
   }
 
-  /** Follows the action whose label a caller names, and waits for the screen it leads to. */
   async startAction(label: string): Promise<void> {
     const pattern = labelPattern(label);
     const group = (await this.record()).locator(ACTION_GROUP_SELECTOR);
@@ -472,7 +441,6 @@ export class ClientViewPage {
     await this.startAction('New Loan');
   }
 
-  /** Root locator: every other locator in this class is scoped to the record. */
   private root(): Locator {
     return this.page.locator(ROOT_SELECTOR).first();
   }
@@ -483,7 +451,6 @@ export class ClientViewPage {
     return this.root();
   }
 
-  /** Waits for the record's first paint, or for the message that replaces a record the server refused. */
   private async awaitRecordSettled(): Promise<void> {
     const settled = this.root().locator(`${RECORD_HEADER_SELECTOR}, .alert.alert-danger`);
     if ((await settled.count()) > 0) {
@@ -495,7 +462,6 @@ export class ClientViewPage {
       .catch((): void => undefined);
   }
 
-  /** Waits for the accounts section to reach one of the three states its template paints, and lets a section that reaches none of them be read as it stands (see {@link ACCOUNTS_SETTLED_SELECTOR}). */
   private async awaitAccountsSettled(): Promise<void> {
     const settled = this.root().locator(ACCOUNTS_SETTLED_SELECTOR);
     if ((await settled.count()) > 0) {
@@ -555,7 +521,6 @@ export class ClientViewPage {
     return null;
   }
 
-  /** Waits for the screen an action's own link leads to. The destination comes from the route the link carries rather than from the label, so a locale that words an action differently still resolves the screen it opens. */
   private async awaitActionDestination(href: string): Promise<void> {
     for (const destination of ACTION_DESTINATIONS) {
       if (destination.route.test(href)) {

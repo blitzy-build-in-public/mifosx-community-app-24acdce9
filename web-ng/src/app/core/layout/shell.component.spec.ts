@@ -193,7 +193,6 @@ describe('ShellComponent', () => {
   }
 
   beforeEach(() => {
-    // Reset first so each test starts on a fresh root injector and no previous fixture's listeners or signals reach it.
     TestBed.resetTestingModule();
     auth = new AuthStub();
     idle = new IdleStub();
@@ -273,7 +272,6 @@ describe('ShellComponent', () => {
         `${link.getAttribute('href') ?? ''} ${link.textContent ?? ''}`.toLowerCase(),
     );
 
-    // Asserted non-empty first, so the absence below is the shell's in-scope links being checked rather than a template that rendered no link at all.
     expect(destinations.length).toBeGreaterThan(0);
 
     expect(
@@ -299,7 +297,6 @@ describe('ShellComponent', () => {
   it('starts the idle clock while a session is in effect, stops it when the session clears, and ignores activity without one', () => {
     createShell();
 
-    // No session: the gate leaves the clock stopped.
     expect(idle.start).not.toHaveBeenCalled();
     expect(idle.stop).toHaveBeenCalledTimes(1);
 
@@ -355,19 +352,16 @@ describe('ShellComponent', () => {
       document.dispatchEvent(new Event('mousemove'));
       expect(idle.reset).toHaveBeenCalledTimes(1);
 
-      // The rest of the burst is dropped, whichever pointer event it is.
       for (let move = 0; move < 20; move += 1) {
         document.dispatchEvent(new Event('mousemove'));
       }
       document.dispatchEvent(new Event('wheel'));
       expect(idle.reset).toHaveBeenCalledTimes(1);
 
-      // One millisecond short of the window: still suppressed.
       vi.setSystemTime(new Date(START_OF_WINDOW.getTime() + POINTER_THROTTLE_MS - 1));
       document.dispatchEvent(new Event('wheel'));
       expect(idle.reset).toHaveBeenCalledTimes(1);
 
-      // The first pointer event of the next window re-arms it again, so a pointer that keeps moving keeps the session alive.
       vi.setSystemTime(new Date(START_OF_WINDOW.getTime() + POINTER_THROTTLE_MS));
       document.dispatchEvent(new Event('mousemove'));
       expect(idle.reset).toHaveBeenCalledTimes(2);
@@ -417,7 +411,6 @@ describe('ShellComponent', () => {
     expect(find<HTMLButtonElement>('.alert-warning button').textContent?.trim()).toBe(
       SPEC_BUNDLE_FR['label.button.stay.signed.in'],
     );
-    // Still the same warning about the same session: a switch re-renders the copy, it does not end the session or dismiss the alert.
     expect(auth.logout).not.toHaveBeenCalled();
     expect(host().querySelector('.alert.alert-warning')).not.toBeNull();
   });
@@ -476,7 +469,6 @@ describe('ShellComponent', () => {
     document.dispatchEvent(new KeyboardEvent('keydown'));
     expect(idle.reset).not.toHaveBeenCalled();
 
-    // The throttled pointer listener is removed with the same reference the constructor added, so a destroyed shell cannot re-arm a later session's clock through it either.
     document.dispatchEvent(new Event('mousemove'));
     document.dispatchEvent(new Event('wheel'));
     expect(idle.reset).not.toHaveBeenCalled();
@@ -524,7 +516,6 @@ describe('ShellComponent', () => {
     expect(navigate).not.toHaveBeenCalled();
     expect(crumbLabels()).toEqual([SPEC_BUNDLE_FR['label.heading.clients']]);
 
-    // Back again, so the case cannot pass by rendering the second language unconditionally.
     await firstValueFrom(translate.use(BASE_LANG));
     fixture.detectChanges();
 

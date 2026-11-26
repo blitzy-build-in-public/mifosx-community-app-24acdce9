@@ -100,10 +100,8 @@ describe('ProfileCardComponent', () => {
   it('renders the avatar as decoration served from the legacy image tree', () => {
     const fixture = createCard();
     const avatar = host(fixture).querySelector('img.img-responsive');
-    // Exactly one image: the card carries the avatar and nothing else that draws one.
     expect(host(fixture).querySelectorAll('img')).toHaveLength(1);
     expect(avatar).not.toBeNull();
-    // Decorative: the record's identity is carried by the heading, so the alt stays empty.
     expect(avatar?.getAttribute('alt')).toBe('');
     // The attribute as written, not the resolved `.src`: the path is served in place from the legacy image tree, so a rewrite here would point the card at an asset the build never serves.
     expect(avatar?.getAttribute('src')).toBe('images/client-image-placeholder.png');
@@ -122,11 +120,9 @@ describe('ProfileCardComponent', () => {
     const populated = rows(fixture)[0];
     expect(cellText(populated, 'profile-field-label')).toBe(FIELDS[0].label);
     expect(cellText(populated, 'profile-field-value')).toBe(FIELDS[0].value);
-    // The bold key column is the class the stylesheet styles; a row without a value keeps it.
     expect(
       populated.querySelector('[data-testid="profile-field-label"]')?.classList.contains('value-key'),
     ).toBe(true);
-    // One label element and one value element per row, for the populated row and the empty one alike, which is what puts every value at one fixed offset (jsdom has no layout to measure).
     for (const row of rows(fixture)) {
       expect(row.querySelectorAll('[data-testid="profile-field-label"]')).toHaveLength(1);
       expect(row.querySelectorAll('[data-testid="profile-field-value"]')).toHaveLength(1);

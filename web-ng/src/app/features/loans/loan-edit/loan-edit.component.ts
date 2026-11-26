@@ -10,18 +10,19 @@ import {
 import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
-import { ApiError } from '../../../core/http/api-error';
+import { ApiError, screenFailure, toDisplayableFailure } from '../../../core/http/api-error';
 import { fromFineractDate } from '../../../shared/date-format.util';
 import { DateFieldComponent } from '../../../shared/date-field/date-field.component';
 import { PanelCardComponent } from '../../../shared/panel-card/panel-card.component';
+import { RecordNotFoundComponent } from '../../../shared/record-not-found/record-not-found.component';
 import {
   SelectFieldComponent,
   type SelectOption,
   type SelectValue,
 } from '../../../shared/select-field/select-field.component';
 import { createSubmitGuard } from '../../../shared/submit-guard.util';
-import { isLoanAccount, readSelectedId } from '../loan.models';
-import type { LoanAccount, LoanCharge, LoanEditRequest } from '../loan.models';
+import { readSelectedId } from '../loan.models';
+import type { LoanAccount, LoanCharge, LoanEditRequest, LoanEditSeed } from '../loan.models';
 import { LoanService } from '../loan.service';
 import type { LoanApplicationInput } from '../loan.service';
 /** The sixteen controls of the edit form, in the order the application body carries them: `formControlName` and the rendered element's `id` are the control names themselves, because the parity page objects address the same fields by id on both front ends (`#principal`, `#numberOfRepayments`, `#repaymentEvery`, `#interestRatePerPeriod`, `#expectedDisbursementDate`, `#submittedOnDate`, `#loanOfficerId`, `#fundId`). */
@@ -122,47 +123,35 @@ const EMPTY_TEMPLATE_FIELDS: LoanEditTemplateFields = {
   fundId: null,
   fundOptions: [],
 };
-/** The payload's own members, read by name as the loosely typed values a response carries. */
-type PayloadFields = ReadonlyMap<string, unknown>;
 /** Whether a value is a JSON object, the only shape an option row or an id-bearing member has. */
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
-/** Indexes a response body by member name so the members this file reads through {@link LoanEditTemplateFields} can be narrowed one at a time without a cast: `Object.entries` types a plain object's values as `any`, and widening the pairs here keeps every read below a checked `unknown` the narrowing helpers accept — the same boundary `loan.service.ts` uses when it serialises a request body (Rule 1 clause 4). */
-function payloadFields(account: LoanAccount): PayloadFields {
-  const entries: readonly (readonly [string, unknown])[] = Object.entries(account);
-  return new Map(entries);
-}
-/** A numeric member, or `null` when the payload carried none. */
-function readNumberMember(fields: PayloadFields, key: string): number | null {
-  const value = fields.get(key);
+/** A numeric member, or `null` when the payload carried none: the payload is JSON the model describes, so a member it sent in another shape is read as absent rather than as a number nobody entered (Rule 1 clause 4). */
+function asNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 /** A non-empty string member, or `null` when the payload carried none. */
-function readStringMember(fields: PayloadFields, key: string): string | null {
-  const value = fields.get(key);
+function asText(value: unknown): string | null {
   return typeof value === 'string' && value !== '' ? value : null;
 }
-/** The object rows of an option list, skipping anything the payload sent in another shape. */
-function readOptionRows(fields: PayloadFields, key: string): readonly Readonly<Record<string, unknown>>[] {
-  const value = fields.get(key);
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  const rows: readonly unknown[] = value;
-  return rows.filter(isRecord);
+/** The object rows of an option list, skipping anything the payload sent in another shape; a list the payload omitted holds no row. */
+function readOptionRows(
+  rows: readonly unknown[] | undefined,
+): readonly Readonly<Record<string, unknown>>[] {
+  return rows === undefined ? [] : rows.filter(isRecord);
 }
-/** The rows of an option list shaped `{id: number, value: string}`, in the received order. */
-function readIdOptions(fields: PayloadFields, key: string): readonly SelectOption[] {
-  return readOptionRows(fields, key).flatMap((row): readonly SelectOption[] => {
+/** The rows of an enumeration option list, shaped `{id: number, value: string}`, in the received order. */
+function readIdOptions(rows: readonly unknown[] | undefined): readonly SelectOption[] {
+  return readOptionRows(rows).flatMap((row): readonly SelectOption[] => {
     const id = row['id'];
     const name = row['value'];
     return typeof id === 'number' && typeof name === 'string' ? [{ id, name }] : [];
   });
 }
-/** The rows of an option list shaped `{code: string, name: string}`, keyed by their code. */
-function readCodeOptions(fields: PayloadFields, key: string): readonly SelectOption[] {
-  return readOptionRows(fields, key).flatMap((row): readonly SelectOption[] => {
+/** The rows of the strategy option list, shaped `{code: string, name: string}`, keyed by their code. */
+function readCodeOptions(rows: readonly unknown[] | undefined): readonly SelectOption[] {
+  return readOptionRows(rows).flatMap((row): readonly SelectOption[] => {
     const code = row['code'];
     const name = row['name'];
     return typeof code === 'string' && typeof name === 'string' ? [{ id: code, name }] : [];
@@ -180,45 +169,43 @@ function readOfficerLabel(row: Readonly<Record<string, unknown>>): string | null
   return names.length === 0 ? null : names.join(' ');
 }
 /** The rows of `loanOfficerOptions`, shaped `{id, displayName, firstname, lastname}`, in order. */
-function readOfficerOptions(fields: PayloadFields, key: string): readonly SelectOption[] {
-  return readOptionRows(fields, key).flatMap((row): readonly SelectOption[] => {
+function readOfficerOptions(rows: readonly unknown[] | undefined): readonly SelectOption[] {
+  return readOptionRows(rows).flatMap((row): readonly SelectOption[] => {
     const id = row['id'];
     const name = readOfficerLabel(row);
     return typeof id === 'number' && name !== null ? [{ id, name }] : [];
   });
 }
-/** Reads the template portion of the edit payload: the persisted values and the option lists. */
-function readTemplateFields(account: LoanAccount): LoanEditTemplateFields {
-  const fields = payloadFields(account);
+/** The rows of `fundOptions`, shaped `{id, name}` — the label member `OptionItem` declares and the one the fund picker renders — reading `value` instead only for a payload that sent the enumeration shape, in the received order (AAP 0.7.2, Rule 1 clause 3). */
+function readFundOptions(rows: readonly unknown[] | undefined): readonly SelectOption[] {
+  return readOptionRows(rows).flatMap((row): readonly SelectOption[] => {
+    const id = row['id'];
+    const name = typeof row['name'] === 'string' ? row['name'] : row['value'];
+    return typeof id === 'number' && typeof name === 'string' ? [{ id, name }] : [];
+  });
+}
+/** Reads the template portion of the edit seed: the persisted values and the option lists, from the typed members `LoanEditSeed` declares — a Fineract rename now fails the build instead of emptying a picker, and each row helper below still drops a row the server sent in another shape (AAP 0.7.2, Rule 1 clause 4). */
+function readTemplateFields(seed: LoanEditSeed): LoanEditTemplateFields {
   return {
-    termFrequency: readNumberMember(fields, 'termFrequency'),
-    termFrequencyType: readSelectedId(fields.get('termPeriodFrequencyType')),
-    termFrequencyTypeOptions: readIdOptions(fields, 'termFrequencyTypeOptions'),
-    repaymentFrequencyType: readSelectedId(fields.get('repaymentFrequencyType')),
-    repaymentFrequencyTypeOptions: readIdOptions(fields, 'repaymentFrequencyTypeOptions'),
-    interestRateFrequencyType: readSelectedId(fields.get('interestRateFrequencyType')),
-    interestRateFrequencyTypeOptions: readIdOptions(fields, 'interestRateFrequencyTypeOptions'),
-    amortizationType: readSelectedId(fields.get('amortizationType')),
-    amortizationTypeOptions: readIdOptions(fields, 'amortizationTypeOptions'),
-    interestType: readSelectedId(fields.get('interestType')),
-    interestTypeOptions: readIdOptions(fields, 'interestTypeOptions'),
-    interestCalculationPeriodType: readSelectedId(fields.get('interestCalculationPeriodType')),
-    interestCalculationPeriodTypeOptions: readIdOptions(
-      fields,
-      'interestCalculationPeriodTypeOptions',
-    ),
-    transactionProcessingStrategyCode: readStringMember(
-      fields,
-      'transactionProcessingStrategyCode',
-    ),
-    transactionProcessingStrategyOptions: readCodeOptions(
-      fields,
-      'transactionProcessingStrategyOptions',
-    ),
-    loanOfficerId: readSelectedId(fields.get('loanOfficerId')),
-    loanOfficerOptions: readOfficerOptions(fields, 'loanOfficerOptions'),
-    fundId: readSelectedId(fields.get('fundId')),
-    fundOptions: readIdOptions(fields, 'fundOptions'),
+    termFrequency: asNumber(seed.termFrequency),
+    termFrequencyType: readSelectedId(seed.termPeriodFrequencyType),
+    termFrequencyTypeOptions: readIdOptions(seed.termFrequencyTypeOptions),
+    repaymentFrequencyType: readSelectedId(seed.repaymentFrequencyType),
+    repaymentFrequencyTypeOptions: readIdOptions(seed.repaymentFrequencyTypeOptions),
+    interestRateFrequencyType: readSelectedId(seed.interestRateFrequencyType),
+    interestRateFrequencyTypeOptions: readIdOptions(seed.interestRateFrequencyTypeOptions),
+    amortizationType: readSelectedId(seed.amortizationType),
+    amortizationTypeOptions: readIdOptions(seed.amortizationTypeOptions),
+    interestType: readSelectedId(seed.interestType),
+    interestTypeOptions: readIdOptions(seed.interestTypeOptions),
+    interestCalculationPeriodType: readSelectedId(seed.interestCalculationPeriodType),
+    interestCalculationPeriodTypeOptions: readIdOptions(seed.interestCalculationPeriodTypeOptions),
+    transactionProcessingStrategyCode: asText(seed.transactionProcessingStrategyCode),
+    transactionProcessingStrategyOptions: readCodeOptions(seed.transactionProcessingStrategyOptions),
+    loanOfficerId: readSelectedId(seed.loanOfficerId),
+    loanOfficerOptions: readOfficerOptions(seed.loanOfficerOptions),
+    fundId: readSelectedId(seed.fundId),
+    fundOptions: readFundOptions(seed.fundOptions),
   };
 }
 /** A select's chosen id as the number the payload posts, or `null` when nothing is chosen. */
@@ -245,20 +232,6 @@ function requireStrategyCode(value: SelectValue | null): string {
 
 /** One `charges` row of the edit body, taken from the model's own row type (AAP 0.7.2, Rule 1 clause 4). */
 type LoanChargeRow = NonNullable<LoanEditRequest['charges']>[number];
-
-/** The text shown when an action rejects with something the interceptor did not map to an `ApiError` (AAP 0.4.2, AAP 0.4.4). */
-const UNMAPPED_FAILURE = 'The request could not be completed.';
-
-/** Reads whatever a call rejected with into the one error type a screen renders (Rule 1 clause 3, AAP 0.14.2, Rule 1 clause 9). */
-function toDisplayableFailure(cause: unknown): ApiError {
-  if (cause instanceof ApiError) {
-    return cause;
-  }
-
-  const message = cause instanceof Error && cause.message !== '' ? cause.message : UNMAPPED_FAILURE;
-
-  return new ApiError(message, 0);
-}
 
 /** One `charges` row of the body, for a charge the loan carries (AAP 0.3.4, AAP 0.14.1, Rule 1 clause 2). */
 function chargeRow(charge: LoanCharge): LoanChargeRow {
@@ -288,6 +261,7 @@ function chargeRow(charge: LoanCharge): LoanChargeRow {
     TranslatePipe,
     DateFieldComponent,
     PanelCardComponent,
+    RecordNotFoundComponent,
     SelectFieldComponent,
   ],
   templateUrl: './loan-edit.component.html',
@@ -313,7 +287,7 @@ export class LoanEditComponent {
   /** `true` when the loan does not exist, or when the body is not a loan at all. */
   readonly notFound = signal(false);
 
-  /** The failure to render above the form, verbatim; `null` while there is none. */
+  /** The failure to render above the form, verbatim: the 4xx `screenFailure` hands back, and `null` while there is none or when the interceptor has already reported the failure it mapped. */
   readonly error = signal<ApiError | null>(null);
 
   /** The loaded loan, the source of the identifiers the body echoes and of the seeded values. */
@@ -374,7 +348,7 @@ export class LoanEditComponent {
       });
   }
 
-  /** Saves the edited application with one `PUT /loans/{id}`, then returns to the record (AAP 0.14.2). */
+  /** Saves the edited application with one `PUT /loans/{id}`, then returns to the record; the failures this screen paints are the 4xx and the ones raised before the request left it, because a 5xx or a transport failure is already the interceptor's own notification (AAP 0.14.2). */
   async submit(): Promise<void> {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
@@ -396,7 +370,8 @@ export class LoanEditComponent {
         await this.router.navigate(['/viewloanaccount', loanId]);
       });
     } catch (error: unknown) {
-      this.error.set(toDisplayableFailure(error));
+      // The interceptor raises the one notification for every failure it maps to a 5xx or a transport status, so `screenFailure` answers `null` for those and this screen paints only the 4xx it leaves to the caller — and a failure raised before the request left the screen, which is what `buildRequest`'s own `requireNumber` and `requireStrategyCode` throw, and which no notification can carry (AAP 0.7.4 "server validation messages appear verbatim above the form … 5xx or network failures raise a notification"; AAP 0.14.2 "no `catch` swallows an error silently").
+      this.error.set(error instanceof ApiError ? screenFailure(error) : toDisplayableFailure(error));
     }
   }
 
@@ -498,27 +473,20 @@ export class LoanEditComponent {
     }
 
     try {
-      const payload = await firstValueFrom(this.loans.getWithTemplate(loanId));
+      const seed = await firstValueFrom(this.loans.getWithTemplate(loanId));
 
-      // The single await is the whole read, so this check covers every write below it: a superseded loan's answer is dropped here rather than seeded under the loan the URL now names.
       if (load !== this.loadSequence) {
         return;
       }
 
-      if (!isLoanAccount(payload)) {
-        this.notFound.set(true);
+      const template = readTemplateFields(seed);
 
-        return;
-      }
-
-      const template = readTemplateFields(payload);
-
-      this.account.set(payload);
-      this.charges.set(payload.charges ?? []);
+      this.account.set(seed);
+      this.charges.set(seed.charges ?? []);
       this.template.set(template);
       this.loanOfficerOptions.set(template.loanOfficerOptions);
       this.fundOptions.set(template.fundOptions);
-      this.seedForm(payload, template);
+      this.seedForm(seed, template);
     } catch (error: unknown) {
       if (load !== this.loadSequence) {
         return;
@@ -526,13 +494,13 @@ export class LoanEditComponent {
 
       const failure = toDisplayableFailure(error);
 
+      // A 404 is this record's absence, which the template renders in place of the form; any other 4xx is the server's own message above the form; a 5xx or a transport failure answers `null` from `screenFailure`, because the interceptor has already raised that failure's one notification (AAP 0.7.4 "States every list and record screen must implement"; AAP 0.14.2).
       if (failure.status === 404) {
         this.notFound.set(true);
       } else {
-        this.error.set(failure);
+        this.error.set(screenFailure(failure));
       }
     } finally {
-      // Only the current run owns the loading state: the superseded one must not clear the flag the newer read set, or the card would stop reporting that it is still filling.
       if (load === this.loadSequence) {
         this.loading.set(false);
       }

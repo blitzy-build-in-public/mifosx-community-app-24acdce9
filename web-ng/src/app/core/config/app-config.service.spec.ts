@@ -165,7 +165,6 @@ describe('AppConfigService', () => {
       expect(config.apiBaseUrl).toBe('https://parity.example:9443');
       expect(config.tenantId).toBe('blitzy-tenant_01');
 
-      // Only the two overridable keys move; every other value is the one the file supplied.
       expect(config).toEqual({
         ...SERVED_CONFIG,
         apiBaseUrl: 'https://parity.example:9443',
@@ -239,7 +238,6 @@ describe('AppConfigService', () => {
     // A schemeless or relative `apiBaseUrl` used to be accepted and resolved against the application's own origin, so every API call received the SPA's index.html while the application reported a healthy start.
     const invalidValues: readonly (readonly [string, Record<string, unknown>, string, string])[] = [
       ['a schemeless apiBaseUrl', servedRecord({ apiBaseUrl: 'localhost:8443' }), "'apiBaseUrl'", 'absolute URL'],
-      // A dot-relative value is another way the browser would resolve the host against the application's own origin, so the same rule refuses it.
       ['a relative apiBaseUrl', servedRecord({ apiBaseUrl: './fineract-provider' }), "'apiBaseUrl'", 'absolute URL'],
       [
         'an apiBaseUrl carrying whitespace',
@@ -405,7 +403,6 @@ describe('AppConfigService', () => {
       expect(error.message).toContain(CONFIG_URL);
       expect(error.message).toContain(described);
 
-      // No substituted host: the rejection names the file and the fix, never a server the application could quietly call instead.
       expect(error.message).not.toContain(SERVED_CONFIG.apiBaseUrl);
       expect(() => harness.service.config).toThrow(/not resolved yet/);
     });
@@ -423,7 +420,6 @@ describe('AppConfigService', () => {
     it('throws before load() when no translate service can report a selected language', () => {
       const harness = createHarness();
 
-      // Neither source exists yet: no bundle is selected and no configuration is resolved.
       expect(() => harness.service.activeLocale()).toThrow(/not resolved yet/);
     });
 
@@ -440,7 +436,6 @@ describe('AppConfigService', () => {
       const harness = createHarness('', '', SERVED, [{ provide: TranslateService, useValue: translate }]);
       await harness.service.load();
 
-      // A language chosen after startup has to reach the next date-bearing payload.
       expect(harness.service.activeLocale()).toBe('fr');
       selected.set('sw');
       expect(harness.service.activeLocale()).toBe('sw');

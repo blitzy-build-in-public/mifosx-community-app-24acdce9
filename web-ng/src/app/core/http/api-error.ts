@@ -111,7 +111,6 @@ export function navigationFailure(cause: unknown, destination: string): ApiError
     return toApiError(cause);
   }
 
-  // One sentence, built from the destination the caller was navigating to, so the text is identical wherever the same refusal is reported.
   return new ApiError(`The ${destination} did not open. Reload the page and try again.`, 0);
 }
 

@@ -1,4 +1,4 @@
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { TranslatePipe } from '@ngx-translate/core';
@@ -6,6 +6,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 import { HasPermissionDirective } from '../../../../shared/has-permission.directive';
 import { DISPLAY_DATE_FORMAT, fromFineractDate } from '../../../../shared/date-format.util';
 import { EmptyStateComponent } from '../../../../shared/empty-state/empty-state.component';
+import { MoneyPipe } from '../../../../shared/money/money.pipe';
 // The loans feature keeps one model module at its root (`features/loans/loan.models.ts`), which is two levels above this section's folder.
 import type { LoanCharge, LoanStatus } from '../../loan.models';
 
@@ -29,7 +30,7 @@ type ChargeRow = Omit<LoanCharge, 'dueDate'> & {
 /** Charges section of the individual-loan record (`#/viewloanaccount/:id`): the read-only table of the charges the loan carries, with the two entry points that act on one of them (AAP 0.7.1 row `loans`, which names `LoanChargesComponent`; AAP 0.7.2, AAP 0.7.4, AAP 0.7.3, AAP 0.4.2). */
 @Component({
   selector: 'app-loan-charges',
-  imports: [DatePipe, DecimalPipe, RouterLink, TranslatePipe, EmptyStateComponent, HasPermissionDirective],
+  imports: [DatePipe, MoneyPipe, RouterLink, TranslatePipe, EmptyStateComponent, HasPermissionDirective],
   templateUrl: './loan-charges.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })

@@ -1,0 +1,21 @@
+<!--
+  The one not-found presentation a record screen renders in place of the record it does not have
+  (`#/viewclient/:id`, `#/editclient/:id`, `#/client/:id/:action`, `#/viewloanaccount/:id`,
+  `#/editloanaccount/:id`, `#/loanaccount/:id/:action`, `#/loanaccount/:id/repayment`,
+  `#/addloancharge/:id` and `#/loanaccountcharge/:id/:action/:chargeId`), so the same 404 reads the
+  same way on every one of them (AAP 0.7.4 "States every list and record screen must implement").
+
+  Every visual value comes from the global Bootstrap 3 layer `web-ng/src/styles.scss` compiles, so
+  this file carries no `<style>`, no `style` attribute, no colour and no pixel: `.alert.alert-danger`
+  is the legacy error banner `_alerts.scss` paints, which is the treatment AAP 0.5.2 gives a server
+  error banner, and `role="alert"` announces the message without a focus change (Rule 1 clause 6).
+
+  The two strings resolve through `TranslatePipe` from keys the shipped legacy bundles already hold,
+  and the space between them is written as an interpolation because the compiler drops a text node
+  that is only whitespace. No status word, tooltip, title, icon, retry or way-back control is added:
+  the message replaces the record and the shell around it stays usable, and anything further would be
+  a control or a status the design does not show (AAP 0.10.5 item 11; Rule 1 clause 3).
+-->
+<div class="alert alert-danger" role="alert">
+  <strong>{{ 'label.heading.notavailable' | translate }}</strong>{{ ' ' }}<span>{{ 'error.msg.resource.not.found' | translate }}</span>
+</div>

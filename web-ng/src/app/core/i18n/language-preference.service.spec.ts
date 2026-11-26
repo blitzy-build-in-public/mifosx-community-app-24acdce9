@@ -12,21 +12,14 @@ import {
 } from './language-preference.service';
 
 /**
- * Behaviour of `LanguagePreferenceService` — the owner of the `ls.Language` entry the legacy application keeps the
- * chosen language in (`app/scripts/controllers/main/MainController.js:343-345` writes it, `:232-238` reads it
- * back), and the proof that a full page load continues in the language the user picked (Rule 1 clause 3).
+ * Behaviour of `LanguagePreferenceService` — the owner of the `ls.Language` entry the legacy application keeps the chosen language in (`app/scripts/controllers/main/MainController.js:343-345` writes it,
+ * `:232-238` reads it back), and the proof that a full page load continues in the language the user picked (Rule 1 clause 3). It discharges AAP 0.11.1 (a unit spec beside every service), AAP 0.10.3 criterion 2
+ * (the suite runs headless) and Rule 1 clause 8 (no spec without an `expect`). It pins the key as the exact string the legacy storage wrapper produces — its `'ls'` prefix with the period the wrapper appends,
+ * derived in one place — a remembered code written in the legacy JSON shape and read back, `null` for nothing stored and for a value that is not JSON, a JSON value that is not an object or an object without a
+ * usable `code`, a store the browser refuses neither throwing out of `read()` nor out of `remember()`, `restore()` applying the code through `TranslateService.use()` and doing nothing when nothing is
+ * remembered, and a bundle that cannot be loaded leaving `restore()` silent so start-up never fails over a preference. The translate stack is a typed stand-in for the one member this service touches, so a case
+ * can make one bundle load fail; no HTTP provider exists, because the service reaches no host itself (Rule 1 clause 5).
  *
- * It discharges AAP 0.11.1 (a unit spec beside every service), AAP 0.10.3 criterion 2 (the suite runs headless)
- * and Rule 1 clause 8 (no spec without an `expect`). It pins the key as the exact string the legacy storage
- * wrapper produces — its `'ls'` prefix with the period the wrapper appends, derived in one place — a remembered
- * code written in the legacy JSON shape and read back, `null` for nothing stored and for a value that is not
- * JSON, a JSON value that is not an object or an object without a usable `code`, a store the browser refuses
- * neither throwing out of `read()` nor out of `remember()`, `restore()` applying the code through
- * `TranslateService.use()` and doing nothing when nothing is remembered, and a bundle that cannot be loaded
- * leaving `restore()` silent so start-up never fails over a preference.
- *
- * The translate stack is a typed stand-in for the one member this service touches, so a case can make one bundle
- * load fail; no HTTP provider exists, because the service reaches no host itself (Rule 1 clause 5).
  */
 
 /** The language every fixture stores: one of the offered codes, deliberately not the configured `en`, so a value read back can only have come from the entry. */
@@ -165,8 +158,6 @@ describe('LanguagePreferenceService', () => {
     expect(LEGACY_LANGUAGE_PREFIX).toBe(LEGACY_PREFIX_LITERAL);
     expect(LANGUAGE_ENTRY_KEY).toBe(LEGACY_ENTRY_LITERAL);
     expect(languagePreferenceKey()).toBe(LEGACY_KEY_LITERAL);
-    // The prefix carries no period of its own: the wrapper appends it, and the composed key is the
-    // one that must appear in the store.
     expect(languagePreferenceKey('other', 'Entry')).toBe('other.Entry');
   });
 
@@ -194,8 +185,7 @@ describe('LanguagePreferenceService', () => {
   });
 
   it('reads the code of the whole language object a legacy switch stores', () => {
-    // What `angular.toJson(lang)` wrote on a legacy screen: the `Langs` entry, of which the restore
-    // reads only `code` (`MainController.js:232-238`).
+    // What `angular.toJson(lang)` wrote on a legacy screen: the `Langs` entry, of which the restore reads only `code` (`MainController.js:232-238`).
     seedEntry(JSON.stringify({ name: 'Français', code: REMEMBERED_LANG }));
 
     const { service } = harnessFor();
@@ -244,8 +234,7 @@ describe('LanguagePreferenceService', () => {
   });
 
   it('absorbs a store the browser refuses to hand over at all', () => {
-    // `localStorage` itself throwing on access is the third refusal a browser has — a document the
-    // user blocked storage for — and no entry can be read or written through it.
+    // `localStorage` itself throwing on access is the third refusal a browser has — a document the user blocked storage for — and no entry can be read or written through it.
     withStorage((): Storage => {
       throw new Error('storage access is blocked');
     });
@@ -257,8 +246,7 @@ describe('LanguagePreferenceService', () => {
   });
 
   it('answers null when the document has no storage to reach', () => {
-    // A document made without a browsing context has no `defaultView`, which is the state a page
-    // whose storage the browser has taken away presents.
+    // A document made without a browsing context has no `defaultView`, which is the state a page whose storage the browser has taken away presents.
     const noStorage = document.implementation.createHTMLDocument('storage-unavailable');
     const { service } = harnessFor(createTranslateStub(), noStorage);
 
@@ -275,8 +263,7 @@ describe('LanguagePreferenceService', () => {
 
     expect(translate.use).toHaveBeenCalledTimes(1);
     expect(translate.use).toHaveBeenCalledWith(REMEMBERED_LANG);
-    // `use()` only loads a bundle once what it returns is subscribed to, which is how the switch
-    // itself works in the switcher.
+    // `use()` only loads a bundle once what it returns is subscribed to, which is how the switch itself works in the switcher.
     expect(translate.requested).toEqual([REMEMBERED_LANG]);
   });
 
@@ -298,8 +285,7 @@ describe('LanguagePreferenceService', () => {
     translate.failNextBundle();
 
     expect(() => service.restore()).not.toThrow();
-    // The load was still asked for: the library keeps the language it had and reports the failure
-    // itself, so start-up neither blocks nor fails (AAP 0.14.2).
+    // The load was still asked for: the library keeps the language it had and reports the failure itself, so start-up neither blocks nor fails (AAP 0.14.2).
     expect(translate.requested).toEqual([REMEMBERED_LANG]);
   });
 });

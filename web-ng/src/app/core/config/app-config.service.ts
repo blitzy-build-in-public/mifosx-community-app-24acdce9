@@ -77,7 +77,6 @@ export class AppConfigService {
     const shipped = this.parseAppConfig(raw);
     const overrides = this.readQueryOverrides();
 
-    // Overrides are applied as a new object rather than by mutation, so the resolved value is fixed at construction and no query parameter can reach a key other than these two.
     const resolved: AppConfig = {
       ...shipped,
       ...(overrides.baseApiUrl === undefined ? {} : { apiBaseUrl: overrides.baseApiUrl }),

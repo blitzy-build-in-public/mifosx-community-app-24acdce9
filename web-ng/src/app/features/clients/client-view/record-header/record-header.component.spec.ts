@@ -145,14 +145,12 @@ describe('RecordHeaderComponent', () => {
     (code: string, key: StatusKey) => {
       const host = hostOf(render(makeClient({ status: makeStatus(code) })));
       const dot = dotOf(host);
-      // One indicator, on the title's line, with the base geometry and exactly one colour class.
       expect(host.querySelectorAll('app-status-swatch')).toHaveLength(1);
       expect(host.querySelector('h3 > app-status-swatch')).not.toBeNull();
       expect(dot.classList.contains('status-swatch')).toBe(true);
       expect(dot.classList.contains('status-dot')).toBe(true);
       expect(dot.classList.contains(`status-${key}`)).toBe(true);
       expect(dot.classList).toHaveLength(3);
-      // Colour only: no word, no tooltip, no accessible label of its own.
       expect(dot.textContent).toBe('');
       expect(dot.getAttribute('aria-hidden')).toBe('true');
       expect(dot.hasAttribute('title')).toBe(false);
@@ -197,7 +195,6 @@ describe('RecordHeaderComponent', () => {
     const spans = runSpans(host);
     expect(labelsOf(spans)).toEqual(['Client Number:', 'External ID:', 'Staff:']);
     expect(valuesOf(spans)).toEqual([ACCOUNT_NO, '', '']);
-    // The value cell holds neither text nor a placeholder: it is empty, not a dash and not a word.
     expect(spans[3]?.textContent).toBe('');
     expect(spans[5]?.textContent).toBe('');
     for (const standIn of STAND_IN_TEXT) { expect(textOf(host)).not.toContain(standIn); }
@@ -215,18 +212,15 @@ describe('RecordHeaderComponent', () => {
   it.each(UNMAPPED_CODES)('falls back to the neutral colour for the code "%s"', (code: string) => {
     const host = hostOf(render(makeClient({ status: makeStatus(code) })));
     const dot = dotOf(host);
-    // Neutral, never a claim: an unrecognised code must not paint a client as one of the named states.
     expect(dot.classList.contains('status-other')).toBe(true);
     expect(dot.classList.contains('status-active')).toBe(false);
     expect(dot.classList.contains('status-pending')).toBe(false);
     expect(dot.classList.contains('status-closed')).toBe(false);
-    // The rest of the header is unaffected by the fallback.
     expect(dot.textContent).toBe('');
     expect(textOf(titleOf(host))).toBe('Ada Okafor');
     expect(runSpans(host)).toHaveLength(6);
   });
   it('renders nothing that could raise or display an error', () => {
-    // The suite's TestBed registers the translate stack and nothing else, so the header rendering at all is the statement that it needs no other service: it has no request to fail.
     const host = hostOf(render());
     expect(host.querySelector('app-notification')).toBeNull();
     expect(host.querySelector('.alert')).toBeNull();
@@ -237,7 +231,6 @@ describe('RecordHeaderComponent', () => {
     const host = hostOf(render());
     const rules = Array.from(host.querySelectorAll<HTMLElement>('hr'));
     expect(rules).toHaveLength(1);
-    // The rule is the header's own 1px #E5E5E5 section rule, not the global hairline: the class is what makes web-ng/src/styles.scss paint color-section-rule.
     expect(rules[0]?.classList.contains('section-rule')).toBe(true);
     expect(rules[0]?.previousElementSibling).toBe(stripOf(host));
     expect(Array.from(host.children).map((child) => child.tagName)).toEqual(['H3', 'DIV', 'HR']);

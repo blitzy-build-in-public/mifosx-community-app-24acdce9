@@ -17,9 +17,7 @@ export interface ClientRow {
   readonly statusClass: string;
 }
 
-/** One row's status swatch, addressed by its 0-based position among the rows actually rendered. */
 export interface StatusSwatchSummary {
-  /** 0-based index of the row the swatch belongs to. */
   readonly rowIndex: number;
   /** The swatch's raw class attribute; `''` when the row carries no swatch. */
   readonly className: string;
@@ -27,7 +25,6 @@ export interface StatusSwatchSummary {
 
 /** One row of the global search results (`#/search/:query`). */
 export interface SearchResultRow {
-  /** The row's link text — the entity's display name. */
   readonly primaryText: string;
   /** The line below it, e.g. `Entity:CLIENT | Office:Head Office`; `''` when absent. */
   readonly secondaryText: string;
@@ -35,11 +32,9 @@ export interface SearchResultRow {
   readonly statusClass: string;
 }
 
-/** One option of a dropdown, as the page offers it. */
 export interface SelectOptionSummary {
   /** The `<option>` value — what the legacy form posts to Fineract. */
   readonly value: string;
-  /** The visible label, trimmed. */
   readonly label: string;
 }
 
@@ -150,7 +145,6 @@ const NOTIFICATION_SOURCES = [
 /** Where a validation message may live, from the two selectors AAP 0.7.4 fixes (`.alert.alert-danger` and `.help-block` inside `.has-error`) plus legacy's own field-level markup, `<small class="error required">`. */
 const VALIDATION_ERROR_SOURCES = ['div.alert.alert-danger', '.has-error .help-block', 'small.error'];
 
-/** How long a navigation that the click itself decides — the list row that may or may not be wired to the record, {@link ClientsPage.openClient} — is given before the documented fallback runs. */
 const OPTIONAL_NAVIGATION_TIMEOUT_MS = 10_000;
 
 /** One option of a `<select>`, as a page-side function reports it. */
@@ -159,15 +153,12 @@ interface OptionPair {
   readonly label: string;
 }
 
-/** One table row as the document holds it, serialised out of the page in a single round trip. */
 interface RowSnapshot {
-  /** Every cell's rendered text, in column order, whitespace normalised. */
   readonly cells: readonly string[];
   /** Every cell's status-swatch class attribute, in column order; `''` where a cell has none. */
   readonly swatchClasses: readonly string[];
 }
 
-/** One search result row as the document holds it. */
 interface SearchRowSnapshot {
   readonly primaryText: string;
   readonly secondaryText: string;
@@ -195,7 +186,6 @@ const COLUMN_HEADINGS: readonly { readonly field: keyof Omit<ColumnIndexes, 'sta
     { field: 'staff', headings: ['staff', 'loan officer', 'officer'] },
   ];
 
-/** The heading the status swatch sits under. */
 const STATUS_HEADINGS: readonly string[] = ['status'];
 
 /** One navbar search scope: the value legacy sends as the `resource` query parameter, and every spelling a caller may pass to {@link ClientsPage.searchGlobal}. The values and their order are `searchScopes` in (AAP 0.10.5). */
@@ -211,17 +201,14 @@ const SEARCH_SCOPES: readonly { readonly legacyValue: string; readonly aliases: 
   { legacyValue: 'savings', aliases: ['savings'] },
 ];
 
-/** Collapses runs of whitespace and trims, which is how every reader reports rendered text. */
 function normaliseText(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 
-/** Lower-cases a heading and reduces it to its words, so punctuation cannot defeat a match. */
 function headingKey(text: string): string {
   return normaliseText(text).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
-/** Keeps the first occurrence of each value, in order, dropping blanks. */
 function dedupe(values: readonly string[]): string[] {
   const seen = new Set<string>();
   const kept: string[] = [];
@@ -246,7 +233,6 @@ function columnIndex(headings: readonly string[], candidates: readonly string[])
   });
 }
 
-/** Resolves every compared field to its column position for the given rendered headings. */
 function resolveColumns(headings: readonly string[]): ColumnIndexes {
   const positions: Record<string, number> = {};
   for (const { field, headings: candidates } of COLUMN_HEADINGS) {
@@ -299,7 +285,6 @@ function readOptionPairs(element: HTMLElement | SVGElement): OptionPair[] {
   }));
 }
 
-/** Runs inside the page: sets a text input's value and tells AngularJS about it. */
 function setNativeInputValue(element: HTMLElement | SVGElement, text: string): void {
   if (!(element instanceof HTMLInputElement)) return;
   element.value = text;
@@ -405,7 +390,6 @@ export class ClientsPage {
     );
   }
 
-  /** The list's rows as locators, in document order. */
   private listRows(): Locator {
     return this.page.locator(LIST_ROW);
   }

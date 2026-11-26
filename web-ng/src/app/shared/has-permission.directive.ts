@@ -11,7 +11,6 @@ export class HasPermissionDirective {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly renderer = inject(Renderer2);
   constructor() {
-    // Hidden before the first verdict: a gated control must never be painted, clicked or announced in the window between the element being created and the permissions being known.
     this.renderer.setStyle(this.host.nativeElement, 'display', 'none');
     effect(() => {
       const code = this.hasPermission().trim();

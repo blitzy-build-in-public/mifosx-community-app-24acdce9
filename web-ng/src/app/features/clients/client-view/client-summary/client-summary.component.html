@@ -8,8 +8,8 @@
     <div class="col-md-8">{{ row.value }}</div>
   </div>
 }
-<!-- The fifth and last row is the activation date, the block's only date: it renders at the one display pattern the record uses, taken from the component rather than written as a literal. -->
+<!-- The fifth and last row is the activation date, the block's only date: it renders the string the component formatted at the record's one display pattern in the active locale, so it reads exactly what the profile card beside it reads and follows the language switcher (AAP 0.7.2 "Date handling"). A pending client has no date, so the value column stays empty. Its label is the same legacy key the profile card prints, so one field carries one label on the screen (Rule 1 clause 3). -->
 <div class="row">
-  <div class="col-md-4"><span class="value-key">{{ 'label.heading.activationdate' | translate }}</span></div>
-  <div class="col-md-8">{{ activationDate() | date: displayDateFormat }}</div>
+  <div class="col-md-4"><span class="value-key">{{ 'label.input.activationdate' | translate }}</span></div>
+  <div class="col-md-8">{{ activationDateText() }}</div>
 </div>

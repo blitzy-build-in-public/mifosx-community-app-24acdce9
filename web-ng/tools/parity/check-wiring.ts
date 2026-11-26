@@ -11,7 +11,6 @@ import { findComponentClasses, findInjectableClasses, findRouteDeclarations, has
 
 /** `web-ng/`: the parent of every scan root, resolved from this file's URL and never from `process.cwd()`. */
 const webNgRoot: string = fileURLToPath(new URL('../../', import.meta.url));
-/** Repository root, so every reported path is repo-relative and identical on every machine. */
 const repoRoot: string = fileURLToPath(new URL('../../../', import.meta.url));
 const CHECK = 'check:wiring';
 const ROUTES_FILE = 'in-scope-routes.json';
@@ -20,27 +19,20 @@ const SCOPE_FILE = 'scope-allowlist.json';
 const dataFile = (name: string): string => `web-ng/tools/parity/${name}`;
 const APP_ROOT = join(webNgRoot, 'src', 'app');
 const APP_ROOT_SHOWN = 'web-ng/src/app';
-/** The route file that mounts every other one; its declarations compose from the root prefix. */
 const APP_ROUTES_FILE = join(APP_ROOT, 'app.routes.ts');
 const APP_ROUTES_SHOWN = 'web-ng/src/app/app.routes.ts';
 /** Suffix of a route file, which is what `walk` keeps when the route tree is read. */
 const ROUTE_SUFFIX = '.routes.ts';
-/** Files that can hold a component, an injectable or a template, which is what classes (a) and (b) judge. */
 const APP_SUFFIXES: readonly string[] = ['.ts', '.html'];
-/** Spec files, whichever runner owns them; class (d) judges each of them. */
 const SPEC_SUFFIXES: readonly string[] = ['.spec.ts', '.test.ts'];
 /** The `testDir` the Playwright config sets, holding the workflow specs `npm run e2e` executes. */
 const E2E_SPECS_ROOT = join(webNgRoot, 'e2e', 'specs');
 const E2E_SPECS_SHOWN = 'web-ng/e2e/specs';
-/** Files a credential-shaped literal can be written in: source, templates, configuration and operational scripts. */
 const TEXT_SUFFIXES: readonly string[] = ['.ts', '.html', '.json', '.sh', '.yml', '.yaml'];
-/** Generated artefacts rather than source, so no class judges them (they are gitignored build and report output). */
 const GENERATED_SKIP: readonly string[] = ['.captures', 'parity-report.json', 'parity-report.md'];
-/** This gate's own file: it states the rule it enforces, so it is exempt from class (e) with a note, never in silence. */
 const SELF_SKIPPED = 'check-wiring.ts';
 /** The two files this work may add at the repository root, beside everything `web-ng/**` holds (AAP 0.4.4 item 2). */
 const ROOT_ADDITIONS: readonly string[] = ['Dockerfile.web-ng', 'docker-compose.web-ng.yml'];
-/** The sentence every added path outside the boundary carries, so the diff and the untracked list state one rule. */
 const OUTSIDE_BOUNDARY = 'is outside the write boundary: the work may occupy web-ng/** and add only Dockerfile.web-ng, docker-compose.web-ng.yml and the root files scope-allowlist.json names (AAP 0.4.4 item 2, criterion 8)';
 
 const DEAD_INJECTABLE = 'dead-injectable';
@@ -50,7 +42,6 @@ const SPEC_WITHOUT_EXPECT = 'spec-without-expect';
 const CREDENTIAL_LITERAL = 'credential-literal';
 const WRITE_BOUNDARY = 'write-boundary';
 
-/** A JSON object, the only shape a data file may present; anything else is a load failure. */
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null;
 
@@ -60,24 +51,18 @@ const asString = (record: Record<string, unknown> | null, key: string): string |
   return typeof value === 'string' ? value : null;
 };
 
-/** The object rows of an array field; elements of another type are dropped rather than trusted. */
 const asRows = (record: Record<string, unknown>, key: string): Record<string, unknown>[] => {
   const value = record[key];
   return Array.isArray(value) ? value.map(asRecord).filter((row): row is Record<string, unknown> => row !== null) : [];
 };
 
-/** A thrown value is arbitrary data; only the message a reader can act on is kept. */
 const describe = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
-/** git, programmatically: no shell ever interprets a path, and every read is decoded as UTF-8 text. */
 const execFileAsync = promisify(execFile);
-/** Options every git read shares: the checkout as working directory, a buffer past any path list, UTF-8 output. */
 const GIT_OPTIONS: ExecFileOptionsWithStringEncoding = { cwd: repoRoot, maxBuffer: 64 * 1024 * 1024, encoding: 'utf8' };
 
-/** One path git reports as changed against the base commit, or as untracked, with the status letter it carries. */
 interface Change { status: string; path: string }
 
-/** Splits one NUL-separated git listing into its fields, dropping the empty field the final separator leaves. */
 const splitZ = (listing: string): string[] => listing.split('\0').filter((field: string): boolean => field.length > 0);
 
 /** Reads a `git diff --name-status -z` listing: `STATUS\0path\0` pairs, the only shape `--no-renames` emits. */
@@ -93,7 +78,6 @@ const readChanges = (listing: string): Change[] => {
 /** True when a repo-relative path lies inside `web-ng/`, the one tree this work may occupy (AAP 0.4.4 item 2). */
 const isUnderWebNg = (shown: string): boolean => shown.startsWith('web-ng/');
 
-/** Runs one git command in the checkout and returns its standard output. */
 async function git(args: readonly string[]): Promise<string> {
   const { stdout } = await execFileAsync('git', args, GIT_OPTIONS);
   return stdout;
@@ -102,7 +86,6 @@ async function git(args: readonly string[]): Promise<string> {
 /** A data file and the text it was parsed from, so a finding about a row can name the row's own line. */
 interface LoadedData { document: Record<string, unknown>; text: string }
 
-/** Reads one parity data file; a list that cannot be loaded is a violation, because it cannot then be enforced. */
 async function loadData(name: string, rule: string, violations: Violation[]): Promise<LoadedData | null> {
   const location = new URL(`./${name}`, import.meta.url);
   try {
@@ -112,7 +95,6 @@ async function loadData(name: string, rule: string, violations: Violation[]): Pr
     if (document === null) throw new Error('the file does not hold a JSON object');
     return { document, text };
   } catch (error) {
-    // The OS error names an absolute path, so it is rewritten to the repo-relative one for a machine-independent log.
     const reason = describe(error).split(fileURLToPath(location)).join(dataFile(name));
     violations.push(violation(rule, dataFile(name), 0, `cannot be read, so the class it settles cannot be judged: ${reason}`));
     return null;
@@ -128,7 +110,6 @@ function lineOf(text: string, needle: string): number {
 /** The three shapes `in-scope-routes.json` distinguishes; a composition point is none of them and is never listed. */
 type RouteKind = 'component' | 'redirect' | 'wildcard';
 
-/** One route the tree declares as a screen: its full path, its shape, and where it is written. */
 interface DeclaredRoute { path: string; kind: RouteKind; redirectTo: string | null; file: string; line: number }
 
 /** One route row of `in-scope-routes.json`, with the line it is written on. */
@@ -196,13 +177,11 @@ function enclosingPrefix(open: readonly { depth: number; prefix: string }[], bas
   return open.at(-1)?.prefix ?? base;
 }
 
-/** Composes one route file's declarations into the full paths the router serves, and collects the lazy mounts it declares. */
 function composeRoutes(parsed: readonly ParsedRoute[], base: string, file: string): { routes: DeclaredRoute[]; mounts: Mount[] } {
   const routes: DeclaredRoute[] = [];
   const mounts: Mount[] = [];
   const open: { depth: number; prefix: string }[] = [];
   for (const entry of parsed) {
-    // A sibling closes every entry opened at its own depth or deeper, so the stack is exactly the enclosing chain.
     while (open.length > 0 && (open.at(-1)?.depth ?? -1) >= entry.depth) open.pop();
     const prefix = enclosingPrefix(open, base);
     const full = [prefix, entry.decl.path].filter((part: string): boolean => part.length > 0).join('/');
@@ -222,10 +201,8 @@ function resolveSpecifier(importingFile: string, specifier: string): string {
   return target.endsWith('.ts') ? target : `${target}.ts`;
 }
 
-/** One scanned route file: its path, its repo-relative name, and the text the declarations are read from. */
 interface RouteFileScan { file: string; shown: string; text: string }
 
-/** Reads one route file and composes it at the prefix it is mounted under, counting the declarations it holds. @param scan The file, already read. @param base The prefix its own routes hang off. @param count Callback that. */
 function composeFile(scan: RouteFileScan, base: string, count: (declarations: number) => void): { routes: DeclaredRoute[]; mounts: Mount[] } {
   const decls: RouteDecl[] = findRouteDeclarations(scan.text);
   count(decls.length);
@@ -237,14 +214,12 @@ function composeFile(scan: RouteFileScan, base: string, count: (declarations: nu
   return composeRoutes(parsed, base, scan.shown);
 }
 
-/** True when two keys name the same route, compared on the path, the shape and the redirect target the list states. */
 const sameRoute = (path: string, kind: string, redirectTo: string | null, other: { path: string; kind: string; redirectTo: string | null }): boolean =>
   path === other.path && kind === other.kind && (redirectTo ?? '') === (other.redirectTo ?? '');
 
 /** How a route's shape reads in a finding: its kind, and the redirect target when it has one. */
 const shapeOf = (kind: string, redirectTo: string | null): string => (redirectTo === null ? `kind ${kind}` : `kind ${kind} redirecting to ${redirectTo}`);
 
-/** A regex-safe form of an identifier or a selector read out of source. */
 const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** True when one file injects the class `name` names: through `inject(Name)`, which is how a functional interceptor and an initializer reach a dependency, or through a typed field or constructor parameter (`: Name`), which. */
@@ -284,12 +259,10 @@ const CREDENTIAL_ASSIGNMENT = new RegExp(
 );
 /** The login form's own `password` control name, written where the input is declared (AAP 0.10.4's exemption). */
 const LOGIN_CONTROL = /\b(?:formControlName|name)\s*=\s*["']password["']/;
-/** The login screen's own files, the only place that control name is written. */
 const LOGIN_FORM_FILE = /(?:^|\/)features\/auth\/login\/login\.component\.(?:ts|html)$/;
 /** The tenant identifier, which AAP 0.10.4 leaves outside the credential gate by definition. */
 const TENANT_LITERAL = /\b(?:tenantId|tenantIdentifier)\s*:\s*(['"`])((?:\\.|(?!\1)[^\\])*)\1/g;
 
-/** The text of one file with its comments blanked, in the coordinates the file's own offsets use: TypeScript comments through the shared scanner, an HTML comment blanked whole, and a format that carries no comment left as. */
 function commentFree(file: string, text: string): string {
   if (file.endsWith('.ts')) return stripComments(text);
   if (file.endsWith('.html')) return text.replace(/<!--[\s\S]*?-->/g, (match: string): string => match.replace(/[^\n]/g, ' '));
@@ -299,10 +272,8 @@ function commentFree(file: string, text: string): string {
 /** 1-based line of an offset, so a finding names the line the literal is written on. */
 const lineAt = (text: string, offset: number): number => text.slice(0, offset).split('\n').length;
 
-/** One file read for a class that judges it: its repo-relative name, and its text as the file writes it. */
 interface ScannedFile { shown: string; text: string }
 
-/** Reads a set of files once, in the order they were listed, keeping each file's repo-relative name. */
 async function scanFiles(files: readonly string[]): Promise<ScannedFile[]> {
   return Promise.all(files.map(async (file: string) => ({
     shown: relative(repoRoot, file).split(sep).join('/'),
@@ -310,13 +281,11 @@ async function scanFiles(files: readonly string[]): Promise<ScannedFile[]> {
   })));
 }
 
-/** Adds one class's scanned files to the run's distinct-file count and returns them unchanged, so the count states how much of the tree the run actually read rather than how many classes read it. @param files The files one. */
 function countFiles<T extends ScannedFile>(files: T[], into: Set<string>): T[] {
   for (const file of files) into.add(file.shown);
   return files;
 }
 
-/** Reads one scan root for the class it serves. A root that cannot be listed fails that class at line 0 rather than passing on an empty list, because the least-checkable tree must not be the one that passes; a root that. */
 async function readRoot(root: string, extensions: readonly string[], rule: string, violations: Violation[], skip: readonly string[] = []): Promise<ScannedFile[]> {
   const shown = relative(repoRoot, root).split(sep).join('/');
   try {
@@ -441,7 +410,6 @@ if (intent.kind === 'run') await runCheck(CHECK, async (): Promise<CheckOutcome>
   }))), scannedFiles);
   const count = (declarations: number): void => { routeDeclarations += declarations; };
 
-  // The application route file first, because the prefixes every other file hangs off are the mounts it declares.
   const declared: DeclaredRoute[] = [];
   const mounts = new Map<string, string>();
   const appScan = scans.find((scan) => scan.file === APP_ROUTES_FILE);
@@ -466,7 +434,6 @@ if (intent.kind === 'run') await runCheck(CHECK, async (): Promise<CheckOutcome>
     const composed = composeFile(scan, prefix, count);
     declared.push(...composed.routes);
     if (composed.mounts.length > 0) {
-      // A nested lazy group would need its prefix composed through a second level; none is declared today, and a gate that accepted one silently would report its screens as absent from the list instead of naming the real gap.
       for (const mount of composed.mounts) {
         violations.push(violation(ROUTE_DRIFT, scan.shown, mount.line, `declares the lazy group ${mount.specifier} under the prefix "${mount.prefix}", which this gate composes one level deep only — flatten the group, or extend the composition with the routes the list must then hold`));
       }
@@ -511,7 +478,6 @@ if (intent.kind === 'run') await runCheck(CHECK, async (): Promise<CheckOutcome>
     if (file.shown.endsWith('.spec.ts')) continue;
     for (const injectable of findInjectableClasses(file.text)) {
       injectables += 1;
-      // A service that names its own class injects nothing, so its declaring file is not a consumer of it.
       const consumed = appTexts.some((other) => other.shown !== file.shown && injectsName(other.text, injectable.name));
       if (consumed) {
         injected += 1;
@@ -521,7 +487,6 @@ if (intent.kind === 'run') await runCheck(CHECK, async (): Promise<CheckOutcome>
     }
   }
 
-  // (b) dead-component. A component is wired when a route renders it or a template uses its selector.
   const routedNames = new Set<string>();
   for (const scan of scans) {
     for (const match of scan.text.matchAll(ROUTED_COMPONENT)) routedNames.add(match[1] ?? '');
@@ -532,7 +497,6 @@ if (intent.kind === 'run') await runCheck(CHECK, async (): Promise<CheckOutcome>
       notes.push(`${scan.shown} — ${lazyKeys - lazyMembers} loadComponent declaration(s) render a module export this gate cannot name from the source, so no component is credited to them`);
     }
   }
-  // The root component is mounted by bootstrapApplication rather than by a route, which is what index.html's selector and the application's entry file state between them.
   const mainFile = join(webNgRoot, 'src', 'main.ts');
   let mainText = '';
   try {
@@ -542,7 +506,6 @@ if (intent.kind === 'run') await runCheck(CHECK, async (): Promise<CheckOutcome>
   }
   for (const match of mainText.matchAll(BOOTSTRAPPED_ROOT)) routedNames.add(match[1] ?? '');
   const appAll = countFiles(await readRoot(APP_ROOT, APP_SUFFIXES, DEAD_COMPONENT, violations), scannedFiles);
-  // Every template the application renders: the external ones, the root index.html the build serves, and each component file's own text, so an inline template is read on the same footing as a separate file.
   const templateParts: string[] = appAll.map((file) => commentFree(file.shown, file.text));
   const indexFile = join(webNgRoot, 'src', 'index.html');
   try {
@@ -658,7 +621,6 @@ if (intent.kind === 'run') await runCheck(CHECK, async (): Promise<CheckOutcome>
   try {
     const roots: string[] = (await git(['rev-list', '--max-parents=0', 'HEAD']))
       .split('\n').map((line: string): string => line.trim()).filter((line: string): boolean => line.length > 0);
-    // rev-list prints newest first, so the last line is the repository's initial commit.
     const base = roots[roots.length - 1];
     if (base === undefined) {
       throw new Error('git rev-list --max-parents=0 HEAD named no commit to judge against');
@@ -704,7 +666,6 @@ if (intent.kind === 'run') await runCheck(CHECK, async (): Promise<CheckOutcome>
     notes.push(`${baseTracked.length} path(s) tracked at base commit ${shortBase} lie outside web-ng/ and are therefore existing content rather than additions: ${trackedOutside === '' ? 'none' : trackedOutside}`);
     notes.push('a git-ignored path is never judged as an addition, because the untracked listing is read with --exclude-standard');
   } catch (error) {
-    // The OS and git errors name the checkout's absolute path, so it is trimmed to keep the log machine-independent.
     const reason = describe(error).split(repoRoot).join('');
     violations.push(violation(WRITE_BOUNDARY, '.', 0, `the write boundary cannot be judged, so no path outside web-ng/ was checked: git must run in this checkout as a work tree and its initial commit must resolve, and reading it failed with: ${reason}`));
   }

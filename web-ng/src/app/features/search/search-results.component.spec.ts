@@ -199,7 +199,6 @@ describe('SearchResultsComponent', () => {
     expect(host().querySelector('#search-results')).toBeNull();
     expect(host().querySelector('#search-results-empty')?.textContent?.trim()).toBe(NO_DATA_TEXT);
     expect(host().querySelector('#search-results-error')).toBeNull();
-    // A blank query answers with nothing, so there is nothing to cut and no notice to raise.
     expect(host().querySelector('#search-results-truncated')).toBeNull();
   });
 
@@ -213,7 +212,6 @@ describe('SearchResultsComponent', () => {
       expect(calls.at(-1)?.resource, `scope=${raw}`).toBe('all');
     }
 
-    // A URL that carries no scope at all asks for both families, not for a third one.
     queryParams.next(convertToParamMap({}));
     fixture.detectChanges();
     await fixture.whenStable();
@@ -232,7 +230,6 @@ describe('SearchResultsComponent', () => {
 
     expect(calls.at(-1)?.resource).toBe('loans');
     expect(component.scope()).toBe('loans');
-    // One call for the initial navigation, then exactly one for each parameter set pushed above.
     expect(calls).toHaveLength(9);
   });
 
@@ -308,7 +305,6 @@ describe('SearchResultsComponent', () => {
     expect(text(identifierBlock)).toContain('| Client:Ada Okafor');
     expect(text(identifierBlock)).not.toContain('#');
 
-    // Every block's key is its own, so two results can never collide in the loop's track expression.
     expect(new Set(component.rows().map((row) => row.key)).size).toBe(3);
   });
 
@@ -405,7 +401,6 @@ describe('SearchResultsComponent', () => {
     expect(component.isEmpty()).toBe(false);
     expect(host().querySelector('#search-results-empty')).toBeNull();
     expect(blocks()).toHaveLength(2);
-    // The screen stays mounted and usable: the card and its body are still there around the alert.
     expect(host().querySelector('.panel')).not.toBeNull();
     expect(host().querySelector('.panel-body')).not.toBeNull();
   });
@@ -418,13 +413,11 @@ describe('SearchResultsComponent', () => {
       await fixture.whenStable();
       fixture.detectChanges();
 
-      // No message and no alert region — the interceptor has already raised the one notification — and nothing on screen that could pass the failure off as a search that matched nothing.
       expect(calls).toHaveLength(2);
       expect(component.error()).toBeNull();
       expect(host().querySelector('#search-results-error')).toBeNull();
       expect(component.isEmpty()).toBe(false);
       expect(host().querySelector('#search-results-empty')).toBeNull();
-      // The rows of the search before it stay exactly where they were.
       expect(blocks()).toHaveLength(2);
     });
   }

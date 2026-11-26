@@ -227,7 +227,6 @@ if (intent.kind === 'run') await runCheck('check:endpoints', async (): Promise<C
         const canonical = canonicalPath(candidate);
         // The apiPath constant is configuration and navigation is not an endpoint; an apiUrl() argument skips the navigation test because the call site, not the string, tells the two apart.
         if (canonical === apiPath || (!argument && !canonical.startsWith(`${apiPath}/`) && isNavigationPath(navigation, canonical))) continue;
-        // A server-root harness path sits outside apiPath and is matched in its own namespace before any prefixing, and only the harness and the checks may name one.
         if (!root.application && raw.startsWith('/') && serverRootPaths.has(canonical)) continue;
         const endpoint = canonical.startsWith(`${apiPath}/`) ? canonical : canonicalPath(apiPath + canonical);
         if (appPaths.has(endpoint) || (!root.application && harnessPaths.has(endpoint))) continue;

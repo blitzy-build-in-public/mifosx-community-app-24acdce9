@@ -247,7 +247,6 @@ describe('DateFieldComponent', () => {
     expect(labels).toHaveLength(visibleLabel ? 1 : 0);
     expect(dateInput().getAttribute('aria-label')).toBe(accessibleName);
 
-    // A visible label is the name itself, so it still has to point at the control it names.
     if (visibleLabel) {
       expect(labelOf(fixture).getAttribute('for')).toBe(dateInput().id);
     }

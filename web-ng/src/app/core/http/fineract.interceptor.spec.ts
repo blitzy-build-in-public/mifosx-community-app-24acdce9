@@ -204,7 +204,6 @@ describe('fineractInterceptor', () => {
     expect(sent.urlWithParams).toBe(`${CLIENTS_URL}?offset=0&limit=15`);
     expect(sent.urlWithParams).toBe(request.urlWithParams);
     expect(sent.method).toBe(request.method);
-    // The incoming request is never mutated: the interceptor clones it with its headers alone.
     expect(request.headers.has(TENANT_HEADER)).toBe(false);
     expect(request.headers.has(AUTHORIZATION_HEADER)).toBe(false);
   });
@@ -285,7 +284,6 @@ describe('fineractInterceptor', () => {
     expect(error).toBeInstanceOf(ApiError);
     expect((error as ApiError).message).toBe('First problem.');
     expect((error as ApiError).status).toBe(400);
-    // Both failures are kept, in the server's order, so a form can paint each field's own text.
     expect((error as ApiError).validationErrors.map((failure) => failure.defaultUserMessage)).toEqual([
       'First problem.',
       'Second problem.',
@@ -322,11 +320,9 @@ describe('fineractInterceptor', () => {
       expect((error as ApiError).message).toBe(UNMAPPED_FAILURE_TEXT);
       expect((error as ApiError).message).not.toBe('');
       expect((error as ApiError).message).not.toBe(response.message);
-      // Neither the request's path nor the host behind it reaches the text a screen renders.
       expect((error as ApiError).message).not.toContain(CLIENTS_URL);
       expect((error as ApiError).message).not.toContain(API_ROOT);
       expect((error as ApiError).validationErrors).toHaveLength(0);
-      // A 4xx is the screen's to render, whatever shape its body arrived in.
       expect(notifications.messages()).toHaveLength(0);
     },
   );
@@ -376,20 +372,15 @@ describe('fineractInterceptor', () => {
     router.navigate.mockImplementation(() => navigation);
 
     const propagated = await rejectionOf(run(new HttpRequest('GET', CLIENTS_URL), failing(401)));
-    // Crosses a macrotask, so the handler the interceptor attached has run and the notification it raises is queued before the assertions below read it.
     await navigationSettled();
 
-    // The navigation's promise is settled — one rejection handler, attached by the interceptor...
     expect(navigation.rejectionHandlers).toBe(1);
-    // ...the user is told once, in the fixed sentence naming the screen that did not open...
     expect(notifications.messages()).toHaveLength(1);
     expect(notifications.messages()[0]?.kind).toBe('error');
     expect(notifications.messages()[0]?.message).toBe(LOGIN_SCREEN_MESSAGE);
-    // ...and not in the router's own wording, which names navigation ids and guards and leaves an operator nothing to act on...
     expect(notifications.messages()[0]?.message).not.toContain(NAVIGATION_FAILURE);
     // ...and nothing from the request or the session reaches that text (Rule 1 clause 9).
     expect(notifications.messages()[0]?.message).not.toContain(fixture.authenticationKey);
-    // The 401 still reaches the caller as the mapped ApiError the case above asserts.
     expect(propagated).toBeInstanceOf(ApiError);
     expect((propagated as ApiError).status).toBe(401);
     expect(clear).toHaveBeenCalledTimes(1);
@@ -432,7 +423,6 @@ describe('fineractInterceptor', () => {
     const { run, session, router, notifications } = harnessFor();
     session.set(sessionFixture());
     router.url = ATTEMPTED_URL;
-    // A guard that rejects with something other than an error still has to reach the user as words.
     router.navigate.mockImplementation(() => Promise.reject('the guard refused the login screen'));
 
     await rejectionOf(run(new HttpRequest('GET', CLIENTS_URL), failing(401)));
@@ -441,7 +431,6 @@ describe('fineractInterceptor', () => {
     expect(notifications.messages()).toHaveLength(1);
     expect(notifications.messages()[0]?.kind).toBe('error');
     expect(notifications.messages()[0]?.message).toBe(LOGIN_SCREEN_MESSAGE);
-    // The request sentence is for a failure that made a request, and a refused navigation made none.
     expect(notifications.messages()[0]?.message).not.toBe(UNMAPPED_FAILURE_TEXT);
   });
 
@@ -451,7 +440,6 @@ describe('fineractInterceptor', () => {
 
     await rejectionOf(run(new HttpRequest('POST', AUTHENTICATION_URL, {}), failing(401)));
 
-    // The login screen owns the refusal and the user is already there.
     expect(clear).not.toHaveBeenCalled();
     expect(router.navigate).not.toHaveBeenCalled();
   });

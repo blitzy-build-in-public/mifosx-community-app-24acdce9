@@ -47,14 +47,14 @@
 
   Every caption is a key the shipped legacy bundles already carry, read in
   `app/global-translations/locale-en.json`: `label.heading.addloancharge`, `label.heading.payloancharge`
-  and `label.heading.waiveloancharge` for the heading, `label.heading.notavailable` for the state this
-  screen does not serve; `label.input.charge`, `label.input.amount`, `label.input.dueon`,
-  `label.input.paymentdate` and `label.requiredfield` for the fields;
-  `label.selectcharge` for the charge picker's prompt; `label.button.cancel` and `label.button.submit`
-  for the footer; and `error.msg.resource.not.found` for the not-found message, which is the key the
-  sibling not-found screen renders. No user-facing copy is written into this file, and the registered
-  missing-translation handler humanises any key a locale lacks, so a raw dotted key never reaches the
-  screen (AAP 0.3.1).
+  and `label.heading.waiveloancharge` for the heading of the three operations this screen serves;
+  `label.input.charge`, `label.input.amount`, `label.input.dueon`, `label.input.paymentdate` and
+  `label.requiredfield` for the fields; `label.selectcharge` for the charge picker's prompt; and
+  `label.button.cancel` and `label.button.submit` for the footer. The state this screen does not serve
+  is `shared/record-not-found`, which carries its own two keys and is the one presentation every
+  record screen renders for a record it does not have, so no user-facing copy is written into this
+  file, and the registered missing-translation handler humanises any key a locale lacks, so a raw
+  dotted key never reaches the screen (AAP 0.3.1).
 
   No host, URL, endpoint, credential, authentication key or session field appears here: every path in
   this file is a router path, and the payloads are assembled and serialised by `LoanService` (Rule 2;
@@ -64,55 +64,34 @@
   <div class="row">
     <div class="col-md-12">
       <div appPanelCard>
-        <div class="panel-heading">
-          <!--
-            One heading per operation, from the key family the legacy controller itself switches on
-            (`scope.title` in `LoanAccountActionsController`). The final branch covers the resolved
-            `'notfound'` state, where the card still needs a title above the message.
-          -->
-          <h3 class="panel-title">
-            @if (isAddMode()) {
-              {{ 'label.heading.addloancharge' | translate }}
-            } @else if (isPayMode()) {
-              {{ 'label.heading.payloancharge' | translate }}
-            } @else if (isWaiveMode()) {
-              {{ 'label.heading.waiveloancharge' | translate }}
-            } @else {
-              {{ 'label.heading.notavailable' | translate }}
-            }
-          </h3>
-        </div>
+        <!-- One heading per operation, from the key family the legacy controller itself switches on (`scope.title` in `LoanAccountActionsController`). The state this screen does not serve renders `shared/record-not-found`, which carries the heading and the sentence itself, so the band is omitted there rather than printing the same heading twice. -->
+        @if (!notFound()) {
+          <div class="panel-heading">
+            <h3 class="panel-title">
+              @if (isAddMode()) {
+                {{ 'label.heading.addloancharge' | translate }}
+              } @else if (isPayMode()) {
+                {{ 'label.heading.payloancharge' | translate }}
+              } @else if (isWaiveMode()) {
+                {{ 'label.heading.waiveloancharge' | translate }}
+              }
+            </h3>
+          </div>
+        }
 
-        <div class="panel-body">
-          <!--
-            Three mutually exclusive states, in the order a viewer meets them. An unserved route, an
-            action this application does not implement or a loan that is not there puts the message in
-            place of the form and offers no action, while the rest of the shell stays usable
-            (AAP 0.7.4 state rules).
-          -->
+        <div class="panel-body" [attr.aria-busy]="loading() ? 'true' : null">
+          <!-- Three mutually exclusive states, in the order a viewer meets them. An unserved route, an action this application does not implement or a loan that is not there puts the shared not-found presentation in place of the form and offers no action, while the rest of the shell stays usable (AAP 0.7.4 state rules). -->
           @if (notFound()) {
-            <div class="text-center text-muted">{{ 'error.msg.resource.not.found' | translate }}</div>
+            <app-record-not-found />
           } @else if (loading()) {
-            <!-- Nothing is painted while the mode's own reads are in flight: the design carries no
-                 spinner, skeleton or placeholder (AAP 0.2.4), so emitting no half-built form is the
-                 faithful state rather than a missing one. `client-accounts` reads the same way. -->
+            <!-- Nothing is painted while the mode's own reads are in flight: the design carries no spinner, skeleton or placeholder (AAP 0.2.4), so emitting no half-built form is the faithful state rather than a missing one. `client-accounts` reads the same way. -->
           } @else {
-            <!--
-              `invalid` is read from the control itself, and as a plain property: `invalid`, `touched`
-              and `dirty` are not signals, so a computed would keep its first verdict. The expression
-              matches the `shared/date-field` and `shared/select-field` rule, so the amount states its
-              error the same way the two fields beside it do.
-            -->
+            <!-- `invalid` is read from the control itself, and as a plain property: `invalid`, `touched` and `dirty` are not signals, so a computed would keep its first verdict. The expression matches the `shared/date-field` and `shared/select-field` rule, so the amount states its error the same way the two fields beside it do. -->
             @let amountInvalid =
               form.controls.amount.invalid &&
               (form.controls.amount.touched || form.controls.amount.dirty);
 
-            <!--
-              Fineract's own failure text, verbatim and unmoved by any prefix: no capitalisation, no
-              translation, no truncation, and the form below keeps every value the user entered
-              (AAP 0.7.4; Rule 1 clause 3 — W7 compares the rendered text with the server's
-              `errors[].defaultUserMessage`). `role="alert"` announces it without moving focus.
-            -->
+            <!-- Fineract's own failure text, verbatim and unmoved by any prefix: no capitalisation, no translation, no truncation, and the form below keeps every value the user entered (AAP 0.7.4; Rule 1 clause 3 — W7 compares the rendered text with the server's `errors[].defaultUserMessage`). `role="alert"` announces it without moving focus. -->
             @if (error(); as err) {
               <div class="alert alert-danger" role="alert">{{ err.message }}</div>
             }
@@ -125,13 +104,7 @@
               novalidate
             >
               <fieldset>
-                <!--
-                  The picker is add mode's alone, and it renders the template's own option list in the
-                  server's order — nothing sorted, filtered or relabelled. Its prompt is the legacy
-                  `label.selectcharge` row, which is what lets the field start empty: the class seeds
-                  no charge, so a select that auto-picked its first row would show a charge the form
-                  would not post.
-                -->
+                <!-- The picker is add mode's alone, and it renders the template's own option list in the server's order — nothing sorted, filtered or relabelled. Its prompt is the legacy `label.selectcharge` row, which is what lets the field start empty: the class seeds no charge, so a select that auto-picked its first row would show a charge the form would not post. -->
                 @if (isAddMode()) {
                   <div class="form-group">
                     <label class="control-label col-md-3" for="chargeId">
@@ -179,7 +152,7 @@
                         [attr.aria-describedby]="amountInvalid ? 'amount-error' : null"
                       />
                       @if (amountInvalid) {
-                        <span id="amount-error" class="help-block">
+                        <span id="amount-error" class="help-block" role="alert">
                           {{ 'label.requiredfield' | translate }}
                         </span>
                       }

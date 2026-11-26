@@ -1,9 +1,10 @@
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { TranslatePipe } from '@ngx-translate/core';
 
 import { DISPLAY_DATE_FORMAT, fromFineractDate } from '../../../../shared/date-format.util';
 import { EmptyStateComponent } from '../../../../shared/empty-state/empty-state.component';
+import { MoneyPipe } from '../../../../shared/money/money.pipe';
 import type { LoanTransaction } from '../../loan.models';
 
 /** One rendered row: a transaction's own values with `date` parsed. `Date | null` because `fromFineractDate` answers `null` for a value it cannot parse, so the cell renders empty. */
@@ -12,7 +13,7 @@ type TransactionRow = Omit<LoanTransaction, 'date'> & { readonly date: Date | nu
 /** Transactions section of the loan record (`#/viewloanaccount/:id`): the read-only table of the `transactions` the parent's `GET /loans/{id}?associations=all` already loaded — no request, no collaborator, no written state (AAP 0.7.1, AAP 0.7.2, AAP 0.10.5). */
 @Component({
   selector: 'app-loan-transactions',
-  imports: [DatePipe, DecimalPipe, TranslatePipe, EmptyStateComponent],
+  imports: [DatePipe, MoneyPipe, TranslatePipe, EmptyStateComponent],
   templateUrl: './loan-transactions.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
