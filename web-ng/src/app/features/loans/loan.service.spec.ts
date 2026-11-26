@@ -1,4 +1,4 @@
-import { provideHttpClient, type HttpRequest } from '@angular/common/http';
+import { provideHttpClient, type HttpErrorResponse, type HttpRequest } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal, type WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
@@ -21,7 +21,12 @@ import type {
   RepaymentPeriod,
   RepaymentSchedule,
 } from './loan.models';
-import { LoanService, type LoanChargeActionInput, type LoanRepaymentInput } from './loan.service';
+import {
+  LoanService,
+  type LoanActionInput,
+  type LoanChargeActionInput,
+  type LoanRepaymentInput,
+} from './loan.service';
 
 /**
  * Contract spec for `LoanService`: the one place the loans family composes a Fineract URL and turns
@@ -491,6 +496,37 @@ const ACTION_CASES: readonly {
 ];
 
 /**
+ * The three dated lifecycle commands with every member the form can leave unset left unset: the date
+ * itself is `null` and no note, approved amount or expected disbursement date is supplied.
+ *
+ * Each body must then be the date-format pair alone. A member the form did not set is omitted rather
+ * than posted empty — that is the body the legacy application transmitted, whose unset form values
+ * `JSON.stringify` dropped — so the gap is Fineract's own required-field rule to report and never a
+ * value this application invented (AAP 0.7.2 `LoanActionRequest`; Rule 1 clauses 2 and 3).
+ */
+const ACTION_OMISSION_CASES: readonly {
+  readonly command: LoanCommand;
+  readonly request: LoanActionInput;
+  readonly absent: readonly string[];
+}[] = [
+  {
+    command: 'approve',
+    request: { command: 'approve', approvedOnDate: null },
+    absent: ['approvedOnDate', 'approvedLoanAmount', 'expectedDisbursementDate', 'note'],
+  },
+  {
+    command: 'reject',
+    request: { command: 'reject', rejectedOnDate: null },
+    absent: ['rejectedOnDate', 'note'],
+  },
+  {
+    command: 'disburse',
+    request: { command: 'disburse', actualDisbursementDate: null },
+    absent: ['actualDisbursementDate', 'transactionAmount', 'fixedEmiAmount', 'note'],
+  },
+];
+
+/**
  * The two loan-charge commands. The endpoint pays or waives the charge's **whole outstanding
  * portion**, so `pay` carries only the date the payment is recorded on and `waive` carries neither a
  * date, an amount nor a payment type: the running server refuses an `amount` and a `paymentTypeId`
@@ -741,6 +777,28 @@ describe('LoanService', () => {
     request.flush(ACTION_RESULT);
   });
 
+  it('posts the preview and the submission as byte-identical bodies', () => {
+    // The preview is only truthful if it is computed from the application that is then submitted, so
+    // the two requests are compared to each other rather than each to expected members: the same
+    // input must produce the same wire body from both methods, differing only in the command
+    // parameter that names the preview (AAP 0.7.3 W4; AAP 0.7.2 row `LoanApplicationRequest`).
+    service.previewSchedule(APPLICATION).subscribe();
+    service.create(APPLICATION).subscribe();
+
+    const requests = httpMock.match(isRequest('POST', loanUrl('loans')));
+
+    expect(requests).toHaveLength(2);
+
+    const [previewed, submitted] = requests;
+
+    expect(previewed.request.params.get('command')).toBe('calculateLoanSchedule');
+    expect(submitted.request.params.keys()).toEqual([]);
+    expect(previewed.request.body).toEqual(submitted.request.body);
+
+    previewed.flush(SCHEDULE);
+    submitted.flush(ACTION_RESULT);
+  });
+
   it('omits a missing date and every unset optional member rather than posting them empty', () => {
     service.create(UNDATED_APPLICATION).subscribe();
 
@@ -949,6 +1007,26 @@ describe('LoanService', () => {
     });
   }
 
+  for (const { command, request, absent } of ACTION_OMISSION_CASES) {
+    it(`omits every unset member of the ${command} body instead of posting it empty`, () => {
+      service.action(LOAN_ID, command, request).subscribe();
+
+      const sent = httpMock.expectOne(isRequest('POST', loanUrl('loans', LOAN_ID)));
+
+      expect(sent.request.params.keys()).toEqual(['command']);
+      expect(sent.request.params.get('command')).toBe(command);
+      // The date-format pair and nothing else: the date the form left empty is no date at all, and no
+      // optional member is invented in its place, so Fineract's required-field rule reports the gap
+      // (Rule 1 clauses 2 and 3; AAP 0.7.2).
+      expect(sent.request.body).toEqual({ dateFormat: FINERACT_DATE_FORMAT, locale: APP_LOCALE });
+      for (const member of absent) {
+        expect(bodyKeys(sent.request)).not.toContain(member);
+      }
+
+      sent.flush(ACTION_RESULT);
+    });
+  }
+
   it('posts the empty body the server takes when a caller supplies none for an undo command', () => {
     service.action(LOAN_ID, 'undodisbursal').subscribe();
 
@@ -1047,6 +1125,33 @@ describe('LoanService', () => {
     sent.flush(ACTION_RESULT);
   });
 
+  it('sends a repayment with no note without the member, keeping the rest of the body', () => {
+    service
+      .repay(LOAN_ID, {
+        transactionDate: DISBURSEMENT_DATE,
+        transactionAmount: REPAYMENT.transactionAmount,
+        paymentTypeId: REPAYMENT.paymentTypeId,
+      })
+      .subscribe();
+
+    const sent = httpMock.expectOne(
+      isRequest('POST', loanUrl('loans', LOAN_ID, 'transactions')),
+    );
+
+    // An absent note is no member rather than an empty string, which is the body the legacy form
+    // posted when its note was left blank (Rule 1 clause 2).
+    expect(bodyKeys(sent.request)).not.toContain('note');
+    expect(sent.request.body).toEqual({
+      transactionDate: DISBURSEMENT_TEXT,
+      transactionAmount: 467,
+      paymentTypeId: 1,
+      dateFormat: FINERACT_DATE_FORMAT,
+      locale: APP_LOCALE,
+    });
+
+    sent.flush(ACTION_RESULT);
+  });
+
   it('reads the loan charge template with no parameter at all', () => {
     const received: ChargeTemplate[] = [];
 
@@ -1125,6 +1230,22 @@ describe('LoanService', () => {
     });
   }
 
+  it('sends a charge payment with no date without the member, leaving the gap to the server', () => {
+    service.chargeAction(LOAN_ID, CHARGE_ID, 'pay', { command: 'pay', transactionDate: null }).subscribe();
+
+    const sent = httpMock.expectOne(
+      isRequest('POST', loanUrl('loans', LOAN_ID, 'charges', CHARGE_ID)),
+    );
+
+    expect(sent.request.params.get('command')).toBe('pay');
+    expect(bodyKeys(sent.request)).not.toContain('transactionDate');
+    // The format pair alone, as a waiver sends it: the empty date is no date rather than an empty
+    // one, and the server's own rule reports it (Rule 1 clauses 2 and 3).
+    expect(sent.request.body).toEqual({ dateFormat: FINERACT_DATE_FORMAT, locale: APP_LOCALE });
+
+    sent.flush(ACTION_RESULT);
+  });
+
   /**
    * The path segment is the loan's own charge row — the `resourceId` `POST /loans/{id}/charges`
    * answers — and not the charge definition id the picker offers: with this body,
@@ -1198,6 +1319,31 @@ describe('LoanService', () => {
     for (const request of requests) {
       request.flush(LOAN_ACCOUNT);
     }
+  });
+
+  it('propagates a failed record read unchanged, carrying the server’s own message', () => {
+    const received: LoanAccount[] = [];
+    const failures: HttpErrorResponse[] = [];
+    const serverMessage = 'The loan with identifier 31 does not exist';
+
+    service.get(LOAN_ID).subscribe({
+      next: (loan) => received.push(loan),
+      error: (failure: HttpErrorResponse) => failures.push(failure),
+    });
+
+    httpMock
+      .expectOne(isRequest('GET', loanUrl('loans', LOAN_ID)))
+      .flush({ defaultUserMessage: serverMessage }, { status: 404, statusText: 'Not Found' });
+
+    // One failure, no emission and nothing swallowed: this service maps no error, so Fineract's own
+    // `defaultUserMessage` reaches the caller on the response the interceptor turns into `ApiError`
+    // and the record screen prints verbatim (AAP 0.7.2 "rendered verbatim"; workflow W7). The mapping
+    // itself belongs to `core/http/fineract.interceptor.spec.ts`, which is why the transport here is
+    // registered without that interceptor (AAP 0.4.2).
+    expect(failures).toHaveLength(1);
+    expect(received).toEqual([]);
+    expect(failures[0]?.status).toBe(404);
+    expect(failures[0]?.error).toEqual({ defaultUserMessage: serverMessage });
   });
 
   it('refuses a crafted route id or charge id with the guard message and issues no request at all', () => {

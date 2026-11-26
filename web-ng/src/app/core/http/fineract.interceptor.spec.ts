@@ -13,15 +13,25 @@
  *   route, while a 401 on the authentication request and a 401 while the login screen is showing leave
  *   both alone;
  * - that return to the login screen is settled rather than dropped: when the router refuses it, the user
- *   is told once in the rejection's own words and no unhandled rejection is left behind (AAP 0.14.2);
+ *   is told once in the rejection's own words — an `ApiError`, a Fineract response and another `Error`
+ *   each reaching the notice as the text they carry, and anything else as the shared sentence — and no
+ *   unhandled rejection is left behind (AAP 0.14.2);
  * - exactly one notification is raised for a transport failure or a 5xx, and none for a 4xx, which
  *   reaches the caller alone;
- * - every `HttpErrorResponse` becomes the `ApiError` the caller renders, and an error of another kind is
- *   rethrown unchanged.
+ * - every `HttpErrorResponse` becomes the `ApiError` the caller renders: the message is the envelope's
+ *   top-level `defaultUserMessage`, else its first field-level one, else the response's own text, with
+ *   the field-level failures kept in the server's order, and a body of another shape costs the caller
+ *   only the message it did not carry;
+ * - an error that is not an HTTP response is rethrown unchanged, and nothing about a failed exchange
+ *   reaches the console (Rule 1 clause 9).
  *
  * The interceptor is exercised through `runInInjectionContext` with the four collaborators it injects
  * supplied as values, rather than through `TestBed`: it has no template, and the run's house pattern for
- * a class with no template is the runtime injector (see `session.service.spec.ts`).
+ * a class with no template is the runtime injector (see `session.service.spec.ts`). A
+ * `provideHttpClient(withInterceptors([...]))` pipeline would need this file to import `HttpClient`,
+ * which `eslint.config.js` restricts to the seven files that own the Fineract API surface; feeding the
+ * interceptor through the injector exercises the same code — the header composition and the
+ * `catchError` chain — without weakening that gate.
  *
  * Security (Rule 1 clause 9, AAP 0.10.4): the session fixture's credential is assembled at run time from
  * parts, so no credential-shaped literal reaches the source, and it is compared by equality rather than
@@ -200,6 +210,18 @@ function refusedNavigation(failure: Error): RefusedNavigation {
   });
 }
 
+/**
+ * Waits until the handler the interceptor attached to a refused navigation has run.
+ *
+ * The attachment is synchronous but its handler is queued, so a macrotask boundary is what turns
+ * "the notification is raised eventually" into an assertion a test can make.
+ */
+async function navigationSettled(): Promise<void> {
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
+
 describe('fineractInterceptor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -217,7 +239,10 @@ describe('fineractInterceptor', () => {
 
     expect(sent.headers.get(TENANT_HEADER)).toBe(TENANT);
     expect(sent.headers.get(AUTHORIZATION_HEADER)).toBe(`Basic ${fixture.authenticationKey}`);
-    expect(sent.url).toBe(request.url);
+    // The composed URL the calling service owns reaches the handler unchanged, query included, so
+    // `check:endpoints` stays a true statement about what the application requests (AAP 0.4.2).
+    expect(sent.url).toBe(CLIENTS_URL);
+    expect(sent.urlWithParams).toBe(`${CLIENTS_URL}?offset=0&limit=15`);
     expect(sent.urlWithParams).toBe(request.urlWithParams);
     expect(sent.method).toBe(request.method);
     // The incoming request is never mutated: the interceptor clones it with its headers alone.
@@ -282,6 +307,58 @@ describe('fineractInterceptor', () => {
     expect(router.navigate).not.toHaveBeenCalled();
   });
 
+  it('takes the first field-level message when the envelope carries no top-level one', async () => {
+    const { run, notifications } = harnessFor();
+    const body = {
+      errors: [{ defaultUserMessage: 'First problem.' }, { defaultUserMessage: 'Second problem.' }],
+    };
+
+    const error = await rejectionOf(
+      run(new HttpRequest('POST', CLIENTS_URL, {}), failing(400, body)),
+    );
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).message).toBe('First problem.');
+    expect((error as ApiError).status).toBe(400);
+    // Both failures are kept, in the server's order, so a form can paint each field's own text.
+    expect((error as ApiError).validationErrors.map((failure) => failure.defaultUserMessage)).toEqual([
+      'First problem.',
+      'Second problem.',
+    ]);
+    expect(notifications.messages()).toHaveLength(0);
+  });
+
+  it.each([
+    ['a plain-string body', 'Bad Request from a proxy'],
+    ['a null body', null],
+    ['an errors list whose entries carry no message', { errors: [null, 42] }],
+  ])(
+    'falls back to the response\'s own text for %s, reporting no field-level failure',
+    async (_label, body) => {
+      const { run, notifications } = harnessFor();
+      const response = new HttpErrorResponse({
+        status: 400,
+        statusText: 'Bad Request',
+        url: CLIENTS_URL,
+        error: body,
+      });
+
+      const error = await rejectionOf(
+        run(
+          new HttpRequest('GET', CLIENTS_URL),
+          () => throwError(() => response),
+        ),
+      );
+
+      expect(error).toBeInstanceOf(ApiError);
+      expect((error as ApiError).message).toBe(response.message);
+      expect((error as ApiError).message).not.toBe('');
+      expect((error as ApiError).validationErrors).toHaveLength(0);
+      // A 4xx is the screen's to render, whatever shape its body arrived in.
+      expect(notifications.messages()).toHaveLength(0);
+    },
+  );
+
   it.each([0, 500, 503])('raises exactly one notification for status %i', async (status) => {
     const { run, notifications } = harnessFor();
 
@@ -329,9 +406,7 @@ describe('fineractInterceptor', () => {
     const propagated = await rejectionOf(run(new HttpRequest('GET', CLIENTS_URL), failing(401)));
     // Crosses a macrotask, so the handler the interceptor attached has run and the notification it
     // raises is queued before the assertions below read it.
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await navigationSettled();
 
     // The navigation's promise is settled — one rejection handler, attached by the interceptor...
     expect(navigation.rejectionHandlers).toBe(1);
@@ -345,6 +420,55 @@ describe('fineractInterceptor', () => {
     expect(propagated).toBeInstanceOf(ApiError);
     expect((propagated as ApiError).status).toBe(401);
     expect(clear).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a refused return whose own failure is an ApiError in that failure\'s own words', async () => {
+    const { run, session, router, notifications } = harnessFor();
+    session.set(sessionFixture());
+    router.url = ATTEMPTED_URL;
+    const refusal = new ApiError('The login screen could not be loaded.', 500);
+    router.navigate.mockImplementation(() => Promise.reject(refusal));
+
+    await rejectionOf(run(new HttpRequest('GET', CLIENTS_URL), failing(401)));
+    await navigationSettled();
+
+    expect(notifications.messages()).toHaveLength(1);
+    expect(notifications.messages()[0]?.kind).toBe('error');
+    expect(notifications.messages()[0]?.message).toBe(refusal.message);
+  });
+
+  it('reports a refused return whose own failure is a Fineract response in the server\'s words', async () => {
+    const { run, session, router, notifications } = harnessFor();
+    session.set(sessionFixture());
+    router.url = ATTEMPTED_URL;
+    const refusal = new HttpErrorResponse({
+      status: 503,
+      error: { defaultUserMessage: SERVER_MESSAGE },
+    });
+    router.navigate.mockImplementation(() => Promise.reject(refusal));
+
+    await rejectionOf(run(new HttpRequest('GET', CLIENTS_URL), failing(401)));
+    await navigationSettled();
+
+    expect(notifications.messages()).toHaveLength(1);
+    expect(notifications.messages()[0]?.kind).toBe('error');
+    expect(notifications.messages()[0]?.message).toBe(SERVER_MESSAGE);
+  });
+
+  it('reports a refused return carrying no message of its own with the shared sentence', async () => {
+    const { run, session, router, notifications } = harnessFor();
+    session.set(sessionFixture());
+    router.url = ATTEMPTED_URL;
+    // A guard that rejects with something other than an error still has to reach the user as words.
+    router.navigate.mockImplementation(() => Promise.reject('the guard refused the login screen'));
+
+    await rejectionOf(run(new HttpRequest('GET', CLIENTS_URL), failing(401)));
+    await navigationSettled();
+
+    expect(notifications.messages()).toHaveLength(1);
+    expect(notifications.messages()[0]?.kind).toBe('error');
+    // The sentence `api-error.ts` shows for a failure that carries no text of its own.
+    expect(notifications.messages()[0]?.message).toBe('The request could not be completed.');
   });
 
   it('leaves the session and the route alone when the authentication request itself is refused', async () => {
@@ -383,5 +507,26 @@ describe('fineractInterceptor', () => {
     expect(clear).not.toHaveBeenCalled();
     expect(router.navigate).not.toHaveBeenCalled();
     expect(notifications.messages()).toHaveLength(0);
+  });
+
+  it('writes nothing to the console while a session ends and a failure is notified', async () => {
+    const { run, session, router } = harnessFor();
+    // Spied on rather than intercepted: the assertion is that the interceptor calls none of them
+    // (Rule 1 clause 9 — no credential, header or exchange detail in a log or a console output).
+    const logged = vi.spyOn(console, 'log');
+    const errored = vi.spyOn(console, 'error');
+    const warned = vi.spyOn(console, 'warn');
+    const debugged = vi.spyOn(console, 'debug');
+    session.set(sessionFixture());
+    router.url = ATTEMPTED_URL;
+
+    await rejectionOf(run(new HttpRequest('GET', CLIENTS_URL), failing(401)));
+    await rejectionOf(run(new HttpRequest('GET', CLIENTS_URL), failing(500)));
+    await navigationSettled();
+
+    expect(logged).not.toHaveBeenCalled();
+    expect(errored).not.toHaveBeenCalled();
+    expect(warned).not.toHaveBeenCalled();
+    expect(debugged).not.toHaveBeenCalled();
   });
 });

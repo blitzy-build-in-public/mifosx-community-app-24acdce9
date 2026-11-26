@@ -557,6 +557,9 @@ describe('SavingsService', () => {
       // be asked about, and stopping here is what keeps one click to one POST (AAP 0.1.1).
       expect(() => service.action(ACCOUNT_ID, command, body)).toThrowError(message);
       httpMock.expectNone(isRequest('POST', savingsUrl('savingsaccounts', ACCOUNT_ID)));
+      // Stronger than the one path above: the refusal happens before `defer` composes anything, so
+      // the controller saw no request of any method or URL for this call.
+      httpMock.expectNone(() => true);
     });
   }
 

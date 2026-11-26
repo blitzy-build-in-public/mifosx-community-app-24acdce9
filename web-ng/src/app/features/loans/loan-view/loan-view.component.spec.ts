@@ -637,11 +637,23 @@ describe('LoanViewComponent', () => {
     // The charges the payload carried are the record's charge list, taken from that one answer.
     expect(component.charges()).toEqual(LOAN_CHARGES);
 
-    // The record's own identity, as the payload reported it.
-    expect(host().textContent).toContain(LOAN.accountNo);
-    expect(host().textContent).toContain('Spec Loan Product');
-    expect(host().textContent).toContain('Spec Borrower');
-    expect(host().textContent).toContain('5,000');
+    // The record's own identity, as the payload reported it, inside the record's head.
+    const head = (): string => host().querySelector('#loan-view-header')?.textContent ?? '';
+
+    expect(head()).toContain(LOAN.accountNo);
+    expect(head()).toContain('Spec Loan Product');
+    expect(head()).toContain('Spec Borrower');
+    expect(head()).toContain('5,000');
+
+    // The status indicator is the design's colour and nothing else: the record's dot geometry with
+    // the active key's class, decorative and wordless (AAP 0.10.5 deliberate difference 11). The
+    // classes are checked by membership because the renderer normalises their order.
+    const swatch = host().querySelector('#loan-view-header app-status-swatch span');
+
+    expect(swatch?.classList.contains('status-swatch')).toBe(true);
+    expect(swatch?.classList.contains('status-dot')).toBe(true);
+    expect(swatch?.classList.contains('status-active')).toBe(true);
+    expect(swatch?.getAttribute('aria-hidden')).toBe('true');
 
     // Three tabs, in the legacy record's order and under the legacy bundles' own headings.
     expect(tabAnchors().map((anchor) => anchor.textContent?.trim())).toEqual([
@@ -695,8 +707,10 @@ describe('LoanViewComponent', () => {
     await show(id, () => throwError(() => failure(404, NOT_FOUND_MESSAGE)));
 
     expect(component.notFound()).toBe(true);
-    expect(host().textContent).toContain(NOT_FOUND_TEXT);
-    // The record is replaced, not annotated: no tabs, no action group, no alert beside it.
+    expect(host().querySelector('#loan-view-not-found')?.textContent?.trim()).toBe(NOT_FOUND_TEXT);
+    // The record is replaced, not annotated: no head, no tabs, no action group, no alert beside it.
+    expect(host().querySelector('#loan-view-header')).toBeNull();
+    expect(host().querySelector('#loan-actions')).toBeNull();
     expect(host().querySelector('ul.nav-tabs')).toBeNull();
     expect(host().querySelector('.btn-group')).toBeNull();
     expect(host().querySelector('.alert')).toBeNull();
@@ -754,6 +768,9 @@ describe('LoanViewComponent', () => {
       fixture.detectChanges();
 
       expect(actionLinks().map((link) => link.getAttribute('id'))).toEqual(shown);
+      // A state the legacy record offers no step in renders no joined group at all rather than an
+      // empty one, so no affordance stands where an action cannot be taken.
+      expect(host().querySelector('#loan-actions') === null).toBe(shown.length === 0);
 
       for (const id of hidden) {
         expect(host().querySelector(`#${id}`)).toBeNull();
@@ -796,10 +813,13 @@ describe('LoanViewComponent', () => {
   it('shows a failure other than a 404 verbatim and keeps the record page mounted', async () => {
     await show(LOAN_ID, () => throwError(() => failure(400, VALIDATION_MESSAGE)));
 
+    expect(host().querySelector('#loan-view-error')?.textContent?.trim()).toBe(VALIDATION_MESSAGE);
     expect(host().querySelector('.alert.alert-danger')?.textContent?.trim()).toBe(VALIDATION_MESSAGE);
     expect(component.clientError()?.message).toBe(VALIDATION_MESSAGE);
-    // A refusal is not an absent record, and the panel that would hold one is still there.
+    // A refusal is not an absent record, and the record card that holds the message is still there.
     expect(component.notFound()).toBe(false);
+    expect(host().querySelector('#loan-view')).not.toBeNull();
+    expect(host().querySelector('#loan-view-not-found')).toBeNull();
     expect(host().querySelector('.panel-body')).not.toBeNull();
     // A record that could not be read leaves no charge list behind, so the charge tab can neither
     // list rows nor claim the loan carries none.
@@ -815,6 +835,8 @@ describe('LoanViewComponent', () => {
     expect(component.clientError()).toBeNull();
     expect(component.notFound()).toBe(false);
     expect(host().querySelector('.alert.alert-danger')).toBeNull();
+    expect(host().querySelector('#loan-view-error')).toBeNull();
+    expect(host().querySelector('#loan-view-not-found')).toBeNull();
     expect(host().querySelector('.panel-body')).not.toBeNull();
     // Nothing of a record that never arrived is painted: no figures, no links, no charges.
     expect(component.loan()).toBeNull();
