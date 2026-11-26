@@ -62,6 +62,13 @@ FROM nginx:alpine
 # It replaces the stock configuration, whose server block listens on 80. There is no
 # reverse-proxy location on purpose: the parity harness asserts the API host the browser
 # itself calls, and a proxy would hide that host.
+#
+# nginx is the whole serving tier, so this block also hardens, compresses and caches what it
+# serves: the nginx version is not disclosed, a response keeps the content type it was given,
+# the document cannot be framed from another origin and sends no referrer to one, the text
+# assets travel gzipped, and each URL is given the cache lifetime its name justifies. The one
+# double-quoted argument below carries the CSP keyword's literal single quotes, which a
+# single-quoted argument cannot.
 RUN printf '%s\n' \
         'server {' \
         '    listen 4300;' \
@@ -69,6 +76,69 @@ RUN printf '%s\n' \
         '    root /usr/share/nginx/html;' \
         '    index index.html;' \
         '' \
+        '    # The nginx build in this image is not the product, so its version is not advertised.' \
+        '    server_tokens off;' \
+        '' \
+        '    # Hardening for every response this server sends. There is no upstream tier that could' \
+        '    # add it: a browser must not re-interpret a response as another type, may not frame the' \
+        '    # document, and a navigation away from it must not reveal where it came from.' \
+        '    add_header X-Content-Type-Options "nosniff" always;' \
+        '    add_header X-Frame-Options "DENY" always;' \
+        "    add_header Content-Security-Policy \"frame-ancestors 'none'\" always;" \
+        '    add_header Referrer-Policy "same-origin" always;' \
+        '' \
+        '    # The bundle is text: compress it in flight, and announce that with Vary so a shared' \
+        '    # cache never hands a plain response to a client that asked for a compressed one.' \
+        '    gzip on;' \
+        '    gzip_vary on;' \
+        '    gzip_min_length 1024;' \
+        '    gzip_proxied any;' \
+        '    gzip_comp_level 6;' \
+        '    gzip_types text/css text/plain text/xml application/javascript application/json application/xml image/svg+xml;' \
+        '' \
+        '    # The entrypoint rewrites this file in place at every container start, so any earlier' \
+        '    # answer is stale by definition: it can point the bundle at the previous API host or' \
+        '    # tenant. Exact match, so no other location can claim the path first.' \
+        '    location = /assets/config.json {' \
+        '        add_header Cache-Control "no-store, must-revalidate" always;' \
+        '        # Repeated because a location that declares an add_header of its own inherits none' \
+        '        # of the ones declared above it.' \
+        '        add_header X-Content-Type-Options "nosniff" always;' \
+        '        add_header X-Frame-Options "DENY" always;' \
+        "        add_header Content-Security-Policy \"frame-ancestors 'none'\" always;" \
+        '        add_header Referrer-Policy "same-origin" always;' \
+        '    }' \
+        '' \
+        '    # The document names the hashed bundles, so a stale copy can point at a file a later' \
+        '    # build has deleted. It is revalidated on every visit, and served this way both when it' \
+        '    # is requested directly and when the fallback below hands it the request.' \
+        '    location = /index.html {' \
+        '        add_header Cache-Control "no-cache" always;' \
+        '        # Repeated: a location that declares its own add_header inherits none from above.' \
+        '        add_header X-Content-Type-Options "nosniff" always;' \
+        '        add_header X-Frame-Options "DENY" always;' \
+        "        add_header Content-Security-Policy \"frame-ancestors 'none'\" always;" \
+        '        add_header Referrer-Policy "same-origin" always;' \
+        '    }' \
+        '' \
+        '    # Every file this matches carries the hash of its own content in its name, because the' \
+        '    # production build uses outputHashing, so the name that exists is the name a browser' \
+        '    # may keep for a year and a new build cannot collide with it. The expires directive is' \
+        '    # deliberately absent here: it would emit a second Cache-Control beside this one. This' \
+        '    # header is added to successful and not-modified answers only, so a name that does not' \
+        '    # exist is not itself stored for a year.' \
+        '    location ~* \.(?:js|css|woff2?|ttf|eot|svg|ico)$ {' \
+        '        add_header Cache-Control "public, max-age=31536000, immutable";' \
+        '        # Repeated: a location that declares its own add_header inherits none from above.' \
+        '        add_header X-Content-Type-Options "nosniff" always;' \
+        '        add_header X-Frame-Options "DENY" always;' \
+        "        add_header Content-Security-Policy \"frame-ancestors 'none'\" always;" \
+        '        add_header Referrer-Policy "same-origin" always;' \
+        '    }' \
+        '' \
+        '    # Anything else is a client-side route: hand it the document and let the router decide.' \
+        '    # The internal redirect re-runs location matching, so the fallback is served with the' \
+        '    # revalidation rule declared for the document above.' \
         '    location / {' \
         '        try_files $uri $uri/ /index.html;' \
         '    }' \

@@ -143,8 +143,8 @@ Open `http://localhost:4300/`: step 2 runs at container start, and the browser c
 
 ## Legacy assets
 
-Translations (`app/global-translations/`), images (`app/images/`) and styles (`app/styles-dev/main/**`) are wired
-through `angular.json`'s `assets` mappings and `stylePreprocessorOptions.includePaths`, never copied; the relative
-link `web-ng/app -> ../app` is how the builder, which accepts no input outside the workspace root, reaches the
-repository-root legacy tree. Without that tree the build emits neither `global-translations/` nor `images/`, and
-the served app 404s both — every label is then the missing-translation fallback and no language can be applied.
+Translations, images and styles are never copied: they come from `app/` via `angular.json`'s `assets` and
+`stylePreprocessorOptions.includePaths`. The link `web-ng/app -> ../app` exists because the builder confines inputs to
+the workspace root: build where the repository root holds that tree, and never follow it destructively —
+`rm -rf web-ng/app/` would reach `app/`. Without it the build emits neither `global-translations/` nor `images/`: no label
+resolves and no image is served. The image build guarantees both — it fails its assertions rather than degrade silently.

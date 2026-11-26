@@ -23,6 +23,10 @@
               "src/styles.scss"
             ],
             "stylePreprocessorOptions": {
+              // `app/styles-dev` is reached through the tracked `web-ng/app -> ../app` link, because the
+              // builder confines every input to the workspace root. The link points into the read-only
+              // legacy tree, so nothing may follow it destructively: `rm -rf web-ng/app/`, an archive or a
+              // copy step would reach `app/`. A checkout without that tree resolves no legacy partial.
               "includePaths": [
                 "app/styles-dev"
               ]
@@ -33,11 +37,18 @@
                 "input": "src/assets",
                 "output": "assets"
               },
+              // Both `app/` inputs below resolve through the tracked `web-ng/app -> ../app` link, because the
+              // builder confines every asset input to the workspace root. The link points into the read-only
+              // legacy tree, so no tool may follow it destructively: `rm -rf web-ng/app/`, an archive or a copy
+              // step would reach `app/` itself. In a checkout without that tree the build still succeeds but
+              // emits no `global-translations/`, so the served app 404s every bundle and no language applies.
               {
                 "glob": "**/*",
                 "input": "app/global-translations",
                 "output": "global-translations"
               },
+              // The same link and the same prohibition: without the legacy tree this input emits no `images/`,
+              // and the served app 404s the favicon, both logo lockups and the client avatar placeholder.
               {
                 "glob": "**/*",
                 "input": "app/images",
