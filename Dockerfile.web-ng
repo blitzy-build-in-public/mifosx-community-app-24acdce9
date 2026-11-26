@@ -1,0 +1,74 @@
+# =============================================================================
+# Dockerfile.web-ng — the serving image of the Angular 22 replacement front end
+#
+# Stage 1 builds the production bundle with the Angular CLI; stage 2 serves the static
+# files from nginx on port 4300. The browser calls Fineract directly, so the runtime
+# stage configures no proxy: the API base URL reaches the bundle from the environment at
+# container start, through web-ng/docker/entrypoint.sh.
+#
+# The build context is the repository root (`docker build -f Dockerfile.web-ng .`), which
+# is why every COPY source is prefixed with web-ng/. Nothing from the legacy front end, its
+# test suite or the legacy root Dockerfile is read, so the legacy image builds unchanged.
+# =============================================================================
+
+FROM node:22 AS build
+
+# Angular 22.3.0 requires Node ^22.22.3 || ^24.15.0 || >=26.0.0, which the node:22 tag meets.
+WORKDIR /src
+
+# The npm bundled with the node:22 tag (10.9.9) aborts on this dependency graph with
+# "Cannot read properties of null (reading 'edgesOut')". 11.21.3 is the version every pin in
+# package.json was resolved and validated with, so it is pinned here rather than inherited
+# from whatever the base tag happens to ship.
+RUN npm install -g npm@11.21.3
+
+# The manifest is copied alone so this layer is reused until the pins change. Every
+# dependency is pinned exactly and no lockfile is committed, so the install is
+# `npm install`; a lockfile-based install is not usable here. NODE_ENV must stay unset:
+# the Angular CLI and its builder are dev dependencies and the build below needs them.
+COPY web-ng/package.json ./
+RUN npm install --no-audit --no-fund
+
+# Explicit build inputs only — the workspace files and the application source. The
+# checkout's node_modules/, dist/, .angular/, e2e/ and tools/ never enter the image. The
+# legacy translations and images reach the bundle through the asset mappings in
+# angular.json, never through this file, so the document root holds build output alone.
+COPY web-ng/angular.json web-ng/tsconfig.json web-ng/tsconfig.app.json web-ng/tsconfig.spec.json ./
+COPY web-ng/src ./src
+
+# The production configuration enforces strict templates and the 1.5 MB initial-budget
+# error, so a regression fails the image build rather than the deployment. Asserting the
+# emitted path in the same layer turns a workspace rename into a build failure instead of
+# an image that serves 404s from an empty document root.
+RUN npx ng build --configuration production \
+ && test -f dist/web-ng/browser/index.html
+
+FROM nginx:alpine
+
+# One server block on the port this project publishes, with the single-page-app fallback.
+# It replaces the stock configuration, whose server block listens on 80. There is no
+# reverse-proxy location on purpose: the parity harness asserts the API host the browser
+# itself calls, and a proxy would hide that host.
+RUN printf '%s\n' \
+        'server {' \
+        '    listen 4300;' \
+        '    server_name _;' \
+        '    root /usr/share/nginx/html;' \
+        '    index index.html;' \
+        '' \
+        '    location / {' \
+        '        try_files $uri $uri/ /index.html;' \
+        '    }' \
+        '}' \
+        > /etc/nginx/conf.d/default.conf
+
+COPY --from=build /src/dist/web-ng/browser /usr/share/nginx/html
+
+# The entrypoint rewrites the served assets/config.json from API_BASE_URL and TENANT_ID and
+# then execs nginx itself, so the image declares no CMD and nothing starts a second nginx.
+COPY web-ng/docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod 0755 /usr/local/bin/entrypoint.sh
+
+EXPOSE 4300
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

@@ -1,3 +1,4 @@
+import { Location } from '@angular/common';
 import {
   provideHttpClient,
   withInterceptors,
@@ -9,9 +10,19 @@ import {
   provideHttpClientTesting,
   type TestRequest,
 } from '@angular/common/http/testing';
+import { provideLocationMocks } from '@angular/common/testing';
+import type { EnvironmentProviders, Provider } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
-import { Validators } from '@angular/forms';
-import { ActivatedRoute, Router, convertToParamMap, type ParamMap } from '@angular/router';
+import { Validators, type FormControl } from '@angular/forms';
+import {
+  ActivatedRoute,
+  Router,
+  convertToParamMap,
+  provideRouter,
+  withDisabledInitialNavigation,
+  type ParamMap,
+  type Routes,
+} from '@angular/router';
 import { provideTranslateService, TranslateService } from '@ngx-translate/core';
 import { catchError, of, Subject, throwError, type Observable } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
@@ -77,6 +88,25 @@ const LOAN_URL = `${API_ROOT}/loans/${LOAN_ID}`;
 const RECORD_ROUTE = ['/viewloanaccount', LOAN_ID];
 
 /**
+ * The router table the cancel-link case installs, so a real `RouterLink` resolves its target instead of
+ * a stubbed router answering nothing.
+ *
+ * One route, and deliberately no component: the case asserts where the cancel control points and that
+ * following it posts nothing, not what the record screen renders — that screen is another subject.
+ */
+const RECORD_ROUTES: Routes = [{ path: 'viewloanaccount/:id', children: [] }];
+
+/**
+ * The two URLs that name no screen of this application: an empty `:action` segment and a route carrying
+ * no `:id`. Both are the not-found outcome, and the parameterised case built from them asserts that a
+ * URL the application does not serve issues no request and so cannot post against a loan (AAP 0.7.4).
+ */
+const UNSERVED_URLS: readonly (readonly [string, ParamMap])[] = [
+  ['an empty action segment', convertToParamMap({ id: LOAN_ID, action: '' })],
+  ['no loan id', convertToParamMap({ action: 'approve' })],
+];
+
+/**
  * The legacy captions this screen resolves, keyed exactly as the shipped flat translation bundles key
  * them. A key that did not resolve would render humanised through the missing-translation handler, so
  * serving the real wording is what proves the labels below resolve rather than fall back.
@@ -134,6 +164,40 @@ const DISBURSE_TEMPLATE: LoanTransactionTemplate = {
   amount: 5000,
   loanId: 9,
 };
+
+/** One mode whose form collects an amount, with the control the figure is typed into. */
+interface AmountMode {
+  /** The `:action` segment that selects the mode. */
+  readonly action: 'approve' | 'disburse';
+
+  /** The seed read the mode answers with. */
+  readonly template: LoanActionTemplate | LoanTransactionTemplate;
+
+  /** The member of the posted body the control's value travels in. */
+  readonly amountKey: 'approvedLoanAmount' | 'transactionAmount';
+
+  /** The control of the mounted screen that holds the amount. */
+  readonly control: (screen: LoanActionComponent) => FormControl<number | null>;
+}
+
+/**
+ * The two amount-bearing modes. They differ only in the action mounted and the control carrying the
+ * figure, so one parameterised case asserts the rule for both instead of repeating it twice.
+ */
+const AMOUNT_MODES: readonly AmountMode[] = [
+  {
+    action: 'approve',
+    template: APPROVAL_TEMPLATE,
+    amountKey: 'approvedLoanAmount',
+    control: (screen) => screen.approveForm.controls.approvedLoanAmount,
+  },
+  {
+    action: 'disburse',
+    template: DISBURSE_TEMPLATE,
+    amountKey: 'transactionAmount',
+    control: (screen) => screen.disburseForm.controls.transactionAmount,
+  },
+];
 
 /** The message a refused approval answers with, quoted from a real Fineract validation failure. */
 const REJECTED_MESSAGE = 'The loan cannot be approved because the approval date is before the submission date.';
@@ -256,8 +320,16 @@ describe('LoanActionComponent', () => {
    * case supplies, and a module left instantiated by the previous case cannot take a new one.
    *
    * @param paramMap the route's own `paramMap`, which decides how many URLs the instance is handed.
+   * @param router the router providers, which default to the navigation spy. The cancel-link case
+   *   installs a real router instead, because a stub that answers no URL tree leaves a `routerLink`
+   *   nothing to resolve and its target unassertable.
    */
-  async function mount(paramMap: Observable<ParamMap>): Promise<void> {
+  async function mount(
+    paramMap: Observable<ParamMap>,
+    router: readonly (Provider | EnvironmentProviders)[] = [
+      { provide: Router, useValue: { navigate } },
+    ],
+  ): Promise<void> {
     TestBed.resetTestingModule();
 
     TestBed.configureTestingModule({
@@ -266,7 +338,7 @@ describe('LoanActionComponent', () => {
         provideHttpClient(withInterceptors([MAP_FINERACT_FAILURES])),
         provideHttpClientTesting(),
         provideTranslateService(),
-        { provide: Router, useValue: { navigate } },
+        ...router,
         { provide: ActivatedRoute, useValue: { paramMap } },
       ],
     });
@@ -292,9 +364,16 @@ describe('LoanActionComponent', () => {
    *
    * @param action the `:action` segment, or `null` for a route that carries none.
    * @param id the `:id` segment, or `null` for a route that carries none.
+   * @param router the router providers, defaulted as {@link mount} defaults them.
    */
-  async function show(action: string | null, id: string | null = LOAN_ID): Promise<void> {
-    await mount(of(paramsFor(action, id)));
+  async function show(
+    action: string | null,
+    id: string | null = LOAN_ID,
+    router: readonly (Provider | EnvironmentProviders)[] = [
+      { provide: Router, useValue: { navigate } },
+    ],
+  ): Promise<void> {
+    await mount(of(paramsFor(action, id)), router);
   }
 
   /**
@@ -597,6 +676,99 @@ describe('LoanActionComponent', () => {
     expect(navigate).toHaveBeenCalledTimes(1);
   });
 
+  it('disables the submit trigger while the post is in flight and re-enables it after', async () => {
+    await show('disburse');
+    await settle(DISBURSE_TEMPLATE);
+
+    component.disburseForm.patchValue({
+      actualDisbursementDate: new Date(2026, 10, 24),
+      transactionAmount: 5000,
+    });
+    fixture.detectChanges();
+
+    const trigger = (): HTMLButtonElement | null => host().querySelector('button[type="submit"]');
+
+    expect(trigger()?.disabled).toBe(false);
+
+    const submission = component.submit();
+
+    fixture.detectChanges();
+
+    // The trigger is disabled for exactly as long as the request is in flight, which is what stops a
+    // second click reaching an endpoint Fineract does not make idempotent (AAP 0.4.2, workflow W5).
+    expect(component.guard.busy()).toBe(true);
+    expect(trigger()?.disabled).toBe(true);
+
+    httpMock.expectOne(isActionPost('disburse')).flush({ resourceId: 9 });
+    await submission;
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(component.guard.busy()).toBe(false);
+    expect(trigger()?.disabled).toBe(false);
+  });
+
+  it.each(AMOUNT_MODES)(
+    'accepts an out-of-range amount on the $action form, leaving the date grammar to the service',
+    async (mode: AmountMode) => {
+      await show(mode.action);
+      await settle(mode.template);
+
+      const amount = mode.control(component);
+
+      // Fineract alone bounds an amount: a figure below any product minimum and one above any maximum
+      // are both accepted by the form, so the out-of-range principal workflow W7 depends on reaches the
+      // server and the server's own message is what the user reads (Rule 1 clause 3; AAP 0.4.4 decision 6).
+      amount.setValue(0);
+      amount.markAsTouched();
+      expect(amount.valid).toBe(true);
+      expect(amount.hasError('min')).toBe(false);
+
+      amount.setValue(50000);
+      amount.markAsTouched();
+      fixture.detectChanges();
+
+      expect(amount.valid).toBe(true);
+      expect(amount.errors).toBeNull();
+      expect(amount.hasError('max')).toBe(false);
+      expect(host().querySelector('.has-error')).toBeNull();
+
+      // The body this screen assembles carries the command's own fields only: `dateFormat` and `locale`
+      // are written by the service as it serialises, so the screen holds no second copy of the date
+      // contract and the payload keeps exactly one writer (Rule 1 clause 2).
+      const body = component.buildRequest();
+
+      expect(body).toMatchObject({ [mode.amountKey]: 50000 });
+      expect(Object.keys(body ?? {})).not.toContain('dateFormat');
+      expect(Object.keys(body ?? {})).not.toContain('locale');
+    },
+  );
+
+  it('offers a cancel that returns to the loan record and posts nothing', async () => {
+    // A real router, so the shipped `routerLink` resolves its target rather than a stub answering no URL
+    // tree: the assertion below is about where the control points, not about a mocked navigation.
+    await show('approve', LOAN_ID, [
+      provideRouter(RECORD_ROUTES, withDisabledInitialNavigation()),
+      provideLocationMocks(),
+    ]);
+    await settle(APPROVAL_TEMPLATE);
+
+    const cancel = host().querySelector<HTMLAnchorElement>('.panel-footer a.btn');
+
+    expect(cancel?.textContent?.trim()).toBe('Cancel');
+    expect(cancel?.getAttribute('href')).toBe(`/viewloanaccount/${LOAN_ID}`);
+
+    cancel?.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // Following the cancel link leaves for the record and sends nothing: no action is posted, so the
+    // screen's cancel path cannot change the loan's state.
+    expect(TestBed.inject(Location).path()).toBe(`/viewloanaccount/${LOAN_ID}`);
+    httpMock.expectNone(isAnyPostToLoan);
+    expect(component.guard.busy()).toBe(false);
+  });
+
   it('sends nothing while a required field is missing, and marks the field', async () => {
     await show('approve');
     await settle(APPROVAL_TEMPLATE);
@@ -738,6 +910,25 @@ describe('LoanActionComponent', () => {
     expect(host().querySelector('form')).toBeNull();
   });
 
+  it.each(UNSERVED_URLS)(
+    'renders the not-found message for a route with %s, with no request',
+    async (_case: string, params: ParamMap) => {
+      await mount(of(params));
+
+      // A URL that names no screen of this application issues no request at all — not a seed read and
+      // not a post — so it cannot change a loan's state (AAP 0.7.4 state rules; AAP 0.9.2).
+      httpMock.expectNone(() => true);
+      fixture.detectChanges();
+
+      expect(component.mode()).toBe('notfound');
+      expect(component.command()).toBeNull();
+      expect(component.notFound()).toBe(true);
+      expect(host().textContent).toContain('The requested resource is not available.');
+      expect(host().querySelector('form')).toBeNull();
+      expect(host().querySelector('.panel-footer button.btn-primary')).toBeNull();
+    },
+  );
+
   it('renders the not-found message in place of the form when the seed read answers 404', async () => {
     await show('disburse');
 
@@ -751,6 +942,24 @@ describe('LoanActionComponent', () => {
     expect(component.error()).toBeNull();
     expect(host().textContent).toContain('The requested resource is not available.');
     expect(host().querySelector('form')).toBeNull();
+  });
+
+  it('renders the not-found message in place of the approve form when its template read answers 404', async () => {
+    await show('approve');
+
+    // The approval read is the other seed a 404 can refuse: the id is not a loan, or not a loan in a
+    // state this command applies to, so the message replaces the form and no control can post.
+    httpMock
+      .expectOne(isApprovalTemplateRead)
+      .flush({ defaultUserMessage: 'Loan not found' }, { status: 404, statusText: 'Not Found' });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(component.notFound()).toBe(true);
+    expect(component.error()).toBeNull();
+    expect(host().textContent).toContain('Not Available');
+    expect(host().querySelector('form')).toBeNull();
+    httpMock.expectNone(isAnyPostToLoan);
   });
 
   it('delegates the repayment mode to the child screen and issues no action read of its own', async () => {
