@@ -1,0 +1,16 @@
+services:
+  web-ng:
+    # The build context is the repository root because Dockerfile.web-ng copies its sources from
+    # web-ng/ relative to it, and it is the context acceptance criterion 10 builds from.
+    build:
+      context: .
+      dockerfile: Dockerfile.web-ng
+    image: web-ng
+    ports:
+      - "4300:4300"
+    # Consumed by the image entrypoint, web-ng/docker/entrypoint.sh, which rewrites the served
+    # assets/config.json before nginx starts. The defaults equal that file's values, so a local
+    # run needs no override and a forwarded API host is supplied by setting the variables alone.
+    environment:
+      API_BASE_URL: ${API_BASE_URL:-https://localhost:8443}
+      TENANT_ID: ${TENANT_ID:-default}
