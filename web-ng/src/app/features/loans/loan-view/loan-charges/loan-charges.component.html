@@ -1,0 +1,53 @@
+<!-- Charges section of the individual loan record (`#/viewloanaccount/:id`; AAP 0.7.1 row `loans`, AAP 0.7.2 row `LoanCharge`, AAP 0.7.3 row "Loan charges") (Rule 1 clause 2, Rule 2, AAP 0.7.4, Rule 1 clause 3). -->
+<!-- This table stays hand-written rather than rendered through `app-data-table`, for two reasons of its own: its last cell is two permission-gated `routerLink` controls routed through `HasPermissionDirective`, while `app-data-table` renders its single `cellTemplate` for every data cell, so the six text columns would have to re-declare their own text inside a per-column branch; and that component's inert `ColumnDef` — no formatter or renderer, its `value` a plain `string` — would push the money and date pipes below into component code, putting a second money-and-date formatting path inside this one feature. -->
+
+@if (isEmpty()) {
+  <app-empty-state id="loan-charges-empty" [message]="'label.nodata' | translate" />
+} @else {
+  <div class="table-responsive">
+    <table class="table table-striped" id="loan-charges">
+      <caption class="sr-only">{{ 'label.heading.charges' | translate }}</caption>
+      <thead>
+        <tr>
+          <th scope="col">{{ 'label.heading.name' | translate }}</th>
+          <!-- The charge's own due date is labelled with label.heading.dueasof: that is the caption the legacy record heads this column with, and the key every locale bundle carries. -->
+          <th scope="col">{{ 'label.heading.dueasof' | translate }}</th>
+          <th scope="col">{{ 'label.heading.amount' | translate }}</th>
+          <th scope="col">{{ 'label.heading.paid' | translate }}</th>
+          <!-- The written-off portion of the charge, which the legacy record heads label.heading.waived and renders from the charge's amountWaived: without it a waived charge reads as a paid one whose amount went nowhere. -->
+          <th scope="col">{{ 'label.heading.waived' | translate }}</th>
+          <th scope="col">{{ 'label.heading.outstanding' | translate }}</th>
+          <th scope="col">{{ 'label.heading.actions' | translate }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of rows(); track row.id) {
+          <tr>
+            <td>{{ row.name }}</td>
+            <td>{{ row.dueDate | date: displayFormat }}</td>
+            <td>{{ row.amount | money: row.currency }}</td>
+            <td>{{ row.amountPaid | money: row.currency }}</td>
+            <td>{{ row.amountWaived | money: row.currency }}</td>
+            <td>{{ row.amountOutstanding | money: row.currency }}</td>
+            <td>
+              <a
+                class="btn btn-primary btn-sm"
+                [class.hidden]="!row.canPay"
+                [id]="'loan-charge-pay-' + row.id"
+                [routerLink]="['/loanaccountcharge', loanId(), 'paycharge', row.id]"
+                [hasPermission]="actionPermission()"
+              >{{ 'label.button.paycharge' | translate }}</a>
+              <a
+                class="btn btn-primary btn-sm"
+                [class.hidden]="!row.canWaive"
+                [id]="'loan-charge-waive-' + row.id"
+                [routerLink]="['/loanaccountcharge', loanId(), 'waivecharge', row.id]"
+                [hasPermission]="actionPermission()"
+              >{{ 'label.button.waivecharge' | translate }}</a>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}

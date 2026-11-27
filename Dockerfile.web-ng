@@ -1,0 +1,179 @@
+# =============================================================================
+# Dockerfile.web-ng — the serving image of the Angular 22 replacement front end
+#
+# Stage 1 builds the production bundle with the Angular CLI; stage 2 serves the static
+# files from nginx on port 4300. The browser calls Fineract directly, so the runtime
+# stage configures no proxy: the API base URL reaches the bundle from the environment at
+# container start, through web-ng/docker/entrypoint.sh.
+#
+# The build context is the repository root (`docker build -f Dockerfile.web-ng .`), which
+# is why most COPY sources are prefixed with web-ng/. The three legacy asset roots the
+# bundle is built from are copied in read-only so the workspace-relative mappings in
+# angular.json resolve inside the image; they are referenced, never modified. Nothing else
+# of the legacy front end — its scripts, its views, its test suite, its root Dockerfile —
+# enters the image, so the legacy app still builds and runs unchanged.
+# =============================================================================
+
+FROM node:22 AS build
+
+# Angular 22.3.0 requires Node ^22.22.3 || ^24.15.0 || >=26.0.0, which the node:22 tag meets.
+WORKDIR /src
+
+# The npm bundled with the node:22 tag (10.9.9) aborts on this dependency graph with
+# "Cannot read properties of null (reading 'edgesOut')". 11.21.3 is the version every pin in
+# package.json was resolved and validated with, so it is pinned here rather than inherited
+# from whatever the base tag happens to ship.
+RUN npm install -g npm@11.21.3
+
+# The manifest is copied alone so this layer is reused until the pins change. Every
+# dependency is pinned exactly and no lockfile is committed, so the install is
+# `npm install`; a lockfile-based install is not usable here. NODE_ENV must stay unset:
+# the Angular CLI and its builder are dev dependencies and the build below needs them.
+COPY web-ng/package.json ./
+RUN npm install --no-audit --no-fund
+
+# Explicit build inputs only — the workspace files, the application source and the three
+# legacy asset roots the build reads. The checkout's node_modules/, dist/, .angular/, e2e/
+# and tools/ never enter the image, and neither does anything else under the legacy app/:
+# its scripts, views, test suite and root Dockerfile stay out. The three roots are copied
+# read-only because angular.json's asset inputs name `app/global-translations` and
+# `app/images` and its Sass includePath names `app/styles-dev`, and the builder resolves
+# each against the workspace root — /src in this stage — while rejecting any input outside
+# it. The files are served verbatim: translations at global-translations/, images at images/.
+COPY web-ng/angular.json web-ng/tsconfig.json web-ng/tsconfig.app.json web-ng/tsconfig.spec.json ./
+COPY web-ng/src ./src
+COPY app/global-translations ./app/global-translations
+COPY app/images ./app/images
+COPY app/styles-dev ./app/styles-dev
+
+# The production configuration enforces strict templates and the 1.5 MB initial-budget
+# error, so a regression fails the image build rather than the deployment. Asserting the
+# emitted document root, one translation bundle and one image in the same layer turns a
+# workspace rename or an unread legacy root into a build failure instead of an image that
+# serves 404s from an incomplete document root.
+RUN npx ng build --configuration production \
+ && test -f dist/web-ng/browser/index.html \
+ && test -f dist/web-ng/browser/global-translations/locale-en.json \
+ && test -f dist/web-ng/browser/images/favicon.ico
+
+FROM nginx:alpine
+
+# One server block on the port this project publishes, with the single-page-app fallback.
+# It replaces the stock configuration, whose server block listens on 80. There is no
+# reverse-proxy location on purpose: the parity harness asserts the API host the browser
+# itself calls, and a proxy would hide that host.
+#
+# nginx is the whole serving tier, so this block also hardens, compresses and caches what it
+# serves: the nginx version is not disclosed, a response keeps the content type it was given,
+# the document cannot be framed from another origin and sends no referrer to one, the text
+# assets travel gzipped, and each URL is given the cache lifetime its name justifies. The one
+# double-quoted argument below carries the CSP keyword's literal single quotes, which a
+# single-quoted argument cannot.
+RUN printf '%s\n' \
+        'server {' \
+        '    listen 4300;' \
+        '    server_name _;' \
+        '    root /usr/share/nginx/html;' \
+        '    index index.html;' \
+        '' \
+        '    # The nginx build in this image is not the product, so its version is not advertised.' \
+        '    server_tokens off;' \
+        '' \
+        '    # Hardening for every response this server sends. There is no upstream tier that could' \
+        '    # add it: a browser must not re-interpret a response as another type, may not frame the' \
+        '    # document, and a navigation away from it must not reveal where it came from.' \
+        '    add_header X-Content-Type-Options "nosniff" always;' \
+        '    add_header X-Frame-Options "DENY" always;' \
+        "    add_header Content-Security-Policy \"frame-ancestors 'none'\" always;" \
+        '    add_header Referrer-Policy "same-origin" always;' \
+        '' \
+        '    # The bundle is text: compress it in flight, and announce that with Vary so a shared' \
+        '    # cache never hands a plain response to a client that asked for a compressed one.' \
+        '    gzip on;' \
+        '    gzip_vary on;' \
+        '    gzip_min_length 1024;' \
+        '    gzip_proxied any;' \
+        '    gzip_comp_level 6;' \
+        '    gzip_types text/css text/plain text/xml application/javascript application/json application/xml image/svg+xml;' \
+        '' \
+        '    # The entrypoint rewrites this file in place at every container start, so any earlier' \
+        '    # answer is stale by definition: it can point the bundle at the previous API host or' \
+        '    # tenant. Exact match, so no other location can claim the path first.' \
+        '    location = /assets/config.json {' \
+        '        add_header Cache-Control "no-store, must-revalidate" always;' \
+        '        # Repeated because a location that declares an add_header of its own inherits none' \
+        '        # of the ones declared above it.' \
+        '        add_header X-Content-Type-Options "nosniff" always;' \
+        '        add_header X-Frame-Options "DENY" always;' \
+        "        add_header Content-Security-Policy \"frame-ancestors 'none'\" always;" \
+        '        add_header Referrer-Policy "same-origin" always;' \
+        '    }' \
+        '' \
+        '    # The document names the hashed bundles, so a stale copy can point at a file a later' \
+        '    # build has deleted. It is revalidated on every visit, and served this way both when it' \
+        '    # is requested directly and when the fallback below hands it the request.' \
+        '    location = /index.html {' \
+        '        add_header Cache-Control "no-cache" always;' \
+        '        # Repeated: a location that declares its own add_header inherits none from above.' \
+        '        add_header X-Content-Type-Options "nosniff" always;' \
+        '        add_header X-Frame-Options "DENY" always;' \
+        "        add_header Content-Security-Policy \"frame-ancestors 'none'\" always;" \
+        '        add_header Referrer-Policy "same-origin" always;' \
+        '    }' \
+        '' \
+        '    # Every file this matches carries the hash of its own content in its name, because the' \
+        '    # production build uses outputHashing, so the name that exists is the name a browser' \
+        '    # may keep for a year and a new build cannot collide with it. The expires directive is' \
+        '    # deliberately absent here: it would emit a second Cache-Control beside this one. This' \
+        '    # header is added to successful and not-modified answers only, so a name that does not' \
+        '    # exist is not itself stored for a year.' \
+        '    location ~* \.(?:js|css|woff2?|ttf|eot|svg|ico)$ {' \
+        '        add_header Cache-Control "public, max-age=31536000, immutable";' \
+        '        # Repeated: a location that declares its own add_header inherits none from above.' \
+        '        add_header X-Content-Type-Options "nosniff" always;' \
+        '        add_header X-Frame-Options "DENY" always;' \
+        "        add_header Content-Security-Policy \"frame-ancestors 'none'\" always;" \
+        '        add_header Referrer-Policy "same-origin" always;' \
+        '    }' \
+        '' \
+        '    # Anything else is a client-side route: hand it the document and let the router decide.' \
+        '    # The internal redirect re-runs location matching, so the fallback is served with the' \
+        '    # revalidation rule declared for the document above.' \
+        '    location / {' \
+        '        try_files $uri $uri/ /index.html;' \
+        '    }' \
+        '}' \
+        > /etc/nginx/conf.d/default.conf
+
+COPY --from=build /src/dist/web-ng/browser /usr/share/nginx/html
+
+# The two directories nginx writes to belong to the image's own nginx user (uid 101): the document
+# root, because the entrypoint rewrites assets/config.json in place and renames the result over it,
+# and the cache directory, because the master creates its client/proxy/fastcgi/uwsgi/scgi temp
+# directories there at start. The pid file moves to /tmp with them, since /run belongs to root and
+# the master writes that file itself; the grep turns a future base image that relocates the
+# directive into a build failure instead of a container that cannot write its own pid.
+RUN chown -R nginx:nginx /usr/share/nginx/html /var/cache/nginx \
+ && sed -i 's|^pid[[:space:]].*|pid /tmp/nginx.pid;|' /etc/nginx/nginx.conf \
+ && grep -qx 'pid /tmp/nginx.pid;' /etc/nginx/nginx.conf
+
+# The entrypoint rewrites the served assets/config.json from API_BASE_URL and TENANT_ID and then
+# execs nginx itself, ignoring any arguments it is handed. Declaring ENTRYPOINT already discards
+# the CMD nginx:alpine ships (["nginx","-g","daemon off;"]), and the empty CMD at the end of this
+# file states that nothing follows, so the entrypoint alone runs and exactly one nginx starts.
+COPY web-ng/docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod 0755 /usr/local/bin/entrypoint.sh
+
+# Both the entrypoint and the nginx master it execs run as the image's own nginx user, never as
+# root; port 4300 is above 1024, so no capability is needed to bind it. The base image's own
+# `user nginx;` directive stays in nginx.conf: it is a no-op once the master is unprivileged, and
+# it still drops the workers if the image is ever run as root.
+USER nginx
+
+EXPOSE 4300
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+
+# Declared rather than left as the side effect of the ENTRYPOINT instruction above: the image takes
+# no arguments, and none is passed through to nginx.
+CMD []

@@ -1,0 +1,153 @@
+<!-- The loan-charge screen of the individual-loan family — `#/addloancharge/:id`, which adds a charge to a loan, and `#/loanaccountcharge/:id/:action/:chargeId`, which pays or waives one the loan already carries (AAP 0.7.1 row `loans` → `LoanChargeFormComponent`; AAP 0.7.4: "the action screens … are single-purpose forms rendered in the same card, each with a primary submit and a cancel that returns to the record"; AAP 0.8.2 feature routes).
+  The card holds exactly three things — the heading, the form and the footer — each chosen by the mode the class resolved from the route's parameters (`isAddMode()`, `isPayMode()`, `isWaiveMode()`, `formVisible()`; in add mode the legacy `isCollapsed` toggle hides the amount and due date until a charge is picked, while the action routes always show their single field). Two fields, one per operation that has any: the add form carries the amount (and the due date of a charge that falls due on a specified date), the pay form the payment date, and waiving carries neither, because the endpoint waives the whole outstanding portion and refuses an amount, date or payment type beside `?command=waive`. Nothing renders a control that posts nothing.
+  The `.panel` surface, its `.panel-heading` band and `.panel-title` come from the shared `div[appPanelCard]` (AAP 0.2.3 row `PanelCard`), which is the one place the card is defined; the heading text is projected from the mode's `@if`/`@else if` chain rather than the component's `title`. Every other visual value comes from the global Bootstrap 3 layer `web-ng/src/styles.scss` (Rule 1 clause 6), `span.required` included — the legacy asterisk marker (`app/styles-dev/main/components/_content.scss:148`) the legacy forms and `client-create` render. This file carries no stylesheet, no inline style, no colour and no class of its own, and loads no DOM scripting plugin and no UI-widget script: AAP 0.5.1 records that the design system has no JavaScript behaviour, so every interaction here is Angular state. `.panel-default` is deliberately not applied, as `features/clients/client-view/profile-card` records for the whole family.
+  The form follows the application's one convention, stated for `.form-horizontal` in `styles.scss`: a field's label sits above its control at the control's left edge, inside the `.col-md-6` column that holds it, and the footer's two actions end at the card's right edge at every width through Bootstrap's own `text-right`.
+  The ids are the ones the parity harness and the legacy forms already address — `chargeId`, `amount`, `dueDate`, `transactionDate`, and `cancel` / `save` in the footer (`app/views/loans/addloancharge.html`; `app/views/loans/loanaccountactions.html`) — and each renders only in the mode whose body carries its value. Every caption is a key the shipped legacy bundles already carry, read in `app/global-translations/locale-en.json`: `label.heading.addloancharge`, `label.heading.payloancharge` and `label.heading.waiveloancharge`; `label.input.charge`, `label.input.amount`, `label.input.dueon`, `label.input.paymentdate` and `label.requiredfield`; `label.selectcharge`; and `label.button.cancel` and `label.button.submit`. The state this screen does not serve is `shared/record-not-found`, which carries its own two keys, so no user-facing copy is written into this file, and the registered missing-translation handler humanises any key a locale lacks (AAP 0.3.1).
+  No host, URL, endpoint, credential, authentication key or session field appears here: every path in this file is a router path, and the payloads are assembled and serialised by `LoanService` (Rule 2; Rule 1 clauses 2 and 9; AAP 0.14.1). -->
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-md-12">
+      <div appPanelCard>
+        <!-- One heading per operation, from the key family the legacy controller itself switches on (`scope.title` in `LoanAccountActionsController`). The state this screen does not serve renders `shared/record-not-found`, which carries the message itself, so the band is omitted rather than printing the same heading twice. It is an `h1` because it is the screen's own title where it renders, with `.panel-title` keeping the 18px/700 box the legacy heading band paints. -->
+        @if (!notFound()) {
+          <div class="panel-heading">
+            <h1 class="panel-title">
+              @if (isAddMode()) {
+                {{ 'label.heading.addloancharge' | translate }}
+              } @else if (isPayMode()) {
+                {{ 'label.heading.payloancharge' | translate }}
+              } @else if (isWaiveMode()) {
+                {{ 'label.heading.waiveloancharge' | translate }}
+              }
+            </h1>
+          </div>
+        }
+
+        <div class="panel-body" [attr.aria-busy]="loading() ? 'true' : null">
+          <!-- Three mutually exclusive states, in the order a viewer meets them. An unserved route, an action this application does not implement or a loan that is not there puts the shared not-found presentation in place of the form and offers no action, while the rest of the shell stays usable (AAP 0.7.4 state rules). -->
+          @if (notFound()) {
+            <app-record-not-found />
+          } @else if (loading()) {
+            <!-- Nothing is painted while the mode's own reads are in flight: the design carries no spinner, skeleton or placeholder (AAP 0.2.4), so emitting no half-built form is the faithful state rather than a missing one. `client-accounts` reads the same way. -->
+          } @else {
+            <!-- `invalid` is read from the control itself, and as a plain property: `invalid`, `touched` and `dirty` are not signals, so a computed would keep its first verdict. The expression matches the `shared/date-field` and `shared/select-field` rule, so the amount states its error the same way the two fields beside it do. -->
+            @let amountInvalid =
+              form.controls.amount.invalid &&
+              (form.controls.amount.touched || form.controls.amount.dirty);
+
+            <!-- Fineract's own failure text, verbatim and unmoved by any prefix: no capitalisation, no translation, no truncation, and the form below keeps every value the user entered (AAP 0.7.4; Rule 1 clause 3 — W7 compares the rendered text with the server's `errors[].defaultUserMessage`). `role="alert"` announces it without moving focus. -->
+            @if (error(); as err) {
+              <div class="alert alert-danger" role="alert">{{ err.message }}</div>
+            }
+
+            <form
+              id="loanChargeForm"
+              class="form-horizontal"
+              [formGroup]="form"
+              (ngSubmit)="submit()"
+              novalidate
+            >
+              <fieldset>
+                <!-- The picker is add mode's alone, and it renders the template's own option list in the server's order — nothing sorted, filtered or relabelled. Its prompt is the legacy `label.selectcharge` row, which is what lets the field start empty: the class seeds no charge, so a select that auto-picked its first row would show a charge the form would not post. -->
+                @if (isAddMode()) {
+                  <div class="form-group">
+                    <div class="col-md-6">
+                      <label class="control-label" for="chargeId">
+                        {{ 'label.input.charge' | translate }}<span class="required">*</span>
+                      </label>
+                      <app-select-field
+                        inputId="chargeId"
+                        [control]="form.controls.chargeId"
+                        [options]="chargeOptions()"
+                        [placeholder]="'label.selectcharge' | translate"
+                        [required]="true"
+                      />
+                    </div>
+                  </div>
+                }
+
+                @if (isAddMode() && formVisible()) {
+                  <!-- The amount the charge is added for: the add form's own control, carrying the `required` validator the legacy form carries and no other. There is deliberately no `min`, `max`, `pattern` or native `required` attribute, so nothing in the browser can block or reshape a value Fineract alone validates, and the server's message stays the one the user reads (Rule 1 clause 3). `type="number"` is what makes the control hold a number rather than the text the user typed, so the body posts the JSON number legacy posted; `step="any"` keeps a fractional amount enterable, and the form's `novalidate` means the element still cannot block a submission the server should answer. -->
+                  <div class="form-group" [class.has-error]="amountInvalid">
+                    <div class="col-md-6">
+                      <label class="control-label" for="amount">
+                        {{ 'label.input.amount' | translate }}<span class="required">*</span>
+                      </label>
+                      <input
+                        id="amount"
+                        name="amount"
+                        type="number"
+                        step="any"
+                        inputmode="decimal"
+                        class="form-control"
+                        formControlName="amount"
+                        [attr.aria-required]="true"
+                        [attr.aria-invalid]="amountInvalid ? 'true' : null"
+                        [attr.aria-describedby]="amountInvalid ? 'amount-error' : null"
+                      />
+                      @if (amountInvalid) {
+                        <span id="amount-error" class="help-block" role="alert">
+                          {{ 'label.requiredfield' | translate }}
+                        </span>
+                      }
+                    </div>
+                  </div>
+
+                  <!-- The due date exists only for a charge that falls due on a specified date (the legacy `chargeTimeType.id == 2` test, which the class resolves in `dueDateRequired()`), and only on the add form. Its control is the shared native date field — the registered replacement for the legacy datepicker plugin (AAP 0.10.5 item 1) — whose value is a `Date` the service formats on the way out. -->
+                  @if (dueDateRequired()) {
+                    <div class="form-group">
+                      <div class="col-md-6">
+                        <label class="control-label" for="dueDate">
+                          {{ 'label.input.dueon' | translate }}<span class="required">*</span>
+                        </label>
+                        <app-date-field
+                          inputId="dueDate"
+                          [control]="form.controls.dueDate"
+                          [required]="true"
+                        />
+                      </div>
+                    </div>
+                  }
+                }
+
+                <!-- The payment date belongs to pay mode alone, and it is the command's whole form. A waiver books no money movement and no date, so it renders no field at all: the server pays or waives the charge's whole outstanding portion, refuses an `amount` or a `paymentTypeId` on either command and refuses a `transactionDate` on `waive`, so none of the three is collected here. The date is the legacy pay form's own control, defaulted from the browser clock and editable; that default is this build's own rather than legacy's, whose pay-charge screen reads the charge with `GET /loans/{id}/charges/{chargeId}?command=pay` and seeds the payment date from the charge's `dueDate` — a read this build does not make, because the endpoint lies outside AAP 0.7.3's loan-charge row and AAP 0.10.4 admits a URL outside it only with a justification written into the plan, so the difference is registered in `e2e/report/difference-register.ts` under AAP 0.10.5 item 15. That refusal is checked against the running server rather than inferred from the command name: `?command=pay` answers HTTP 400 `error.msg.parameter.unsupported` ("The parameter amount is not supported.") for a body carrying `amount`, the same 400 for `paymentTypeId`, and `?command=waive` the same 400 for `amount`, while the body this form posts clears that check and is answered on the charge's own domain grounds instead. The server takes the amount from the charge's outstanding portion itself, so neither member is a control this screen could post, and the legacy pay form collects the date alone. -->
+                @if (isPayMode()) {
+                  <div class="form-group">
+                    <div class="col-md-6">
+                      <label class="control-label" for="transactionDate">
+                        {{ 'label.input.paymentdate' | translate }}<span class="required">*</span>
+                      </label>
+                      <app-date-field
+                        inputId="transactionDate"
+                        [control]="form.controls.transactionDate"
+                        [required]="true"
+                      />
+                    </div>
+                  </div>
+                }
+              </fieldset>
+            </form>
+          }
+        </div>
+
+        <!-- Cancel returns to the loan record and submits nothing; the primary control posts the one request and disables itself while that request is in flight, because Fineract's action endpoints are not idempotent and one click must send exactly one POST (AAP 0.1.1, 0.14.1; W5's "one POST per action"). Both are the legacy form's own ids (`cancel`, `save`). The button sits in the card's footer rather than inside the form, and its `form` attribute names the form above, so it is that form's own submit control: a click on it and Enter in one of the form's fields both dispatch that form's one `submit` event, `(ngSubmit)` serves both, and the class's guard makes the two paths one request. -->
+        @if (!notFound()) {
+          <div class="panel-footer text-right">
+            <a id="cancel" class="btn btn-default" [routerLink]="['/viewloanaccount', loanId()]">
+              {{ 'label.button.cancel' | translate }}
+            </a>
+            <button
+              id="save"
+              type="submit"
+              class="btn btn-primary"
+              form="loanChargeForm"
+              [disabled]="guard.busy()"
+            >
+              {{ 'label.button.submit' | translate }}
+            </button>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+</div>

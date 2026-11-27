@@ -1,0 +1,272 @@
+/** The deliberate-difference register: the readings the delivered tree takes more narrowly than AAP 0.10.5's own wording or where the cut scope stops short of it, the application-owned copy it carries because no legacy bundle supplies it — the session-expiry warning, and the clients card title and login paragraph the sixteen differences name nowhere — and the two failure behaviours and the accessibility markup it adds where the register's sixteen differences name none, carried into `parity-report.md` and `parity-report.json` so acceptance criterion 4's reader can compare them (AAP 0.10.3, AAP 0.11.1, AAP 0.3.4, Rule 1 clause 3). */
+
+/** One reading of AAP 0.10.5's register: the plan's own wording, what this run delivers instead, and the authority that settles the difference. */
+export interface DifferenceRegisterReading {
+  /** The register item and the subject it governs: the AAP section, the item number and what it covers. */
+  readonly where: string;
+  readonly plan: string;
+  readonly delivered: string;
+  /** Why the delivered reading holds: the AAP decision and the user Rule behind it, and the code they rest on. */
+  readonly why: string;
+}
+
+/** The ten readings the delivered tree takes from the plan's wording, in the order the report renders them: AAP 0.10.5 item 5, the savings entry point AAP 0.9.3's fixed cut order withdrew; AAP 0.10.5 item 15, the default dates a form opens with, the charge form's payment date being the one that does not follow legacy; the charge-action route's action vocabulary (AAP 0.8.2, AAP 0.1.1) and the charge-pay happy path AAP 0.9.3's cut leaves unreachable; AAP 0.10.1's W2 row, the client template read (AAP 0.3.4); AAP 0.10.5 itself, the application-owned copy no legacy bundle carries a key for — the session-expiry warning's two strings, and the clients list's card title and the login screen's legal paragraph, the two legacy literals the sixteen differences name nowhere; and what the sixteen differences name nowhere — the two failure behaviours, the bounded request and the credential refusal this deployment's browser reports as a transport failure, and the accessibility markup the named breadcrumb landmark and the ARIA tab strip add. */
+export const DIFFERENCE_REGISTER_READINGS: readonly DifferenceRegisterReading[] = [
+  {
+    where: 'AAP 0.10.5 item 5 — the client record\'s "New Saving" entry point',
+    plan: 'the savings entry point is rendered because Stretch ships',
+    delivered:
+      'the savings screens are not delivered: the record offers `Edit`, `New Loan` and `Close` and no "New Saving", '
+      + 'and the savings application, record and action screens, their three routes, their e2e page objects and their '
+      + 'spec are gone. Every Must workflow keeps its screen and its spec, and no Must scope was dropped.',
+    why:
+      'AAP 0.9.3 fixes the cut order for the case its 60,000-line ceiling cannot otherwise be met — first drop Stretch '
+      + '(savings, workflow W8), then trim the e2e suite to the Must workflows, and stop there — and requires every cut to '
+      + 'be recorded with its reason and its revised totals. The tracked tree measured 88,418 lines before the prose trim, '
+      + 'over that ceiling, so the order engaged: W8 was the only Stretch workflow and its spec the only Stretch spec, so '
+      + 'its first step contains the second. Restoring the cut half — 5,214 lines in 17 files — would put the tree back '
+      + 'over that ceiling, which is why the cut stands and is not undone. '
+      + 'The revised totals stand in the report\'s `## Line budget` section, and Rule 1 clause 10 is met by that record.',
+  },
+  {
+    where: 'AAP 0.10.5 item 15 — the default dates a form opens with',
+    plan:
+      'activation, submission, disbursement and repayment dates default from the browser clock exactly '
+      + 'as legacy\'s do, and only the harness derives its run date from the tenant business date',
+    delivered:
+      'every date default the application itself chooses comes from the browser clock: the loan application\'s '
+      + 'submission and expected disbursement dates, the approve, reject and disburse dates, the repayment form\'s '
+      + 'transaction date, the due date the charge form fills for a specified-due-date charge, and the client '
+      + 'create form\'s submission date and the activation action\'s date. The charge form\'s payment date is the '
+      + 'one default that does not follow legacy, and it is registered here rather than delivered: legacy\'s '
+      + 'pay-charge screen reads the charge with `GET /loans/{id}/charges/{chargeId}?command=pay` and seeds the '
+      + 'payment date from the charge\'s `dueDate`, while this build opens it on the browser clock and issues no '
+      + 'per-charge read. Where a server payload carries the date a form opens on, the form opens on that '
+      + 'payload\'s value instead: the client create form\'s '
+      + 'activation date comes from the client template\'s `activationDate`, with the browser clock only as its '
+      + 'fallback, the loan edit form\'s two dates come from the loan\'s own `timeline`, and the client edit form\'s '
+      + 'activation date comes from the record the form edits. No form seeds a date member from GET /loans/template '
+      + 'or GET /loans/{id}/transactions/template?command=repayment: those reads seed the option lists and the other '
+      + 'defaults, and the repayment form opens on today at local midnight rather than on the template\'s `date`, '
+      + 'which this backend answers with the earliest unpaid instalment\'s due date. The application issues no '
+      + 'business-date request.',
+    why:
+      'AAP 0.10.5 item 15 keeps a form\'s default dates on the browser clock exactly as legacy\'s, and gives the '
+      + 'reason: reading the tenant business date inside the application would add a request legacy never makes and '
+      + 'register as a request difference in every workflow. The business date stays authoritative where AAP 0.10.1, '
+      + 'AAP 0.12 and Rule 1 clause 2 require it — the seed, every workflow input and every comparison, each of them '
+      + 'read from the harness\'s one business-date call. The charge form\'s payment date departs from legacy\'s '
+      + 'because closing that gap needs `GET /loans/{id}/charges/{chargeId}`, which lies outside AAP 0.7.3\'s '
+      + 'loan-charge row, and AAP 0.10.4 admits a URL outside that table only with a justification written into '
+      + 'the plan, which may not be edited — so registering the divergence is the alternative that rule leaves, '
+      + 'as Rule 1 clause 3 asks of every deliberate difference.',
+  },
+  {
+    where: 'AAP 0.8.2 and 0.1.1 — the charge-action route\'s action vocabulary',
+    plan:
+      'the route is `loanaccountcharge/:id/:action/:chargeId`, and the plan names no segment that fills `:action`',
+    delivered:
+      'the route serves legacy\'s own segments `paycharge` and `waivecharge` — the ones the record\'s links emit '
+      + 'and a legacy deep link or cutover redirect carries — and also accepts `pay` and `waive` as aliases, so '
+      + 'a URL either front end has already served lands on the same charge form. Legacy\'s third segment '
+      + '`editcharge` resolves to not found and issues no request, editing a charge lying outside the charge '
+      + 'scope of AAP 0.9.1 group 3.',
+    why:
+      'AAP 0.1.1 requires the legacy URL scheme to be mirrored, `#/` hash style included, so screens can be cut '
+      + 'over one route at a time, while AAP 0.8.2 fixes the route pattern and leaves the vocabulary to the '
+      + 'tree: `features/loans/loans.routes.ts` declares that pattern and the charge form maps the four segments '
+      + 'in `CHARGE_ACTION_SEGMENTS`. Rule 1 clause 5 requires hash routing with paths mirroring legacy\'s URLs, '
+      + 'and Rule 1 clause 3 asks the one deliberate difference — `editcharge` — to be listed with its reason, '
+      + 'which is what this entry does.',
+  },
+  {
+    where: 'AAP 0.9.1 group 3 and 0.9.3 — the charge-pay happy path',
+    plan:
+      'the charge screens add, pay and waive a loan charge against AAP 0.10.1\'s fixed `Parity Fee`, each of the '
+      + 'three exercised end to end on the running backend',
+    delivered:
+      'add and waive are exercised end to end against that fixture and the fee they book is read back in the '
+      + 'repayment schedule, while the pay command\'s happy path is unreachable in the delivered scope: this '
+      + 'backend pays a loan charge only when the charge\'s payment mode is account transfer, the seeded '
+      + '`Parity Fee` is Regular mode (`chargePaymentMode: 0`, AAP 0.10.1\'s row naming no payment mode), and no '
+      + 'payable charge can be seeded instead, because an account-transfer charge needs a loan-linked savings '
+      + 'account that only the cut savings family could open. The pay screen\'s one reachable outcome is the '
+      + 'server\'s refusal — `403` "This loan charge cannot be paid as the charge payment mode is not account '
+      + 'transfer" — which it renders verbatim above the form with the entered date kept.',
+    why:
+      'the fork\'s own validation refuses to add or to pay an account-transfer loan charge without a '
+      + 'loan-linked, funded savings account, so a second charge in that mode would fail the seed script instead '
+      + 'of making the workflow reachable. The savings family is the first item of AAP 0.9.3\'s fixed cut order, '
+      + 'applied and recorded with its revised totals because the tree crossed the 60,000-line ceiling, and '
+      + 'restoring it to reach the happy path would put the tree back over that ceiling, which Rule 1 clause 10 '
+      + 'forbids. Paying a charge is therefore the one part of AAP 0.9.1 group 3\'s "charges add, pay and waive" '
+      + 'that the delivered scope cannot reach, and the refusal rendered verbatim is what the delivered scope '
+      + 'proves.',
+  },
+  {
+    where: 'AAP 0.10.1 — the W2 create-and-activate row',
+    plan: 'the ordered outcome names GET /clients/{id}?template=true between the create and the activation',
+    delivered:
+      'the create, record and activate path reads the plain client record and sends no template read; only '
+      + 'the edit screen sends the template parameter, so the parity spec asserts the plain record read both '
+      + 'front ends make and holds any template read to the row\'s ordering',
+    why:
+      'AAP 0.3.4 gives the shipped code precedence where it and the request disagree, and the archived legacy '
+      + 'record screen reads the plain record — app/scripts/controllers/client/ViewClientController.js calls '
+      + 'clientResource.get({clientId}) and never asks for the template — while Rule 1 clause 2 requires the '
+      + 'same calls as legacy.',
+  },
+  {
+    where: 'AAP 0.10.5 — the session-expiry warning\'s copy, which the register\'s sixteen differences do not cover',
+    plan:
+      'every label resolves through the legacy `app/global-translations/*.json` bundles ngx-translate loads in place '
+      + '(AAP 0.1.1, AAP 0.4.3), and the register\'s sixteen differences carry no entry for the shell\'s session-expiry '
+      + 'warning',
+    delivered:
+      'the idle warning\'s two strings — `label.message.session.expiring` and `label.button.stay.signed.in` — are the '
+      + 'application\'s own copy in `APP_OWNED_TRANSLATIONS` rather than a legacy bundle\'s, because no bundle under the '
+      + 'legacy `app/global-translations/` tree carries either key, and that copy is English-only in every one of the '
+      + 'languages the switchers offer. The handler that supplies it runs only for keys the active and fallback bundles '
+      + 'lack, so the day a legacy or build-owned per-locale bundle carries either key, that bundle\'s wording wins '
+      + 'automatically and no code changes; adding the copy to a build-owned bundle per locale is the path to a '
+      + 'translated warning.',
+    why:
+      'AAP 0.1.1 requires the 10-second warning before logout, the legacy bundles AAP 0.4.3 loads carry no key for it, '
+      + 'and Rule 1 clause 6 keeps app/ read-only, so a key invented in a legacy bundle is not available — while '
+      + 'answering the two keys with neither copy nor a bundle would put the humanised fragments "Expiring" and "In" in '
+      + 'front of the user. Rule 1 clause 3 asks every deliberate difference from legacy to be listed with its reason, '
+      + 'which is what this entry does; shell.component.html renders both strings.',
+  },
+  {
+    where: 'AAP 0.10.5 — the two legacy literals the register\'s sixteen differences do not cover',
+    plan:
+      'every label resolves through the legacy `app/global-translations/*.json` bundles ngx-translate loads in place '
+      + '(AAP 0.1.1, AAP 0.4.3), and the register\'s sixteen differences carry no entry for the clients list\'s card '
+      + 'title or for the login screen\'s legal paragraph: legacy hard-codes both as English HTML and no bundle under '
+      + 'the legacy tree carries a key for either',
+    delivered:
+      'both now render through the application\'s own copy in `core/i18n/app-translations.ts` — '
+      + '`label.heading.listofclients` for the card title and `label.text.mifosx.designedby`, '
+      + '`label.anchor.mifosinitiative`, `label.anchor.globalcommunity`, `label.text.mifosx.community`, '
+      + '`label.text.mifosx.interesting` and `label.anchor.getinvolved` for the paragraph\'s six fragments. English is '
+      + 'byte-identical to what both screens rendered before and to legacy\'s own wording — the design\'s "List of '
+      + 'Clients" (AAP 0.7.4) and the sentence `app/scripts/controllers/main/MainController.js:220-222` hard-codes — '
+      + 'French copy is carried for exactly those seven keys, and the eleven other offered languages fall back to the '
+      + 'English copy rather than to a humanised key. A legacy or build-owned bundle carrying any of those keys wins '
+      + 'with no code change: the handler is consulted only for a key the active and fallback bundles both lack.',
+    why:
+      'AAP 0.1.1 requires i18n through ngx-translate over the legacy bundles with a language switcher, while AAP '
+      + '0.7.4 names the card title "List of Clients" and both strings stayed English under a French UI because they '
+      + 'never entered the translation layer at all. No file under the read-only `app/global-translations/` carries a '
+      + 'key for any of the seven (Rule 1 clause 6), so a key invented there is not available, and Rule 1 clause 3 '
+      + 'asks every deliberate difference from legacy to be listed with its reason, which is what this entry does; '
+      + '`client-list.component.html` and `login.component.html` render the keys.',
+  },
+  {
+    where: 'AAP 0.10.5 — the bounded request, which the register\'s sixteen differences do not cover',
+    plan:
+      'no request the application sends carries a client-side time limit: the plan sets none, and the legacy '
+      + '$http chain waits for as long as its server takes, so a host that accepts a connection and never answers '
+      + 'holds the request — and the control that sent it — open indefinitely',
+    delivered:
+      'every request the application sends fails once 30 seconds pass without an answer, the same bound '
+      + 'e2e/check-backend.ts already puts on its own probes: core/http/fineract.interceptor.ts places rxjs '
+      + '`timeout({ first: 30_000, each: 30_000 })` on the outbound chain and turns the resulting `TimeoutError` into '
+      + 'an `ApiError` carrying status 0 and the sentence "The server did not answer in time. Try again in a moment.", '
+      + 'raises exactly one notification for it and rethrows it, so the submit guard\'s finally-block re-enables the '
+      + 'button and the form keeps its values. A request that answers inside the bound is untouched: no workflow\'s '
+      + 'request, payload, status or rendered message changes.',
+    why:
+      'AAP 0.14.2 requires every HTTP call path to end in a rendered message or a notification and forbids a `catch` '
+      + 'that swallows an error, which a request no server ever answers cannot do, while Rule 1 clause 3\'s "match '
+      + 'legacy" protects the validations, defaults, dropdown sources, error messages and screens the parity comparison '
+      + 'reads — not a wait that never ends on a host that stopped answering. The difference is registered here because '
+      + 'AAP 0.10.5\'s sixteen entries predate the code and the plan may not be edited, and Rule 1 clause 3 asks every '
+      + 'deliberate difference to be listed with its reason, which is what this entry does; the interceptor states the '
+      + 'same bound at the constant that sets it.',
+  },
+  {
+    where:
+      'AAP 0.10.5 — a credential refusal the browser reports as a transport failure, which the register\'s sixteen '
+      + 'differences do not cover',
+    plan:
+      'a refused credential is recognised by its 401: the interceptor clears the session and returns the user to the '
+      + 'login screen carrying the attempted route, and leaves every other failure to the screen that made the call',
+    delivered:
+      'the session also ends when a request that carried it fails with status 0 and the one re-validation read that '
+      + 'follows — `GET /users/{id}`, the read the session restore already makes for AAP 0.10.1\'s W1 — is refused '
+      + 'too: the stored entry is removed, the user is returned to `#/login?returnUrl=<attempted route>` and a single '
+      + 'notice says the session has ended and to sign in again. A status-0 failure whose re-validation answers 200 is '
+      + 'a transport fault and keeps the session, so a backend that falters mid-request does not sign a working user '
+      + 'out; a backend that refuses the connection outright answers status 0 at once and is indistinguishable, in '
+      + 'this browser, from a refused key, so it ends the session exactly as a refusal does. The '
+      + 're-validation happens once per burst of failures, and not before the router\'s first navigation, where '
+      + '`SessionService.restore()` owns the same reading.',
+    why:
+      'AAP 0.4.2 requires a refused credential to clear the session and return the user to login with the attempted '
+      + 'route, and this deployment\'s Fineract answers a refused key with a 401 sent outside its CORS filter, so the '
+      + 'browser reports the refusal as status 0 and no `status === 401` branch can ever see it; recognising the '
+      + 'refusal where it is observed is what makes that requirement true of the running application. SessionService '
+      + 'already treats status 0 as a refusal on the start-up restore, so this extends one reading rather than adding '
+      + 'a second. Rule 1 clause 3 asks every deliberate difference from legacy to be listed with its reason, which is '
+      + 'what this entry does; legacy leaves the refused key in storage and its screen blank.',
+  },
+  {
+    where: 'AAP 0.10.5 — the accessibility markup the register\'s sixteen differences do not cover',
+    plan:
+      'the register\'s sixteen differences say nothing about a named navigation landmark around a breadcrumb '
+      + 'trail, an `aria-current` marker on its current crumb, or the ARIA tab pattern over a record\'s sections; '
+      + 'they name plugins, redirects, unrendered screens, search scopes and icons, and no markup role, landmark or '
+      + 'tab stop among them',
+    delivered:
+      'the shared breadcrumb wraps the trail in `<nav aria-label="Breadcrumb">` on every screen that renders one, '
+      + 'marking the current crumb with Bootstrap 3\'s `.active` class alone; the client record wraps its own trail '
+      + 'in the same named landmark and marks its crumb `aria-current="page"`; and each tab of the record\'s strip '
+      + 'is an anchor inside a `role="tablist"` list carrying `role="tab"`, `tabindex="0"` and `aria-selected` '
+      + 'with no `href`, so the tabs are reachable and operable by their own tab stop and Enter or the space bar, '
+      + 'and no tab offers an open-in-new-tab that would reload the page as a valueless `href` does',
+    why:
+      'a trail that names where the reader is has to be a landmark assistive technology can name and jump to, with '
+      + 'its current crumb announced as the current page, and a strip whose tabs are not links has to carry the tab '
+      + 'role, a tab stop and a key handler to stay operable. Legacy renders the bare `<ul class="breadcrumb">` with '
+      + 'no landmark around it (`app/views/clients/clients.html`) and anchors its tabs with a valueless `href`, so '
+      + 'both additions depart from Rule 1 clause 3\'s "match legacy" — and AAP 0.10.5\'s preamble and Rule 1 clause 3 '
+      + 'require every deliberate difference to be listed with its reason, which is what this entry does.',
+  },
+];
+
+const REGISTER_COLUMNS: readonly string[] = ['Where', 'The plan\'s wording', 'What the run delivers', 'Authority'];
+
+function registerCell(value: string): string {
+  return value.replace(/\s+/g, ' ').replace(/\|/g, '\\|');
+}
+
+/** Renders the register as the report's `## Deliberate-difference register (AAP 0.10.5)` section: the heading, a paragraph placing the entries against AAP 0.10.5's sixteen differences, and one table row per reading ({@link DIFFERENCE_REGISTER_READINGS}). */
+export function renderDifferenceRegister(
+  readings: readonly DifferenceRegisterReading[] = DIFFERENCE_REGISTER_READINGS,
+): string[] {
+  const lines: string[] = [
+    '',
+    '## Deliberate-difference register (AAP 0.10.5)',
+    '',
+    'The register itself is AAP 0.10.5\'s sixteen deliberate differences, and every `intentional-diff` row '
+      + 'above cites one of them by number. The entries below are the ten readings this run states on the '
+      + 'register\'s behalf: readings narrower than the plan wrote them — at item 5 a difference the run does not '
+      + 'deliver at all, as AAP 0.9.3\'s fixed cut order required, at item 15 the charge form\'s payment date, '
+      + 'which legacy seeds from the charge itself, and at the session-expiry warning copy of the application\'s '
+      + 'own because no legacy bundle supplies it — the charge-action route\'s action vocabulary, the charge-pay '
+      + 'happy path the cut savings family leaves unreachable, and the clients card title and login paragraph the '
+      + 'legacy bundles supply no key for, the two failure behaviours this run adds where the sixteen differences '
+      + 'name none, and the accessibility markup the sixteen name nowhere, each stated with what the run delivers '
+      + 'so that the register and the specs agree.',
+    '',
+    `| ${REGISTER_COLUMNS.join(' | ')} |`,
+    `| ${REGISTER_COLUMNS.map(() => '---').join(' | ')} |`,
+  ];
+  for (const reading of readings) {
+    lines.push(
+      `| ${[reading.where, reading.plan, reading.delivered, reading.why].map(registerCell).join(' | ')} |`,
+    );
+  }
+  return lines;
+}

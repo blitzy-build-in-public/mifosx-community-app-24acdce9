@@ -1,0 +1,29 @@
+<!doctype html>
+<!-- `lang` is the pre-render default only, and it equals `DEFAULT_APP_CONFIG.locale` ('en') (AAP 0.7.4). -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Mifos X</title>
+    <base href="/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/x-icon" href="images/favicon.ico" />
+    <!-- The one rule the pre-bootstrap placeholder in <body> needs, kept here because the application's stylesheet has not loaded yet and self-contained because nothing else may style it. Its values are the design's own body text — 14px/1.42857 Helvetica in #666F74 (AAP 0.2.2 text-body, AAP 0.2.2 color-text-strong) — so the wait looks like the product rather than like a browser default, and the legacy index.html carries a <style> block for its own pre-bootstrap loader in the same way (Rule 1 clause 3, AAP 0.10.5). -->
+    <style>
+      .app-boot-placeholder {
+        display: block;
+        margin: 12vh auto 0;
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        font-size: 14px;
+        line-height: 1.42857;
+        color: #666F74;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- <app-root> holds nothing until Angular bootstraps it, and app.config.ts awaits the session restore — GET /users/{id} — before that, for as long as the interceptor's 30-second bound allows when the backend does not answer. This placeholder is what the user sees during that wait instead of a blank white page; Angular replaces the element's content when AppComponent boots, so nothing is added to app.component.html and no screen renders it (AAP 0.1.1, AAP 0.7.4). role="status" announces the wait instead of leaving it silent, and the sentence stays English because the translation bundles load with the application (AAP 0.7.4). -->
+    <app-root>
+      <p class="app-boot-placeholder" role="status">Loading…</p>
+    </app-root>
+  </body>
+</html>

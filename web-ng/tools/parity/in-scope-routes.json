@@ -1,0 +1,116 @@
+{
+  "header": {
+    "source": "AAP 0.8.2 Feature routes + app.routes.ts declaration",
+    "declaredIn": [
+      "web-ng/src/app/app.routes.ts",
+      "web-ng/src/app/features/auth/auth.routes.ts",
+      "web-ng/src/app/features/clients/clients.routes.ts",
+      "web-ng/src/app/features/loans/loans.routes.ts"
+    ],
+    "composition": "full paths are app-level parent segments joined with feature child segments; lazy groups mount at path ''",
+    "generatedOn": "2026-11-24",
+    "routeCount": 16,
+    "legacyGap": "app/scripts/routes.js is absent from this checkout; the tree is transcribed from AAP 0.8.2",
+    "strictness": "a route absent from this list, or present only in it, fails npm run check:wiring (AAP 0.10.4)"
+  },
+  "routes": [
+    {
+      "path": "login",
+      "family": "auth",
+      "kind": "component",
+      "declaredIn": "web-ng/src/app/features/auth/auth.routes.ts"
+    },
+    {
+      "path": "",
+      "family": "shell",
+      "kind": "redirect",
+      "declaredIn": "web-ng/src/app/app.routes.ts",
+      "redirectTo": "clients"
+    },
+    {
+      "path": "home",
+      "family": "shell",
+      "kind": "redirect",
+      "declaredIn": "web-ng/src/app/app.routes.ts",
+      "redirectTo": "clients"
+    },
+    {
+      "path": "clients",
+      "family": "clients",
+      "kind": "component",
+      "declaredIn": "web-ng/src/app/features/clients/clients.routes.ts"
+    },
+    {
+      "path": "createclient",
+      "family": "clients",
+      "kind": "component",
+      "declaredIn": "web-ng/src/app/features/clients/clients.routes.ts"
+    },
+    {
+      "path": "editclient/:id",
+      "family": "clients",
+      "kind": "component",
+      "declaredIn": "web-ng/src/app/features/clients/clients.routes.ts"
+    },
+    {
+      "path": "viewclient/:id",
+      "family": "clients",
+      "kind": "component",
+      "declaredIn": "web-ng/src/app/features/clients/clients.routes.ts"
+    },
+    {
+      "path": "client/:id/:action",
+      "family": "clients",
+      "kind": "component",
+      "declaredIn": "web-ng/src/app/features/clients/clients.routes.ts"
+    },
+    {
+      "path": "newclientloanaccount/:clientId",
+      "family": "loans",
+      "kind": "component",
+      "declaredIn": "web-ng/src/app/features/loans/loans.routes.ts"
+    },
+    {
+      "path": "editloanaccount/:id",
+      "family": "loans",
+      "kind": "component",
+      "declaredIn": "web-ng/src/app/features/loans/loans.routes.ts"
+    },
+    {
+      "path": "viewloanaccount/:id",
+      "family": "loans",
+      "kind": "component",
+      "declaredIn": "web-ng/src/app/features/loans/loans.routes.ts"
+    },
+    {
+      "path": "loanaccount/:id/:action",
+      "family": "loans",
+      "kind": "component",
+      "declaredIn": "web-ng/src/app/features/loans/loans.routes.ts"
+    },
+    {
+      "path": "addloancharge/:id",
+      "family": "loans",
+      "kind": "component",
+      "declaredIn": "web-ng/src/app/features/loans/loans.routes.ts"
+    },
+    {
+      "path": "loanaccountcharge/:id/:action/:chargeId",
+      "family": "loans",
+      "kind": "component",
+      "declaredIn": "web-ng/src/app/features/loans/loans.routes.ts"
+    },
+    {
+      "path": "search/:query",
+      "family": "search",
+      "kind": "component",
+      "declaredIn": "web-ng/src/app/app.routes.ts"
+    },
+    {
+      "path": "**",
+      "family": "shell",
+      "kind": "wildcard",
+      "declaredIn": "web-ng/src/app/app.routes.ts"
+    }
+  ]
+}

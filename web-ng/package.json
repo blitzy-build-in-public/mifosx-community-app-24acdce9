@@ -1,0 +1,54 @@
+{
+  "name": "web-ng",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Mifos X community-app replacement front end: an Angular 22 single-page application for Apache Fineract bank and microfinance staff",
+  "type": "module",
+  "engines": {
+    "node": ">=22.22.3"
+  },
+  "scripts": {
+    "build": "ng build --configuration production",
+    "lint": "ng lint",
+    "test": "ng test web-ng --watch=false --coverage && ng test web-ng-services --watch=false --coverage",
+    "seed": "tsx e2e/seed/seed.ts",
+    "reset:db": "bash e2e/reset-db.sh",
+    "check:backend": "tsx e2e/check-backend.ts",
+    "check:endpoints": "tsx tools/parity/check-endpoints.ts",
+    "check:templates": "tsx tools/parity/check-templates.ts",
+    "check:wiring": "tsx tools/parity/check-wiring.ts",
+    "check:all": "npm run check:endpoints && npm run check:templates && npm run check:wiring",
+    "typecheck:harness": "tsc -p tsconfig.harness.json --noEmit",
+    "test:harness": "vitest run --config e2e/vitest.config.ts --coverage",
+    "e2e": "npm run check:backend && tsx e2e/capture/retention.ts && { npm run reset:db && playwright test --config=e2e/playwright.config.ts --project=legacy; npm run reset:db && playwright test --config=e2e/playwright.config.ts --project=next; rc=$?; tsx e2e/report/parity-report.ts || rc=$?; exit $rc; }"
+  },
+  "dependencies": {
+    "@angular/common": "22.3.0",
+    "@angular/compiler": "22.3.0",
+    "@angular/core": "22.3.0",
+    "@angular/forms": "22.3.0",
+    "@angular/platform-browser": "22.3.0",
+    "@angular/router": "22.3.0",
+    "@ngx-translate/core": "18.1.0",
+    "@ngx-translate/http-loader": "18.1.0",
+    "bootstrap-sass": "3.4.3",
+    "font-awesome": "4.7.0",
+    "rxjs": "7.8.2",
+    "tslib": "2.9.1"
+  },
+  "devDependencies": {
+    "@angular/build": "22.3.0",
+    "@angular/cli": "22.3.0",
+    "@angular/compiler-cli": "22.3.0",
+    "@playwright/test": "1.65.1",
+    "@types/node": "22.20.5",
+    "@vitest/coverage-v8": "5.1.1",
+    "angular-eslint": "22.8.0",
+    "eslint": "9.39.5",
+    "jsdom": "31.0.1",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.73.0",
+    "vitest": "5.1.1"
+  }
+}

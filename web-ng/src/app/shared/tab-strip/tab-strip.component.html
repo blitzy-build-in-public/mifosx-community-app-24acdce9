@@ -1,0 +1,25 @@
+<!-- The strip is one tab list over the record's sections, in the ARIA tab pattern: `role="tablist"` on the list, `role="tab"` on each tab with `aria-selected` naming the one whose section is showing, and `role="tabpanel"` on that section in the record's own template, which points back at the tab through the id `tabDomId` mints; every tab is a tab stop that Enter and the space bar activate through `select()`, and a tab carries no `href`, because with its role, tab stop and key handler it needs no link to be reachable and an empty `href` makes open-in-new-tab reload the current page (Rule 1 clause 3). The design draws two scroll chevrons at the strip's ends and both are painted, one before the tabs and one after them: each is an `aria-hidden` `li` around a Font Awesome glyph, with no anchor, button, `href`, tab stop or handler, so assistive technology never reaches it and it costs the strip no keyboard stop. They encode the strip's own horizontal scroll — the row scrolls sideways once its tabs outrun the card — and add no control legacy lacks, because activating either one does nothing (AAP 0.2.1 step 3, AAP 0.2.4; Rule 1 clause 3). An empty tab list renders nothing at all: unguarded, `.nav-tabs` would still paint its 1px bottom border around no tab. -->
+@if (tabs().length > 0) {
+  <ul class="nav nav-tabs" role="tablist">
+    <!-- The design's two chevrons are decoration around the tabs, never controls: the leading one here, the trailing one after the loop (AAP 0.2.1 step 3). -->
+    <li class="tab-strip-chevron tab-strip-chevron-start" role="presentation" aria-hidden="true">
+      <i class="fa fa-chevron-left" aria-hidden="true"></i>
+    </li>
+    @for (tab of tabs(); track tab.id) {
+      <!-- The tab is the plain `li` and `a` legacy's tabset renders inside a `ul.nav.nav-tabs`, with `.active` on the `li` as its visual state — the markup AAP 0.5.2 maps the strip to (AAP 0.10.5, Rule 1 clause 3) — carrying the ARIA tab role, the selection state and a DOM id the record's panel labels itself by, so the same markup also reads as one tab list whose selected tab is told apart from the others. -->
+      <li role="presentation" [class.active]="tab.id === activeId()">
+        <a
+          role="tab"
+          tabindex="0"
+          [id]="tabDomId(tab.id)"
+          [attr.aria-selected]="tab.id === activeId()"
+          (click)="select($event, tab)"
+          (keydown)="select($event, tab)"
+        >{{ tab.label }}</a>
+      </li>
+    }
+    <li class="tab-strip-chevron tab-strip-chevron-end pull-right" role="presentation" aria-hidden="true">
+      <i class="fa fa-chevron-right" aria-hidden="true"></i>
+    </li>
+  </ul>
+}

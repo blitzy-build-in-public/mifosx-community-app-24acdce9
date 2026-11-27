@@ -1,0 +1,39 @@
+<!-- Transactions section of the individual loan record (`#/viewloanaccount/:id`; AAP 0.7.1 row `loans`, 0.7.2 row `LoanTransaction`, 0.7.3 row "W6 repayment"): it renders the `transactions` slice the parent already loaded (Rule 1 clause 2, Rule 2, AAP 0.7.4, Rule 1 clause 3). -->
+<!-- This table stays hand-written rather than rendered through `app-data-table`: that component's `ColumnDef` is deliberately inert — no width, alignment, formatter or renderer, and its `value` returns a plain `string` — so the money and date columns below, which are `number` and `date` pipes over the payload's own members at the application's `LOCALE_ID`, would have to move their formatting into component code and put a second money-and-date formatting path inside this one feature. -->
+
+@if (isEmpty()) {
+  <app-empty-state
+    id="loan-transactions-empty"
+    [message]="'label.nodata' | translate"
+  />
+} @else {
+  <div class="table-responsive">
+    <table class="table table-striped" id="loan-transactions">
+      <caption class="sr-only">{{ 'label.heading.transactions' | translate }}</caption>
+      <thead>
+        <tr>
+          <th scope="col">{{ 'label.heading.date' | translate }}</th>
+          <th scope="col">{{ 'label.heading.type' | translate }}</th>
+          <th scope="col">{{ 'label.heading.amount' | translate }}</th>
+          <th scope="col">{{ 'label.heading.principal' | translate }}</th>
+          <th scope="col">{{ 'label.heading.interest' | translate }}</th>
+          <th scope="col">{{ 'label.heading.fees' | translate }}</th>
+          <th scope="col">{{ 'label.heading.outstanding' | translate }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of rows(); track row.id) {
+          <tr>
+            <td>{{ row.date | date: displayFormat }}</td>
+            <td>{{ row.type.value }}</td>
+            <td>{{ row.amount | money }}</td>
+            <td>{{ row.principalPortion | money }}</td>
+            <td>{{ row.interestPortion | money }}</td>
+            <td>{{ row.feeChargesPortion | money }}</td>
+            <td>{{ row.outstandingLoanBalance | money }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}

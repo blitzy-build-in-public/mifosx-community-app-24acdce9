@@ -1,0 +1,46 @@
+<!-- Accounts section of the individual client record's `General` tab: the read-only table of the client's loan and savings accounts (AAP 0.7.1 row `clients` — `ClientViewComponent` with `ClientAccountsComponent`; AAP 0.7.4; AAP 0.2.3). The section renders the content of the record card's body and never a body of its own: the record template already paints that card's `.panel-body`, so a second `.panel-body` here would inset the table 15px on every side and split the record's one content anchor — which the heading, the summary labels, the tab strip and this table all share. The wrapper below therefore carries the read's busy state and nothing that paints, and the table is contained by Bootstrap 3's own `.table-responsive`, inert at 768px and above and a horizontal scroll container below it, so its columns can never spill the card at any viewport width (Rule 1 clause 6). -->
+<div [attr.aria-busy]="loading() ? 'true' : null">
+  <!-- Four mutually exclusive states, in the order a viewer meets them, and a failed read never reaches the empty state (AAP 0.2.4). -->
+  @if (loading()) {
+  } @else if (failed()) {
+    <!-- Fineract's own failure text, verbatim and untranslated, for the failures the interceptor does not notify — a 4xx — because it raises its single notification for status `0` and `>= 500` alone (AAP 0.7.4). -->
+    @if (errorMessage(); as message) {
+      <div class="alert alert-danger" role="alert">{{ message }}</div>
+    }
+  } @else if (isEmpty()) {
+    <app-empty-state id="client-accounts-empty" [message]="emptyMessageKey | translate" />
+  } @else {
+    <!-- Bootstrap 3's own `.table-responsive` around the four columns: it authors no colour, size or spacing, so the table keeps the look the global layer gives it, while below 768px it scrolls inside the section instead of pushing the record card sideways (Rule 1 clause 6). -->
+    <div class="table-responsive">
+      <table class="table table-striped" id="client-accounts">
+        <caption class="sr-only">{{ 'label.heading.accountdetail' | translate }}</caption>
+        <thead>
+          <tr>
+            <!-- `label.heading.accnum` is the key the legacy client record heads this column with ("Account Number" in `app/global-translations/locale-en.json`); no locale bundle defines a `label.heading.accountno`, so the account-number column takes the key the legacy table itself uses. -->
+            <th scope="col">{{ 'label.heading.accnum' | translate }}</th>
+            <th scope="col">{{ 'label.heading.product' | translate }}</th>
+            <th scope="col">{{ 'label.heading.status' | translate }}</th>
+            <th scope="col" class="text-right">{{ 'label.heading.balance' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Tracked by index, not by `row.id`: loan accounts and savings accounts are numbered by independent Fineract sequences, so a client holding both can carry the same id twice and a repeated track key is an Angular error. -->
+          @for (row of rows(); track $index) {
+            <tr>
+              <td>{{ row.accountNo }}</td>
+              <td>{{ row.productName }}</td>
+              <!-- The swatch is the whole cell: a colour and no word, no `title`, no `aria-label`, no visually-hidden text (AAP 0.10.5, Rule 1 clause 3). -->
+              <td><app-status-swatch [status]="row.status" /></td>
+              <!-- The account family's own balance figure, right-aligned beneath its header and printed through the one shared money formatter, which groups a figure the way the filter legacy applies to both of its balance cells does. The currency is deliberately not printed: the legacy client record shows this balance as a bare figure (`app/views/clients/viewclient.html:349,446,560`), and Rule 1 clause 3 allows no difference from it here (AAP 0.10.2, AAP 0.7.4). -->
+              <td class="text-right">
+                @if (row.balance !== null) {
+                  {{ row.balance | money }}
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

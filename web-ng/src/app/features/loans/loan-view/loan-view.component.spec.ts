@@ -1,0 +1,938 @@
+import { HttpErrorResponse } from '@angular/common/http';
+import { provideZonelessChangeDetection, signal, type WritableSignal } from '@angular/core';
+import { TestBed, type ComponentFixture } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import {
+  ActivatedRoute,
+  ActivatedRouteSnapshot,
+  Router,
+  UrlTree,
+  convertToParamMap,
+  provideRouter,
+  type CanActivateFn,
+  type ParamMap,
+  type Route,
+  type RouterStateSnapshot,
+} from '@angular/router';
+import { provideTranslateService, TranslateService } from '@ngx-translate/core';
+import { BehaviorSubject, Observable, of, throwError } from 'rxjs';
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
+import { permissionGuard } from '../../../core/auth/permission.guard';
+import { PermissionsService } from '../../../core/auth/permissions.service';
+import { ApiError, toApiError } from '../../../core/http/api-error';
+import type { LoanAccount, LoanCharge, LoanCurrency, LoanTransaction, RepaymentSchedule } from '../loan.models';
+import { LoanService } from '../loan.service';
+import { LOANS_ROUTES } from '../loans.routes';
+import { LoanChargesComponent } from './loan-charges/loan-charges.component';
+import { LoanScheduleComponent } from './loan-schedule/loan-schedule.component';
+import { LoanTransactionsComponent } from './loan-transactions/loan-transactions.component';
+import { LOAN_ACTIONS, LoanViewComponent } from './loan-view.component';
+
+/** Behavioural spec for the individual-loan record — `#/viewloanaccount/:id`, the screen the loan route tree mounts for its one record path (AAP 0.7.1 Features row `loans`; AAP 0.7.4's `#/viewloanaccount/:id` row; AAP 0.8.2 "Feature routes, matching legacy paths exactly"; AAP 0.7.3 row "W6 repayment"; Rule 1 clause 3, AAP 0.4.2). */
+
+const LOAN_ID = '9';
+
+const SECOND_LOAN_ID = '12';
+
+/** The action links the fixture loan's state offers — it is an active loan (`loanStatusType.active`, 300) — in the order `LOAN_ACTIONS` lists them: the charge form, the repayment form and undo disbursal, which is exactly the set the legacy record shows for an active loan (`ViewLoanDetailsController.js`). */
+const ACTION_PATHS: readonly string[] = [
+  `/addloancharge/${LOAN_ID}`,
+  `/loanaccount/${LOAN_ID}/repayment`,
+  `/loanaccount/${LOAN_ID}/undodisbursal`,
+];
+
+const ACTION_CAPTIONS: readonly string[] = ['Add Loan Charge', 'Make Repayment', 'Undo Disbursal'];
+
+const SUMMARY_CAPTIONS: readonly string[] = [
+  'Total',
+  'Outstanding',
+  'Principal Outstanding',
+  'Interest Outstanding',
+  'Fees',
+];
+
+/** The legacy captions this record resolves, keyed as the shipped bundles key them. */
+const TRANSLATIONS: Readonly<Record<string, string>> = {
+  'label.heading.repaymentschedule': 'Repayment Schedule',
+  'label.heading.transactions': 'Transactions',
+  'label.heading.charges': 'Charges',
+  'label.heading.accnum': 'Account Number',
+  'label.heading.clientname': 'Client Name',
+  'label.heading.principal': 'Principal',
+  'label.heading.total': 'Total',
+  'label.heading.outstanding': 'Outstanding',
+  'label.heading.principal.outstanding': 'Principal Outstanding',
+  'label.heading.interest.outstanding': 'Interest Outstanding',
+  'label.heading.fees': 'Fees',
+  'label.heading.date': 'Date',
+  'label.heading.amount': 'Amount',
+  'label.heading.type': 'Type',
+  'label.heading.name': 'Name',
+  'label.heading.dueasof': 'Due as of',
+  'label.heading.paid': 'Paid',
+  'label.heading.waived': 'Waived',
+  'label.heading.balanceofloan': 'Balance of Loan',
+  'label.heading.actions': 'Actions',
+  'label.heading.no': 'No',
+  'label.heading.fromdate': 'From Date',
+  'label.heading.interest': 'Interest',
+  'label.button.approve': 'Approve',
+  'label.button.modifyapplication': 'Modify Application',
+  'label.button.undoapproval': 'Undo Approval',
+  'label.button.reject': 'Reject',
+  'label.button.disburse': 'Disburse',
+  'label.button.undodisbursal': 'Undo Disbursal',
+  'label.button.makerepayment': 'Make Repayment',
+  'label.button.addloancharge': 'Add Loan Charge',
+  'label.button.paycharge': 'Pay Charge',
+  'label.button.waivecharge': 'Waive Charge',
+  'label.nodata': 'No Data',
+  'label.heading.notavailable': 'Not Available',
+  'error.msg.resource.not.found': 'The requested resource is not available.',
+};
+
+/** The currency `GET /loans/{id}?associations=all` reports at the payload's top level and inside each `charges[]` entry, member for member: the record prints this symbol in front of the principal, the five summary figures and every charge amount, which is where the legacy record prints it too (Rule 1 clause 3). */
+const CURRENCY: LoanCurrency = {
+  code: 'USD',
+  name: 'US Dollar',
+  displaySymbol: '$',
+  decimalPlaces: 2,
+};
+
+/** The two-period schedule the payload of the fixture loan carries, shaped as `GET /loans/{id}?associations=all` answers it: the loan-wide totals beside the periods, and the per-period outstanding members the record's three balances are summed from. The first period is paid and carries every member at zero; the second omits the fee and penalty members entirely, which is how the fork reports a period no fee is outstanding against. */
+const SCHEDULE: RepaymentSchedule = {
+  periods: [
+    {
+      period: 1,
+      fromDate: '2026-11-24',
+      dueDate: '2026-12-24',
+      principalDue: 416.67,
+      principalOriginalDue: 416.67,
+      interestDue: 50,
+      feeChargesDue: 25,
+      penaltyChargesDue: 0,
+      totalDueForPeriod: 491.67,
+      totalOriginalDueForPeriod: 491.67,
+      principalOutstanding: 0,
+      principalLoanBalanceOutstanding: 0,
+      interestOutstanding: 0,
+      feeChargesOutstanding: 0,
+      penaltyChargesOutstanding: 0,
+      totalOutstandingForPeriod: 0,
+      complete: true,
+    },
+    {
+      period: 2,
+      fromDate: '2026-12-24',
+      dueDate: '2027-01-24',
+      principalDue: 4583.33,
+      principalOriginalDue: 4583.33,
+      interestDue: 550,
+      feeChargesDue: 0,
+      penaltyChargesDue: 0,
+      totalDueForPeriod: 5133.33,
+      totalOriginalDueForPeriod: 5133.33,
+      principalOutstanding: 4583.33,
+      principalLoanBalanceOutstanding: 4583.33,
+      interestOutstanding: 550,
+      totalOutstandingForPeriod: 5133.33,
+      complete: false,
+    },
+  ],
+  totalPrincipalDisbursed: 5000,
+  totalPrincipalExpected: 5000,
+  totalPrincipalPaid: 416.67,
+  totalInterestCharged: 600,
+  totalFeeChargesCharged: 25,
+  totalPenaltyChargesCharged: 0,
+  totalWaived: 0,
+  totalWrittenOff: 0,
+  totalRepaymentExpected: 5625,
+  totalRepayment: 491.67,
+  totalOutstanding: 5133.33,
+};
+
+const TRANSACTIONS: readonly LoanTransaction[] = [
+  {
+    id: 41,
+    date: '2026-11-24',
+    type: { id: 1, code: 'loanTransactionType.disbursement', value: 'Disbursement' },
+    amount: 5000,
+    principalPortion: 5000,
+    interestPortion: 0,
+    feeChargesPortion: 0,
+    penaltyChargesPortion: 0,
+    outstandingLoanBalance: 5125,
+    manuallyReversed: false,
+  },
+];
+
+/** The charges the fixture loan carries, shaped as the record's own `charges` member carries them — `GET /loans/{id}?associations=all` (AAP 0.7.3 row "W6 repayment"): one charge still outstanding, with a specified due date, and one already paid that falls due on disbursement and so carries no date at all. The settle flags are the fork's own, and `chargePayable` is false on both because neither charge is payable through an account transfer. */
+const LOAN_CHARGES: readonly LoanCharge[] = [
+  {
+    id: 21,
+    chargeId: 3,
+    name: 'Parity Fee',
+    currency: CURRENCY,
+    amount: 25,
+    amountOrPercentage: 25,
+    amountPaid: 0,
+    amountWaived: 0,
+    amountOutstanding: 25,
+    paid: false,
+    waived: false,
+    chargePayable: false,
+    chargeTimeType: { id: 2, value: 'Specified due date' },
+    chargeCalculationType: { id: 1, value: 'Flat' },
+    dueDate: '2026-12-24',
+  },
+  {
+    id: 22,
+    chargeId: 1,
+    name: 'Parity Fee W8',
+    currency: CURRENCY,
+    amount: 40,
+    amountOrPercentage: 40,
+    amountPaid: 40,
+    amountWaived: 0,
+    amountOutstanding: 0,
+    paid: true,
+    waived: false,
+    chargePayable: false,
+    chargeTimeType: { id: 1, value: 'Disbursement' },
+    chargeCalculationType: { id: 1, value: 'Flat' },
+  },
+];
+
+const LOAN: LoanAccount = {
+  id: 9,
+  accountNo: '000000145',
+  clientId: 2,
+  clientName: 'Spec Borrower',
+  loanProductId: 3,
+  loanProductName: 'Spec Loan Product',
+  currency: CURRENCY,
+  principal: 5000,
+  numberOfRepayments: 1,
+  repaymentEvery: 1,
+  interestRatePerPeriod: 2.5,
+  status: { id: 300, code: 'loanStatusType.active', value: 'Active' },
+  repaymentSchedule: SCHEDULE,
+  transactions: TRANSACTIONS,
+  charges: LOAN_CHARGES,
+};
+
+/** A loan whose payload carries no `charges` member at all, which is how the fork answers a loan that carries no charge: the record's charge tab then renders the explicit empty state rather than an empty table or an error (AAP 0.7.4). */
+const UNCHARGED_LOAN: LoanAccount = { ...LOAN, charges: undefined };
+
+const SECOND_LOAN_CHARGE: LoanCharge = {
+  id: 31,
+  chargeId: 4,
+  name: 'Second Fee',
+  currency: CURRENCY,
+  amount: 60,
+  amountOrPercentage: 60,
+  amountPaid: 0,
+  amountWaived: 0,
+  amountOutstanding: 60,
+  paid: false,
+  waived: false,
+  chargePayable: false,
+  chargeTimeType: { id: 2, value: 'Specified due date' },
+  chargeCalculationType: { id: 1, value: 'Flat' },
+  dueDate: '2027-01-24',
+};
+
+const SECOND_LOAN: LoanAccount = {
+  ...LOAN,
+  id: 12,
+  accountNo: '000000212',
+  clientName: 'Second Borrower',
+  principal: 12000,
+  charges: [SECOND_LOAN_CHARGE],
+};
+
+/** The fixture loan as the same payload in another lifecycle state, so a case can read the record the way the server answers it for an application that has been submitted, approved or rejected. @param id numeric. */
+function loanInStatus(id: number, code: string, value: string): LoanAccount {
+  return { ...LOAN, status: { id, code, value } };
+}
+
+/** The action links the legacy record offers in each loan state, and the ones it does not — the per-status button lists of `app/scripts/controllers/loanAccount/ViewLoanDetailsController.js`, which is what the record's (Rule 1 clause 3). */
+const ACTIONS_BY_STATUS: readonly {
+  readonly state: string;
+  readonly loan: LoanAccount;
+  readonly shown: readonly string[];
+  readonly hidden: readonly string[];
+}[] = [
+  {
+    state: 'a submitted application',
+    loan: loanInStatus(
+      100,
+      'loanStatusType.submitted.and.pending.approval',
+      'Submitted and pending approval',
+    ),
+    shown: [
+      'loan-action-addcharge',
+      'loan-action-approve',
+      'loan-action-edit',
+      'loan-action-reject',
+    ],
+    hidden: [
+      'loan-action-disburse',
+      'loan-action-undoapproval',
+      'loan-action-repayment',
+      'loan-action-undodisbursal',
+    ],
+  },
+  {
+    state: 'an approved loan',
+    loan: loanInStatus(200, 'loanStatusType.approved', 'Approved'),
+    shown: ['loan-action-addcharge', 'loan-action-disburse', 'loan-action-undoapproval'],
+    hidden: ['loan-action-approve', 'loan-action-edit', 'loan-action-reject', 'loan-action-repayment'],
+  },
+  {
+    state: 'an active loan',
+    loan: LOAN,
+    shown: ['loan-action-addcharge', 'loan-action-repayment', 'loan-action-undodisbursal'],
+    hidden: ['loan-action-approve', 'loan-action-edit', 'loan-action-reject', 'loan-action-disburse'],
+  },
+  {
+    state: 'a rejected application',
+    loan: loanInStatus(500, 'loanStatusType.rejected', 'Rejected'),
+    shown: [],
+    hidden: LOAN_ACTIONS.map((action) => action.id),
+  },
+];
+
+const PARTIAL_LOAN: LoanAccount = {
+  ...LOAN,
+  repaymentSchedule: {
+    periods: [
+      {
+        period: 1,
+        fromDate: '2026-11-24',
+        dueDate: '2026-12-24',
+        principalDue: 5000,
+        principalOriginalDue: 5000,
+        interestDue: 0,
+        feeChargesDue: 0,
+        penaltyChargesDue: 0,
+        totalDueForPeriod: 5000,
+        totalOriginalDueForPeriod: 5000,
+        principalOutstanding: 5000,
+        complete: false,
+      },
+    ],
+  },
+};
+
+const NOT_FOUND_MESSAGE = 'The requested resource is not available.';
+
+/** The not-found text the record renders, as the shipped legacy bundle words it. */
+const NOT_FOUND_TEXT: string = TRANSLATIONS['error.msg.resource.not.found'];
+
+const VALIDATION_MESSAGE = 'The loan cannot be disbursed because it has not been approved.';
+
+/** An observable a case settles by hand, so one route's answer can be held open while the URL moves to another record — the order in which a superseded read answers last. */
+function deferredResponse<T>(): { readonly response: Observable<T>; resolve(value: T): void } {
+  let settle: ((value: T) => void) | null = null;
+
+  const response = new Observable<T>((subscriber) => {
+    settle = (value: T): void => {
+      subscriber.next(value);
+      subscriber.complete();
+    };
+  });
+
+  return {
+    response,
+    resolve(value: T): void {
+      if (settle === null) {
+        throw new Error('the screen never subscribed to the deferred response');
+      }
+      settle(value);
+    },
+  };
+}
+
+type LoanRead = (id: number | string) => Observable<LoanAccount>;
+
+/** The slice of `LoanService` this screen is given: the one read it makes (AAP 0.7.3, Rule 1 clause 2). */
+type LoanServiceStub = Pick<LoanService, 'get'>;
+
+/** The half of `PermissionsService` the `hasPermission` directive asks, with the legacy algebra for `ALL_FUNCTIONS` and a leading `!`. */
+class PermissionsStub implements Pick<PermissionsService, 'has'> {
+  private readonly granted: WritableSignal<readonly string[]> = signal<readonly string[]>([]);
+
+  /** Whether the permission — or its absence, for a negated code — is held. */
+  has(key: string): boolean {
+    const code = key.trim();
+    if (code.startsWith('!')) {
+      const negated = code.slice(1).trim();
+      return negated.length > 0 && !this.granted().includes(negated);
+    }
+    return this.granted().includes('ALL_FUNCTIONS') || this.granted().includes(code);
+  }
+
+  /** Replaces the granted list, as a login or a withdrawal does. */
+  grant(codes: readonly string[]): void {
+    this.granted.set(codes);
+  }
+}
+
+describe('LoanViewComponent', () => {
+  let fixture: ComponentFixture<LoanViewComponent>;
+  let component: LoanViewComponent;
+  let readLoan: Mock<LoanRead>;
+  let permissions: PermissionsStub;
+  let routeParams: BehaviorSubject<ParamMap>;
+
+  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines the cast to one line and keeps the DOM assertions type-checked (Rule 1 clause 4).
+  const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
+
+  function tabAnchors(): readonly HTMLAnchorElement[] {
+    return Array.from(host().querySelectorAll<HTMLAnchorElement>('ul.nav-tabs > li > a'));
+  }
+
+  function actionLinks(): readonly HTMLAnchorElement[] {
+    return Array.from(host().querySelectorAll<HTMLAnchorElement>('.btn-group a'));
+  }
+
+  /** The charges table's rows, as the six data cells the user reads — the actions column excluded. */
+  function chargeRows(): readonly (readonly string[])[] {
+    return Array.from(host().querySelectorAll<HTMLTableRowElement>('#loan-charges tbody tr')).map(
+      (row): readonly string[] =>
+        Array.from(row.querySelectorAll<HTMLTableCellElement>('td'))
+          .slice(0, 6)
+          .map((cell) => cell.textContent?.trim() ?? ''),
+    );
+  }
+
+  /** The two charge actions of every rendered charge row, in the order the table shows them. */
+  function chargeActionLinks(): readonly HTMLAnchorElement[] {
+    return Array.from(host().querySelectorAll<HTMLAnchorElement>('#loan-charges tbody a'));
+  }
+
+  function openChargesTab(): void {
+    tabAnchors()[2].click();
+    fixture.detectChanges();
+  }
+
+  /** The summary block's rows as `[caption, value]` pairs, read from the cells the user sees. */
+  function renderedSummary(): readonly (readonly [string, string])[] {
+    return Array.from(host().querySelectorAll<HTMLElement>('#loan-summary > .row')).map(
+      (row): readonly [string, string] => [
+        row.firstElementChild?.textContent?.trim() ?? '',
+        row.lastElementChild?.textContent?.trim() ?? '',
+      ],
+    );
+  }
+
+  function paramMapFor(id: string | null): ParamMap {
+    const params: Record<string, string> = {};
+
+    if (id !== null) {
+      params['id'] = id;
+    }
+
+    return convertToParamMap(params);
+  }
+
+  /** Lets the record's reads answer and the screen paint them: each read resumes in a microtask, which the awaits below cross before the render. */
+  async function settle(): Promise<void> {
+    await Promise.resolve();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  /** Moves the mounted record to another URL the way the router does when only the `:id` segment changes: the same component instance stays on screen and the parameter map emits again. @param id the `:id` segment of the record the URL now names. */
+  async function navigateTo(id: string): Promise<void> {
+    routeParams.next(paramMapFor(id));
+    await settle();
+  }
+
+  /** Mounts the record for one `#/viewloanaccount/:id` URL and renders it once. */
+  async function show(id: string | null, read: LoanRead): Promise<void> {
+    TestBed.resetTestingModule();
+    readLoan.mockImplementation(read);
+    routeParams = new BehaviorSubject<ParamMap>(paramMapFor(id));
+
+    TestBed.configureTestingModule({
+      imports: [LoanViewComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideRouter([]),
+        provideTranslateService(),
+        { provide: LoanService, useValue: { get: readLoan } satisfies LoanServiceStub },
+        { provide: ActivatedRoute, useValue: { paramMap: routeParams.asObservable() } },
+        { provide: PermissionsService, useValue: permissions },
+      ],
+    });
+
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('en', TRANSLATIONS, true);
+    translate.use('en');
+
+    permissions.grant(['UPDATE_LOAN']);
+
+    fixture = TestBed.createComponent(LoanViewComponent);
+    component = fixture.componentInstance;
+    await settle();
+  }
+
+  /** The production mapping of a Fineract failure onto `ApiError`, so a rejected read reaches the component as the type it catches in the application (AAP 0.4.2; AAP 0.7.2 row `FineractError`). @param status HTTP status to answer with. @param message the server's own `defaultUserMessage`. @returns the failure the service rejects with. */
+  function failure(status: number, message: string): ApiError {
+    return toApiError(new HttpErrorResponse({ status, error: { defaultUserMessage: message } }));
+  }
+
+  beforeEach(() => {
+    readLoan = vi.fn<LoanRead>();
+    permissions = new PermissionsStub();
+  });
+
+  it('renders the loaded loan, from its one read, with its account number, its product and its three tabs', async () => {
+    await show(LOAN_ID, () => of(LOAN));
+
+    // One read of the record endpoint, and that is the whole load: the answer carries the schedule, the transactions and the loan's charges, so no second request is made (AAP 0.7.3 row "W6 repayment"; Rule 1 clause 2).
+    expect(readLoan).toHaveBeenCalledTimes(1);
+    expect(readLoan).toHaveBeenCalledWith(LOAN_ID);
+    expect(component.loanId()).toBe(LOAN_ID);
+    expect(component.loading()).toBe(false);
+    expect(component.notFound()).toBe(false);
+    expect(component.charges()).toEqual(LOAN_CHARGES);
+
+    const head = (): string => host().querySelector('#loan-view-header')?.textContent ?? '';
+
+    expect(head()).toContain(LOAN.accountNo);
+    expect(head()).toContain('Spec Loan Product');
+    expect(head()).toContain('Spec Borrower');
+    // The principal carries the loan's own currency symbol, with no space, as the legacy record prints the currency beside this loan's balance (`app/views/loans/viewloanaccountdetails.html:125`).
+    expect(head()).toContain('$5,000');
+
+    // The status indicator is the design's colour and nothing else: the record's dot geometry with the active key's class, decorative and wordless (AAP 0.10.5 deliberate difference 11).
+    const swatch = host().querySelector('#loan-view-header app-status-swatch span');
+
+    expect(swatch?.classList.contains('status-swatch')).toBe(true);
+    expect(swatch?.classList.contains('status-dot')).toBe(true);
+    expect(swatch?.classList.contains('status-active')).toBe(true);
+    expect(swatch?.getAttribute('aria-hidden')).toBe('true');
+
+    // Three tabs, in the legacy record's order and under the legacy bundles' own headings.
+    expect(tabAnchors().map((anchor) => anchor.textContent?.trim())).toEqual([
+      'Repayment Schedule',
+      'Transactions',
+      'Charges',
+    ]);
+  });
+
+  it('hands each section the payload slice it renders, and shows one section at a time', async () => {
+    await show(LOAN_ID, () => of(LOAN));
+
+    const schedule = fixture.debugElement.query(By.directive(LoanScheduleComponent));
+
+    expect(schedule).not.toBeNull();
+    expect((schedule.componentInstance as LoanScheduleComponent).schedule()).toEqual(SCHEDULE);
+    expect(fixture.debugElement.query(By.directive(LoanTransactionsComponent))).toBeNull();
+    expect(fixture.debugElement.query(By.directive(LoanChargesComponent))).toBeNull();
+
+    const transactionsTab = tabAnchors()[1];
+    transactionsTab.click();
+    fixture.detectChanges();
+
+    const transactions = fixture.debugElement.query(By.directive(LoanTransactionsComponent));
+
+    expect(transactions).not.toBeNull();
+    expect((transactions.componentInstance as LoanTransactionsComponent).transactions()).toEqual(
+      TRANSACTIONS,
+    );
+    expect(fixture.debugElement.query(By.directive(LoanScheduleComponent))).toBeNull();
+
+    const chargesTab = tabAnchors()[2];
+    chargesTab.click();
+    fixture.detectChanges();
+
+    const charges = fixture.debugElement.query(By.directive(LoanChargesComponent));
+
+    expect(charges).not.toBeNull();
+    expect((charges.componentInstance as LoanChargesComponent).charges()).toEqual(LOAN_CHARGES);
+    expect((charges.componentInstance as LoanChargesComponent).loanId()).toBe(LOAN.id);
+    // The child is handed the loan's own lifecycle state beside its rows, because the section's two actions are offered only on an `Active` loan, exactly as the legacy record decides them (Rule 1 clause 3).
+    expect((charges.componentInstance as LoanChargesComponent).loanStatus()).toEqual(LOAN.status);
+    expect(fixture.debugElement.query(By.directive(LoanTransactionsComponent))).toBeNull();
+    expect(readLoan).toHaveBeenCalledTimes(1);
+  });
+
+  it.each<[string, string | null]>([
+    ['a route that names no loan', null],
+    ['a route whose id is not a Fineract identifier', 'abc'],
+    ['a 404 from the loan read', LOAN_ID],
+  ])('renders the not-found message in place of the record for %s', async (_label, id) => {
+    await show(id, () => throwError(() => failure(404, NOT_FOUND_MESSAGE)));
+
+    expect(component.notFound()).toBe(true);
+
+    // The shared presentation `shared/record-not-found` renders, at the id the page objects address: one danger alert carrying the heading and then the sentence, in that order.
+    const notFound = host().querySelector('#loan-view-not-found');
+    expect(notFound?.querySelectorAll('.alert.alert-danger')).toHaveLength(1);
+    expect((notFound?.textContent ?? '').trim()).toBe(
+      `${TRANSLATIONS['label.heading.notavailable']} ${NOT_FOUND_TEXT}`,
+    );
+
+    expect(host().querySelector('#loan-view-header')).toBeNull();
+    expect(host().querySelector('#loan-actions')).toBeNull();
+    expect(host().querySelector('ul.nav-tabs')).toBeNull();
+    expect(host().querySelector('.btn-group')).toBeNull();
+    expect(host().querySelectorAll('.alert')).toHaveLength(1);
+
+    // Only the id that addresses a loan reaches the service: a route that names none and a route whose id is not a Fineract resource identifier both issue no request (AAP 0.7.4; Rule 1 clause 2).
+    expect(readLoan).toHaveBeenCalledTimes(id === LOAN_ID ? 1 : 0);
+    expect(component.charges()).toBeNull();
+  });
+
+  it('links the steps the loan’s state allows, each gated on that step’s own permission code', async () => {
+    await show(LOAN_ID, () => of(LOAN));
+
+    expect(actionLinks().map((link) => link.getAttribute('id'))).toEqual([
+      'loan-action-addcharge',
+      'loan-action-repayment',
+      'loan-action-undodisbursal',
+    ]);
+    expect(actionLinks().map((link) => link.textContent?.trim())).toEqual(ACTION_CAPTIONS);
+    expect(actionLinks().map((link) => link.getAttribute('href'))).toEqual(ACTION_PATHS);
+    // The charge section's pay and waive links keep the record's own code; the entry points above each answer to the code their `LOAN_ACTIONS` row carries.
+    expect(component.actionPermission).toBe('UPDATE_LOAN');
+
+    permissions.grant([]);
+    fixture.detectChanges();
+    expect(actionLinks().every((link) => link.style.display === 'none')).toBe(true);
+
+    permissions.grant(['REPAYMENT_LOAN']);
+    fixture.detectChanges();
+    expect(
+      actionLinks().map((link) => [link.getAttribute('id'), link.style.display] as const),
+    ).toEqual([
+      ['loan-action-addcharge', 'none'],
+      ['loan-action-repayment', ''],
+      ['loan-action-undodisbursal', 'none'],
+    ]);
+
+    // `ALL_FUNCTIONS` is the one code that reveals every entry point (legacy's permission algebra).
+    permissions.grant(['ALL_FUNCTIONS']);
+    fixture.detectChanges();
+    expect(actionLinks().every((link) => link.style.display === '')).toBe(true);
+  });
+
+  it.each(ACTIONS_BY_STATUS)(
+    'offers the entry points the legacy record offers for $state, and no others',
+    async ({ loan, shown, hidden }) => {
+      await show(LOAN_ID, () => of(loan));
+
+      // Every code the table names is held, so the only thing deciding what appears is the loan's own state — the filter the legacy record applies and the record reproduces (Rule 1 clause 3).
+      permissions.grant(['ALL_FUNCTIONS']);
+      fixture.detectChanges();
+
+      expect(actionLinks().map((link) => link.getAttribute('id'))).toEqual(shown);
+      // A state the legacy record offers no step in renders no joined group at all rather than an empty one, so no affordance stands where an action cannot be taken.
+      expect(host().querySelector('#loan-actions') === null).toBe(shown.length === 0);
+
+      for (const id of hidden) {
+        expect(host().querySelector(`#${id}`)).toBeNull();
+      }
+    },
+  );
+
+  it('derives the five summary figures from the repayment schedule the fork sends', async () => {
+    await show(LOAN_ID, () => of(LOAN));
+
+    // The fork answers a `summary` object for an active loan only, so the block reads the schedule every state carries: the total is `totalRepaymentExpected`, the outstanding balance is `totalOutstanding`, and the three.
+    expect(renderedSummary().map(([caption, value]) => [caption, value])).toEqual([
+      ['Total', '$5,625'],
+      ['Outstanding', '$5,133.33'],
+      ['Principal Outstanding', '$4,583.33'],
+      ['Interest Outstanding', '$550'],
+      ['Fees', '$0'],
+    ]);
+  });
+
+  it('renders a summary figure the payload omits as an empty cell and never as a zero', async () => {
+    await show(LOAN_ID, () => of(PARTIAL_LOAN));
+
+    const rows = renderedSummary();
+
+    // The captions are the legacy bundles' own, in the record's order…
+    expect(rows.map(([caption]) => caption)).toEqual(SUMMARY_CAPTIONS);
+    // …the one figure the schedule reports renders as reported… …and the four it omits render nothing at all (Rule 1 clause 3).
+    expect(rows.map(([, value]) => value)).toEqual(['', '', '$5,000', '', '']);
+    expect(rows.map(([, value]) => value)).not.toContain('0');
+  });
+
+  it('shows a failure other than a 404 verbatim and keeps the record page mounted', async () => {
+    await show(LOAN_ID, () => throwError(() => failure(400, VALIDATION_MESSAGE)));
+
+    expect(host().querySelector('#loan-view-error')?.textContent?.trim()).toBe(VALIDATION_MESSAGE);
+    expect(host().querySelector('.alert.alert-danger')?.textContent?.trim()).toBe(VALIDATION_MESSAGE);
+    expect(component.clientError()?.message).toBe(VALIDATION_MESSAGE);
+    expect(component.notFound()).toBe(false);
+    expect(host().querySelector('#loan-view')).not.toBeNull();
+    expect(host().querySelector('#loan-view-not-found')).toBeNull();
+    expect(host().querySelector('.panel-body')).not.toBeNull();
+    expect(component.charges()).toBeNull();
+  });
+
+  it('reports a 5xx only through the interceptor’s notification, leaving the shell usable', async () => {
+    await show(LOAN_ID, () => throwError(() => failure(503, VALIDATION_MESSAGE)));
+
+    // A 5xx is the interceptor's to announce exactly once (AAP 0.4.2), so the record adds neither a second copy of the message nor a not-found state of its own (AAP 0.7.4; AAP 0.14.2).
+    expect(component.error()?.status).toBe(503);
+    expect(component.clientError()).toBeNull();
+    expect(component.notFound()).toBe(false);
+    expect(host().querySelector('.alert.alert-danger')).toBeNull();
+    expect(host().querySelector('#loan-view-error')).toBeNull();
+    expect(host().querySelector('#loan-view-not-found')).toBeNull();
+    expect(host().querySelector('.panel-body')).not.toBeNull();
+    expect(component.loan()).toBeNull();
+    expect(component.charges()).toBeNull();
+    expect(actionLinks()).toEqual([]);
+  });
+
+  it('renders one row per charge the record carried, with a gated pay and waive link each', async () => {
+    await show(LOAN_ID, () => of(LOAN));
+
+    openChargesTab();
+
+    expect(chargeRows()).toEqual([
+      ['Parity Fee', '24 December 2026', '$25', '$0', '$0', '$25'],
+      ['Parity Fee W8', '', '$40', '$40', '$0', '$0'],
+    ]);
+
+    expect(chargeActionLinks().map((link) => link.getAttribute('href'))).toEqual(
+      LOAN_CHARGES.flatMap((charge) => [
+        `/loanaccountcharge/${LOAN_ID}/paycharge/${charge.id}`,
+        `/loanaccountcharge/${LOAN_ID}/waivecharge/${charge.id}`,
+      ]),
+    );
+    expect(chargeActionLinks().map((link) => link.textContent?.trim())).toEqual([
+      'Pay Charge',
+      'Waive Charge',
+      'Pay Charge',
+      'Waive Charge',
+    ]);
+
+    permissions.grant([]);
+    fixture.detectChanges();
+    expect(chargeActionLinks().every((link) => link.style.display === 'none')).toBe(true);
+
+    permissions.grant(['UPDATE_LOAN']);
+    fixture.detectChanges();
+    expect(chargeActionLinks().every((link) => link.style.display === '')).toBe(true);
+  });
+
+  it('renders the explicit empty state for a loan whose payload carries no charges', async () => {
+    await show(LOAN_ID, () => of(UNCHARGED_LOAN));
+
+    openChargesTab();
+
+    // AAP 0.7.4's empty-state rule for this surface: the shared empty state and no error, never an empty table and never a failure message.
+    expect(component.charges()).toEqual([]);
+    expect(host().querySelector('#loan-charges')).toBeNull();
+    expect(host().querySelector('#loan-charges-empty')?.textContent?.trim()).toBe('No Data');
+    expect(host().querySelector('.alert.alert-danger')).toBeNull();
+  });
+
+  it('re-reads the record for a second route id, replacing the previous loan, its action links and its charges', async () => {
+    const answer: LoanRead = (id) => of(String(id) === SECOND_LOAN_ID ? SECOND_LOAN : LOAN);
+
+    await show(LOAN_ID, answer);
+
+    expect(host().textContent).toContain(LOAN.accountNo);
+    expect(actionLinks().map((link) => link.getAttribute('href'))).toEqual(ACTION_PATHS);
+
+    await navigateTo(SECOND_LOAN_ID);
+
+    expect(readLoan.mock.calls).toEqual([[LOAN_ID], [SECOND_LOAN_ID]]);
+    expect(component.loanId()).toBe(SECOND_LOAN_ID);
+
+    expect(host().textContent).toContain(SECOND_LOAN.accountNo);
+    expect(host().textContent).toContain(SECOND_LOAN.clientName);
+    expect(host().textContent).not.toContain(LOAN.accountNo);
+    expect(actionLinks().map((link) => link.getAttribute('href'))).toEqual(
+      ACTION_PATHS.map((path) => path.replace(LOAN_ID, SECOND_LOAN_ID)),
+    );
+
+    expect(component.charges()).toEqual([SECOND_LOAN_CHARGE]);
+
+    openChargesTab();
+
+    expect(chargeRows()).toEqual([['Second Fee', '24 January 2027', '$60', '$0', '$0', '$60']]);
+    expect(host().textContent).not.toContain('Parity Fee');
+    expect(component.loading()).toBe(false);
+    expect(component.error()).toBeNull();
+  });
+
+  it('clears the previous record while the second route’s read is outstanding', async () => {
+    const second = deferredResponse<LoanAccount>();
+
+    await show(LOAN_ID, (id) => (String(id) === SECOND_LOAN_ID ? second.response : of(LOAN)));
+
+    expect(host().textContent).toContain(LOAN.accountNo);
+
+    routeParams.next(paramMapFor(SECOND_LOAN_ID));
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(component.loanId()).toBe(SECOND_LOAN_ID);
+    expect(component.loan()).toBeNull();
+    expect(component.charges()).toBeNull();
+    expect(component.loading()).toBe(true);
+    expect(host().textContent).not.toContain(LOAN.accountNo);
+    expect(actionLinks()).toEqual([]);
+
+    second.resolve(SECOND_LOAN);
+    await settle();
+
+    expect(component.loan()?.id).toBe(SECOND_LOAN.id);
+    expect(component.loading()).toBe(false);
+  });
+
+  it('discards a superseded loan’s answer that lands after the URL moved on', async () => {
+    const first = deferredResponse<LoanAccount>();
+    const second = deferredResponse<LoanAccount>();
+
+    await show(LOAN_ID, (id) => (String(id) === SECOND_LOAN_ID ? second.response : first.response));
+
+    routeParams.next(paramMapFor(SECOND_LOAN_ID));
+    await fixture.whenStable();
+
+    second.resolve(SECOND_LOAN);
+    await settle();
+
+    expect(component.loan()?.id).toBe(SECOND_LOAN.id);
+    expect(component.loading()).toBe(false);
+
+    first.resolve(LOAN);
+    await settle();
+
+    expect(component.loanId()).toBe(SECOND_LOAN_ID);
+    expect(component.loan()?.id).toBe(SECOND_LOAN.id);
+    expect(host().textContent).toContain(SECOND_LOAN.accountNo);
+    expect(host().textContent).not.toContain(LOAN.accountNo);
+    expect(actionLinks().map((link) => link.getAttribute('href'))).toEqual(
+      ACTION_PATHS.map((path) => path.replace(LOAN_ID, SECOND_LOAN_ID)),
+    );
+    expect(component.loading()).toBe(false);
+    expect(component.error()).toBeNull();
+    expect(component.notFound()).toBe(false);
+  });
+
+  /** The codes the record's action links are gated on, held against the routes those links open: the link that offers a command and the guard that admits the screen behind it must ask one code, or a user is offered an action they are then bounced from and refused one they may take (AAP 0.1.1, AAP 0.4.2, AAP 0.14.1). */
+  describe('the codes its action links are gated on', () => {
+    /** Whether a value is a non-null object that is not an array — the shape a `{ param, codes }` permission declaration has, and the shape its `codes` map has (Rule 1 clause 4). */
+    function isDeclarationObject(value: unknown): value is Record<string, unknown> {
+      return typeof value === 'object' && value !== null && !Array.isArray(value);
+    }
+
+    /** The route of `LOANS_ROUTES` the given commands open: the one whose first path segment is the commands' first, so the pairing is the URL's own rather than a second table written beside it. @param commands the link's router commands. */
+    function routeFor(commands: readonly string[]): Route {
+      const segment = commands[0].replace(/^\//, '');
+      const route = LOANS_ROUTES.find(
+        (candidate: Route): boolean => (candidate.path ?? '').split('/')[0] === segment,
+      );
+
+      if (route === undefined) {
+        throw new Error(`No loans route serves ${commands.join('/')}.`);
+      }
+
+      return route;
+    }
+
+    /** The code a route declares for the screen the given commands open: a single-code declaration is its own answer, while the `{ param, codes }` declaration is asked about the `:action` segment those commands carry, exactly as `permissionGuard` reads it. @param route the route the commands open. @param commands the link's router commands. */
+    function declaredCode(route: Route, commands: readonly string[]): string | null {
+      const declared: unknown = route.data?.['permission'];
+
+      if (typeof declared === 'string') {
+        return declared;
+      }
+
+      if (!isDeclarationObject(declared)) {
+        return null;
+      }
+
+      const codes: unknown = declared['codes'];
+      const command = commands[2];
+
+      if (command === undefined || !isDeclarationObject(codes) || !Object.hasOwn(codes, command)) {
+        return null;
+      }
+
+      const code: unknown = codes[command];
+
+      return typeof code === 'string' ? code : null;
+    }
+
+    const ACTION_ROUTE: Route = routeFor(['/loanaccount', LOAN_ID, 'approve']);
+
+    type GuardAnswer = ReturnType<CanActivateFn>;
+
+    /** The snapshot `permissionGuard` is handed for `#/loanaccount/<id>/<action>`, built from the declaration the router mounts rather than from a copy of it. @param command the `:action` segment the URL carries. */
+    function actionSnapshot(command: string): ActivatedRouteSnapshot {
+      const route = new ActivatedRouteSnapshot();
+      route.params = { id: LOAN_ID, action: command };
+      route.data = ACTION_ROUTE.data ?? {};
+
+      return route;
+    }
+
+    /** The router state the guard is handed. Its second parameter is never consulted — no verdict depends on the target URL — so the router's own empty snapshot is the whole of what the contract needs. */
+    function unreadState(): RouterStateSnapshot {
+      return TestBed.inject(Router).routerState.snapshot;
+    }
+
+    /** Runs the guard in the injector this case configured, which is what lets it inject its two services. @param route the route snapshot the guard decides on. */
+    function runGuard(route: ActivatedRouteSnapshot): GuardAnswer {
+      return TestBed.runInInjectionContext(() => permissionGuard(route, unreadState()));
+    }
+
+    /** The route a denial redirects to, serialized by the same router the guard built the tree with, or `null` when the guard allowed the navigation. @param answer the guard's answer. */
+    function denialTarget(answer: GuardAnswer): string | null {
+      return answer instanceof UrlTree ? TestBed.inject(Router).serializeUrl(answer) : null;
+    }
+
+    beforeEach(() => {
+      // A fresh injector per case: the guard injects `Router` for its denial target and `PermissionsService` for its verdict, answered by the same stub the component cases already grant codes to.
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [provideRouter([]), { provide: PermissionsService, useValue: permissions }],
+      });
+    });
+
+    it.each(LOAN_ACTIONS)('gates $id on the code the route it opens declares', (action) => {
+      const commands = action.route(LOAN_ID);
+      const route = routeFor(commands);
+      const declared = declaredCode(route, commands);
+
+      // One code for the link and for its route, row by row over the whole table rather than the one entry a case happened to try (AAP 0.1.1, AAP 0.4.2).
+      expect(declared).not.toBeNull();
+      expect(action.permission).toBe(declared);
+      // A declaration no guard reads would be decorative, so each route a link opens is gated by `permissionGuard` as well.
+      expect(route.canActivate ?? []).toContain(permissionGuard);
+    });
+
+    it('admits the approve form for the session the Approve link is shown to', () => {
+      permissions.grant(['READ_LOAN', 'APPROVE_LOAN']);
+
+      // The user holding the code the Approve link is gated on reaches the screen that link opens: the guard asks for that same code, for the `:action` the URL carries (AAP 0.1.1).
+      expect(runGuard(actionSnapshot('approve'))).toBe(true);
+    });
+
+    it.each<[string, readonly string[]]>([
+      ['only the record read code', ['READ_LOAN']],
+      ['the record read and the edit code, but not the action code', ['READ_LOAN', 'UPDATE_LOAN']],
+    ])('turns a session holding %s away from the approve form', (_label, granted) => {
+      permissions.grant(granted);
+
+      // The read code opens the record and nothing more, and a code the approve form does not require is no substitute for the one it does: the navigation is replaced by the clients list rather than painted (AAP 0.1.1, AAP 0.4.2).
+      expect(denialTarget(runGuard(actionSnapshot('approve')))).toBe('/clients');
+    });
+  });
+});

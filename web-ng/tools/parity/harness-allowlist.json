@@ -1,0 +1,75 @@
+{
+  "header": {
+    "apiPath": "/fineract-provider/api/v1",
+    "scope": "URLs the parity harness and the static checks call and the application never does; none of them may appear in endpoint-allowlist.json",
+    "businessDateCandidate": "GET /businessdate/BUSINESS_DATE relative to apiPath. Confirmed against the fork: BusinessDateApiResource declares @Path(\"/v1/businessdate\") with @GET @Path(\"{type}\"), so BUSINESS_DATE is a path segment and there is no type query parameter. Replace this string with the confirmed path if a fork update differs.",
+    "generatedOn": "2026-11-24",
+    "additionPolicy": "a harness URL is added only with the consuming tool named in its note; harness URLs never migrate into the app allowlist"
+  },
+  "entries": [
+    {
+      "consumer": "web-ng/e2e/seed/seed.ts",
+      "method": "POST",
+      "prefix": "apiPath",
+      "path": "/staff",
+      "purpose": "Create the fixed staff member Parity Officer (loan officer, office 1 Head Office), which the loan workflows select as loan officer.",
+      "note": "Seed-only write: the application never creates or updates staff. The seed sends the AAP 0.10.1 value verbatim (firstname Parity, lastname Officer, which Fineract composes into the display name Officer, Parity) with no clone index or other suffix, and it is non-idempotent by design: every run is expected to start from a recreated database (npm run reset:db), which is what keeps the name unique. On a backend that already holds the staff member the seed fails fast on Fineract's duplicate-name rejection of that display name (HTTP 403), as expected, because staff cannot be deleted through the API (HTTP 405)."
+    },
+    {
+      "consumer": "web-ng/e2e/seed/seed.ts",
+      "method": "POST",
+      "prefix": "apiPath",
+      "path": "/loanproducts",
+      "purpose": "Create the fixed loan product Parity Loan (USD, principal min 1,000, default 5,000, max 10,000, 12 monthly repayments, flat interest 12% per year) used by W4, W5, W6 and W7.",
+      "note": "Seed-only write: the application only reads loan products through GET /loans/template. The seed sends the AAP 0.10.1 values verbatim (name Parity Loan, shortName PARL) with no clone index or other suffix, and it is non-idempotent by design: every run is expected to start from a recreated database (npm run reset:db), which is what keeps the name unique. On a backend that already holds the product the seed fails fast on Fineract's duplicate-name rejection, as expected, because loan products cannot be deleted through the API (HTTP 405)."
+    },
+    {
+      "consumer": "web-ng/e2e/seed/seed.ts",
+      "method": "POST",
+      "prefix": "apiPath",
+      "path": "/charges",
+      "purpose": "Create the fixed loan charge Parity Fee (flat amount 25, specified due date) that the loan-charges workflow applies to a loan.",
+      "note": "Seed-only write: the application reads charge options from GET /loans/{id}/charges/template and adds a charge to an existing loan, never to the charge catalogue."
+    },
+    {
+      "consumer": "web-ng/e2e/seed/seed.ts",
+      "method": "POST",
+      "prefix": "apiPath",
+      "path": "/codes/name/{codeName}/codevalues",
+      "purpose": "Create the active narration value each client lifecycle action offers — ClientClosureReason, ClientRejectReason and ClientWithdrawReason — so GET /clients/template?commandParam=close|reject|withdraw answers a narration and POST /clients/{id}?command=close|reject|withdraw reaches its end state instead of failing on a mandatory reason id.",
+      "note": "Seed-only write: the application reads a code's values through the three action templates and never creates one. OpenAPI operation createCodeValueByCodeName (CodeValuesApiResource) on the fork. The path is keyed by code name rather than by numeric code id, so the seed needs no GET /codes lookup and hard-codes no id the tenant's migration assigned, and the created value's id is the answer's subResourceId. Added under the AAP 0.10.4 addition policy: the consumer is named here and this URL never appears in endpoint-allowlist.json."
+    },
+    {
+      "consumer": "web-ng/e2e/seed/seed.ts",
+      "method": "POST",
+      "prefix": "apiPath",
+      "path": "/datatables",
+      "purpose": "Register the client datatable client_action_check (apptableName m_client, one non-mandatory notes column) that the client-action gate reads with GET /datatables/{table}/{clientId}?genericResultSet=true once its check matches.",
+      "note": "Seed-only write: the application reads a registered datatable through the gate and never creates one. OpenAPI operation DatatablesApiResource.createDatatable on the fork; entitySubType is mandatory on this fork's create body, and the answer carries the table's name rather than an id, so the fixture's identity is its name. Added under the AAP 0.10.4 addition policy: the consumer is named here, and the application's own datatable read stays in endpoint-allowlist.json as its own row and path."
+    },
+    {
+      "consumer": "web-ng/e2e/seed/fixtures.ts",
+      "method": "GET",
+      "prefix": "apiPath",
+      "path": "/businessdate/BUSINESS_DATE",
+      "purpose": "Read the tenant business date that is the run date: every seed value, workflow input and comparison is the run date or a day offset from it.",
+      "note": "Harness-only because the application derives its form dates from the browser clock exactly as legacy does, so reading the business date inside the app would add a request legacy never makes. The path is confirmed above against BusinessDateApiResource; re-confirm it if the fork changes."
+    },
+    {
+      "consumer": "web-ng/e2e/check-backend.ts",
+      "method": "GET",
+      "prefix": "serverRoot",
+      "path": "/fineract-provider/actuator/info",
+      "purpose": "Prove the backend is Blitzy-Sandbox/blitzy-fineract built from source, and record its commit in the parity report header.",
+      "note": "Server-root path: Spring management endpoints sit beside the API context, not under apiPath. Consumed by npm run check:backend, which fails the run when the reported remote is not Blitzy-Sandbox/blitzy-fineract."
+    },
+    {
+      "consumer": "web-ng/e2e/reset-db.sh",
+      "method": "GET",
+      "prefix": "serverRoot",
+      "path": "/fineract-provider/actuator/health",
+      "purpose": "Poll backend readiness after recreating the containers, instead of sleeping a fixed interval, and proceed only once the status is UP.",
+      "note": "Server-root path, and the only harness URL the shell scripts call; it needs no credentials and no tenant header."
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+<!-- The global search results screen (AAP 0.7.1 Features row `search`; AAP 0.7.3 row "Shell: global search"; AAP 0.8.2 route `search/:query`; AAP 0.7.4 states; AAP 0.11.1 row for this folder) (Rule 1 clause 3, AAP 0.10.5, Rule 1 clause 6, AAP 0.2.2). -->
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-md-12">
+      <div appPanelCard variant="default">
+        <div class="panel-body">
+          <!-- The screen's own title, painted for assistive technology and not on screen (Bootstrap 3.4.3's own `sr-only`), so the page carries exactly one `h1` and the results sit under it rather than under no heading at all. The caption is the legacy bundle's own search heading, so it is a real entry and never a raw key, and the card's appearance does not change. -->
+          <h1 class="sr-only">{{ 'label.heading.search' | translate }}</h1>
+
+          <!-- Fineract's own failure text for a 4xx, verbatim and untranslated, above whatever is already rendered: a failed search leaves the screen mounted and the previous results standing, while a 5xx or a transport failure is the interceptor's to announce (AAP 0.7.4). -->
+          @if (error(); as message) {
+            <div class="alert alert-danger" id="search-results-error" role="alert">{{ message }}</div>
+          }
+
+          <!-- The bundle's own truncation notice, above the blocks the answer was cut to: a search of more than 200 results shows its first 201 and says so (`app/views/search/glresults.html:5`, whose string is `label.search.query.matched.results.exceeds.max.length`) (Rule 1 clause 3, Rule 1 clause 6). -->
+          @if (exceedsMaxLength()) {
+            <p class="text-danger" id="search-results-truncated">{{ 'label.search.query.matched.results.exceeds.max.length' | translate }}</p>
+          }
+
+          <!-- Three mutually exclusive states. Before the first response nothing is painted (AAP 0.7.4). -->
+          @if (isEmpty()) {
+            <app-empty-state id="search-results-empty" [message]="'label.nodatafound' | translate" />
+          } @else if (rows().length > 0) {
+            <!-- Legacy's results list itself: one `.blockquoteresult` block per result, carrying the name as the link, the account number where the family has one, and the entity and parent line below it. -->
+            <div id="search-results">
+              <!-- Tracked by the result's own entity key, so a re-run of the search reuses the blocks it can and the loop never falls back to the index. -->
+              @for (row of rows(); track row.key) {
+                <div class="blockquoteresult">
+                  <a [routerLink]="row.link" [hasPermission]="row.permission">{{ row.name }}</a>
+                  <span [hasPermission]="'!' + row.permission">{{ row.name }}</span>
+                  @if (row.printsAccountNo) {&nbsp;|&nbsp;#{{ row.accountNo }}}
+                  <br />
+                  <!-- The family in the legacy bundles' own words ("Client", "Loan"), never the API's untranslated discriminator, and the parent named by the label its own family uses: a client's office, or the owning client of a loan or of an identifier match. -->
+                  <strong>{{ 'label.heading.entity' | translate }}</strong>:{{ entityLabelKey[row.kind] | translate }}&nbsp;|&nbsp;<strong>{{ row.parentLabelKey | translate }}</strong>:{{ row.parentName }}
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

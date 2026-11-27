@@ -1,0 +1,10 @@
+{
+  "apiBaseUrl": "https://localhost:8443",
+  "apiPath": "/fineract-provider/api/v1",
+  "tenantId": "default",
+  "dateFormat": "dd MMMM yyyy",
+  "locale": "en",
+  "idleMinutes": 30,
+  "warningSeconds": 10,
+  "keepaliveMinutes": 15
+}

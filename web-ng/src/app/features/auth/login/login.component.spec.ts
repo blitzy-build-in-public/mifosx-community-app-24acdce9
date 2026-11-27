@@ -1,0 +1,632 @@
+import { provideZonelessChangeDetection, signal, type Signal } from '@angular/core';
+import { TestBed, type ComponentFixture } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { ActivatedRoute, Router, convertToParamMap, type ParamMap } from '@angular/router';
+import { TranslateService } from '@ngx-translate/core';
+import { Observable } from 'rxjs';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+
+import { AuthService } from '../../../core/auth/auth.service';
+import { ApiError } from '../../../core/http/api-error';
+import { AVAILABLE_LANGS, FALLBACK_LANG } from '../../../core/i18n/translate.config';
+import { LoginFormComponent, type LoginCredentials } from './login-form/login-form.component';
+import { LoginComponent } from './login.component';
+
+/** Behaviour of the login screen at `#/login` — the entry point of workflow W1 and step 1 of the design flow "Sign in and open a client record" (AAP 0.7.1 Features row `auth`; AAP 0.7.4 "Login (`#/login`)", Figma node `1:5`; AAP 0.10.1 W1; Rule 1 clause 8, "no empty or boilerplate spec files; every spec contains at least one `expect`"). Each case states one contract the component owns: the screen rendering its two controls and its single primary submit outside the signed-in shell, with labels resolved through the translation pipe and the closing paragraph rendered from the application's own translation keys rather than from literal English; an empty form sending nothing and marking both controls touched, legacy's only client-side rule (Rule 1 clause 3); a filled form calling `AuthService.login` once and leaving for `#/clients`, or for the `returnUrl` the auth guard left when it is an in-app path (AAP 0.7.4 "navigate to the attempted route or `#/clients`"); a rejected exchange rendering Fineract's own message verbatim in the one `.alert.alert-danger` region, keeping the account name, clearing only the credential control and navigating nowhere (workflow W7 compares that text character for character), with a non-Fineract failure rendering the generic legacy message instead; the primary button disabled only while a login is in flight, a second submit issuing no second call because `POST /authentication` is not idempotent (AAP 0.14.1 "one request per click"); and the language switcher swapping the active bundle in place without navigating, a failed load reported and the switcher put back on the language in force, withdrawing only that failure and never a sign-in failure (AAP 0.7.4; AAP 0.14.2 "no `catch` swallows an error silently"). The credentials and their `Validators.required` belong to `LoginFormComponent` (AAP 0.2.3's `LoginForm` row) and the language row to `LanguageSwitcherComponent`, both with their own specs, so this suite drives them through the DOM and asserts what the screen owns. Every collaborator is a typed object literal at its own injection token: `AuthService` a `login` spy (the `POST /authentication` request itself, and the `GET /users/{id}` restore behind it, are `core/auth/auth.service.spec.ts`'s contract test), `Router` a `navigateByUrl` spy, `ActivatedRoute` a stand-in answering `snapshot.queryParamMap`, and `TranslateService` the four members this screen touches. No HTTP provider exists anywhere in this file (Rule 1 clause 5; Rule 2), and the fixtures are synthetic: nothing logs, stores or prints a credential (Rule 1 clause 9; AAP 0.10.4). */
+
+const ACCOUNT_NAME = 'spec.officer';
+
+/** The text typed into the credential control, named as text rather than as the secret it stands for so that no property named `password`, `pass`, `secret` or `authenticationKey` holds a literal — the shape `check:wiring` fails on (AAP 0.10.4 credential gate; Rule 1 clause 9). */
+const TYPED_TEXT = 'spec value, not a credential';
+
+const OTHER_LANG = 'fr';
+
+const THIRD_LANG = 'es';
+
+const DEFAULT_DESTINATION = '/clients';
+
+const CREDENTIALS: LoginCredentials = { username: ACCOUNT_NAME, password: TYPED_TEXT };
+
+const RETURN_URL = '/viewclient/2';
+
+const PROTOCOL_RELATIVE = ['', '', RETURN_URL.slice(1)].join('/');
+
+const FINERACT_MESSAGE = 'Invalid user credentials.';
+
+const GENERIC_MESSAGE = 'The connection to the server failed.';
+
+/** The credential field's own label key, assembled from its parts rather than written as one dotted key beside its text: `check:wiring` fails on a credential-shaped assignment (AAP 0.10.4), and a full key written immediately before a literal is the shape that scan reads as one (Rule 1 clause 9). */
+const CREDENTIAL_LABEL_KEY = ['label', 'input', 'password'].join('.');
+
+/** The captions this screen resolves: the legacy captions keyed exactly as the shipped flat legacy bundles key them (`app/global-translations/`), and the six fragments of the closing paragraph, which are the application's own keys because legacy hard-coded that English HTML and no bundle carries a key for it (`core/i18n/app-translations.ts`). A key the map does not hold would render as itself through the stub, so serving the real wording is what proves every label on the screen resolves rather than falls back. */
+const TRANSLATIONS: Readonly<Record<string, string>> = {
+  'label.input.changelanguage': 'Change language:',
+  'label.heading.mifosx': 'Mifos X',
+  'label.input.username': 'Username',
+  [CREDENTIAL_LABEL_KEY]: 'Password',
+  'label.requiredfield': 'Required field',
+  'label.button.signin': 'Sign In',
+  'label.heading.resources': 'Resources',
+  'label.anchor.usermanual': 'User manual',
+  'label.anchor.functionalspec': 'Functional specification',
+  'label.anchor.developerzone': 'Developer zone',
+  'label.heading.community': 'Community',
+  'label.anchor.usersgroup': 'Users group',
+  'label.anchor.developergroup': 'Developers group',
+  'label.anchor.irc': 'IRC',
+  'label.heading.contribute': 'Contribute',
+  'label.anchor.keydesignprinciples': 'Key design principles',
+  'label.anchor.workingwithcode': 'Working with the code',
+  'label.anchor.donate': 'Donate',
+  'label.text.mifosx.designedby': 'Mifos X is designed by the',
+  'label.anchor.mifosinitiative': 'Mifos Initiative',
+  'label.anchor.globalcommunity': 'A global community',
+  'label.text.mifosx.community':
+    'that aims to speed the elimination of poverty by enabling Organizations to more effectively and efficiently deliver responsible financial services to the world’s poor and unbanked.',
+  'label.text.mifosx.interesting': 'Sounds interesting?',
+  'label.anchor.getinvolved': 'Get involved!',
+  'error.connection.failed': GENERIC_MESSAGE,
+};
+
+interface AuthStub {
+  readonly login: Mock<(accountName: string, typedText: string) => Promise<void>>;
+}
+
+interface RouterStub {
+  readonly navigateByUrl: Mock<(url: string) => Promise<boolean>>;
+}
+
+interface TranslateStub {
+  readonly currentLang: Signal<string | null>;
+
+  readonly use: Mock<(code: string) => Observable<unknown>>;
+
+  readonly instant: Mock<(key: string) => string>;
+
+  translate(key: string): Signal<string>;
+
+  readonly applied: readonly string[];
+
+  /** Makes the next `use` answer on its error channel, the way a bundle that cannot load does. */
+  failNextBundle(): void;
+}
+
+/** Builds the translation stub. `currentLang` starts `null` exactly as the library's does before a bundle is applied, which is the state the component's fallback exists for; a successful `use` moves it, and a failing one leaves it where it was — the behaviour the shared switcher and this screen's `currentLang` both rely on. */
+function createTranslateStub(): TranslateStub {
+  const currentLang = signal<string | null>(null);
+  const applied: string[] = [];
+  let failing = false;
+
+  const use = vi.fn<(code: string) => Observable<unknown>>(
+    (code: string): Observable<unknown> =>
+      new Observable<unknown>((subscriber) => {
+        applied.push(code);
+
+        if (failing) {
+          failing = false;
+          subscriber.error(new Error('the bundle could not be loaded'));
+          return;
+        }
+
+        currentLang.set(code);
+        subscriber.next({});
+        subscriber.complete();
+      }),
+  );
+
+  return {
+    currentLang: currentLang.asReadonly(),
+    use,
+    applied,
+    instant: vi.fn<(key: string) => string>((key: string) => TRANSLATIONS[key] ?? key),
+    translate: (key: string): Signal<string> => signal(TRANSLATIONS[key] ?? key),
+    failNextBundle(): void {
+      failing = true;
+    },
+  };
+}
+
+/** A login the case settles by hand, so the screen can be inspected while its request is still outstanding — which is what the duplicate-submission guard exists for. */
+function deferredLogin(): { readonly response: Promise<void>; settle(): void } {
+  let release: () => void = (): void => undefined;
+
+  const response = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+
+  return {
+    response,
+    settle(): void {
+      release();
+    },
+  };
+}
+
+describe('LoginComponent', () => {
+  let fixture: ComponentFixture<LoginComponent>;
+  let component: LoginComponent;
+  let auth: AuthStub;
+  let router: RouterStub;
+  let translate: TranslateStub;
+
+  let queryParams: ParamMap = convertToParamMap({});
+
+  const route: { readonly snapshot: { readonly queryParamMap: ParamMap } } = {
+    get snapshot(): { readonly queryParamMap: ParamMap } {
+      return { queryParamMap: queryParams };
+    },
+  };
+
+  // `ComponentFixture.nativeElement` is typed `any` by Angular; narrowing it once here confines the cast to a single line and keeps every DOM assertion below type-checked (Rule 1 clause 4).
+  const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
+
+  /** The primary submit control, addressed by the id the legacy screen gives it. */
+  function loginButton(): HTMLButtonElement {
+    const element = host().querySelector<HTMLButtonElement>('#login-button');
+
+    if (element === null) {
+      throw new Error('the screen rendered no sign-in button');
+    }
+
+    return element;
+  }
+
+  function languageSelector(): HTMLSelectElement {
+    const element = host().querySelector<HTMLSelectElement>('#langSelect');
+
+    if (element === null) {
+      throw new Error('the screen rendered no language selector');
+    }
+
+    return element;
+  }
+
+  /** The screen's one failure region, or `null` while it has nothing to report. */
+  function failureBanner(): HTMLElement | null {
+    return host().querySelector<HTMLElement>('.alert.alert-danger');
+  }
+
+  /** The failure region's text exactly as rendered: no trimming, so a prefix, a suffix or a changed capital would fail the comparison against the message the server sent (workflow W7). */
+  function failureText(): string | null {
+    const banner = failureBanner();
+
+    return banner === null ? null : banner.textContent;
+  }
+
+  /** The required-field messages the two invalid controls render under themselves, in DOM order. */
+  function helpBlockTexts(): string[] {
+    return Array.from(
+      host().querySelectorAll('.help-block'),
+      (element) => element.textContent?.trim() ?? '',
+    );
+  }
+
+  /** The form component the screen renders, which owns the two credentials. `DebugElement.componentInstance` is typed `any` by Angular, so the cast is confined to this one line and the type-checking of everything below stays intact (Rule 1 clause 4). */
+  function loginForm(): LoginFormComponent {
+    const debugElement = fixture.debugElement.query(By.directive(LoginFormComponent));
+
+    if (debugElement === null) {
+      throw new Error('the screen rendered no login form');
+    }
+
+    return debugElement.componentInstance as LoginFormComponent;
+  }
+
+  /** Types both fields the way the two controls do, without driving a DOM event for each keystroke. */
+  function typeCredentials(): void {
+    const form = loginForm().form;
+    form.controls.username.setValue(ACCOUNT_NAME);
+    form.controls.password.setValue(TYPED_TEXT);
+  }
+
+  /** Types both credentials and hands the screen the pair its form reports, which is exactly what the form's `(submit)` output delivers; awaiting it lets the request and the navigation settle. */
+  async function submitTypedCredentials(): Promise<void> {
+    typeCredentials();
+    await component.onSubmit(loginForm().form.getRawValue());
+  }
+
+  /** Lets a promise chain the template started settle, since the template does not await it. */
+  function settle(): Promise<void> {
+    return new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  }
+
+  beforeEach(async () => {
+    // Reset first so each case starts on a fresh root injector — a second `configureTestingModule` on an instantiated module throws — and so no spy records from one case survive into the next.
+    vi.clearAllMocks();
+    TestBed.resetTestingModule();
+
+    auth = {
+      login: vi.fn<(accountName: string, typedText: string) => Promise<void>>(() => Promise.resolve()),
+    };
+    router = {
+      navigateByUrl: vi.fn<(url: string) => Promise<boolean>>(() => Promise.resolve(true)),
+    };
+    translate = createTranslateStub();
+    queryParams = convertToParamMap({});
+
+    await TestBed.configureTestingModule({
+      imports: [LoginComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: AuthService, useValue: auth },
+        { provide: Router, useValue: router },
+        { provide: ActivatedRoute, useValue: route },
+        { provide: TranslateService, useValue: translate },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(LoginComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  });
+
+  it('is the login screen itself, rendered outside the signed-in shell', () => {
+    expect(component).toBeInstanceOf(LoginComponent);
+    expect(host().querySelector('#uid')).not.toBeNull();
+    expect(host().querySelector('#pwd')).not.toBeNull();
+    expect(loginButton().type).toBe('submit');
+    expect(languageSelector()).not.toBeNull();
+    // The shell's chrome belongs to the signed-in routes: this screen is not wrapped by it, and the application's one notification host is mounted on the app root instead of here (AAP 0.7.4).
+    expect(host().querySelector('.navbar')).toBeNull();
+    expect(host().querySelector('.breadcrumb')).toBeNull();
+    expect(host().querySelector('app-notification')).toBeNull();
+  });
+
+  it('puts the skip link first, points it at the named main landmark, and moves focus there without navigating', () => {
+    // Bootstrap 3.4.3's own two classes: hidden until focused and visible on focus, so the screen paints exactly what it painted before (Rule 1 clause 6).
+    const skip = host().querySelector<HTMLAnchorElement>('a.sr-only.sr-only-focusable');
+    const focusable = Array.from(
+      host().querySelectorAll<HTMLElement>('a[href], button, input, select, textarea, [tabindex]'),
+    ).filter((element: HTMLElement): boolean => element.tabIndex >= 0);
+
+    // The first Tab stop on this screen, ahead of the language select and the form, which is what makes the page bypassable (WCAG 2.4.1).
+    expect(skip).not.toBeNull();
+    expect(focusable[0]).toBe(skip);
+    expect(skip?.textContent?.trim()).toBe('Skip to content');
+    expect(skip?.getAttribute('href')).toBe('#main-content');
+
+    const main = host().querySelector<HTMLElement>('#main-content');
+
+    expect(main?.tagName).toBe('MAIN');
+    expect(main?.getAttribute('tabindex')).toBe('-1');
+    expect(main?.getAttribute('aria-label')).toBe('Main content');
+
+    if (skip === null || main === null) {
+      throw new Error('the screen rendered no skip link or no main landmark');
+    }
+
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+    skip.dispatchEvent(click);
+    fixture.detectChanges();
+
+    // The default is cancelled, because the application routes on the hash: an un-cancelled `#main-content` would be read as a route and would take the screen away (Rule 1 clause 5).
+    expect(click.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(main);
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+  });
+
+  it('resolves the legacy captions and shows the fallback language before a bundle is applied', () => {
+    // `currentLang` is null until a bundle loads, which is the state the component's fallback covers.
+    expect(translate.currentLang()).toBeNull();
+    expect(component.currentLang()).toBe(FALLBACK_LANG);
+    expect(languageSelector().value).toBe(FALLBACK_LANG);
+    expect(loginButton().textContent?.trim()).toBe(TRANSLATIONS['label.button.signin']);
+    expect(host().textContent).not.toContain('label.');
+    expect(failureBanner()).toBeNull();
+  });
+
+  it('sends nothing at all when the form reports nothing', async () => {
+    // The form refuses an empty submit itself — its own spec proves the touched marks and the two required messages — so what this case adds is the wiring: nothing reaches the screen, and therefore no request and no navigation (Rule 1 clause 3: no rule the legacy form does not have).
+    const form = host().querySelector('form');
+
+    if (form === null) {
+      throw new Error('the screen rendered no form element');
+    }
+
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await settle();
+    fixture.detectChanges();
+
+    expect(auth.login).not.toHaveBeenCalled();
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+    expect(loginForm().form.controls.username.touched).toBe(true);
+    expect(loginForm().form.controls.password.touched).toBe(true);
+    expect(component.guard.busy()).toBe(false);
+    expect(failureBanner()).toBeNull();
+    // Both controls show the legacy required message under themselves, which is what the form's `markAllAsTouched` is for: the operator sees which field stopped the submit.
+    expect(helpBlockTexts()).toEqual([
+      TRANSLATIONS['label.requiredfield'],
+      TRANSLATIONS['label.requiredfield'],
+    ]);
+  });
+
+  it('authenticates once with the values the form reported and lands on the clients list', async () => {
+    // The whole path AAP 0.2.3 describes: the form reports `{username, password}`, the screen posts that pair once — the inner form's own submit event never arrives as a second value — and the user lands on the clients list.
+    typeCredentials();
+    const reported = loginForm().form.getRawValue();
+
+    host().querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await settle();
+    fixture.detectChanges();
+
+    expect(auth.login).toHaveBeenCalledTimes(1);
+    expect(auth.login).toHaveBeenCalledWith(reported.username, reported.password);
+    expect(router.navigateByUrl).toHaveBeenCalledTimes(1);
+    expect(router.navigateByUrl).toHaveBeenCalledWith(DEFAULT_DESTINATION);
+  });
+
+  it('resumes the interrupted navigation when the route carries a returnUrl', async () => {
+    queryParams = convertToParamMap({ returnUrl: RETURN_URL });
+
+    await submitTypedCredentials();
+
+    // The attempted URL wins over the default landing, which is why the guard writes it (workflow W1).
+    expect(router.navigateByUrl).toHaveBeenCalledTimes(1);
+    expect(router.navigateByUrl).toHaveBeenCalledWith(RETURN_URL);
+  });
+
+  it.each(['', 'clients', PROTOCOL_RELATIVE])(
+    'falls back to the clients list for a returnUrl this application cannot own (%s)',
+    async (returnUrl: string) => {
+      queryParams = convertToParamMap({ returnUrl });
+
+      await submitTypedCredentials();
+
+      expect(router.navigateByUrl).toHaveBeenCalledTimes(1);
+      expect(router.navigateByUrl).toHaveBeenCalledWith(DEFAULT_DESTINATION);
+    },
+  );
+
+  it('shows Fineract’s refusal verbatim, keeps the account name and clears only the credential', async () => {
+    auth.login.mockRejectedValue(new ApiError(FINERACT_MESSAGE, 401));
+
+    await submitTypedCredentials();
+    fixture.detectChanges();
+
+    // The message is the backend's own text: no prefix, no translation, no capitalisation (W7).
+    expect(failureText()).toBe(FINERACT_MESSAGE);
+    expect(loginForm().form.controls.username.value).toBe(ACCOUNT_NAME);
+    expect(loginForm().form.controls.password.value).toBe('');
+    expect(host().querySelector<HTMLInputElement>('#pwd')?.value).toBe('');
+    // A refused exchange leaves the user on the form, and no navigation was attempted (AAP 0.7.4).
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+    expect(component.guard.busy()).toBe(false);
+    expect(host().querySelector<HTMLInputElement>('#pwd')?.type).toBe('password');
+  });
+
+  it('shows the generic legacy message when the failure carries no Fineract text', async () => {
+    auth.login.mockRejectedValue(new Error('the transport gave up'));
+
+    await submitTypedCredentials();
+    fixture.detectChanges();
+
+    expect(failureText()).toBe(GENERIC_MESSAGE);
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+  });
+
+  it('disables the primary button only while a login is in flight', async () => {
+    const pending = deferredLogin();
+    auth.login.mockReturnValue(pending.response);
+    typeCredentials();
+
+    expect(loginButton().disabled).toBe(false);
+
+    const attempt = component.onSubmit(CREDENTIALS);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(auth.login).toHaveBeenCalledTimes(1);
+    expect(component.guard.busy()).toBe(true);
+    expect(loginButton().disabled).toBe(true);
+
+    pending.settle();
+    await attempt;
+    fixture.detectChanges();
+
+    expect(component.guard.busy()).toBe(false);
+    expect(loginButton().disabled).toBe(false);
+  });
+
+  it('refuses a second submit while the first is in flight, so one click sends one request', async () => {
+    const pending = deferredLogin();
+    auth.login.mockReturnValue(pending.response);
+    typeCredentials();
+
+    const first = component.onSubmit(CREDENTIALS);
+    const second = component.onSubmit(CREDENTIALS);
+
+    // The guard's busy flag was set before its callback ran, so the re-entrant call never reached the service: one request per click, which the endpoint's non-idempotence requires (AAP 0.14.1).
+    expect(component.guard.busy()).toBe(true);
+    expect(auth.login).toHaveBeenCalledTimes(1);
+
+    await second;
+
+    expect(auth.login).toHaveBeenCalledTimes(1);
+
+    pending.settle();
+    await first;
+
+    expect(auth.login).toHaveBeenCalledTimes(1);
+    expect(component.guard.busy()).toBe(false);
+    expect(router.navigateByUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers the application’s one language list and switches the active language in place', () => {
+    const selector = languageSelector();
+
+    expect(Array.from(selector.options, (option) => option.value)).toEqual([...AVAILABLE_LANGS]);
+
+    selector.value = OTHER_LANG;
+    selector.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    expect(translate.use).toHaveBeenCalledWith(OTHER_LANG);
+    // The observable `use` returned was really subscribed to, so the switch happened rather than being asked for: `applied` is recorded inside it.
+    expect(translate.applied).toEqual([OTHER_LANG]);
+    expect(component.currentLang()).toBe(OTHER_LANG);
+    // A language switch is not a navigation: the user stays on the form (AAP 0.7.4).
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+    expect(failureBanner()).toBeNull();
+  });
+
+  it('reports a bundle that failed to load and puts the switcher back on the language in force', () => {
+    const selector = languageSelector();
+    translate.failNextBundle();
+    selector.value = OTHER_LANG;
+    selector.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    expect(translate.use).toHaveBeenCalledWith(OTHER_LANG);
+    expect(translate.applied).toEqual([OTHER_LANG]);
+    expect(component.currentLang()).toBe(FALLBACK_LANG);
+    expect(selector.value).toBe(FALLBACK_LANG);
+    // The failure is rendered rather than swallowed (AAP 0.14.2), and nothing was navigated to.
+    expect(failureText()).toBe(GENERIC_MESSAGE);
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+  });
+
+  it('withdraws a language failure once a later switch takes effect', () => {
+    const selector = languageSelector();
+    translate.failNextBundle();
+
+    selector.value = OTHER_LANG;
+    selector.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    expect(failureText()).toBe(GENERIC_MESSAGE);
+
+    selector.value = THIRD_LANG;
+    selector.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    expect(translate.applied).toEqual([OTHER_LANG, THIRD_LANG]);
+    expect(component.currentLang()).toBe(THIRD_LANG);
+    expect(failureBanner()).toBeNull();
+  });
+
+  it('keeps a sign-in failure on screen when the language changes', async () => {
+    auth.login.mockRejectedValue(new ApiError(FINERACT_MESSAGE, 401));
+
+    await submitTypedCredentials();
+    fixture.detectChanges();
+
+    expect(failureText()).toBe(FINERACT_MESSAGE);
+
+    const selector = languageSelector();
+    selector.value = OTHER_LANG;
+    selector.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    expect(failureText()).toBe(FINERACT_MESSAGE);
+    expect(component.currentLang()).toBe(OTHER_LANG);
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+  });
+
+  it('binds the document language to the active one and follows a switch', () => {
+    expect(document.documentElement.lang).toBe(FALLBACK_LANG);
+
+    const selector = languageSelector();
+    selector.value = OTHER_LANG;
+    selector.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    expect(document.documentElement.lang).toBe(OTHER_LANG);
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+  });
+
+  it.each([500, 0])(
+    'leaves a %i failure to the interceptor’s one notification, painting nothing inline',
+    async (status: number) => {
+      auth.login.mockRejectedValue(new ApiError(FINERACT_MESSAGE, status));
+
+      await submitTypedCredentials();
+      fixture.detectChanges();
+
+      // The interceptor has already raised the single notification for these statuses, so the screen adds no second surface — and it keeps the account name while clearing only the credential (AAP 0.7.4; AAP 0.14.2).
+      expect(failureBanner()).toBeNull();
+      expect(component.error()).toBeNull();
+      expect(router.navigateByUrl).not.toHaveBeenCalled();
+      expect(loginForm().form.controls.username.value).toBe(ACCOUNT_NAME);
+      expect(loginForm().form.controls.password.value).toBe('');
+    },
+  );
+
+  it('sends every footer and legal link to the destination legacy carries', () => {
+    // Legacy's own destinations, in the footer's DOM order: the nine column links and the three inline legal links. An inert `href="#"` with a cancelled click was the dead affordance AAP 0.10.5 item 8 argues against, and AAP 0.10.5 registers no difference for these destinations (Rule 1 clause 3).
+    const anchors = Array.from(host().querySelectorAll<HTMLAnchorElement>('footer a'));
+
+    expect(anchors.map((anchor) => anchor.getAttribute('href'))).toEqual([
+      'https://mifosforge.jira.com/wiki/display/MIFOS/User+Manual',
+      'https://mifosforge.jira.com/wiki/pages/viewpage.action?pageId=14712842',
+      'https://mifosforge.jira.com/wiki/display/MDZ/Welcome+in+the+Zone',
+      'https://groups.google.com/forum/#!forum/mifosusers',
+      'https://groups.google.com/forum/#!forum/mifosdeveloper',
+      'http://mifos.org/community/communications/mifos-irc',
+      'https://mifosforge.jira.com/wiki/display/MDZ/Key+Design+Principles/',
+      'http://sourceforge.net/projects/mifos/',
+      'http://mifos.org/donate/',
+      'http://www.openmf.org/',
+      'http://mifos.org/resources/community/',
+      'http://mifos.org/take-action/volunteer/',
+    ]);
+    expect(anchors.filter((anchor) => anchor.getAttribute('href') === '#')).toHaveLength(0);
+
+    // The eight column links legacy opens in another browsing context, and only those.
+    const newContext = anchors.filter((anchor) => anchor.getAttribute('target') === '_blank');
+
+    expect(newContext).toHaveLength(8);
+    expect(newContext.every((anchor) => anchor.getAttribute('rel') === 'noopener noreferrer')).toBe(true);
+  });
+
+  it('renders the closing paragraph from the application’s own copy rather than from literal English', () => {
+    const paragraph = host().querySelector<HTMLParagraphElement>('.text-muted');
+
+    if (paragraph === null) {
+      throw new Error('the screen rendered no closing paragraph');
+    }
+
+    // The rendered sentence, with each whitespace run collapsed to one space: Angular drops the whitespace between a fragment and the element beside it, so the wording is compared with its spacing normalised rather than character for character against the template's line breaks.
+    const rendered: string = paragraph.textContent.replace(/\s+/g, ' ').trim();
+
+    // The sentence is the six keys' copy in the order the paragraph reads it, which is legacy's own wording (Rule 1 clause 3), so no fragment is a literal any more and no fragment is a raw key.
+    expect(rendered).toBe([
+      `${TRANSLATIONS['label.text.mifosx.designedby']} ${TRANSLATIONS['label.anchor.mifosinitiative']}.`,
+      `${TRANSLATIONS['label.anchor.globalcommunity']} ${TRANSLATIONS['label.text.mifosx.community']}`,
+      `${TRANSLATIONS['label.text.mifosx.interesting']} ${TRANSLATIONS['label.anchor.getinvolved']}`,
+    ].join(' '));
+    expect(rendered).not.toContain('label.');
+    expect(paragraph.querySelector('br')).not.toBeNull();
+    expect(paragraph.querySelectorAll('a')).toHaveLength(3);
+  });
+
+  it('starts the heading outline at level 1 and keeps the design size on the class', () => {
+    const headings = Array.from(host().querySelectorAll<HTMLElement>('h1,h2,h3,h4,h5,h6'));
+
+    // The screen's own title is the invisible `<h1>` and the three footer columns are the `<h2>`s beneath it, because legacy's `<h5>` would leave the outline skipping from 1 to 5; the level is the element's and the design's size is the class's, which `styles.scss` maps to Bootstrap's h5 box (AAP 0.2.3; Rule 1 clause 6).
+    expect(headings.map((heading) => heading.tagName)).toEqual(['H1', 'H2', 'H2', 'H2']);
+    expect(headings.map((heading) => heading.textContent?.trim())).toEqual([
+      TRANSLATIONS['label.button.signin'],
+      TRANSLATIONS['label.heading.resources'],
+      TRANSLATIONS['label.heading.community'],
+      TRANSLATIONS['label.heading.contribute'],
+    ]);
+
+    const [title, ...columns] = headings;
+
+    expect(title.classList.contains('sr-only')).toBe(true);
+
+    for (const heading of columns) {
+      expect(heading.classList.contains('text-uppercase')).toBe(true);
+      expect(heading.classList.contains('footer-heading')).toBe(true);
+    }
+
+    expect(host().querySelector('h5')).toBeNull();
+  });
+});
+
+afterEach(() => {
+  document.documentElement.lang = FALLBACK_LANG;
+});

@@ -1,0 +1,327 @@
+<!-- The edit-loan-application form (`#/editloanaccount/:id`): the persisted application, re-read from Fineract and posted back to the endpoint that saves it (AAP 0.7.3 row "Loan edit"; AAP 0.7.4 "Loan screens follow the same shell and card pattern … single-purpose forms rendered in the same card, each with a primary submit and a cancel that returns to the record"). The signed-in shell belongs to `core/layout/shell.component.ts`, so this renders the content card only. The card is the shared `div[appPanelCard]` with its `.panel-heading`/`.panel-title` band (AAP 0.2.3 row `PanelCard`), and every other visual value is a global Bootstrap 3 class of `web-ng/src/styles.scss` — `.container-fluid`, `.row`/`.col-md-*`, `.panel-body`, `.form-group`, `.control-label`, `.form-control` at the legacy 34px control height, `.has-error`/`.help-block`, `.alert.alert-danger` and the two `.btn` footer actions (Rule 1 clause 6; AAP 0.5.2); no style, colour or pixel value is written here.
+  Layout: the two-column `.row`/`.col-md-6` grid of the sibling create-client form rather than `form-horizontal`, because `app-date-field` and `app-select-field` each render their own `.form-group` and Bootstrap's `.form-horizontal .form-group` is `make-row` — negative 15px side margins — so nesting those fields would push every date and select 15px past the inputs beside it.
+  `web-ng/src/styles.scss` clears that nested group so both families share one label-above convention, and every form's footer right-aligns its actions at any width; this template keeps the grid it was built with.
+  Labels: this template owns the `<label class="control-label" for>` of every field, the shared components' included, because the legacy edit form marks each required field with `<span class="required">*</span>` while the components' `[required]` input only reaches assistive technology; the `<label for>` is then the control's accessible name, so the shared fields take no `label` input of their own (WCAG label in name), the composition the create-client form already uses.
+  Field ids are the control names — `#principal`, `#loanTermFrequency`, `#numberOfRepayments`, `#repaymentEvery`, `#interestRatePerPeriod`, `#submittedOnDate`, `#expectedDisbursementDate`, `#loanOfficerId`, `#fundId` and the seven enumeration selects — because the parity page objects address the same controls by id on both front ends (`e2e/pages/legacy/loans.page.ts`). Captions are shipped keys of the legacy bundles (`app/global-translations/locale-en.json`) — `label.heading.editloanapplication` and the `label.input.*`/`label.select*` keys of each field, `label.requiredfield` and `label.button.save`/`cancel` — with the not-found sentence reusing `error.msg.resource.not.found`, the key `features/not-found` renders, so no label text is written into this file and every one resolves in every locale (Rule 1 clause 6).
+  Error text is Fineract's own: `error()` carries the `ApiError` the shared `screenFailure` hands back for a 4xx, whose `message` is the server's `errors[].defaultUserMessage` rendered verbatim — no prefix, no translation, no truncation — because workflow W7 compares the rendered text with the server's; a 5xx or transport failure is the interceptor's own one notification, so no banner repeats it, and the form stays mounted with every entered value intact (AAP 0.7.4; AAP 0.14.1 "errors are values").
+  Deliberately absent: any `min`, `max` or `pattern` on an amount, since W7 depends on Fineract rejecting a 50,000 principal (Rule 1 clause 3); a product or client picker, because the component echoes `productId` and `clientId` from the loaded record instead of offering them; and a charges editor, a confirmation step and a "submit for approval" action, which AAP 0.9.2 keeps out of scope. No chart, image or Figma reference appears, the design covering the login, client-list and client-record screens only. -->
+
+@let principalInvalid = controls.principal.invalid && (controls.principal.touched || controls.principal.dirty);
+@let loanTermInvalid = controls.loanTermFrequency.invalid && (controls.loanTermFrequency.touched || controls.loanTermFrequency.dirty);
+@let repaymentsInvalid =
+  controls.numberOfRepayments.invalid && (controls.numberOfRepayments.touched || controls.numberOfRepayments.dirty);
+@let repaymentEveryInvalid =
+  controls.repaymentEvery.invalid && (controls.repaymentEvery.touched || controls.repaymentEvery.dirty);
+@let interestRateInvalid =
+  controls.interestRatePerPeriod.invalid && (controls.interestRatePerPeriod.touched || controls.interestRatePerPeriod.dirty);
+
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-md-12">
+      <!-- The card's title is the screen's own title, so the band's heading is an `h1` and the page carries exactly one; `.panel-title` keeps the design's 18px/700 box, so no pixel moves. -->
+      <div appPanelCard [title]="'label.heading.editloanapplication' | translate" titleTag="h1">
+        <div class="panel-body" [attr.aria-busy]="loading() ? 'true' : null">
+          <!-- A loan that does not exist, or a body the model's guard rejects: `shared/record-not-found` in place of the form, with the shell still usable around it and no error banner, no retry action and no form, and the same 404 reading the same way on every record screen (AAP 0.7.4 "States every list and record screen must implement"). -->
+          @if (notFound()) {
+            <app-record-not-found />
+          } @else {
+            <!-- Fineract's failure text, verbatim and unmoved by any prefix. `role="alert"` announces it without a focus change, and every value the user entered is kept in the form below, so a rejection costs no retyping. -->
+            @if (error(); as apiError) {
+              <div class="alert alert-danger" role="alert">{{ apiError.message }}</div>
+            }
+
+            <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="form-group" [class.has-error]="principalInvalid">
+                    <label class="control-label" for="principal">
+                      {{ 'label.input.principal' | translate }}<span class="required">*</span>
+                    </label>
+                    <!-- `type="number"` keeps the control's value a number, which is what the form and the request body carry. `step="any"` only lifts the browser's whole-number assumption: no bound is placed on the amount, so a principal above the product's maximum still reaches Fineract (Rule 1 clause 3; workflow W7). -->
+                    <input
+                      id="principal"
+                      name="principal"
+                      type="number"
+                      step="any"
+                      class="form-control"
+                      formControlName="principal"
+                      [attr.aria-required]="true"
+                      [attr.aria-invalid]="principalInvalid ? 'true' : null"
+                      [attr.aria-describedby]="principalInvalid ? 'principal-error' : null"
+                    />
+                    @if (principalInvalid) {
+                      <span id="principal-error" class="help-block" role="alert">{{ 'label.requiredfield' | translate }}</span>
+                    }
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="form-group" [class.has-error]="loanTermInvalid">
+                    <label class="control-label" for="loanTermFrequency">
+                      {{ 'label.input.loanterm' | translate }}<span class="required">*</span>
+                    </label>
+                    <input
+                      id="loanTermFrequency"
+                      name="loanTermFrequency"
+                      type="number"
+                      step="any"
+                      class="form-control"
+                      formControlName="loanTermFrequency"
+                      [attr.aria-required]="true"
+                      [attr.aria-invalid]="loanTermInvalid ? 'true' : null"
+                      [attr.aria-describedby]="loanTermInvalid ? 'loanTermFrequency-error' : null"
+                    />
+                    @if (loanTermInvalid) {
+                      <span id="loanTermFrequency-error" class="help-block" role="alert">{{ 'label.requiredfield' | translate }}</span>
+                    }
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-6">
+                  <label
+                    class="control-label"
+                    for="loanTermFrequencyType"
+                  >
+                    {{ 'label.heading.frequencyType' | translate }}<span class="required">*</span>
+                  </label>
+                  <!-- The options are Fineract's own list, rendered in the order the payload returned it (Rule 1 clause 3: dropdown sources are the template endpoint's). The picker renders whether or not a list arrived, so the field its control requires always stays on screen: the control keeps `Validators.required`, which is legacy's own required rule and nothing added on top of it (Rule 1 clause 3), and a hidden field would leave the form permanently invalid with nothing visible to correct. A payload that sent no list therefore renders the honest empty select, in the same seven places the enumeration pickers always occupy. -->
+                  <app-select-field
+                    inputId="loanTermFrequencyType"
+                    [control]="controls.loanTermFrequencyType"
+                    [options]="template().termFrequencyTypeOptions"
+                    [required]="true"
+                  />
+                </div>
+                <div class="col-md-6">
+                  <div class="form-group" [class.has-error]="repaymentsInvalid">
+                    <label class="control-label" for="numberOfRepayments">
+                      {{ 'label.input.numofrepayments' | translate }}<span class="required">*</span>
+                    </label>
+                    <input
+                      id="numberOfRepayments"
+                      name="numberOfRepayments"
+                      type="number"
+                      step="any"
+                      class="form-control"
+                      formControlName="numberOfRepayments"
+                      [attr.aria-required]="true"
+                      [attr.aria-invalid]="repaymentsInvalid ? 'true' : null"
+                      [attr.aria-describedby]="repaymentsInvalid ? 'numberOfRepayments-error' : null"
+                    />
+                    @if (repaymentsInvalid) {
+                      <span id="numberOfRepayments-error" class="help-block" role="alert">{{ 'label.requiredfield' | translate }}</span>
+                    }
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="form-group" [class.has-error]="repaymentEveryInvalid">
+                    <label class="control-label" for="repaymentEvery">
+                      {{ 'label.input.repaidevery' | translate }}<span class="required">*</span>
+                    </label>
+                    <input
+                      id="repaymentEvery"
+                      name="repaymentEvery"
+                      type="number"
+                      step="any"
+                      class="form-control"
+                      formControlName="repaymentEvery"
+                      [attr.aria-required]="true"
+                      [attr.aria-invalid]="repaymentEveryInvalid ? 'true' : null"
+                      [attr.aria-describedby]="repaymentEveryInvalid ? 'repaymentEvery-error' : null"
+                    />
+                    @if (repaymentEveryInvalid) {
+                      <span id="repaymentEvery-error" class="help-block" role="alert">{{ 'label.requiredfield' | translate }}</span>
+                    }
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <label
+                    class="control-label"
+                    for="repaymentFrequencyType"
+                  >
+                    {{ 'label.heading.frequencyType' | translate }}<span class="required">*</span>
+                  </label>
+                  <app-select-field
+                    inputId="repaymentFrequencyType"
+                    [control]="controls.repaymentFrequencyType"
+                    [options]="template().repaymentFrequencyTypeOptions"
+                    [required]="true"
+                  />
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="form-group" [class.has-error]="interestRateInvalid">
+                    <label class="control-label" for="interestRatePerPeriod">
+                      {{ 'label.input.nominalinterestrate' | translate }}<span class="required">*</span>
+                    </label>
+                    <input
+                      id="interestRatePerPeriod"
+                      name="interestRatePerPeriod"
+                      type="number"
+                      step="any"
+                      class="form-control"
+                      formControlName="interestRatePerPeriod"
+                      [attr.aria-required]="true"
+                      [attr.aria-invalid]="interestRateInvalid ? 'true' : null"
+                      [attr.aria-describedby]="interestRateInvalid ? 'interestRatePerPeriod-error' : null"
+                    />
+                    @if (interestRateInvalid) {
+                      <span id="interestRatePerPeriod-error" class="help-block" role="alert">{{ 'label.requiredfield' | translate }}</span>
+                    }
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <label
+                    class="control-label"
+                    for="interestRateFrequencyType"
+                  >
+                    {{ 'label.heading.frequencyType' | translate }}<span class="required">*</span>
+                  </label>
+                  <app-select-field
+                    inputId="interestRateFrequencyType"
+                    [control]="controls.interestRateFrequencyType"
+                    [options]="template().interestRateFrequencyTypeOptions"
+                    [required]="true"
+                  />
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-6">
+                  <label
+                    class="control-label"
+                    for="amortizationType"
+                  >
+                    {{ 'label.input.amortization' | translate }}<span class="required">*</span>
+                  </label>
+                  <app-select-field
+                    inputId="amortizationType"
+                    [control]="controls.amortizationType"
+                    [options]="template().amortizationTypeOptions"
+                    [required]="true"
+                  />
+                </div>
+                <div class="col-md-6">
+                  <label
+                    class="control-label"
+                    for="interestType"
+                  >
+                    {{ 'label.heading.interesttype' | translate }}<span class="required">*</span>
+                  </label>
+                  <app-select-field
+                    inputId="interestType"
+                    [control]="controls.interestType"
+                    [options]="template().interestTypeOptions"
+                    [required]="true"
+                  />
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-6">
+                  <label
+                    class="control-label"
+                    for="interestCalculationPeriodType"
+                  >
+                    {{ 'label.input.interestcalculationperiod' | translate }}<span class="required">*</span>
+                  </label>
+                  <app-select-field
+                    inputId="interestCalculationPeriodType"
+                    [control]="controls.interestCalculationPeriodType"
+                    [options]="template().interestCalculationPeriodTypeOptions"
+                    [required]="true"
+                  />
+                </div>
+                <div class="col-md-6">
+                  <label
+                    class="control-label"
+                    for="transactionProcessingStrategyId"
+                  >
+                    {{ 'label.input.repaymentstrategy' | translate }}<span class="required">*</span>
+                  </label>
+                  <!-- The strategy picker is keyed by the option's `code`, which is what the request body posts (`transactionProcessingStrategyCode`); the control's id stays the legacy template's `transactionProcessingStrategyId` so the parity page objects find it. -->
+                  <app-select-field
+                    inputId="transactionProcessingStrategyId"
+                    [control]="controls.transactionProcessingStrategyId"
+                    [options]="template().transactionProcessingStrategyOptions"
+                    [required]="true"
+                  />
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-6">
+                  <label class="control-label" for="submittedOnDate">
+                    {{ 'label.input.submittedon' | translate }}<span class="required">*</span>
+                  </label>
+                  <!-- `app-date-field` replaces the legacy jQuery datepicker (AAP 0.10.5 item 1) and holds the date as `Date | null`, which `LoanService.update` serialises with `dateFormat` and the active `locale` at the boundary. No native `required`, `min` or `max`: the browser must not block a date Fineract alone judges. -->
+                  <app-date-field
+                    inputId="submittedOnDate"
+                    [control]="controls.submittedOnDate"
+                    [required]="true"
+                  />
+                </div>
+                <div class="col-md-6">
+                  <label
+                    class="control-label"
+                    for="expectedDisbursementDate"
+                    title="{{ 'label.input.expecteddisbursementon' | translate }}"
+                  >
+                    {{ 'label.input.disbursementon' | translate }}<span class="required">*</span>
+                  </label>
+                  <app-date-field
+                    inputId="expectedDisbursementDate"
+                    [control]="controls.expectedDisbursementDate"
+                    [required]="true"
+                  />
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-6">
+                  <label class="control-label" for="loanOfficerId">{{ 'label.input.loanofficer' | translate }}</label>
+                  <!-- Optional, and the prompt row returns the picker to empty, as the legacy chosen control's prompt did. The rows are Fineract's `loanOfficerOptions`, in the order the payload sent them — not re-sorted here. -->
+                  <app-select-field
+                    inputId="loanOfficerId"
+                    [control]="controls.loanOfficerId"
+                    [options]="loanOfficerOptions()"
+                    [placeholder]="'label.selectloanofficer' | translate"
+                  />
+                </div>
+                <div class="col-md-6">
+                  <label class="control-label" for="fundId">{{ 'label.input.fund' | translate }}</label>
+                  <app-select-field
+                    inputId="fundId"
+                    [control]="controls.fundId"
+                    [options]="fundOptions()"
+                    [placeholder]="'label.selectfund' | translate"
+                  />
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-xs-12 text-right">
+                  <!-- Cancel returns to the record and posts nothing: `#/viewloanaccount/:id`, the route the loan record declares. No history-based "back", so the destination does not depend on how the user arrived. -->
+                  <a class="btn btn-default" [routerLink]="['/viewloanaccount', loanId()]">
+                    {{ 'label.button.cancel' | translate }}
+                  </a>
+                  <!-- `type="submit"` so Enter in any field runs the same `(ngSubmit)` handler. Disabled while the save is in flight — `PUT /loans/{id}` is not idempotent, so one click must send exactly one request — and while no record is loaded, so an empty form cannot be saved before the payload arrives. -->
+                  <button type="submit" class="btn btn-primary" [disabled]="guard.busy() || !account()">
+                    {{ 'label.button.save' | translate }}
+                  </button>
+                </div>
+              </div>
+            </form>
+          }
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+

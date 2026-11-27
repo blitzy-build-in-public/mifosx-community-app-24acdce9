@@ -1,0 +1,42 @@
+<!-- Header labels are the legacy bundle's own keys, matched column for column to the record page's schedule table (`loan-view/loan-schedule`) so the application's two schedules cannot diverge: `label.heading.no` numbers the period, and `label.heading.date` heads the due date because no locale bundle defines a `label.heading.duedate` key. -->
+@if (isEmpty()) {
+  <app-empty-state
+    id="repayment-preview-empty"
+    [message]="'label.nodata' | translate"
+  />
+} @else {
+  <table class="table table-striped" id="repayment-preview">
+    <caption class="sr-only">{{ 'label.heading.repaymentschedule' | translate }}</caption>
+    <thead>
+      <tr>
+        <th scope="col">{{ 'label.heading.no' | translate }}</th>
+        <th scope="col">{{ 'label.heading.fromdate' | translate }}</th>
+        <th scope="col">{{ 'label.heading.date' | translate }}</th>
+        <th scope="col">{{ 'label.heading.principal' | translate }}</th>
+        <!-- The principal balance the loan still carries, which the legacy schedule heads label.heading.balanceofloan and renders from the period's principalLoanBalanceOutstanding, right after the principal due and before the interest. -->
+        <th scope="col">{{ 'label.heading.balanceofloan' | translate }}</th>
+        <th scope="col">{{ 'label.heading.interest' | translate }}</th>
+        <th scope="col">{{ 'label.heading.fees' | translate }}</th>
+        <th scope="col">{{ 'label.heading.total' | translate }}</th>
+        <th scope="col">{{ 'label.heading.outstanding' | translate }}</th>
+      </tr>
+    </thead>
+    <!-- The server's own periods in the server's order, at the record's one date pattern (the component's `displayFormat`) and through the one shared money formatter, which is what the record page's schedule table uses too. The six money cells print no currency symbol, exactly as the legacy preview does (`app/views/loans/previewloanrepaymentschedule.html:52-58`) (Rule 1 clause 3). -->
+    <tbody>
+      <!-- Keyed by position rather than by period number: the server's order is kept as sent, never re-sorted, filtered or paginated, and the leading disbursement row carries no period number to key on — two such rows would raise NG0955. -->
+      @for (row of rows(); track $index) {
+        <tr>
+          <td>{{ row.period }}</td>
+          <td>{{ row.fromDate | date: displayFormat }}</td>
+          <td>{{ row.dueDate | date: displayFormat }}</td>
+          <td>{{ row.principalDue | money }}</td>
+          <td>{{ row.principalLoanBalanceOutstanding | money }}</td>
+          <td>{{ row.interestDue | money }}</td>
+          <td>{{ row.feeChargesDue | money }}</td>
+          <td>{{ row.totalDueForPeriod | money }}</td>
+          <td>{{ row.totalOutstandingForPeriod | money }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+}

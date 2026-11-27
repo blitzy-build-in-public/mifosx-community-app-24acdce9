@@ -1,0 +1,35 @@
+<!-- The navbar's global search, reproducing the legacy control of app/views/_topnavbar.html:118-137: a text field and a scope selector in one Bootstrap 3 `navbar-form`, submitted with Enter rather than by a button. -->
+<form
+  class="navbar-form navbar-right"
+  role="search"
+  (submit)="submit(); $event.preventDefault()"
+>
+  <!-- `.input-group` attaches the two controls into one box: the field is the flexible cell and `.input-group-btn` is the shrink-to-fit cell holding the scope selector, so the selector hugs the field's right edge exactly as the design draws it. -->
+  <div class="input-group">
+    <!-- `id="search"` is the id the legacy field carries, kept because the parity page objects address the control by it. -->
+    <input
+      #field
+      id="search"
+      type="text"
+      class="form-control"
+      [formControl]="queryControl"
+      [attr.placeholder]="'label.searchorpress' | translate"
+      [attr.aria-label]="'label.heading.search' | translate"
+    />
+
+    <span class="input-group-btn">
+      <!-- A native `<select>`, the Angular-native replacement for the jQuery `chosen` plugin the request forbids (AAP 0.10.5 item 2), and the one control the design draws attached to the field.
+        The selector's accessible name is the literal "Search scope", and it is invisible — no attribute is drawn and nothing on screen changes. It is a literal rather than a translation key because no shipped bundle carries a key for the scope control itself: the shipped scope keys name the individual options (`label.search.scope.all` and its siblings), and a key invented here would reach the missing-translation handler on every render and be reported in the console. The English text resolves without the translation stack, so the control carries a name that describes its function on every screen and raises no warning. -->
+      <select
+        id="search-scope"
+        class="form-control"
+        [formControl]="scopeControl"
+        aria-label="Search scope"
+      >
+        @for (option of scopes; track option) {
+          <option [value]="option">{{ labelKey(option) | translate }}</option>
+        }
+      </select>
+    </span>
+  </div>
+</form>
